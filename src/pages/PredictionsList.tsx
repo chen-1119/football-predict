@@ -1028,12 +1028,25 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       )}
 
       {baseFilteredMatches.length > 0 && (
-        <section className="compact-record" aria-label={language === 'zh' ? '当前日期已结算统计' : 'Settled record for this date'} data-formal-settled={dailyReviewStats.formalSettled}>
+        <section className="compact-record" aria-label={language === 'zh' ? '当前日期已结算统计' : 'Settled record for this date'} data-formal-settled={dailyReviewStats.formalSettled} data-live-settled={dailyReviewStats.liveSettled} data-reference-best-settled={dailyReviewStats.referenceBestSettled} data-analysis-settled={dailyReviewStats.analysisSettled} data-provisional-reference-settled={dailyReviewStats.provisionalReferenceSettled} data-awaiting-official={dailyReviewStats.awaitingOfficial} data-archived-directions={dailyReviewStats.archivedDirections}>
           <span>{language === 'zh' ? '正式命中 / 已结算' : 'Formal hits / settled'} <strong>{dailyReviewStats.formalWon}/{dailyReviewStats.formalSettled}</strong> <b>{formatDailyRate(dailyReviewStats.formalHitRate, language)}</b></span>
           {dailyReviewStats.referenceBestSettled > 0 && <span>{language === 'zh' ? '参考命中 / 已结算' : 'Reference hits / settled'} <strong>{dailyReviewStats.referenceBestWon}/{dailyReviewStats.referenceBestSettled}</strong></span>}
           {dailyReviewStats.liveSettled > 0 && <span>{language === 'zh' ? '实时参考命中 / 已结算' : 'Live reference hits / settled'} <strong>{dailyReviewStats.liveWon}/{dailyReviewStats.liveSettled}</strong></span>}
           {dailyReviewStats.awaitingOfficial > 0 && <span>{language === 'zh' ? '待赛果' : 'Pending result'} <strong>{dailyReviewStats.awaitingOfficial}</strong></span>}
           <small>{language === 'zh' ? '参考、待赛果与作废场次不计入正式命中率。' : 'Reference, pending and void picks are excluded from the formal hit rate.'}</small>
+          <details>
+            <summary>{language === 'zh' ? '查看各类赛后统计' : 'View review tracks'}</summary>
+            <div className="daily-review-stats">
+              <span>{language === 'zh' ? '正式推荐（官方结算）' : 'Formal picks (official settlement)'}：{dailyReviewStats.formalWon}/{dailyReviewStats.formalSettled} · {formatDailyRate(dailyReviewStats.formalHitRate, language)}</span>
+              <span>{language === 'zh' ? '实时推荐（官方结算）' : 'Live picks (official settlement)'}：{dailyReviewStats.liveWon}/{dailyReviewStats.liveSettled} · {formatDailyRate(dailyReviewStats.liveHitRate, language)}</span>
+              <span>{language === 'zh' ? '数据推荐 BEST（参考）' : 'Reference BEST picks'}：{dailyReviewStats.referenceBestWon}/{dailyReviewStats.referenceBestSettled} · {formatDailyRate(dailyReviewStats.referenceBestHitRate, language)}</span>
+              <span>{language === 'zh' ? '全部分析项（参考）' : 'All analysis rows'}：{dailyReviewStats.analysisWon}/{dailyReviewStats.analysisSettled} · {formatDailyRate(dailyReviewStats.analysisHitRate, language)}</span>
+              <span>{language === 'zh' ? '外部赛果影子参考' : 'External result shadow reference'}：{dailyReviewStats.provisionalReferenceWon}/{dailyReviewStats.provisionalReferenceSettled} · {formatDailyRate(dailyReviewStats.provisionalReferenceHitRate, language)}</span>
+              <span>{language === 'zh' ? '原赛前方向归档' : 'Original pre-match direction archive'}：{dailyReviewStats.archivedDirections}/{dailyReviewStats.resultPhaseFixtures}</span>
+              <span>{language === 'zh' ? '待官方赛果' : 'Awaiting official result'}：{dailyReviewStats.awaitingOfficial}</span>
+            </div>
+            <small>{language === 'zh' ? '官方竞彩结算与外部赛果参考分开统计；外部比分不会写入正式命中率，原赛前方向保持不变。' : 'Official settlement and external result references are counted separately. External scores do not change the formal hit rate or the original pre-match direction.'}</small>
+          </details>
         </section>
       )}
       {groupedMatches.length === 0 ? (

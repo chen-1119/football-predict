@@ -8,7 +8,8 @@ const {
 
 const rootDir = path.resolve(__dirname, "..");
 const bestTipsSource = fs.readFileSync(path.join(rootDir, "src", "pages", "BestTips.tsx"), "utf8");
-const predictionsSource = fs.readFileSync(path.join(rootDir, "src", "pages", "PredictionsList.tsx"), "utf8");
+const reviewSource = fs.readFileSync(path.join(rootDir, "src", "pages", "LegacyHitAndWin.tsx"), "utf8");
+const reviewEvidenceSource = fs.readFileSync(path.join(rootDir, "src", "components", "review", "ReviewEvidenceOverview.tsx"), "utf8");
 const serverSource = fs.readFileSync(path.join(rootDir, "server", "index.cjs"), "utf8");
 const apiContractSource = fs.readFileSync(path.join(rootDir, "scripts", "verifyApiContracts.cjs"), "utf8");
 
@@ -41,11 +42,9 @@ assert.equal(GOODWIN_BENCHMARK_SHADOW_POLICY.hitRateDisclosureOnly, true);
 assert.ok(GOODWIN_BENCHMARK_SHADOW_POLICY.minimumCalendarDays >= 42);
 assert.ok(GOODWIN_BENCHMARK_SHADOW_POLICY.minimumClosingLineCoverage >= 0.95);
 assert.deepEqual(GOODWIN_BENCHMARK_SHADOW_POLICY.reviewCheckpoints, [200, 300, 450, 700, 1050]);
-assert.match(bestTipsSource, /benchmarkQualified \? 1000 : 0/);
-assert.match(bestTipsSource, /Benchmark candidate · Shadow/);
-assert.match(predictionsSource, /data-testid="benchmark-shadow-track"/);
-assert.match(predictionsSource, /prospective settled; excluded from formal record/);
-assert.match(predictionsSource, /data-ledger-chain-valid/);
+assert.match(bestTipsSource, /<RecommendationCenter language=\{language\}/);
+assert.match(reviewSource, /shadow=\{scorecard\?\.shadowTracks\?\.CANDIDATE_PROSPECTIVE\}/);
+assert.match(reviewEvidenceSource, /研究影子不能替代独立前瞻验证/);
 assert.match(serverSource, /formalOnlineEffect: false/);
 assert.match(serverSource, /GOODWIN_BENCHMARK: benchmarkShadow/);
 assert.match(serverSource, /goodwin-benchmark-prospective-audit-v3|rawBenchmarkShadow\.auditVersion/);
@@ -58,7 +57,7 @@ process.stdout.write(`${JSON.stringify({
   ok: true,
   verifier: "benchmark-selection-policy",
   version: GOODWIN_BENCHMARK_SHADOW_POLICY.version,
-  checks: 24,
+  checks: 22,
   criteria: qualified.criteria,
   role: GOODWIN_BENCHMARK_SHADOW_POLICY.role,
 }, null, 2)}\n`);

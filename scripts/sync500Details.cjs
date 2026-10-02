@@ -232,14 +232,24 @@ const shouldUseCurlFirst = (url) => (
   || /:\/\/odds\.500\.com\//i.test(String(url || ""))
 );
 
+const assertReadableSourceHtml = (html) => {
+  if (/EO_Bot_Ssid|__tst_status/.test(html)) {
+    const error = new Error("500.com returned an access challenge; keeping the previous detail snapshot");
+    error.code = "SOURCE_ACCESS_CHALLENGE";
+    throw error;
+  }
+  return html;
+};
+
 const httpGetHtml = async (url, referer) => {
   if (shouldUseCurlFirst(url)) {
-    return iconv.decode(curlGetBuffer(url, referer), "gbk");
+    return assertReadableSourceHtml(iconv.decode(curlGetBuffer(url, referer), "gbk"));
   }
   try {
-    return iconv.decode(await httpGetBuffer(url, referer), "gbk");
+    return assertReadableSourceHtml(iconv.decode(await httpGetBuffer(url, referer), "gbk"));
   } catch (error) {
-    return iconv.decode(curlGetBuffer(url, referer, error), "gbk");
+    if (error.code === "SOURCE_ACCESS_CHALLENGE") throw error;
+    return assertReadableSourceHtml(iconv.decode(curlGetBuffer(url, referer, error), "gbk"));
   }
 };
 
@@ -972,6 +982,16 @@ const hasComponentData = {
   externalOdds: (value) => validTriplet(value),
 };
 
+const hasParsedDetailEvidence = (details) => Boolean(
+  hasComponentData.rank(details?.analysis?.rank)
+  || hasComponentData.recentForm(details?.analysis?.recentForm)
+  || hasComponentData.futureSchedule(details?.analysis?.futureSchedule)
+  || details?.analysis?.projectedSquads?.home?.length
+  || details?.analysis?.projectedSquads?.away?.length
+  || hasComponentData.europeOdds(details?.europeOdds)
+  || hasComponentData.asianHandicap(details?.asianHandicap)
+);
+
 const preMatchComponentEntries = (signal) => [
   ["bookmakerOdds.had", signal?.bookmakerOdds?.had],
   ["bookmakerOdds.hhad", signal?.bookmakerOdds?.hhad],
@@ -1553,13 +1573,27 @@ const main = async () => {
 
   for (const match of targets) {
     try {
-      const details = {
-        analysis: match.urls.analysis ? await parseAnalysisPage(match.urls.analysis, match) : null,
-        europeOdds: match.urls.europeOdds ? await parseEuropeOdds(match.urls.europeOdds) : null,
-        asianHandicap: match.urls.asianHandicap ? await parseAsianHandicap(match.urls.asianHandicap) : null,
-      };
-      requestedPages += [match.urls.analysis, match.urls.europeOdds, match.urls.asianHandicap].filter(Boolean).length;
-      const signal = buildDetailSignal(match, details, updatedAt);
+      const details = { analysis: null, europeOdds: null, asianHandicap: null };
+      for (const [component, url, fetchPage] of [
+        ["analysis", match.urls.analysis, () => parseAnalysisPage(match.urls.analysis, match)],
+        ["europeOdds", match.urls.europeOdds, () => parseEuropeOdds(match.urls.europeOdds)],
+        ["asianHandicap", match.urls.asianHandicap, () => parseAsianHandicap(match.urls.asianHandicap)],
+      ]) {
+        if (!url) continue;
+        requestedPages += 1;
+        try {
+          details[component] = await fetchPage();
+        } catch (error) {
+          errors.push({ sourceMatchId: match.sourceMatchId, component, message: error.message || String(error) });
+        }
+      }
+      if (!hasParsedDetailEvidence(details)) {
+        throw new Error("500.com detail pages contained no usable parsed evidence; keeping the previous snapshot");
+      }
+      const signal = mergeSignal(
+        detailsMatches[match.sourceMatchId]?.signal,
+        buildDetailSignal(match, details, updatedAt),
+      );
       const payload = {
         ...match,
         sourceObservedAt: observedIso(updatedAt),
@@ -1567,7 +1601,10 @@ const main = async () => {
         validUntil: preMatchValidUntil(match),
         latestReceivedAt: observedIso(updatedAt),
         updatedAt,
-        details,
+        details: {
+          ...(detailsMatches[match.sourceMatchId]?.details || {}),
+          ...Object.fromEntries(Object.entries(details).filter(([, value]) => value !== null)),
+        },
         signal,
       };
       detailsMatches[match.sourceMatchId] = payload;
@@ -1583,6 +1620,7 @@ const main = async () => {
       });
       if (errors.length >= MAX_ERRORS) break;
     }
+    if (errors.length >= MAX_ERRORS) break;
   }
 
   const detailsPayload = {
@@ -1676,7 +1714,7 @@ const main = async () => {
     currentMatchesWithDetails: currentTradeRows.filter((row) => Boolean(detailsMatches[row.sourceMatchId]?.signal)).length,
     requestedPages,
     warnings: allErrors.length > 0 && hasUsableDetails ? allErrors : [],
-    errors: hasUsableDetails ? [] : allErrors,
+    errors: allErrors,
     output: path.relative(PROJECT_ROOT, DETAILS_FILE),
   }, null, 2));
 };
@@ -1693,6 +1731,8 @@ if (require.main === module) {
     buildResultMergeSignal,
     ensureSignalComponentTiming,
     mergeSignal,
+    assertReadableSourceHtml,
+    hasParsedDetailEvidence,
     preMatchComponentTiming,
     resultComponentTiming,
     resultArchiveDatesForRows,

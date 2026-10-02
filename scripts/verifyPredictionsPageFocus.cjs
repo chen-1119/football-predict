@@ -10,6 +10,9 @@ const bestTips = readText("src/pages/BestTips.tsx");
 const matchDetail = readText("src/pages/MatchDetail.tsx");
 const betSlip = readText("src/pages/BetSlipGenerator.tsx");
 const personalReview = readText("src/pages/HitAndWin.tsx");
+const legacyPersonalReview = readText("src/pages/LegacyHitAndWin.tsx");
+const recommendationCenter = readText("src/components/recommendations/RecommendationCenter.tsx");
+const publishedPick = readText("src/components/recommendations/PublishedMatchPick.tsx");
 const app = readText("src/App.tsx");
 const navbar = readText("src/components/Navbar.tsx");
 const matchSummaryRow = readText("src/components/predictions/MatchSummaryRow.tsx");
@@ -57,48 +60,24 @@ pushCheck("schedule-only live state never fabricates an elapsed minute", hasAll(
   inferredStateIsExplicit: liveScorePresentation.includes("状态待确认")
 });
 
-pushCheck("live-pick pool remains a gated secondary tool", hasAll(bestTips, [
-  "赛前推荐",
-  "优先展示通过正式门槛",
-  "matches without official SP on sale are clearly marked unavailable",
-  "isPredictionOfficialResultPoolAvailable",
-  "getOfficialPredictionHandicapLine(match, prediction)",
-  "getLiveCandidatePrediction(match, now)",
-  "publicationTrack === 'live'"
+// The September unified publication UI replaced the former local live-pick pool.
+// Verify its actual entrypoints and immutable-record presentation contract.
+pushCheck("today entry uses the unified published recommendation center", hasAll(bestTips, [
+  "<RecommendationCenter", "selectedTab={tab}", "onTabChange={next=>"
 ]) && hasAll(app, [
-  '<Route path="/" element={<Navigate to="/predictions" replace />} />',
-  '<Route path="*" element={<Navigate to="/predictions" replace />} />',
-  'path="/tools"',
-  'path="/best"'
-  , "'/best': { zh: '赛前推荐', en: 'Pre-match Picks' }"
-]) && navbar.includes("setCurrentTab('tools')")
-  && navbar.includes('role="menuitem"'), {
-  defaultRouteIsPredictions: app.includes('<Route path="/" element={<Navigate to="/predictions" replace />} />'),
-  formalPoolInTools: app.includes("onClick: () => navigate('/best')")
-});
+  '<Route path="/" element={<Navigate to="/best" replace />} />',
+  '<Route path="*" element={<Navigate to="/best" replace />} />',
+  'path="/tools"', 'path="/best"'
+]) && hasAll(publishedPick, ["data-decision-id={d.decisionId}", "data-record-hash={d.recordHash}",
+  "selectionReferenceLabel(row.selectionQuality,language)", "publicationLifecycle(d,now)"]));
 
 const primaryNavStart = navbar.indexOf('const navItems');
 const primaryNavEnd = navbar.indexOf('export const Navbar', primaryNavStart);
 const primaryNavSource = navbar.slice(primaryNavStart, primaryNavEnd);
-pushCheck("primary navigation exposes the independent AI arena", hasAll(primaryNavSource, [
-  "key: 'predictions'",
-  "key: 'fixtures'",
-  "key: 'arena'",
-  "key: 'review'",
-  "key: 'leagues'",
-  "labelKey: 'topLeagues'"
-]) && !["key: 'best'", "key: 'generator'", "key: 'hitwin'"].some((needle) => primaryNavSource.includes(needle))
-  && hasAll(app, [
-    "fixtures: '/fixtures'",
-    "arena: '/ai-arena'",
-    "review: '/review'",
-    "leagues: '/leagues'",
-    "tools: '/tools'",
-    'path="/leagues"',
-    'path="/ai-arena"',
-    '<Route path="/worldcup" element={<Navigate to="/leagues" replace />} />',
-    '<Route path="/hitwin" element={<Navigate to="/review" replace />} />'
-  ]));
+pushCheck("primary navigation retains today and exposes strategy through the menu", hasAll(primaryNavSource, [
+  "key: 'best'", "key: 'fixtures'", "key: 'following'", "key: 'review'", "key: 'my'"
+]) && hasAll(navbar, ["setCurrentTab('arena')", "setCurrentTab('leagues')", "setCurrentTab('tools')", 'role="menuitem"'])
+  && hasAll(app, ["arena: '/ai-arena'", "leagues: '/leagues'", 'path="/ai-arena"', 'path="/leagues"']));
 
 // Both routes now share the same compact match/pick/SP/result row contract.
 pushCheck("analysis and fixtures routes share compact rows while retaining separate route state", hasAll(app, [
@@ -126,25 +105,12 @@ pushCheck("initial loading and errors never present a false zero-match conclusio
   'role="status" aria-live="polite"'
 ]));
 
-pushCheck("secondary tools are bounded and explain empty formal pools", hasAll(betSlip, [
-  "getFormalRecommendationPrediction",
-  "formalRecommendationCount >= 2",
-  'max="8.00"',
-  "(['auto', 2, 3, 5] as const)",
-  'min="62"',
-  "disabled={!canGenerateCombination}",
-  "onOpenObservations",
-  "参考推荐不会进入组合",
-  "正式推荐池不足 2 条"
-]) && !betSlip.includes('max="150.00"')
-  && !betSlip.includes("2, 3, 5, 10, 15")
-  && !betSlip.includes("setOnlyImportant")
-  && hasAll(personalReview, [
-    "个人赛前复盘笔记",
-    "不是本站官方推荐或公开挑战",
-    "个人选择与本站正式推荐分开统计"
-  ])
-  && !personalReview.includes("本设备世界杯预测记录"));
+pushCheck("combos and review use the same center with separate legacy records", hasAll(betSlip, [
+  "<RecommendationCenter", 'initialTab="two"'
+]) && hasAll(personalReview, ["<RecommendationCenter", 'mode="review"', '<LegacyHitAndWin/>', '不混入新成绩'])
+  && hasAll(recommendationCenter, ["comboPreviewForSize", "comboUnavailable||quoteExpired?comboWaitingMessage:",
+    "当前可用", "场不同比赛", "不会改选第二方向凑SP", "参考串关 · 模型未验证",
+    "单场每场统计截止前最后一个真实发布版本", "未结算不记为未命中"]));
 
 const eligibleBase = {
   marketType: "BEST",
@@ -247,14 +213,8 @@ pushCheck("analysis keeps the shared reference selector and evidence gates witho
   "const analysisReference = analysisReferenceSelection?.prediction",
   "const nowMs = clockNow",
   "getReferencePredictionOdds(match, pickedPrediction)"
-]) && hasAll(bestTips, [
-  "selectOnSaleAnalysisReference(match, { allowModelOnly: false, now })",
-  "reference.source === 'official-calibrated-market'",
-  "reference.source === 'official-market-consensus'",
-  "reference.source === 'five-hundred-market'",
-  "reference.source === 'official-low-evidence-market'",
-  "reference.source === 'five-hundred-low-evidence-market'",
-  "reference.source === 'model-low-evidence'"
+]) && hasAll(publishedPick, [
+  "selectionReferenceLabel(row.selectionQuality,language)", "SP {s.had.odds.toFixed(2)}", "!compact&&row.outcomeResearch"
 ]) && hasAll(analysisReferenceSelection, [
   "match.resultDisposition === 'VOID'",
   "match.status !== 'SCHEDULED'",
@@ -356,7 +316,7 @@ pushCheck("reference directions remain visible and never become unavailable or f
   "const pickedPrediction = reviewPrediction || displayRecommendation?.prediction || archivedPreMatchPrediction || analysisReference",
   "const isReferencePick = Boolean(",
   "(!isFinished && !displayRecommendation && analysisReference)",
-  "const hasPick = !isVoid && Boolean(pickedPrediction && directionLabel)",
+  "const hasPick = !isVoid && (useUnified ? Boolean(unifiedRow) : Boolean(pickedPrediction && directionLabel))",
   "hasPick ? directionLabel", "'暂无推荐' : 'No pick'",
   "isFormal ? 'is-formal' : 'is-reference'",
   "'正式' : 'Formal'", "'参考' : 'Reference'",
@@ -367,61 +327,22 @@ pushCheck("reference prices retain their selected SP without exposing the provid
   "const fiveHundredDisplayOdds = fiveHundredPresentation?.reference.selectedSourceOdds",
   "analysisReferenceSelection.displayOdds",
   "fiveHundredDisplayOdds && fiveHundredDisplayOdds > 1 ? fiveHundredDisplayOdds.toFixed(2)",
-  'odds={<><strong className="compact-sp">{sp}</strong>',
+  'odds={<><strong className="compact-sp">{useUnified ? unifiedRow?.decision.odds.toFixed(2)',
   'className="compact-sp-note"', "'推荐方向' : 'Selected pick'"
 ]) && !rowSource.includes("'500.com reference odds'") && !rowSource.includes("500数据推荐"));
 
-const directReferenceListStart = bestTips.indexOf('<div className="best-pool-v4__rows is-formal-list">');
-const directReferenceList = bestTips.slice(directReferenceListStart);
-const tipCardsStart = bestTips.indexOf('const tipCards = React.useMemo<TipCard[]>');
-const dataCardsStart = bestTips.indexOf('const observationCards = React.useMemo<ObservationCard[]>', tipCardsStart);
-const featuredCardsStart = bestTips.indexOf('const featuredMatchIds = React.useMemo', dataCardsStart);
-const translationsStart = bestTips.indexOf('const translations =', featuredCardsStart);
-const tipCardsSelection = bestTips.slice(tipCardsStart, dataCardsStart);
-const dataCardsSelection = bestTips.slice(dataCardsStart, featuredCardsStart);
-const featuredCardsSelection = bestTips.slice(featuredCardsStart, translationsStart);
-pushCheck("best tips renders every data pick and limits only the featured marker to three", directReferenceListStart >= 0
-  && hasAll(bestTips, [
-    "const getCleanPickLabel = (prediction: PredictionDetail, language: Language)",
-    "pickLabel: getCleanPickLabel(prediction, language)",
-    "tipCards.length === 0 && observationCards.length === 0",
-    "tipCards.length + observationCards.length",
-    "observation: { zh: '数据推荐', en: 'Data pick' }",
-    "blockers: { zh: '推荐依据', en: 'Pick basis' }",
-    "reference.source === 'official-market-consensus'",
-    "官方去水市场首位达到数据推荐门槛；独立复盘",
-    "全部赛前推荐 · 重点 3 场",
-    "市场去水概率 ${probabilityLabel} · 证据等级低",
-    "saleClosed: boolean",
-    "售卖已截止；仅保留截止前锁定数据，不可执行",
-    "截止前锁定 · 不可执行",
-    "已锁定数据推荐"
-  ])
-  && hasAll(directReferenceList, [
-    "{tipCards.map((card) => {",
-    "{observationCards.map((card) => {",
-    'key={`reference-${match.id}',
-    'className="best-pool-v4__row is-observation"',
-    "card.referenceSource === 'official-market-consensus'",
-    "官方市场数据推荐"
-  ])
-  && !tipCardsSelection.includes(".slice(0, 3)")
-  && !dataCardsSelection.includes("remainingSlots")
-  && hasAll(featuredCardsSelection, [
-    "[...tipCards, ...observationCards]",
-    ".slice(0, 3)"
-  ])
-  && !bestTips.includes("card.evidenceScore ?? Number(prediction.trustScore || 0)")
-  && !bestTips.includes("<details")
-  && !bestTips.includes("观察")
-  && !bestTips.includes("if (tipCards.length > 0) return []"));
+pushCheck("today renders all filtered publications without an arbitrary top-three cap", hasAll(recommendationCenter, [
+  "const [qualifiedOnly,setQualifiedOnly]=useState(false)", "visibleRows.map(row=><Pick",
+  "quality={row.selectionQuality}", "key={row.decision.decisionId}", "暂时没有可展示的推荐",
+  "有效赛前数据到达后会自动更新"
+]) && !recommendationCenter.includes("rows.slice(0,3)") && !recommendationCenter.includes("rows.slice(0, 3)"));
 
 const rollingDayContract = hasAll(predictions, [
   "const hasFreshListReturnScroll =",
   "const restoreReturnView = React.useMemo(() => hasFreshListReturnScroll(viewMode), [viewMode])",
   "const previousTodayRef = React.useRef(todayStr)",
   "setSelectedDate((current) => current === previousToday ? todayStr : current)",
-  "const filteredMatches = baseFilteredMatches",
+  "if (!normalizedSearch) return baseFilteredMatches",
   "const directionShownCount = recommendationCounts.home + recommendationCounts.draw + recommendationCounts.away"
 ]) && !predictions.includes("signal-quick-filter") && !predictions.includes("signalFilter");
 pushCheck("analysis always opens on the complete day and rolls forward across midnight", rollingDayContract || hasAll(predictions, [
@@ -429,20 +350,20 @@ pushCheck("analysis always opens on the complete day and rolls forward across mi
   "const restoreReturnView = React.useMemo(() => hasFreshListReturnScroll(viewMode), [viewMode])",
   "const previousTodayRef = React.useRef(todayStr)",
   "setSelectedDate((current) => current === previousToday ? todayStr : current)",
-  "const filteredMatches = baseFilteredMatches"
+  "if (!normalizedSearch) return baseFilteredMatches"
 ]) && !predictions.includes("有方向")
   && !predictions.includes("signal-quick-filter")
   && !predictions.includes("signalFilter"));
 
 pushCheck("fixtures keeps the full schedule in the selected sort order", hasAll(predictions, [
-  "const filteredMatches = baseFilteredMatches",
+  "if (!normalizedSearch) return baseFilteredMatches",
   "const sorted = [...filteredMatches]",
   "comparison = new Date(a.kickoffTime).getTime() - new Date(b.kickoffTime).getTime()"
 ]) && !predictions.includes("if (aHasDirection !== bHasDirection)"));
 
 pushCheck("every row renders market odds separately from direction, SP and archived results", rowStart >= 0
   && hasAll(predictions, ["group.matches.map(renderMatchRow)", "getArchivedPreMatchPrediction(match, nowMs)"])
-  && hasAll(rowSource, ["pick={<div", "odds={<><strong", "result={<span",
+  && hasAll(rowSource, ["pick={useUnified ? <PublishedMatchPick", "odds={<><strong", "result={<span",
     "marketOdds={<MatchMarketOdds match={match} language={language} capturedData={capturedDataByMatchId?.[match.id]} />}"])
   && hasAll(matchSummaryRow, [
     "pick: ReactNode", "odds: ReactNode", "result: ReactNode", "marketOdds: ReactNode",
@@ -465,7 +386,6 @@ pushCheck("filters are keyboard-accessible and collapsed by default", filterDeta
   && hasAll(filterDetails, [
     '<summary className="filters-summary">',
     "筛选与排序",
-    "filteredMatches.length",
     "filterLeagueSummary"
   ]) && hasAll(css, [
     ".filters-panel.filters-details",
@@ -547,14 +467,16 @@ const evidenceTabEnd = matchDetail.indexOf("{activeTab === 'history' && (", evid
 const evidenceTab = matchDetail.slice(evidenceTabStart, evidenceTabEnd);
 const overviewTabStart = matchDetail.indexOf("{activeTab === 'overview' && (");
 const overviewTab = matchDetail.slice(overviewTabStart, evidenceTabStart);
-pushCheck("detailed evidence belongs to the match analysis tab and is absent from list and overview", evidenceTabStart >= 0
+pushCheck("supplemental evidence stays in analysis while other panels use the published record only", evidenceTabStart >= 0
   && evidenceTabEnd > evidenceTabStart && overviewTabStart >= 0
   && hasAll(evidenceTab, [
     'data-section="evidence"', "<RecommendationEvidenceFacts", "match={match}",
     "prediction={primaryOutcomePrediction || primaryPostReviewPrediction}", 'className="is-detail"',
-    "数据与分析", "确认首发、预计阵容和模型估计各按实际状态展示"
+    "数据与分析", "补充模型快照与最新采集资料分别标明来源"
   ]) && !overviewTab.includes("<RecommendationEvidenceFacts")
-  && (matchDetail.match(/<RecommendationEvidenceFacts\b/g) || []).length === 1
+  && (matchDetail.match(/<RecommendationEvidenceFacts\b/g) || []).length === 3
+  && (matchDetail.match(/supplementaryModel=\{false\}/g) || []).length === 2
+  && hasAll(matchDetail, ["publishedDecision={unifiedRow?.decision || null}"])
   && !predictions.includes("RecommendationEvidenceFacts"));
 
 pushCheck("daily review retains separate formal, live, reference BEST and analysis denominators", hasAll(predictions, [
@@ -583,7 +505,7 @@ pushCheck("date chips use only the Sporttery business-day scope", hasAll(predict
   "const sportteryDay = getSportteryDay(match);",
   "return sportteryDay ? [sportteryDay] : [];",
   'data-date-scope="sporttery-business-date"',
-  "按竞彩业务日归档；跨午夜比赛只计入原竞彩日。"
+  "按竞彩日查看，跨午夜比赛仍归属原竞彩日。"
 ]) && !predictions.includes("kickoffDay,\n    sportteryDay"));
 
 pushCheck("date navigation opens the nearest available match day and stays user-controlled", hasAll(predictions, [
@@ -592,7 +514,7 @@ pushCheck("date navigation opens the nearest available match day and stays user-
   "const nearestAvailableDate = nearestUpcomingDate || nearestRecentDate",
   "setAutomaticInitialDateResolved(true)",
   "onSelectDate={handleDateSelect}"
-]) && hasAll(personalReview, [
+]) && hasAll(legacyPersonalReview, [
   "<DateScopeBar",
   "quickReviewDates",
   "olderReviewDates",
@@ -622,7 +544,7 @@ pushCheck("publication samples exclude candidate, live and reference rows even w
 pushCheck("fixture header reports only the selected date and filter count", hasAll(predictions, [
   "matches.filter((match) => matchBelongsToDate(match, effectiveSelectedDate))",
   "baseFilteredMatches.length + (language === 'zh' ? ' 场比赛' : ' matches')",
-  "查看比赛赔率、推荐方向、SP 与赛后结果"
+  "按竞彩日查看赛程、SP 与赛后结果"
 ]) && !predictions.includes("场方向已显示") && !predictions.includes("directions shown")
   && !predictions.includes("predictions-v4__evidence-snapshot"));
 

@@ -23,6 +23,7 @@ export interface HadDirectionSelection {
 }
 export interface Decision {
   decisionId:string; sourceMatchId:string; matchId:string; eventVersion:string; businessDate:string;
+  modelValidation?:'unvalidated';
   publishedAt:string; cutoffTime:string; kickoffTime:string; homeTeamName:string; awayTeamName:string;
   matchNo:string|null; tipCode:Outcome; odds:number; probabilities:Record<Outcome,number>;
   modelProbability:number; modelGeneratedAt:string; quoteObservedAt:string; recordHash:string; quoteSource?:string|null; quoteOdds?:Record<Outcome,number>;
@@ -276,7 +277,7 @@ function decision(v:unknown):Decision{
 
   if(d.primaryPickPolicyVersion!==undefined&&d.primaryPickPolicyVersion!=='independent-market-primary-v1')throw new Error('Unknown primary pick policy');
   if(d.primaryPickPolicyVersion!==undefined&&d.supplementaryPolicyVersion!=='supplementary-research-v2')throw new Error('Inconsistent primary pick policy');
-  return {primaryPickPolicyVersion:d.primaryPickPolicyVersion as Decision['primaryPickPolicyVersion'],decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash,quoteSource,...(quoteOdds?{quoteOdds}:{}),handicapAnalysis:parsedHandicap,directionSelection, supplementaryResearch:parseSupplementaryResearch(d)};
+  return {primaryPickPolicyVersion:d.primaryPickPolicyVersion as Decision['primaryPickPolicyVersion'],modelValidation:'unvalidated',decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash,quoteSource,...(quoteOdds?{quoteOdds}:{}),handicapAnalysis:parsedHandicap,directionSelection, supplementaryResearch:parseSupplementaryResearch(d)};
 }
 function parseSupplementaryResearch(d:Obj):SupplementaryResearch|null{
   if(d.supplementaryPolicyVersion===undefined){if(d.supplementaryResearch!==undefined)throw new Error('Unversioned supplementary picks');return null;}
@@ -713,7 +714,7 @@ export function handicapExtensionText(h:NonNullable<ReturnType<typeof primarySel
 }
 
 export function quoteSourceLabel(d:Pick<Decision,'quoteSource'>,language:'zh'|'en'):string {
-  if(d.quoteSource==='500.com:jczq:HAD')return language==='zh'?'500竞彩页面转录':'500 JCZQ SP copy';
+  if(d.quoteSource==='500.com:jczq:HAD')return language==='zh'?'500网竞彩页转录 · 非官方直连':'500 JCZQ page copy · not a direct official feed';
   if(/^sporttery:(?:had|hhad)(?:$|:)/i.test(d.quoteSource||''))return language==='zh'?'竞彩网来源SP':'Sporttery-sourced SP';
   return language==='zh'?'已存档SP，来源见原记录':'Archived SP; see original source';
 }

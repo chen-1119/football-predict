@@ -3534,6 +3534,10 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       run: (extraEnv) => runEnrichment(true, "sync:openfootball-observations", extraEnv),
     });
     const footballDataFixturesStatus = readJson(footballDataFixturesStatusFile, null);
+    const openLigaDbShadowStep = await runEnrichment(
+      process.env.ENABLE_OPENLIGADB_SHADOW_SYNC === "1",
+      "sync:openligadb-shadow",
+    );
     enrichmentSteps.push(await runFootballDataFixtureRetry({
       enabled: process.env.ENABLE_FOOTBALL_DATA_FIXTURES_SYNC !== "0",
       checkedAt: footballDataFixturesStatus?.checkedAt,
@@ -3854,6 +3858,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     });
     const slowSteps = [
       communityReceiptStep,
+      openLigaDbShadowStep,
       ...enrichmentSteps,
       sourceValidationStep,
       postEnrichmentDataValidationStep,
@@ -3906,6 +3911,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       releaseEnrichmentReuse,
       enrichmentSteps,
       communityReceiptStep,
+      openLigaDbShadowStep,
       sourceValidationStep,
       postEnrichmentDataValidationStep,
       postEnrichmentPublicationPlan,

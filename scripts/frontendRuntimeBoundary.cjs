@@ -37,7 +37,9 @@ const EXTERNAL_UNITS = deepFreeze({
 // arbitrary command. Their enclosing function source must remain exact, and
 // baseline/candidate package and entire reachable-source bytes must also match.
 const COMMAND_FUNCTIONS = deepFreeze({
-  "scripts/syncDailyPrematchApi.cjs": ["91da78aabb2c925254c42abec031be710d4f9a5316a2ba059533b60189b3bedf"],
+  // Reviewed credential-fingerprint backoff recovery; child command and its
+  // fixed environment/arguments remain independently pinned below.
+  "scripts/syncDailyPrematchApi.cjs": ["14f9823eb5fc60c308afb761ed3546398132a5c7cb6b64903aca47acfb6fc4c9"],
   "server/index.cjs": ["209dac00faf2eb81c7c6348cacd5c273dd31dfc8ef913d9f77e0cf2fd4a621b6"],
   "server/relayFastResultWatcher.cjs": ["dbea20508195f9cafdb058ff0e4242448cac19a914c163ef961cfa5d16243567"],
   "scripts/runSyncWorker.cjs": ["7ae9788ce2e4cbc8d321f4750c49de0bb653f132e19497bff992f7e08cb3ac37", "013f6d2f9ffd51b26366edb7f4f942ec80614e91101618a627277ba5d6cf2dbc"],
@@ -62,7 +64,7 @@ const PROCESS_PARAMETER_ALIAS = Object.freeze({ file: "server/relayFastResultWat
   target: "scripts/publishOfficialResultsFast.cjs" });
 const DAILY_PREMATCH_CHILD = Object.freeze({ file: "scripts/syncDailyPrematchApi.cjs", api: "spawnSync",
   target: "scripts/syncApiFootballData.cjs",
-  functionSha256: "91da78aabb2c925254c42abec031be710d4f9a5316a2ba059533b60189b3bedf",
+  functionSha256: "14f9823eb5fc60c308afb761ed3546398132a5c7cb6b64903aca47acfb6fc4c9",
   callSha256: "b2ebc786811b687528499c0b1127882080858bed62dc18fc4368f84f377f9ba3" });
 const COMMAND_CALLER_FUNCTIONS = deepFreeze({
   "server/index.cjs": ["6444af2f96dc8c27a42b17fde3c1e8ecbbf78b431400db68705d79f435b81962",
@@ -74,7 +76,7 @@ const COMMAND_CALLER_FUNCTIONS = deepFreeze({
     "dc5ba7f3cc3b8e8e65d6dc9450fce24c99b9575fdca632d9c8f3c114d749dfd2", "e35c0a392d9a0ab5ca3abdd8375d0578c8b06bd508da82871c3f23e7d81751e3",
     // Reviewed native coverage await and postgres:sync routing. Commands stay
     // literal; the full reachable code and package graph are still compared.
-    "994b5f575e5f8141fc06500fee5a2e036db26d6f3b4248673f462cdd97f701eb", "50b4a036b586195589da6e7b56c11c6a1daa40cc8d183f8af039bc8415e42ff5"],
+    "994b5f575e5f8141fc06500fee5a2e036db26d6f3b4248673f462cdd97f701eb", "67a23f267b1ae9309b0e7c9a77809d9bde13213ce280f3f1ef07ebae199e5801"],
 });
 const UNIT_SOURCE_HASHES = Object.freeze({
   "football-daily-prematch.service": "9e6af93d56635ed0940590b4a027e02ab5310080e53b2873775b520f46796d8a",

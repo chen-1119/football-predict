@@ -151,6 +151,7 @@ const run = async () => {
   const { createServer } = await import('vite');
   const React = await import('react');
   const { renderToStaticMarkup } = await import('react-dom/server');
+  const { MemoryRouter } = await import('react-router-dom');
   const viteCacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'football-match-detail-vite-'));
   let vite;
 
@@ -169,10 +170,22 @@ const run = async () => {
         // tree. Resolve its browser alias to the same real CJS implementation;
         // a virtual ESM bridge uses Node's real CJS loader, not a mock or copy.
         resolveId(id) {
+          if (id.endsWith('/publishedRecommendationStatus.cjs')) {
+            return '\0published-recommendation-status:ssr-verifier';
+          }
           if (id !== 'football-collector-diagnostics') return null;
           return '\0football-collector-diagnostics:ssr-verifier';
         },
         load(id) {
+          if (id === '\0published-recommendation-status:ssr-verifier') {
+            return `import { createRequire } from 'node:module';
+              const load = createRequire(${JSON.stringify(pathToFileURL(path.join(rootDir, 'package.json')).href)});
+              const status = load(${JSON.stringify(path.join(rootDir, 'src/services/publishedRecommendationStatus.cjs'))});
+              export const selectionPriceStatus = status.selectionPriceStatus;
+              export const selectionReferenceLabel = status.selectionReferenceLabel;
+              export const publicationLifecycle = status.publicationLifecycle;
+              export const publicationLifecycleLabel = status.publicationLifecycleLabel;`;
+          }
           if (id !== '\0football-collector-diagnostics:ssr-verifier') return null;
           return `import { createRequire } from 'node:module';
             const load = createRequire(${JSON.stringify(pathToFileURL(path.join(rootDir, 'package.json')).href)});
@@ -190,6 +203,7 @@ const run = async () => {
 
     const detailModule = await vite.ssrLoadModule('/src/pages/MatchDetail.tsx');
     const contextModule = await vite.ssrLoadModule('/src/context/AppContextCore.ts');
+    const accountModule = await vite.ssrLoadModule('/src/context/AccountContext.tsx');
     const adoptionModule = await vite.ssrLoadModule('/src/services/dataAdoption.ts');
     const collectorModule = await vite.ssrLoadModule('football-collector-diagnostics');
     const diagnostics = require('../src/services/apiFootballDiagnostics.cjs');
@@ -201,6 +215,7 @@ const run = async () => {
         === JSON.stringify(diagnostics.compactApiFootballDiagnostics(collectorFixture.externalSignals)));
     const { MatchDetail, getMatchFreshnessTime, isFormalPostReviewRow, selectFreshestMatch } = detailModule;
     const { AppContext } = contextModule;
+    const { AccountProvider } = accountModule;
     const fixture = loadFixture();
     const now = Date.now();
     const formalSettledRow = {
@@ -395,9 +410,13 @@ const run = async () => {
 
     const renderMatch = (match) => renderToStaticMarkup(
       React.createElement(
-        AppContext.Provider,
-        { value: contextValue(match) },
-        React.createElement(MatchDetail, { matchId: match.id, onBack: () => {} })
+        MemoryRouter,
+        null,
+        React.createElement(AccountProvider, null,
+          React.createElement(AppContext.Provider, { value: contextValue(match) },
+            React.createElement(MatchDetail, { matchId: match.id, onBack: () => {} })
+          )
+        )
       )
     );
 
@@ -428,9 +447,14 @@ const run = async () => {
       oddsTrend: { sampleSize: 2, direction: 'flat' }
     });
     check('pending-result insight is settlement-only and tolerates a missing trend summary',
-      pendingHtml.includes('Awaiting Official Result')
-      && pendingHtml.includes('Result pending')
-      && !pendingHtml.includes('Pick Direction'));
+      pendingHtml.includes('Awaiting official result')
+      && pendingHtml.includes('Pre-match record settling')
+      && pendingHtml.includes('No temporary direction shown')
+      && !pendingHtml.includes('Pick Direction'), {
+        awaitingTitle: pendingHtml.includes('Awaiting official result'),
+        pendingStatus: pendingHtml.includes('Pre-match record settling'),
+        pickDirectionShown: pendingHtml.includes('Pick Direction')
+      });
 
     const partialReviewFinished = {
       ...finishedContext,

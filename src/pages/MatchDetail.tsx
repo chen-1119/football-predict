@@ -4,7 +4,7 @@ import { publishedMatchRecommendation, publishedPosteriorDisagreement, usesPubli
 import { PublishedMatchPick } from '../components/recommendations/PublishedMatchPick';
 import { DualResearchV2 } from '../components/recommendations/DualResearchV2';
 import { publishedDetailPresentation } from '../services/publishedDetailPresentation';
-import { boundOfficialHandicapSp } from '../services/recommendationCenterView';
+import { boundOfficialHandicapSp, quoteSourceLabel } from '../services/recommendationCenterView';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContextCore';
 import type { FiveHundredRecentFormRow, League, Match, MatchProbabilityModel, MultiLangString, OutcomeProbability, PredictionDetail, ScoreProbability } from '../services/mockData';
@@ -1856,6 +1856,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     ? publishedPosteriorDisagreement(match, unifiedRow?.decision || null)
     : null;
   const publishedDetail = publishedDetailPresentation(unifiedRow?.decision || null, probabilityModel?.scoreDistribution, unifiedRow?.scoreDistribution);
+  // A modal score is a distribution statistic, not a qualified exact-score pick.
+  const scoreDistributionOnly = useUnified && unifiedRow?.decision.modelValidation === 'unvalidated';
   const publishedMatrix = useUnified && publishedDetail?.scoreSource === 'published-matrix'
     ? unifiedRow?.scoreDistribution : null;
   const publishedTotals = publishedMatrix?.status === 'available' ? publishedMatrix.totalGoals : undefined;
@@ -2064,6 +2066,14 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   const scoreDistributionRows = Array.isArray(probabilityModel?.scoreDistribution)
     ? probabilityModel.scoreDistribution
     : [];
+  const displayedScoreDistributionRows = publishedDetail?.scoreSource === 'published-matrix'
+    ? publishedDetail.globalScores : scoreDistributionRows;
+  const displayedOver25 = publishedTotals?.length === 8
+    ? publishedTotals.slice(3).reduce((sum, row) => sum + row.probability, 0) * 100
+    : probabilityModel?.goalLines?.over25;
+  const displayedUnder25 = publishedTotals?.length === 8
+    ? publishedTotals.slice(0, 3).reduce((sum, row) => sum + row.probability, 0) * 100
+    : probabilityModel?.goalLines?.under25;
   const scoreDistributionCandidates: ScoreRecommendationCandidate[] = scoreDistributionRows.map((score) => ({
     home: score.home,
     away: score.away,
@@ -2127,15 +2137,26 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           : (language === 'zh' ? '备选比分' : 'Alt score')
     };
   });
+  const independentAlignedScore = unifiedRow?.decision.primaryPickPolicyVersion === 'independent-market-primary-v1'
+    ? publishedDetail?.alignedScores[0] : null;
   const scoreRecommendations = useUnified
-    ? [publishedDetail?.primaryScore, publishedDetail?.alternativeScore].filter((score): score is ScoreProbability => Boolean(score)).map((score, index) => ({
-      ...score, tone: index === 0 ? 'aligned' : 'alternate',
-      tag: index === 0
-        ? publishedDetail?.scoreSource === 'published-matrix' ? (unifiedRow?.decision.primaryPickPolicyVersion ? (language === 'zh' ? '比分首选 · 低置信' : 'Score primary · low confidence') : (language === 'zh' ? '同一模型同向比分' : 'Aligned score from the same model')) : (language === 'zh' ? '旧补充分布 · 同向参考' : 'Legacy supplemental aligned score')
-        : (language === 'zh' ? '全局备选 · 不改变首选' : 'Global alternative · primary unchanged'),
-    }))
+    ? (scoreDistributionOnly ? publishedDetail?.globalScores.slice(0, 3) || [] : [publishedDetail?.primaryScore,
+      independentAlignedScore?.label !== publishedDetail?.primaryScore?.label
+        ? independentAlignedScore : publishedDetail?.alternativeScore])
+      .filter((score): score is ScoreProbability => Boolean(score)).map((score, index) => ({
+        ...score, tone: index === 0 ? 'aligned' : 'alternate',
+        tag: scoreDistributionOnly
+          ? (language === 'zh' ? '冻结矩阵概率排序 · 未校准' : 'Frozen matrix rank · uncalibrated')
+          : index === 0
+          ? publishedDetail?.scoreSource === 'published-matrix' ? (unifiedRow?.decision.primaryPickPolicyVersion ? (language === 'zh' ? '单一比分概率最高 · 低置信' : 'Highest single-score probability · low confidence') : (language === 'zh' ? '同一模型同向比分' : 'Aligned score from the same model')) : (language === 'zh' ? '旧补充分布 · 同向参考' : 'Legacy supplemental aligned score')
+          : independentAlignedScore?.label === score.label
+            ? (language === 'zh' ? '与胜平负首选同向 · 低置信' : 'Aligned with 1X2 primary · low confidence')
+            : (language === 'zh' ? '全局备选 · 不改变首选' : 'Global alternative · primary unchanged'),
+      }))
     : legacyScoreRecommendations;
-  const displayedScoreText = useUnified ? publishedDetail?.primaryScore?.label || (language === 'zh' ? '暂无同向比分' : 'No aligned score available') : projectedScoreText;
+  const displayedScoreText = scoreDistributionOnly
+    ? (language === 'zh' ? '暂无可靠单一比分推荐' : 'No qualified exact-score pick')
+    : useUnified ? publishedDetail?.primaryScore?.label || (language === 'zh' ? '暂无同源比分' : 'No bound score available') : projectedScoreText;
   const lockedTagText = useUnified
     ? publishedDetail?.scoreSource === 'published-matrix' ? (language === 'zh' ? '同一发布记录' : 'Same published record')
       : publishedDetail?.scoreSource === 'legacy-supplemental' ? (language === 'zh' ? '旧补充分布' : 'Legacy supplemental distribution')
@@ -2204,7 +2225,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       ? `参考价 ${fiveHundredMarketReference.reference.selectedSourceOdds.toFixed(2)}`
       : `Reference ${fiveHundredMarketReference.reference.selectedSourceOdds.toFixed(2)}`)
     : publicRecommendationCopy.oddsLabel;
-  const publicScoreNote = useUnified
+  const publicScoreNote = scoreDistributionOnly && publishedDetail?.scoreSource === 'published-matrix'
+    ? (language === 'zh'
+      ? '下方列出冻结模型中概率最高的单一比分及其概率，用于理解分布；模型尚未校准，不能把最高项当作精准比分推荐，也不能为了让比分看起来多样而改动概率。'
+      : 'The scores below are the highest-probability outcomes in the frozen model distribution. The model is uncalibrated, so the mode is not an exact-score pick; probabilities are not changed for visual variety.')
+    : useUnified
     ? publishedDetail?.scoreSource === 'published-matrix'
       ? (unifiedRow?.decision.primaryPickPolicyVersion ? (language === 'zh' ? '各玩法来自同一完整比分分布，分别选择首选。比分首选不强制符合胜平负或让球首选；单个比分概率不等于总进球或胜平负概率。' : 'Each market selects its own primary from the same full score distribution. The score mode need not match the marginal 1X2 or handicap pick.') : (language === 'zh' ? '比分与胜平负、让球来自同一发布记录。首选比分同时符合两个方向；全局备选保留模型原始排序。单一比分概率不是胜平负总概率，也不是实际命中率。' : 'Scores, 1X2 and handicap use the same published record. The primary score matches both directions; the global alternative keeps the model ranking. An individual score probability is neither an outcome total nor an observed hit rate.'))
       : publishedDetail?.scoreSource === 'legacy-supplemental'
@@ -3162,7 +3187,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                     </div>
                   ) : scoreRecommendations.length ? scoreRecommendations.map((score, index) => (
                     <div key={score.label} className={`recommendation-score-option is-${score.tone}`}>
-                      <span>{index === 0 ? (language === 'zh' ? '比分一' : 'Score 1') : (language === 'zh' ? '比分二' : 'Score 2')}</span>
+                      <span>{scoreDistributionOnly
+                        ? (language === 'zh' ? `概率第 ${index + 1}` : `Probability rank ${index + 1}`)
+                        : index === 0 ? (language === 'zh' ? '比分一' : 'Score 1') : (language === 'zh' ? '比分二' : 'Score 2')}</span>
                       <strong>{score.label}</strong>
                       <em>{score.tag}</em>
                       {useUnified && typeof score.probability === 'number' && Number.isFinite(score.probability) && <small>{score.probability.toFixed(1)}% · {language === 'zh' ? '单一比分概率' : 'Individual score probability'}</small>}
@@ -3212,7 +3239,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                     <span>{language === 'zh' ? '胜平负' : '1X2'}</span>
                     <strong>{publishedHadNames[unifiedRow.decision.tipCode]}</strong>
                     <em>{language === 'zh' ? '已冻结方向' : 'Frozen direction'}</em>
-                    <small>{(unifiedRow.decision.modelProbability * 100).toFixed(1)}% · SP {unifiedRow.decision.odds.toFixed(2)}</small>
+                    <small>{(unifiedRow.decision.modelProbability * 100).toFixed(1)}% · {unifiedRow.decision.quoteSource === '500.com:jczq:HAD' ? (language === 'zh' ? '参考价' : 'Reference price') : 'SP'} {unifiedRow.decision.odds.toFixed(2)} · {quoteSourceLabel(unifiedRow.decision, language)}</small>
                   </div>
                   <div className="recommendation-score-option">
                     <span>{language === 'zh' ? '让球胜平负' : 'Handicap 1X2'}</span>
@@ -3232,12 +3259,15 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   </div>
                   <div className="recommendation-score-option">
                     <span>{language === 'zh' ? '比分' : 'Exact score'}</span>
-                    <strong>{publishedDetail?.scoreSource === 'published-matrix' ? publishedDetail.primaryScore?.label || '—' : '—'}</strong>
+                    <strong>{scoreDistributionOnly ? '—' : publishedDetail?.scoreSource === 'published-matrix' ? publishedDetail.primaryScore?.label || '—' : '—'}</strong>
                     <em>{publishedDetail?.scoreSource === 'published-matrix'
-                      ? (language === 'zh' ? '同一冻结比分矩阵' : 'Same frozen score matrix')
+                      ? (scoreDistributionOnly ? (language === 'zh' ? '无可靠单一比分推荐' : 'No qualified exact-score pick') : (language === 'zh' ? '单一比分概率最高 · 低置信' : 'Highest single-score probability · low confidence'))
                       : (language === 'zh' ? '同源比分矩阵不可用' : 'Bound score matrix unavailable')}</em>
                     <small>{publishedDetail?.scoreSource === 'published-matrix' && publishedDetail.primaryScore
-                      ? `${publishedDetail.primaryScore.probability.toFixed(1)}% · ` : ''}{language === 'zh' ? '本条未绑定竞彩比分 SP，仅作模型参考' : 'No official exact-score SP bound; model reference only'}</small>
+                      ? `${language === 'zh' ? '最高单点' : 'Mode'} ${publishedDetail.primaryScore.label} ${publishedDetail.primaryScore.probability.toFixed(1)}% · ` : ''}{language === 'zh' ? '本条未绑定竞彩比分 SP，仅作模型参考' : 'No official exact-score SP bound; model reference only'}</small>
+                    {independentAlignedScore && independentAlignedScore.label !== publishedDetail?.primaryScore?.label && (
+                      <small>{language === 'zh' ? '与胜平负同向参考：' : 'Aligned with 1X2: '}{independentAlignedScore.label} · {independentAlignedScore.probability.toFixed(1)}%</small>
+                    )}
                   </div>
                   <div className="recommendation-score-option">
                     <span>{language === 'zh' ? '总进球数' : 'Total goals'}</span>
@@ -3891,15 +3921,20 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   {renderCalculationFormulaPanel()}
 
                   <section className="probability-panel">
-                    <h4>{language === 'zh' ? '比分分布' : 'Score Distribution'}</h4>
+                    <h4>{language === 'zh' ? '比分分布（单一比分参考）' : 'Score Distribution (single-score reference)'}</h4>
                     <div className="score-probability-list">
-                      {scoreDistributionRows.slice(0, 5).map((scoreItem) => (
+                      {displayedScoreDistributionRows.slice(0, 5).map((scoreItem) => (
                         <span key={scoreItem.label}>
                           <strong>{scoreItem.label}</strong>
                           {formatProbabilityValue(scoreItem.probability)}
                         </span>
                       ))}
                     </div>
+                    {probabilityModel.scoreCalibration?.sample?.rows === 0 && (
+                      <p className="probability-weight-line">{language === 'zh'
+                        ? '暂无可核验的赛前比分样本；最高概率比分不是精准比分推荐。'
+                        : 'No verified pre-match score sample is available; the modal score is not an exact-score pick.'}</p>
+                    )}
                     {probabilityModel.scoreCalibration?.sample && (
                       <div className="probability-pair-grid" style={{ marginTop: '0.75rem' }}>
                         <span>
@@ -3929,8 +3964,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   <section className="probability-panel">
                     <h4>{language === 'zh' ? '进球概率' : 'Goal Probability'}</h4>
                     <div className="probability-pair-grid">
-                      <span>{language === 'zh' ? '大 2.5' : 'Over 2.5'} <strong>{formatProbabilityValue(probabilityModel.goalLines?.over25)}</strong></span>
-                      <span>{language === 'zh' ? '小 2.5' : 'Under 2.5'} <strong>{formatProbabilityValue(probabilityModel.goalLines?.under25)}</strong></span>
+                      <span>{language === 'zh' ? '大 2.5' : 'Over 2.5'} <strong>{formatProbabilityValue(displayedOver25)}</strong></span>
+                      <span>{language === 'zh' ? '小 2.5' : 'Under 2.5'} <strong>{formatProbabilityValue(displayedUnder25)}</strong></span>
                     </div>
                   </section>
 
@@ -4257,7 +4292,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               <div className="card score-projection-card match-detail-v4__score-projection">
                 <h4 className="match-detail-v4__score-heading">
                   <Trophy size={16} />
-                  {t('scorePrediction')}
+                  {scoreDistributionOnly ? (language === 'zh' ? '比分分布参考' : 'Score distribution reference') : t('scorePrediction')}
                 </h4>
                 <div className="match-detail-v4__score-value">
                   {displayedScoreText}

@@ -39,6 +39,10 @@ const bestTipsSource = fs.readFileSync(
   path.join(rootDir, "src/pages/BestTips.tsx"),
   "utf8"
 );
+const recommendationCenterSource = fs.readFileSync(
+  path.join(rootDir, "src/components/recommendations/RecommendationCenter.tsx"),
+  "utf8"
+);
 const analysisReferenceSelectionSource = fs.readFileSync(
   path.join(rootDir, "src/services/analysisReferenceSelection.ts"),
   "utf8"
@@ -218,16 +222,13 @@ check("frontend keeps formal gates while reference directions remain separately 
   && predictionsListSource.includes("selectOnSaleAnalysisReference(match")
   && analysisReferenceSelectionSource.includes("isModelOnlyAnalysisReferenceEligible(match, storedBest, now)")
   && analysisReferenceSelectionSource.includes("recommendationAction: 'reference'")
-  && bestTipsSource.includes("const formal = comboEnabled && isBeforeMatchSaleCutoff(match, now)")
-  && bestTipsSource.includes("const reference = selectOnSaleAnalysisReference(match, { allowModelOnly: false, now })")
-  && bestTipsSource.includes("const comboEnabled = formalPresentationAllowed")
-  && bestTipsSource.includes("const publishedIds = React.useMemo(() => new Set(")
-  && bestTipsSource.includes("pickCards.map((card)")
-  && bestTipsSource.includes("不计正式命中率")
-  && officialEligibilitySource.includes("prediction.recommendationAction === 'recommend'")
-  && officialEligibilitySource.includes("Number.isFinite(odds)")
-  && officialEligibilitySource.includes("odds > 1")
-  && officialEligibilitySource.includes("recommendationLinesMatch(prediction, evidence, currentOfficialHandicapLine)")
+  && bestTipsSource.includes("<RecommendationCenter language={language}")
+  && recommendationCenterSource.includes("未绑定官方 SP，不计算收益率，模型尚未验证")
+  && recommendationCenterSource.includes("新鲜、完整的官方赔率")
+  && analysisReferenceSelectionSource.includes("不计正式命中率")
+  && officialEligibilitySource.includes("prediction.recommendationAction !== 'recommend'")
+  && officialEligibilitySource.includes("!Number.isFinite(odds) || odds <= 1")
+  && officialEligibilitySource.includes("exports.recommendationLinesMatch)(prediction, evidence, currentOfficialHandicapLine)")
   && !displayRecommendationSource.includes("const getHandicapOverride =")
   && recommendationCopySource.includes("isFormalRecommendationPrediction(match, prediction)")
   && matchDetailSource.includes("isFormalPrimaryRecommendation")

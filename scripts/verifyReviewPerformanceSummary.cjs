@@ -295,7 +295,8 @@ check("market compaction rejects missing/extra groups and cross-market daily dri
   assert.equal(compactReferenceReviewPerformance(legacy).cumulative.settled, 2);
   assert.equal(compactReferenceReviewPerformance(legacy).marketBreakdown, undefined);
 });
-const pageSource = fs.readFileSync(path.join(rootDir, "src/pages/HitAndWin.tsx"), "utf8");
+const pageSource = fs.readFileSync(path.join(rootDir, "src/pages/LegacyHitAndWin.tsx"), "utf8");
+const currentReviewPage = fs.readFileSync(path.join(rootDir, "src/pages/HitAndWin.tsx"), "utf8");
 // Execute the actual TSX component with read-only React hooks; no browser,
 // access code, network, or on-disk generated bundle is needed for this check.
 let ts = null;
@@ -324,6 +325,8 @@ const renderPage = (scorecard, matches = []) => {
 };
 
 check("review page has a complete-source-only contract, neutral empty states and readable two-column cards", () => {
+  assert.ok(currentReviewPage.includes("升级前的原始复盘口径（不混入新成绩）"));
+  assert.ok(currentReviewPage.includes("<LegacyHitAndWin/>"));
   for (const fragment of ["scorecard?.referenceReviewPerformance", "server-complete-history", "validReviewBucket(referenceReviewPerformance?.cumulative)", "统计待更新", "无已结算样本", "repeat(2, minmax(0, 1fr))", "fontSize: '13px'", "'22px' : '16px'", "命中 ${bucket.won} / 已结算 ${bucket.settled}"]) assert.ok(pageSource.includes(fragment), fragment);
   assert.ok(!pageSource.includes("allSystemReviewMatches.reduce"));
   assert.ok(!pageSource.includes("systemReviewSummary.referenceWon"));

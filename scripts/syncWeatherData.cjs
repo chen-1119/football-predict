@@ -218,6 +218,7 @@ const discoverMissingTeamLocations = async (matches, locations) => {
     if (
       !localTeamId
       || seen.has(localTeamId)
+      || resolveVenueSignal(match)
       || finiteLocation(output.teams[localTeamId])
       || !venueRetryDue(output.unresolvedTeams[localTeamId])
     ) continue;
@@ -297,9 +298,12 @@ const locationKey = (location) => [
 ].join(",");
 
 const finiteLocation = (location) => {
+  if (location?.latitude === null || location?.latitude === undefined || location?.latitude === ""
+    || location?.longitude === null || location?.longitude === undefined || location?.longitude === "") return null;
   const latitude = Number(location?.latitude);
   const longitude = Number(location?.longitude);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)
+    || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
   return {
     name: normText(location.name || location.venue || location.city || "Match venue"),
     city: normText(location.city || location.name || ""),
@@ -331,12 +335,12 @@ const resolveLocation = (match, locations, worldCupIndex) => {
   const byMatch = finiteLocation(locations?.matches?.[id]);
   if (byMatch) return byMatch;
 
+  const venueSignal = resolveVenueSignal(match);
+  if (venueSignal) return venueSignal;
+
   const homeTeamId = normText(match?.homeTeamId);
   const byHomeTeam = finiteLocation(locations?.teams?.[homeTeamId]);
   if (byHomeTeam) return byHomeTeam;
-
-  const venueSignal = resolveVenueSignal(match);
-  if (venueSignal) return venueSignal;
 
   if (enableWorldCupRotation && isWorldCup(match) && Array.isArray(locations?.worldCupHostRotation) && locations.worldCupHostRotation.length) {
     const rotation = finiteLocation(locations.worldCupHostRotation[worldCupIndex % locations.worldCupHostRotation.length]);
@@ -347,6 +351,7 @@ const resolveLocation = (match, locations, worldCupIndex) => {
 };
 
 const weatherCodeText = (code) => {
+  if (code === null || code === undefined || code === "") return { zh: "天气状况未提供", en: "Condition unavailable" };
   const value = Number(code);
   if ([0].includes(value)) return { zh: "晴", en: "Clear" };
   if ([1, 2].includes(value)) return { zh: "少云", en: "Partly cloudy" };
@@ -360,19 +365,21 @@ const weatherCodeText = (code) => {
 };
 
 const riskLevel = ({ temperatureC, windKph, windGustKph, precipitationMm }) => {
+  const atLeast = (value, threshold) => Number.isFinite(value) && value >= threshold;
+  const atMost = (value, threshold) => Number.isFinite(value) && value <= threshold;
   if (
-    precipitationMm >= 8 ||
-    windKph >= 38 ||
-    windGustKph >= 55 ||
-    temperatureC <= 0 ||
-    temperatureC >= 34
+    atLeast(precipitationMm, 8) ||
+    atLeast(windKph, 38) ||
+    atLeast(windGustKph, 55) ||
+    atMost(temperatureC, 0) ||
+    atLeast(temperatureC, 34)
   ) return "high";
   if (
-    precipitationMm >= 2.5 ||
-    windKph >= 24 ||
-    windGustKph >= 40 ||
-    temperatureC <= 4 ||
-    temperatureC >= 30
+    atLeast(precipitationMm, 2.5) ||
+    atLeast(windKph, 24) ||
+    atLeast(windGustKph, 40) ||
+    atMost(temperatureC, 4) ||
+    atLeast(temperatureC, 30)
   ) return "medium";
   return "low";
 };
@@ -403,11 +410,12 @@ const nearestHourlyWeather = (payload, matchTimeMs) => {
 
   const read = (key) => {
     const arr = hourly[key];
-    const value = Array.isArray(arr) ? Number(arr[bestIndex]) : NaN;
+    const raw = Array.isArray(arr) ? arr[bestIndex] : null;
+    const value = raw === null || raw === undefined || raw === "" ? NaN : Number(raw);
     return Number.isFinite(value) ? value : null;
   };
 
-  return {
+  const reading = {
     forecastTime: `${times[bestIndex]}Z`,
     temperatureC: read("temperature_2m"),
     precipitationMm: read("precipitation"),
@@ -415,6 +423,8 @@ const nearestHourlyWeather = (payload, matchTimeMs) => {
     windGustKph: read("wind_gusts_10m"),
     weatherCode: read("weather_code"),
   };
+  if (reading.temperatureC === null || reading.precipitationMm === null || reading.windKph === null) return null;
+  return reading;
 };
 
 const forecastUrl = (location) => {
@@ -633,6 +643,7 @@ module.exports = {
   discoverMissingTeamLocations,
   discoverTeamLocation,
   parseVenueCoordinates,
+  nearestHourlyWeather,
   resolveLocation,
   teamCandidateMatches,
   teamLookupQuery,

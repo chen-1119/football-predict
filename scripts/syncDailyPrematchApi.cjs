@@ -115,7 +115,15 @@ async function main() {
     if (process.argv.includes('--migrate')) { await client.query(fs.readFileSync(path.join(root, 'collectors/leisu-prematch/api-daily-schema.sql'), 'utf8')); console.log('Daily prematch tables ready in existing PostgreSQL'); return; }
     const now = Date.now(), startedAt = new Date(now).toISOString(), today = beijingDay(now);
     const last = read(path.join(dir, 'status.json'), {});
-    if (last.version === VERSION && last.nextAttemptAt && Date.parse(last.nextAttemptAt) > now) { console.log(JSON.stringify({ state: 'backoff', nextAttemptAt: last.nextAttemptAt })); return; }
+    const apiCredential = require('../src/services/apiFootballRuntimePolicy.cjs').configuredKeyFor(process.env);
+    const credentialFingerprint = require('./syncApiFootballData.cjs').credentialFingerprintFor(apiCredential);
+    const cachedCredentialFingerprint = read(path.join(root, 'public/data/api-football-cache.json'), {})
+      .apiAccess?.credentialFingerprint;
+    const credentialChanged = Boolean(credentialFingerprint && cachedCredentialFingerprint
+      && credentialFingerprint !== cachedCredentialFingerprint);
+    if (!credentialChanged && last.version === VERSION && last.nextAttemptAt && Date.parse(last.nextAttemptAt) > now) {
+      console.log(JSON.stringify({ state: 'backoff', nextAttemptAt: last.nextAttemptAt })); return;
+    }
     lock = await require('../server/syncLock.cjs').acquireSyncLock({ lockDir: path.join(store, 'locks/sync-enrichment-artifacts.lock'), owner: 'daily-prematch-api', source: 'scheduled-source-collection', waitMs: 5000 });
     if (!lock.acquired) { console.log(JSON.stringify({ state: 'writer-busy-retry-next-tick' })); return; }
     const runId = crypto.randomUUID(), job = path.join(dir, runId); fs.mkdirSync(job, { mode: 0o700 });

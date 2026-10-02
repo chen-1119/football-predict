@@ -133,7 +133,7 @@ check('current history and SSE share fail-closed protected-session invalidation'
   'effectRequestController.abort();',
   'setMatches([]);',
   'setDataSync(emptyDataSyncState());',
-  '}, [isAccessVerified, accessSession]);'
+  'void account.refresh().catch(() => {});'
 ]) && protectedAuthInvalidations.length >= 3
   && newSessionPersist > newSessionStart
   && (nextSessionClear < 0 || newSessionPersist < nextSessionClear));
@@ -201,7 +201,7 @@ check('LIVE keeps immutable original direction and SP outside official settlemen
 check('pending rows without a frozen or published BEST cannot manufacture a handicap direction', hasAll(listRow, [
   'const analysisReferenceSelection = !isFinished && !displayRecommendation',
   'const pickedPrediction = reviewPrediction || displayRecommendation?.prediction || archivedPreMatchPrediction || analysisReference;',
-  'const hasPick = !isVoid && Boolean(pickedPrediction && directionLabel)',
+  'const hasPick = !isVoid && (useUnified ? Boolean(unifiedRow) : Boolean(pickedPrediction && directionLabel))',
   "'暂无推荐' : 'No pick'", "isVoid || !pickedPrediction || isPublishedReferenceSpUnavailable ? '--'"
 ]) && !list.includes('getAnalysisReferenceHandicapSupplement(')
   && !listRow.includes('companion?.prediction'));
@@ -231,7 +231,8 @@ check('settled rows show hit or miss while formal labels still require the main 
   "const settledStatus = isFinished && reviewRow && isSettledReviewStatus(reviewRow.resultStatus) ? reviewRow.resultStatus : undefined",
   "settledStatus === 'WON' ? (language === 'zh' ? '命中' : 'Hit')",
   "settledStatus === 'LOST' ? (language === 'zh' ? '未命中' : 'Miss')",
-  "settledStatus === 'WON' ? 'is-hit' : settledStatus === 'LOST' ? 'is-miss' : 'is-pending'"
+  "(useUnified ? unifiedRow?.settlement.state : settledStatus) === 'WON' ? 'is-hit'",
+  "(useUnified ? unifiedRow?.settlement.state : settledStatus) === 'LOST' ? 'is-miss'"
 ]));
 
 check('reference hit/miss remains visible with its reference label and a separate denominator', hasAll(list, [

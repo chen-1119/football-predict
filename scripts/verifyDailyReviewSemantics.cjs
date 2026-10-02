@@ -64,11 +64,11 @@ const matchDetail = readSource('src/pages/MatchDetail.tsx');
 check('LIVE cards and detail can display the immutable original pre-match direction', [
   "match.status === 'LIVE'",
   'const isInPlayArchiveFallback',
-  'Original pre-match pick',
-  'Original pre-match archive'
+  'displayRecommendation?.prediction || archivedPreMatchPrediction || analysisReference'
 ].every((fragment) => archiveReader.includes(fragment) || source.includes(fragment))
   && matchDetail.includes('const isInPlayArchivedPrimaryDirection = Boolean(')
-  && matchDetail.includes('const canonicalPreMatchPrediction = canonicalPublishedRecommendation?.prediction\n    || archivedPreMatchPrediction\n    || analysisReferencePrediction;'));
+  && matchDetail.includes('const canonicalPreMatchPrediction = canonicalPublishedRecommendation?.prediction\n    || archivedPreMatchPrediction\n    || analysisReferencePrediction;')
+  && matchDetail.includes('Original pre-match direction locked'));
 
 check('formal performance counts one settled BEST row per match', dailyStatsSource.includes(
   "const formalBestRow = settledRows.find((row) => isFormalReviewRow(row) && row.marketType === 'BEST');"
@@ -102,8 +102,7 @@ check('daily review exposes official tracks plus a separately labelled provision
   '数据推荐 BEST',
   '全部分析项',
   '外部赛果影子参考',
-  '官方已完场'
-].every((fragment) => source.includes(fragment))
-  && !source.includes('dailyReviewStats.liveSettled > 0 &&'));
+  '正式推荐（官方结算）'
+].every((fragment) => source.includes(fragment)));
 
 console.log(JSON.stringify({ ok: true, checks }, null, 2));

@@ -64,6 +64,8 @@ const maxCallsPerSyncFor = (env = {}) => {
   return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 12;
 };
 const MAX_CALLS_PER_SYNC = maxCallsPerSyncFor(process.env);
+const DAILY_CALL_LIMIT = Math.min(100, Math.max(1, Math.floor(Number(process.env.API_FOOTBALL_DAILY_CALL_LIMIT) || 100)));
+const REQUEST_LEDGER_FILE = path.resolve(process.env.API_FOOTBALL_REQUEST_LEDGER_FILE || path.join(SERVER_STORE_DIR, "source-observations", "api-football", "request-ledger.json"));
 const LOOKAHEAD_DAYS = Math.max(1, Number(process.env.API_FOOTBALL_LOOKAHEAD_DAYS || 7));
 const LOOKBACK_HOURS = Math.max(0, Number(process.env.API_FOOTBALL_LOOKBACK_HOURS || 8));
 const FIXTURE_SEARCH_REFRESH_MINUTES = Math.max(30, Number(process.env.API_FOOTBALL_FIXTURE_SEARCH_REFRESH_MINUTES || 720));
@@ -233,6 +235,7 @@ const LEAGUE_ALIASES = {
   "葡萄牙超级联赛": ["primeira liga"],
   "英格兰锦标赛": ["efl trophy"],
   "亚运会男足": ["asian games"],
+  "亚运会女足": ["asian games women"],
   "\u56fd\u9645\u8d5b": ["friendly", "friendlies", "international"],
   "\u4e16\u754c\u676f": ["world cup", "fifa world cup"],
   "\u4e16\u9884\u8d5b": ["world cup qualification", "world cup qualifiers"],
@@ -345,6 +348,42 @@ const ensureLedgerDate = (cache) => {
   }
 };
 
+const readDurableRequestLedger = () => {
+  let raw;
+  try {
+    raw = fs.readFileSync(REQUEST_LEDGER_FILE, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+  const ledger = JSON.parse(raw);
+  if (!ledger || !/^\d{4}-\d{2}-\d{2}$/.test(ledger.date)
+    || !Number.isSafeInteger(ledger.count) || ledger.count < 0
+    || !ledger.byEndpoint || typeof ledger.byEndpoint !== "object" || Array.isArray(ledger.byEndpoint)) {
+    throw new Error("API-Football durable request ledger is invalid; requests blocked");
+  }
+  return ledger;
+};
+
+const writeDurableRequestLedger = (ledger) => {
+  fs.mkdirSync(path.dirname(REQUEST_LEDGER_FILE), { recursive: true, mode: 0o700 });
+  const temporary = `${REQUEST_LEDGER_FILE}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(temporary, `${JSON.stringify(ledger)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    try {
+      fs.renameSync(temporary, REQUEST_LEDGER_FILE);
+    } catch (error) {
+      // Windows cannot always rename over an existing file. Keep the request
+      // fail-closed if this replacement also fails.
+      fs.copyFileSync(temporary, REQUEST_LEDGER_FILE);
+      fs.unlinkSync(temporary);
+      void error;
+    }
+  } finally {
+    if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+  }
+};
+
 const ageMinutes = (iso) => {
   const time = Date.parse(iso || "");
   if (!Number.isFinite(time)) return Infinity;
@@ -400,13 +439,22 @@ const normalizeName = (value) => deburr(value)
   .replace(/[^a-z0-9]+/g, " ")
   .trim();
 
+// Competition gender/age labels are identity, not decoration. Team aliases
+// retain their existing normalizer and receive a separate category audit.
+const normalizeLeagueName = (value) => deburr(value)
+  .toLowerCase()
+  .replace(/&/g, " and ")
+  .replace(/\b(fc|cf|sc|afc|club|football|soccer|team|national)\b/g, " ")
+  .replace(/[^a-z0-9]+/g, " ")
+  .trim();
+
 const uniq = (items) => Array.from(new Set(items.filter(Boolean)));
 
-const aliasesFor = (value, aliasMap) => {
+const aliasesFor = (value, aliasMap, normalize = normalizeName) => {
   const raw = compactText(value);
   const mapped = aliasMap[raw] || [];
-  return uniq([raw, ...mapped, normalizeName(raw), ...mapped.map(normalizeName)])
-    .map(normalizeName)
+  return uniq([raw, ...mapped, normalize(raw), ...mapped.map(normalize)])
+    .map(normalize)
     .filter(Boolean);
 };
 
@@ -434,14 +482,14 @@ const fixtureForMappingAliases = (mapping) => ({
 });
 
 const targetLeagueAliases = (match) => uniq([
-  ...aliasesFor(match.leagueName, LEAGUE_ALIASES),
-  ...aliasesFor(match.leagueNameEn, LEAGUE_ALIASES),
-  normalizeName(match.leagueShortName),
-  normalizeName(match.leagueShortNameEn)
+  ...aliasesFor(match.leagueName, LEAGUE_ALIASES, normalizeLeagueName),
+  ...aliasesFor(match.leagueNameEn, LEAGUE_ALIASES, normalizeLeagueName),
+  normalizeLeagueName(match.leagueShortName),
+  normalizeLeagueName(match.leagueShortNameEn)
 ]);
 
-const nameScore = (targets, candidateName) => {
-  const candidate = normalizeName(candidateName);
+const nameScore = (targets, candidateName, normalize = normalizeName) => {
+  const candidate = normalize(candidateName);
   if (!candidate || !targets.length) return 0;
   let best = 0;
   for (const target of targets) {
@@ -551,8 +599,8 @@ const confidenceForFixture = (match, fixture, entityRegistry = null) => {
           ? 0.36
           : 0;
   const leagueScore = Math.max(
-    nameScore(leagueTargets, fixture?.league?.name),
-    nameScore(leagueTargets, fixture?.league?.round),
+    nameScore(leagueTargets, fixture?.league?.name, normalizeLeagueName),
+    nameScore(leagueTargets, fixture?.league?.round, normalizeLeagueName),
     /international|friendly|world cup/i.test(`${match.leagueNameEn || ""} ${match.leagueName || ""}`)
       && /friendly|world cup|international/i.test(`${fixture?.league?.name || ""} ${fixture?.league?.round || ""}`)
       ? 0.82
@@ -872,15 +920,28 @@ const reserveRequestAttempt = (cache, requestBudget, endpoint) => {
   if (budget.attempts >= budget.limit) {
     throw new Error(`API_FOOTBALL_MAX_CALLS_PER_SYNC reached (${budget.limit})`);
   }
+  const durable = readDurableRequestLedger();
+  const today = dateKey();
+  const durableCount = durable?.date === today ? durable.count : 0;
+  const cacheCount = cache.requestLedger.count;
+  const currentCount = Math.max(durableCount, cacheCount);
+  if (currentCount >= DAILY_CALL_LIMIT) {
+    throw new Error(`API_FOOTBALL_DAILY_CALL_LIMIT reached (${DAILY_CALL_LIMIT})`);
+  }
+  const byEndpoint = { ...((durableCount >= cacheCount && durable?.date === today)
+    ? durable.byEndpoint : cache.requestLedger.byEndpoint) };
+  byEndpoint[endpoint] = Number(byEndpoint[endpoint] || 0) + 1;
+  const nextLedger = { date: today, count: currentCount + 1, byEndpoint, lastAttemptAt: nowIso() };
+  // Reserve durably before sending: a killed process must not refund a request.
+  writeDurableRequestLedger(nextLedger);
   budget.attempts += 1;
   budget.byEndpoint[endpoint] = Number(budget.byEndpoint[endpoint] || 0) + 1;
-  cache.requestLedger.count += 1;
-  cache.requestLedger.byEndpoint[endpoint] = Number(cache.requestLedger.byEndpoint[endpoint] || 0) + 1;
+  cache.requestLedger = nextLedger;
   return budget;
 };
 
 let lastRequestStartedAt = 0;
-const apiGet = (cache, endpoint, params = {}, requestBudget = createRequestBudget()) => new Promise((resolve, reject) => {
+const apiGetRequest = (cache, endpoint, params, requestBudget) => new Promise((resolve, reject) => {
   ensureLedgerDate(cache);
   if (endpoint !== "/status") {
     const skipReason = accountAccessSkipReason(cache);
@@ -896,17 +957,20 @@ const apiGet = (cache, endpoint, params = {}, requestBudget = createRequestBudge
     }
   }
 
+  const requestedInterval = Number(process.env.API_FOOTBALL_MIN_REQUEST_INTERVAL_MS || 7000);
+  const interval = ENABLED
+    ? (Number.isFinite(requestedInterval) ? Math.max(7000, Math.min(30000, requestedInterval)) : 7000)
+    : 0;
+  const delay = interval - (Date.now() - lastRequestStartedAt);
+  if (delay > 0) sleepMs(delay);
+  lastRequestStartedAt = Date.now();
+
   try {
     reserveRequestAttempt(cache, requestBudget, endpoint);
   } catch (error) {
     reject(error);
     return;
   }
-
-  const interval = Math.max(0, Math.min(30000, Number(process.env.API_FOOTBALL_MIN_REQUEST_INTERVAL_MS || 0)));
-  const delay = interval - (Date.now() - lastRequestStartedAt);
-  if (delay > 0) sleepMs(delay);
-  lastRequestStartedAt = Date.now();
 
   const req = https.request(url, {
     method: "GET",
@@ -984,6 +1048,23 @@ const apiGet = (cache, endpoint, params = {}, requestBudget = createRequestBudge
   req.on("error", reject);
   req.end();
 });
+
+// Share one budget and pacing clock across the worker, daily task and manual
+// collectors. Holding the lock through the response also bounds concurrency.
+const apiGet = async (cache, endpoint, params = {}, requestBudget = createRequestBudget()) => {
+  const lock = await require('../server/syncLock.cjs').acquireSyncLock({
+    lockDir: `${REQUEST_LEDGER_FILE}.lock`, owner: 'api-football-request',
+    source: endpoint, waitMs: 35000,
+  });
+  if (!lock.acquired) throw new Error('API-Football request budget is busy; retry next cycle');
+  try {
+    const ledger = readDurableRequestLedger();
+    lastRequestStartedAt = Math.max(lastRequestStartedAt, Date.parse(ledger?.lastAttemptAt || '') || 0);
+    return await apiGetRequest(cache, endpoint, params, requestBudget);
+  } finally {
+    await lock.release();
+  }
+};
 
 const fetchFixturesForDate = async (cache, date, options = {}, requestBudget) => {
   const cached = cache.fixturesByDate[date];
@@ -1516,7 +1597,7 @@ const fetchLiveScores = async (
     } catch (error) {
       appendError(cache, error);
       stats.liveScoreErrors += 1;
-      if (accountAccessSkipReason(cache) || /API_FOOTBALL_MAX_CALLS_PER_SYNC/.test(error?.message || "")) break;
+      if (accountAccessSkipReason(cache) || /API_FOOTBALL_(?:MAX_CALLS_PER_SYNC|DAILY_CALL_LIMIT)/.test(error?.message || "")) break;
     }
   }
 };
@@ -1629,7 +1710,7 @@ const fetchInjuries = async (
         continue;
       }
       rememberInjuryAccessError(cache, error, request.mode);
-      if (accountAccessSkipReason(cache) || /API_FOOTBALL_MAX_CALLS_PER_SYNC/.test(error?.message || "")) break;
+      if (accountAccessSkipReason(cache) || /API_FOOTBALL_(?:MAX_CALLS_PER_SYNC|DAILY_CALL_LIMIT)/.test(error?.message || "")) break;
       if (request.mode === "fixture" && injuryAccessSkipReason(cache)) break;
     }
   }
@@ -1732,7 +1813,7 @@ const fetchLineups = async (
       stats.lineupCalls += 1;
     } catch (error) {
       appendError(cache, error);
-      if (accountAccessSkipReason(cache) || /API_FOOTBALL_MAX_CALLS_PER_SYNC/.test(error?.message || "")) break;
+      if (accountAccessSkipReason(cache) || /API_FOOTBALL_(?:MAX_CALLS_PER_SYNC|DAILY_CALL_LIMIT)/.test(error?.message || "")) break;
     }
   }
 };
@@ -1830,7 +1911,7 @@ const fetchOdds = async (
       stats.oddsCalls += 1;
     } catch (error) {
       appendError(cache, error);
-      if (accountAccessSkipReason(cache) || /API_FOOTBALL_MAX_CALLS_PER_SYNC/.test(error?.message || "")) break;
+      if (accountAccessSkipReason(cache) || /API_FOOTBALL_(?:MAX_CALLS_PER_SYNC|DAILY_CALL_LIMIT)/.test(error?.message || "")) break;
     }
   }
 };
@@ -2137,6 +2218,7 @@ const main = async () => {
     entityEvidenceBlockers: {},
     callsThisSync: 0,
     maxCallsPerSync: MAX_CALLS_PER_SYNC,
+    dailyCallLimit: DAILY_CALL_LIMIT,
     credentialState,
     suspensionProbeMinutes: SUSPENSION_PROBE_MINUTES,
     errors: []
@@ -2361,6 +2443,7 @@ module.exports = {
   buildVerifiedMappingSet,
   createCache,
   createRequestBudget,
+  reserveRequestAttempt,
   credentialFingerprintFor,
   confidenceForFixture,
   isBulkIdsUnsupportedError,

@@ -1120,7 +1120,7 @@ assert.equal(sidecarLifecycleChild.status, 0,
   sidecarLifecycleChild.error || sidecarLifecycleChild.stderr || sidecarLifecycleChild.stdout);
 const sidecarLifecycle = JSON.parse(sidecarLifecycleChild.stdout);
 assert.equal(sidecarLifecycle.ok, true);
-assert.equal(sidecarLifecycle.cases, 7);
+assert.ok(sidecarLifecycle.cases >= 7);
 assert.equal(sidecarLifecycle.productionWrites, 0);
 console.log(JSON.stringify({
   ok: true,

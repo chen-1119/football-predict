@@ -654,6 +654,22 @@ const run = async () => {
       exposesAdmin: Boolean(sourceHealth.body?.admin),
       exposesRefreshPipeline: publicSourceHealthText.includes('"refreshPipeline"')
     });
+    const preMatchHealth = sourceHealth.body?.preMatchSignals || {};
+    const preMatchCohort = preMatchHealth.cohort || {};
+    pushCheck(checks, "pre-match gaps use current read cohort", sourceHealth.status === 200
+      && preMatchHealth.coverageScope === "current-read-matches"
+      && preMatchCohort.matchCount === sourceHealth.body?.currentMatches?.count
+      && preMatchCohort.alignedRows + preMatchCohort.missingRows === preMatchCohort.matchCount
+      && Object.values(preMatchHealth.coverageByComponent || {}).every((component) => (
+        component.rows === preMatchCohort.matchCount
+      )), {
+      status: sourceHealth.status,
+      scope: preMatchHealth.coverageScope || null,
+      snapshotRows: preMatchCohort.snapshotRows ?? null,
+      matchCount: preMatchCohort.matchCount ?? null,
+      alignedRows: preMatchCohort.alignedRows ?? null,
+      missingRows: preMatchCohort.missingRows ?? null,
+    });
     const sourceRedundancy = sourceHealth.body?.officialSourceRedundancy || null;
     const trustedCollectorCount = Number(sourceRedundancy?.trustedCollectorCount);
     const requiredTrustedCollectors = Number(sourceRedundancy?.requiredTrustedCollectors);

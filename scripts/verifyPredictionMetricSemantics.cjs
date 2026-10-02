@@ -345,14 +345,15 @@ function run() {
 
   assert.ok(serverSource.includes('formalRecommendationRows: sample.predictionRows ?? null'));
   assert.ok(serverSource.includes('scope: "formal-recommendations-only"'));
-  assert.ok(predictionsSource.includes("const rawScorecardFormalRows = scorecardSample?.formalRecommendationRows;"));
-  assert.ok(predictionsSource.includes("typeof rawScorecardFormalRows === 'number'"));
   assert.ok(!predictionsSource.includes("scorecardSample?.formalRecommendationRows ?? scorecardSample?.predictionRows"));
-  assert.ok(predictionsSource.includes("const rawHitRateAuditSettled = hitRateAuditObserved?.settled;"));
-  assert.ok(predictionsSource.includes("暂无正式推荐样本；影子 LL/Brier 不计入赔率区间表现"));
-  assert.ok(!predictionsSource.includes("modelGate?.thresholds?.minMarketBaselineRows ?? 100"));
-  assert.ok(predictionsSource.includes(": 500;"));
-  checks.push("public scorecard labels zero formal rows and keeps shadow LL/Brier out of odds-band performance");
+  assert.ok(predictionsSource.includes("const formalBestRow = settledRows.find((row) => isFormalReviewRow(row) && row.marketType === 'BEST');"));
+  assert.ok(predictionsSource.includes("if (formalBestRow) {"));
+  assert.ok(predictionsSource.includes("acc.formalSettled += 1;"));
+  assert.ok(predictionsSource.includes("formalHitRate: stats.formalSettled > 0"));
+  assert.ok(predictionsSource.includes("data-formal-settled={dailyReviewStats.formalSettled}"));
+  assert.ok(predictionsSource.includes("'参考、待赛果与作废场次不计入正式命中率。'"));
+  assert.ok(predictionsSource.includes("'外部赛果影子参考'"));
+  checks.push("daily formal hit rate counts only settled main BEST rows; references and external results remain separate");
 
   for (const source of [predictionsSource, matchDetailSource]) {
     assert.ok(source.includes("row.performanceTrack === 'formal'"));

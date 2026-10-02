@@ -2804,8 +2804,12 @@ function buildCalculationTraceFromPublishedModel(match, model) {
     },
     goals: {
       formula: {
-        zh: "P(大2.5)=1-sum_{g=0..2}Pois(g;lambda_home+lambda_away)；P(BTTS)=(1-e^-lambda_home)*(1-e^-lambda_away)。",
-        en: "P(Over2.5)=1-sum_{g=0..2}Pois(g;lambda_home+lambda_away); P(BTTS)=(1-e^-lambda_home)*(1-e^-lambda_away).",
+        zh: model.goalLinesBasis === "had-reweighted-score-matrix-v1"
+          ? "大/小2.5来自泊松比分矩阵按最终胜平负概率配平后的完整比分求和；双方进球仍为原始模型估计。"
+          : "P(大2.5)=1-sum_{g=0..2}Pois(g;lambda_home+lambda_away)；P(BTTS)=(1-e^-lambda_home)*(1-e^-lambda_away)。",
+        en: model.goalLinesBasis === "had-reweighted-score-matrix-v1"
+          ? "Over/under 2.5 sums the full Poisson score matrix reweighted to final 1X2 probabilities; BTTS remains a raw model estimate."
+          : "P(Over2.5)=1-sum_{g=0..2}Pois(g;lambda_home+lambda_away); P(BTTS)=(1-e^-lambda_home)*(1-e^-lambda_away).",
       },
       values: {
         over25: formulaNumber(model.goalLines?.over25, 1),
@@ -11773,18 +11777,42 @@ function predictionSetInternal(match) {
     bttsProbability = contextGoalAdjustment.btts;
     contextSignals.goalAdjustment = contextGoalAdjustment.meta;
   }
-  const goalsTip = over25Probability >= 0.52 ? "O2.5" : "U2.5";
-  const goalsProbability = goalsTip === "O2.5" ? over25Probability : 1 - over25Probability;
-  const goalsOdds = Number(clamp(1 / Math.max(goalsProbability, 0.36), 1.2, 2.78).toFixed(2));
-  const goalsTipLabel = goalsTip === "O2.5"
-    ? { zh: "大2.5球（≥3球）", en: "Over 2.5 goals" }
-    : { zh: "小2.5球（≤2球）", en: "Under 2.5 goals" };
+  const rawOver25Probability = over25Probability;
   const probabilityModel = buildProbabilityModel(match, probabilities, hhadProbabilities, homeLambda, awayLambda, over25Probability, bttsProbability, lambdaBlend, goalCalibration, contextSignals);
   const finalOneXTwoProbabilities = {
     home: (probabilityModel.oneXTwo.final?.home || pct1(independentProbabilities.home)) / 100,
     draw: (probabilityModel.oneXTwo.final?.draw || pct1(independentProbabilities.draw)) / 100,
     away: (probabilityModel.oneXTwo.final?.away || pct1(independentProbabilities.away)) / 100,
   };
+  const canonicalGoalLines = require("../src/services/publishedScoreDistribution.cjs").projectHadGoalLines(
+    homeLambda, awayLambda, {
+      "1": finalOneXTwoProbabilities.home,
+      X: finalOneXTwoProbabilities.draw,
+      "2": finalOneXTwoProbabilities.away,
+    }
+  );
+  if (canonicalGoalLines) over25Probability = canonicalGoalLines.over25;
+  probabilityModel.rawGoalLines = { over25: pct1(rawOver25Probability), under25: pct1(1 - rawOver25Probability) };
+  probabilityModel.goalLines = canonicalGoalLines
+    ? { over25: pct1(canonicalGoalLines.over25), under25: pct1(canonicalGoalLines.under25) }
+    : null;
+  probabilityModel.goalLinesBasis = canonicalGoalLines?.basis || "unavailable";
+  if (canonicalGoalLines && probabilityModel.calculationTrace?.goals) {
+    probabilityModel.calculationTrace.goals.formula = {
+      zh: "大/小2.5来自泊松比分矩阵按最终胜平负概率配平后的完整比分求和；双方进球仍为原始模型估计。",
+      en: "Over/under 2.5 sums the full Poisson score matrix reweighted to final 1X2 probabilities; BTTS remains a raw model estimate.",
+    };
+    probabilityModel.calculationTrace.goals.values.over25 = probabilityModel.goalLines.over25;
+    probabilityModel.calculationTrace.goals.values.under25 = probabilityModel.goalLines.under25;
+  }
+  const goalsDirectionAvailable = Boolean(canonicalGoalLines) && Math.abs(over25Probability - 0.5) >= 0.04;
+  const goalsTip = over25Probability > 0.5 ? "O2.5" : "U2.5";
+  const goalsProbability = goalsTip === "O2.5" ? over25Probability : 1 - over25Probability;
+  const goalsOdds = goalsDirectionAvailable
+    ? Number(clamp(1 / Math.max(goalsProbability, 0.36), 1.2, 2.78).toFixed(2)) : 0;
+  const goalsTipLabel = goalsTip === "O2.5"
+    ? { zh: "大2.5球（≥3球）", en: "Over 2.5 goals" }
+    : { zh: "小2.5球（≤2球）", en: "Under 2.5 goals" };
   const hhadScoreModel = probabilityModel.handicap?.scoreImplied || probabilityModel.handicap?.poisson || probabilityModel.handicap?.market;
   const hhadModelProbabilities = hhadScoreModel
     ? {
@@ -12128,10 +12156,10 @@ function predictionSetInternal(match) {
 
   const goals = {
     marketType: "GOALS",
-    tipCode: goalsTip,
-    tipLabel: goalsReferenceLabel,
+    tipCode: goalsDirectionAvailable ? goalsTip : "WATCH",
+    tipLabel: goalsDirectionAvailable ? goalsReferenceLabel : goalsWatchLabel,
     odds: goalsOdds,
-    trustScore: clamp(Math.round(goalsProbability * 100 - 2), 42, 58),
+    trustScore: goalsDirectionAvailable ? clamp(Math.round(goalsProbability * 100 - 2), 42, 58) : 0,
     recommendationAction: "reference",
     recommendationTier: "reference",
     explanation: {
@@ -12146,10 +12174,14 @@ function predictionSetInternal(match) {
       {
         zh: goalsGate.promote
           ? `比分热区：${score.home}-${score.away} 附近；${goalsTipLabel.zh} 的模型概率约 ${pct(goalsProbability)}%。`
-          : `比分热区：${score.home}-${score.away} 附近；候选方向 ${goalsTipLabel.zh} 的模型概率约 ${pct(goalsProbability)}%，低于强推阈值。`,
+          : goalsDirectionAvailable
+          ? `比分热区：${score.home}-${score.away} 附近；候选方向 ${goalsTipLabel.zh} 的模型概率约 ${pct(goalsProbability)}%，低于强推阈值。`
+          : `进球方向接近五五开，不给大球或小球单向建议。`,
         en: goalsGate.promote
           ? `Score heat zone: around ${score.home}-${score.away}; model probability for ${goalsTipLabel.en} is about ${pct(goalsProbability)}%.`
-          : `Score heat zone: around ${score.home}-${score.away}; candidate ${goalsTipLabel.en} is about ${pct(goalsProbability)}%, below the promotion threshold.`,
+          : goalsDirectionAvailable
+          ? `Score heat zone: around ${score.home}-${score.away}; candidate ${goalsTipLabel.en} is about ${pct(goalsProbability)}%, below the promotion threshold.`
+          : `The goal line is close to an even split, so no over/under direction is given.`,
       },
       {
         zh: `大 2.5 球概率约 ${pct(over25Probability)}%，该指标用于走势参考，不等同于官方总进球 SP。`,
@@ -12158,7 +12190,7 @@ function predictionSetInternal(match) {
     ],
     riskTags: goalsRiskTags,
     visibilityStatus: "FREE",
-    resultStatus: resultStatus(match, goalsTip, "GOALS"),
+    resultStatus: goalsDirectionAvailable ? resultStatus(match, goalsTip, "GOALS") : "PENDING",
   };
 
   const bestIsSteady = oneXTwoPromote
