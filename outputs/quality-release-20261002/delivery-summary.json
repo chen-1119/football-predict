@@ -1,0 +1,54 @@
+{
+  "version": "quality-release-delivery-v1",
+  "baseline": "6fce1805d0d8db0410c71231d6df6ce72ec766cb",
+  "branch": "codex/football-release-quality",
+  "scope": "tests, supplemental evidence and release preparation",
+  "codeImplemented": true,
+  "codeDeployed": false,
+  "productionWrites": 0,
+  "targetedTests": {
+    "count": 42,
+    "exitCode": 0
+  },
+  "liveObservationAt": "2026-10-02T13:23:19.135Z",
+  "livePublicObservationPassed": true,
+  "expectedR787IdentityMatches": true,
+  "readiness": {
+    "serviceOk": true,
+    "dataFresh": false,
+    "sourceHealthOk": false,
+    "recommendationReliable": false
+  },
+  "exportPublicationDate": "2026-09-30",
+  "onlineAuthenticatedParity": "not exercised",
+  "linuxController": {
+    "checks": 41,
+    "state": "historical receipt reused, not rerun"
+  },
+  "sharedFilePatches": [],
+  "files": [
+    {
+      "file": "scripts/releaseQualityEvidence.cjs",
+      "sha256": "285d532cc72cc8a0af6d0e9191ef67134779c5a205957d9f400ed9ff950b4db7"
+    },
+    {
+      "file": "scripts/observeReleaseQualityPublic.cjs",
+      "sha256": "78562fec5a88051352169cb26dece04c42fdd08d2654534ee10a5bfb119b6ba9"
+    },
+    {
+      "file": "scripts/verifyReleaseQualityEvidence.cjs",
+      "sha256": "59eb5079bc57406df88c322da908c66f8301f63a0d34c6b9bbcd253f132030c8"
+    }
+  ],
+  "evidence": [
+    "historical-continuity-age-check.json",
+    "online-export-audit.json",
+    "public-observation.json",
+    "regression-receipt.json",
+    "targeted-tests.txt",
+    "verifyCurrentListPayloadCompaction.cjs.txt",
+    "verifyFrontendReleaseIdentity.cjs.txt",
+    "verifyFrontendWorkerPreflight.cjs.txt",
+    "verifyRemoteRecommendationParityContract.cjs.txt"
+  ]
+}

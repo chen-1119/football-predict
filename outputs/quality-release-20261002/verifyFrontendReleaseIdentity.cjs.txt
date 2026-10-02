@@ -1,0 +1,89 @@
+{
+  "ok": true,
+  "checks": 19,
+  "results": [
+    {
+      "name": "accepted full state matches both runtime markers and exact current index bytes",
+      "ok": true
+    },
+    {
+      "name": "frontend pending and accepted projections are reread immediately without the health cache",
+      "ok": true
+    },
+    {
+      "name": "pending never carries acceptance and accepted never lacks a root receipt commitment",
+      "ok": true
+    },
+    {
+      "name": "missing unknown and sensitive fields are rejected rather than exposed",
+      "ok": true
+    },
+    {
+      "name": "version kind phase hashes and sequences have a closed schema",
+      "ok": true
+    },
+    {
+      "name": "full and UI kinds cannot misrepresent the global runtime frontend identity order",
+      "ok": true
+    },
+    {
+      "name": "duplicate and escaped duplicate JSON keys cannot overwrite signed identity semantics",
+      "ok": true
+    },
+    {
+      "name": "malformed oversized BOM and non UTF-8 projection bytes fail closed",
+      "ok": true
+    },
+    {
+      "name": "each runtime marker must match state runtime rather than the UI request",
+      "ok": true
+    },
+    {
+      "name": "same length index mutations immediately invalidate identity until root updates the projection",
+      "ok": true
+    },
+    {
+      "name": "atomic projection and index replacements do not reuse previous identity",
+      "ok": true
+    },
+    {
+      "name": "rollback receipt and accumulated tree changes do not invent a new frontend version",
+      "ok": true
+    },
+    {
+      "name": "missing projection yields no identity and missing index or marker cannot be consistent",
+      "ok": true
+    },
+    {
+      "name": "oversized and nonregular entrypoints cannot validate the published index hash",
+      "ok": true
+    },
+    {
+      "name": "hardlinked projection and index are rejected",
+      "ok": true
+    },
+    {
+      "name": "accepted state requires exact raw root receipt bytes and all checks bound to state index and tree",
+      "ok": true
+    },
+    {
+      "name": "rollback proof retains previous accepted frontend identity and cannot accept the failed new candidate",
+      "ok": true
+    },
+    {
+      "name": "symlink or junction ancestors cannot redirect the identity reader",
+      "ok": true
+    },
+    {
+      "name": "production paths are fixed and fixture creation cannot be redirected to any caller path",
+      "ok": true
+    }
+  ],
+  "skipped": [
+    "Windows fixtures exercise real files but cannot prove POSIX permissions, root ownership or direct symlink rejection"
+  ],
+  "productionWrites": 0,
+  "healthServiceOrRecommendationStatusModified": false,
+  "fullDistTreeRecomputed": false,
+  "rootAcceptanceReceiptVerified": true
+}
