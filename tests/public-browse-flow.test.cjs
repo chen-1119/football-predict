@@ -18,6 +18,33 @@ async function harness({data=overview(),failure=false,matchId,route={pathname:'/
 }
 const cards=t=>nodes(t,n=>n.type==='article'&&n.props.className==='public-fixture');
 
+test('missing current business day defaults to the earliest upcoming sales day, not the last day or kickoff date',async()=>{
+ const data=overview();data.businessDate='2026-10-04';
+ data.matches=['2026-10-08','2026-10-06','2026-10-05','2026-10-07'].map((businessDate,index)=>({...fixtures[0],id:`future_${index}`,businessDate,kickoffTime:'2026-10-05T16:00:00Z'}));
+ for(const search of ['', '?date=invalid']){
+  const u=await harness({data,route:{pathname:'/fixtures',search,hash:'',state:null}}),t=u.render();
+  assert.equal(nodes(t,n=>n.type==='select')[0].props.value,'2026-10-05');
+  assert.equal(cards(t).length,1);assert.match(words(nodes(t,n=>n.props?.className==='public-results-summary')[0]),/2026-10-05 · 1 场比赛/);
+  assert.match(words(cards(t)[0]),/10\/06 00:00/);assert.equal(u.search,search);
+ }
+});
+test('a missing current sales day skips history to select the next available business day',async()=>{
+ const data=overview();data.businessDate='2026-09-22';data.matches[0].businessDate='2026-09-21';
+ data.matches.push({...fixtures[0],id:'future_later',businessDate:'2026-09-24'});
+ const u=await harness({data}),t=u.render();assert.equal(nodes(t,n=>n.type==='select')[0].props.value,'2026-09-23');
+ assert.equal(cards(t).length,2);assert.doesNotMatch(words(nodes(t,n=>n.props?.className==='public-results-summary')[0]),/历史竞彩日/);
+});
+test('explicit available URL date overrides the automatic day without changing the search query',async()=>{
+ const data=overview();data.businessDate='2026-09-21';
+ const route={pathname:'/fixtures',search:'?date=2026-09-23&q=博洛尼亚',hash:'',state:null};
+ const u=await harness({data,route}),t=u.render();assert.equal(nodes(t,n=>n.type==='select')[0].props.value,'2026-09-23');
+ assert.equal(cards(t).length,1);assert.match(words(cards(t)[0]),/博洛尼亚/);assert.equal(u.search,route.search);
+});
+test('an empty sales-day inventory keeps the picker and result state empty',async()=>{
+ const data=overview();data.matches=[];const u=await harness({data}),t=u.render();
+ assert.equal(nodes(t,n=>n.type==='select')[0].props.value,'');assert.equal(cards(t).length,0);assert.match(words(t),/这个竞彩日暂无比赛/);
+});
+
 test('fixture snapshot summary identifies an older match day without claiming current sales',async()=>{const data=overview();data.businessDate='2026-10-02';const u=await harness({data}),t=u.render();const summary=nodes(t,n=>n.props?.className==='public-results-summary')[0];assert.match(words(summary),/2026-09-23.*2 场比赛.*历史竞彩日 · 不代表今日在售/);assert.match(words(t),/赛程快照 · 北京时间/);assert.equal(nodes(t,n=>n.props?.['aria-label']==='赛程胜平负 SP 对照').length,2);assert.doesNotMatch(words(t),/从今天的比赛开始/);});
 test('failed public response never invents a zero-fixture summary',async()=>{const u=await harness({failure:true});assert.equal(nodes(u.render(),n=>n.props?.className==='public-results-summary').length,0);});
 test('public detail explicitly identifies fields outside the preview',async()=>{const u=await harness({matchId:'sporttery_a',route:{pathname:'/match/sporttery_a',search:'',hash:'',state:null}});assert.match(words(u.render()),/不含完整赛前概率、伤停、阵容或 xG/);assert.equal(nodes(u.render(),n=>n.type==='time'&&n.props.dateTime===fixtures[0].kickoffTime).length,1);});

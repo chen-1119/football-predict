@@ -30,7 +30,7 @@ export function PublicBrowse(){
  },[attempt,matchId,zh]);
  const update=(key:string,value:string)=>{const next=new URLSearchParams(params);if(value)next.set(key,value);else next.delete(key);setParams(next,{replace:true});};
  const days=[...new Set((data?.matches||[]).map(m=>m.businessDate).filter((d):d is string=>Boolean(d)))].sort();
- const selectedDay=/^\d{4}-\d{2}-\d{2}$/.test(date)?date:(days.includes(data?.businessDate||'')?data?.businessDate:days.at(-1));
+ const selectedDay=/^\d{4}-\d{2}-\d{2}$/.test(date)?date:(days.find(day=>day>=(data?.businessDate||''))??days.at(-1));
  const search=query.trim().normalize('NFKC').toLocaleLowerCase();
  const matches=(data?.matches||[]).filter(m=>(!selectedDay||m.businessDate===selectedDay)&&(!search||`${m.homeTeamName} ${m.awayTeamName} ${m.homeTeamNameEn||''} ${m.awayTeamNameEn||''} ${m.matchNo||''} ${m.leagueName||''}`.normalize('NFKC').toLocaleLowerCase().includes(search)));
  const returnTo=location.pathname+location.search+location.hash,example=data?.review.example,summary=data?.review.summary;
