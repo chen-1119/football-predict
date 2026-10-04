@@ -174,7 +174,7 @@ const runPairedEventScoringChecks = (compareSelection = null) => {
     const env = { ...process.env, MODEL_BACKTEST_INPUT_DATA_DIR: __dirname };
     if (output) env.MODEL_BACKTEST_PUBLIC_OUTPUT_FILE = output;
     else delete env.MODEL_BACKTEST_PUBLIC_OUTPUT_FILE;
-    const rejected = spawnSync(process.execPath, [backtest, "--verify-selected-event-pairing"], { env, encoding: "utf8" });
+    const rejected = spawnSync(process.execPath, [backtest, "--verify-recommendation-selection-time-order"], { env, encoding: "utf8" });
     check(name, rejected.status !== 0 && /requires an explicit isolated|overlaps a read-only input/.test(rejected.stderr));
   }
   return { ok: checks.every((entry) => entry.ok), verifier: "recommendation-paired-selected-event-scoring",
@@ -183,7 +183,8 @@ const runPairedEventScoringChecks = (compareSelection = null) => {
 
 module.exports = { runPairedEventScoringChecks };
 if (require.main === module) {
-  const result = runPairedEventScoringChecks();
+  const { recommendationSelectionComparison } = require("./runModelBacktest.cjs");
+  const result = runPairedEventScoringChecks(recommendationSelectionComparison);
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   process.exitCode = result.ok ? 0 : 1;
 }

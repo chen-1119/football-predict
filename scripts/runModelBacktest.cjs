@@ -3646,18 +3646,20 @@ const runRecommendationSelectionTimeOrderSelfTest = () => {
   process.exit(ok ? 0 : 1);
 };
 
-if (process.argv.includes("--verify-strict-promotion-cohort")) runStrictPromotionCohortSelfTest();
-if (process.argv.includes("--verify-null-fail-closed")) runNullFailClosedSelfTest();
-if (process.argv.includes("--verify-sqlite-streaming")) runSqliteStreamingSelfTest();
-if (process.argv.includes("--verify-odds-observation-time")) runOddsObservationBacktestSelfTest();
-if (process.argv.includes("--verify-recommendation-selection-time-order")) runRecommendationSelectionTimeOrderSelfTest();
-if (process.argv.includes("--verify-probability-selection")) runProbabilitySelectionSelfTest();
-
-if (process.argv.includes("--verify-selected-event-pairing")) {
-  const result = require("./verifyRecommendationPairedEventScoring.cjs")
-    .runPairedEventScoringChecks(recommendationSelectionComparison);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-  process.exit(result.ok ? 0 : 1);
+// Development fixture/signing checks have their own CLI. Keep the runtime
+// dependency graph independent of those modules and never fall through an old
+// verification command into the real backtest.
+if (require.main === module) {
+  if (process.argv.includes("--verify-selected-event-pairing")) {
+    process.stderr.write("Selected-event pairing verification moved to: node scripts/verifyRecommendationPairedEventScoring.cjs\n");
+    process.exit(2);
+  }
+  if (process.argv.includes("--verify-strict-promotion-cohort")) runStrictPromotionCohortSelfTest();
+  if (process.argv.includes("--verify-null-fail-closed")) runNullFailClosedSelfTest();
+  if (process.argv.includes("--verify-sqlite-streaming")) runSqliteStreamingSelfTest();
+  if (process.argv.includes("--verify-odds-observation-time")) runOddsObservationBacktestSelfTest();
+  if (process.argv.includes("--verify-recommendation-selection-time-order")) runRecommendationSelectionTimeOrderSelfTest();
+  if (process.argv.includes("--verify-probability-selection")) runProbabilitySelectionSelfTest();
 }
 
 async function runBacktest() {
@@ -4530,4 +4532,8 @@ console.log(JSON.stringify({
 }
 await persistModelOutputs();
 }
-runBacktest().catch(error => { console.error(error.message); process.exitCode = 1; });
+// Importing the real comparison is safe for the independent development verifier.
+module.exports = { recommendationSelectionComparison };
+if (require.main === module) {
+  runBacktest().catch(error => { console.error(error.message); process.exitCode = 1; });
+}
