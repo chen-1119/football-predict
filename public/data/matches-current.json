@@ -9,7 +9,7 @@
     "status": "SCHEDULED",
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T14:01:27.024Z",
+      "updatedAt": "2026-10-05T14:03:28.819Z",
       "sourceMatchId": "2041805",
       "fixtureId": "1398658",
       "matchNo": "周一001",
@@ -44,7 +44,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T14:00:04.458Z",
+        "updatedAt": "2026-10-05T14:01:57.319Z",
         "sourceMatchId": "2041805",
         "matchId": "fivehundred_2041805",
         "matchNo": "周一001",
@@ -78,7 +78,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T16:00:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-04T16:00:00.000Z"
             },
             "teamCards": {
@@ -114,7 +114,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T16:00:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-05T14:45:00.000Z"
             },
             "injuries": {
@@ -135,7 +135,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T16:00:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-05T10:00:00.000Z"
             },
             "xg": {
@@ -358,14 +358,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T14:01:38.782Z",
+        "lastCheckedAt": "2026-10-05T14:03:37.465Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T14:01:38.782Z",
+          "checkedAt": "2026-10-05T14:03:37.465Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -407,7 +407,7 @@
     "matchNo": "周一001",
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T14:01:40.187Z",
+      "generatedAt": "2026-10-05T14:03:38.858Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -611,11 +611,11 @@
       "decisionGeneratedAt": "2026-10-05T13:34:06.757Z",
       "updatedAt": "2026-10-05T13:59:58.616Z",
       "syncCapturedAt": "2026-10-05T13:33:56.406Z",
-      "publicationFinalizedAt": "2026-10-05T14:01:49.996Z",
+      "publicationFinalizedAt": "2026-10-05T14:03:43.969Z",
       "publicationGate": {
         "version": "prediction-publication-cutoff-gate-v1",
-        "syncCapturedAt": "2026-10-05T14:01:39.347Z",
-        "finalizedAt": "2026-10-05T14:01:49.996Z",
+        "syncCapturedAt": "2026-10-05T14:03:38.025Z",
+        "finalizedAt": "2026-10-05T14:03:43.969Z",
         "cutoffTime": "2026-10-05 22:00:00",
         "crossedCutoffDuringSync": false,
         "syncStartedAfterCutoff": true,
@@ -1200,6 +1200,43 @@
     "sourceStatus": "SCHEDULED",
     "effectiveStatus": "SCHEDULED",
     "statusReason": "source-scheduled",
+    "archivedPreMatchPrediction": {
+      "version": "archived-pre-match-prediction-v1",
+      "source": "immutable-pre-match-prediction-snapshot",
+      "sourceMatchId": "2041805",
+      "matchId": "fivehundred_2041805",
+      "kickoffTime": "2026-10-06T00:00:00+08:00",
+      "eventVersion": "2026-10-06T00:00:00+08:00",
+      "capturedAt": "2026-10-05T03:11:21.044Z",
+      "phase": "published",
+      "signature": "published-direction-attestation-v1:immutable-analysis-reference-decision:HAD:1:0:b0921d9e2211b30a4b612c950d825feed41a8cd5e03bfe5d682d92eff7afe646",
+      "cutoffTime": "2026-10-05 22:00:00",
+      "marketEvidenceScope": "result-pool",
+      "prediction": {
+        "marketType": "BEST",
+        "oddsPoolCode": "HAD",
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "赛前归档 主胜 塞浦路斯",
+          "en": "Pre-match archive: Home win (塞浦路斯)"
+        },
+        "odds": 1.52,
+        "trustScore": 58,
+        "recommendationAction": "reference",
+        "recommendationTier": "immutable-five-hundred-analysis-reference",
+        "liveRecommendationAction": "withhold",
+        "liveRecommendationTier": "live-withhold",
+        "liveRecommendation": null,
+        "livePublicationEvidence": null,
+        "riskTags": [],
+        "explanation": {
+          "zh": "",
+          "en": ""
+        },
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      }
+    },
     "probabilityModel": {
       "version": "unified-poisson-bayes-v76",
       "ensemblePolicy": {
@@ -4426,44 +4463,7 @@
         },
         "livePublicationEvidence": null
       }
-    ],
-    "archivedPreMatchPrediction": {
-      "version": "archived-pre-match-prediction-v1",
-      "source": "immutable-pre-match-prediction-snapshot",
-      "sourceMatchId": "2041805",
-      "matchId": "fivehundred_2041805",
-      "kickoffTime": "2026-10-06T00:00:00+08:00",
-      "eventVersion": "2026-10-06T00:00:00+08:00",
-      "capturedAt": "2026-10-05T03:11:21.044Z",
-      "phase": "published",
-      "signature": "published-direction-attestation-v1:immutable-analysis-reference-decision:HAD:1:0:b0921d9e2211b30a4b612c950d825feed41a8cd5e03bfe5d682d92eff7afe646",
-      "cutoffTime": "2026-10-05 22:00:00",
-      "marketEvidenceScope": "result-pool",
-      "prediction": {
-        "marketType": "BEST",
-        "oddsPoolCode": "HAD",
-        "tipCode": "1",
-        "tipLabel": {
-          "zh": "赛前归档 主胜 塞浦路斯",
-          "en": "Pre-match archive: Home win (塞浦路斯)"
-        },
-        "odds": 1.52,
-        "trustScore": 58,
-        "recommendationAction": "reference",
-        "recommendationTier": "immutable-five-hundred-analysis-reference",
-        "liveRecommendationAction": "withhold",
-        "liveRecommendationTier": "live-withhold",
-        "liveRecommendation": null,
-        "livePublicationEvidence": null,
-        "riskTags": [],
-        "explanation": {
-          "zh": "",
-          "en": ""
-        },
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      }
-    }
+    ]
   },
   {
     "id": "fivehundred_2041806",
@@ -4475,7 +4475,7 @@
     "status": "SCHEDULED",
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T14:01:27.024Z",
+      "updatedAt": "2026-10-05T14:03:28.819Z",
       "sourceMatchId": "2041806",
       "fixtureId": "1398656",
       "matchNo": "周一002",
@@ -4510,7 +4510,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T14:00:04.458Z",
+        "updatedAt": "2026-10-05T14:01:57.319Z",
         "sourceMatchId": "2041806",
         "matchId": "fivehundred_2041806",
         "matchNo": "周一002",
@@ -4544,7 +4544,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -4580,7 +4580,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -4601,7 +4601,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -4824,14 +4824,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T14:01:38.782Z",
+        "lastCheckedAt": "2026-10-05T14:03:37.465Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T14:01:38.782Z",
+          "checkedAt": "2026-10-05T14:03:37.465Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -4874,7 +4874,7 @@
     "matchNo": "周一002",
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T14:01:40.187Z",
+      "generatedAt": "2026-10-05T14:03:38.858Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -5078,11 +5078,11 @@
       "decisionGeneratedAt": "2026-10-05T13:49:31.274Z",
       "updatedAt": "2026-10-05T13:59:58.617Z",
       "syncCapturedAt": "2026-10-05T13:49:23.668Z",
-      "publicationFinalizedAt": "2026-10-05T14:01:49.997Z",
+      "publicationFinalizedAt": "2026-10-05T14:03:43.973Z",
       "publicationGate": {
         "version": "prediction-publication-cutoff-gate-v1",
-        "syncCapturedAt": "2026-10-05T14:01:39.347Z",
-        "finalizedAt": "2026-10-05T14:01:49.997Z",
+        "syncCapturedAt": "2026-10-05T14:03:38.025Z",
+        "finalizedAt": "2026-10-05T14:03:43.973Z",
         "cutoffTime": "2026-10-05 22:00:00",
         "crossedCutoffDuringSync": false,
         "syncStartedAfterCutoff": true,
@@ -5667,6 +5667,43 @@
     "sourceStatus": "SCHEDULED",
     "effectiveStatus": "SCHEDULED",
     "statusReason": "source-scheduled",
+    "archivedPreMatchPrediction": {
+      "version": "archived-pre-match-prediction-v1",
+      "source": "immutable-pre-match-prediction-snapshot",
+      "sourceMatchId": "2041806",
+      "matchId": "fivehundred_2041806",
+      "kickoffTime": "2026-10-06T02:45:00+08:00",
+      "eventVersion": "2026-10-06T02:45:00+08:00",
+      "capturedAt": "2026-10-05T03:06:24.419Z",
+      "phase": "published",
+      "signature": "published-direction-attestation-v1:immutable-analysis-reference-decision:HAD:1:0:c14607c831b14da28405c15c6a1e712ef01dfd8c36a020cf23b65928d925d098",
+      "cutoffTime": "2026-10-05 22:00:00",
+      "marketEvidenceScope": "result-pool",
+      "prediction": {
+        "marketType": "BEST",
+        "oddsPoolCode": "HAD",
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "赛前归档 主胜 法国",
+          "en": "Pre-match archive: Home win (法国)"
+        },
+        "odds": 1.34,
+        "trustScore": 66,
+        "recommendationAction": "reference",
+        "recommendationTier": "immutable-five-hundred-analysis-reference",
+        "liveRecommendationAction": "withhold",
+        "liveRecommendationTier": "live-withhold",
+        "liveRecommendation": null,
+        "livePublicationEvidence": null,
+        "riskTags": [],
+        "explanation": {
+          "zh": "",
+          "en": ""
+        },
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      }
+    },
     "probabilityModel": {
       "version": "unified-poisson-bayes-v76",
       "ensemblePolicy": {
@@ -8893,44 +8930,7 @@
         },
         "livePublicationEvidence": null
       }
-    ],
-    "archivedPreMatchPrediction": {
-      "version": "archived-pre-match-prediction-v1",
-      "source": "immutable-pre-match-prediction-snapshot",
-      "sourceMatchId": "2041806",
-      "matchId": "fivehundred_2041806",
-      "kickoffTime": "2026-10-06T02:45:00+08:00",
-      "eventVersion": "2026-10-06T02:45:00+08:00",
-      "capturedAt": "2026-10-05T03:06:24.419Z",
-      "phase": "published",
-      "signature": "published-direction-attestation-v1:immutable-analysis-reference-decision:HAD:1:0:c14607c831b14da28405c15c6a1e712ef01dfd8c36a020cf23b65928d925d098",
-      "cutoffTime": "2026-10-05 22:00:00",
-      "marketEvidenceScope": "result-pool",
-      "prediction": {
-        "marketType": "BEST",
-        "oddsPoolCode": "HAD",
-        "tipCode": "1",
-        "tipLabel": {
-          "zh": "赛前归档 主胜 法国",
-          "en": "Pre-match archive: Home win (法国)"
-        },
-        "odds": 1.34,
-        "trustScore": 66,
-        "recommendationAction": "reference",
-        "recommendationTier": "immutable-five-hundred-analysis-reference",
-        "liveRecommendationAction": "withhold",
-        "liveRecommendationTier": "live-withhold",
-        "liveRecommendation": null,
-        "livePublicationEvidence": null,
-        "riskTags": [],
-        "explanation": {
-          "zh": "",
-          "en": ""
-        },
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      }
-    }
+    ]
   },
   {
     "id": "fivehundred_2041807",
@@ -8942,7 +8942,7 @@
     "status": "SCHEDULED",
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T14:01:36.944Z",
+      "updatedAt": "2026-10-05T14:03:35.150Z",
       "sourceMatchId": "2041807",
       "fixtureId": "1398612",
       "matchNo": "周一003",
@@ -8977,7 +8977,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T14:00:04.458Z",
+        "updatedAt": "2026-10-05T14:01:57.319Z",
         "sourceMatchId": "2041807",
         "matchId": "fivehundred_2041807",
         "matchNo": "周一003",
@@ -9011,7 +9011,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:48.176Z",
+              "sourceObservedAt": "2026-10-05T14:01:36.944Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -9047,7 +9047,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:48.176Z",
+              "sourceObservedAt": "2026-10-05T14:01:36.944Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -9068,7 +9068,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:48.176Z",
+              "sourceObservedAt": "2026-10-05T14:01:36.944Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -9291,7 +9291,7 @@
       "weather": {
         "source": "open-meteo",
         "provider": "open-meteo",
-        "updatedAt": "2026-10-05T14:01:36.944Z",
+        "updatedAt": "2026-10-05T14:03:35.150Z",
         "forecastTime": "2026-10-05T19:00Z",
         "verified": false,
         "confidence": "estimated-location",
@@ -9325,14 +9325,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T14:01:38.782Z",
+        "lastCheckedAt": "2026-10-05T14:03:37.465Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T14:01:38.782Z",
+          "checkedAt": "2026-10-05T14:03:37.465Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -9375,7 +9375,7 @@
     "matchNo": "周一003",
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T14:01:40.187Z",
+      "generatedAt": "2026-10-05T14:03:38.858Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -9579,11 +9579,11 @@
       "decisionGeneratedAt": "2026-10-05T13:54:23.997Z",
       "updatedAt": "2026-10-05T13:59:58.618Z",
       "syncCapturedAt": "2026-10-05T13:54:17.867Z",
-      "publicationFinalizedAt": "2026-10-05T14:01:49.998Z",
+      "publicationFinalizedAt": "2026-10-05T14:03:43.974Z",
       "publicationGate": {
         "version": "prediction-publication-cutoff-gate-v1",
-        "syncCapturedAt": "2026-10-05T14:01:39.347Z",
-        "finalizedAt": "2026-10-05T14:01:49.998Z",
+        "syncCapturedAt": "2026-10-05T14:03:38.025Z",
+        "finalizedAt": "2026-10-05T14:03:43.974Z",
         "cutoffTime": "2026-10-05 22:00:00",
         "crossedCutoffDuringSync": false,
         "syncStartedAfterCutoff": true,
@@ -10168,6 +10168,43 @@
     "sourceStatus": "SCHEDULED",
     "effectiveStatus": "SCHEDULED",
     "statusReason": "source-scheduled",
+    "archivedPreMatchPrediction": {
+      "version": "archived-pre-match-prediction-v1",
+      "source": "immutable-pre-match-prediction-snapshot",
+      "sourceMatchId": "2041807",
+      "matchId": "fivehundred_2041807",
+      "kickoffTime": "2026-10-06T02:45:00+08:00",
+      "eventVersion": "2026-10-06T02:45:00+08:00",
+      "capturedAt": "2026-10-05T03:06:24.419Z",
+      "phase": "published",
+      "signature": "published-direction-attestation-v1:immutable-analysis-reference-decision:HAD:2:0:8b2758b5fbd78d4f2d402b70e4ee0570fa08bdbbbec992371ac79203b8bac8c9",
+      "cutoffTime": "2026-10-05 22:00:00",
+      "marketEvidenceScope": "result-pool",
+      "prediction": {
+        "marketType": "BEST",
+        "oddsPoolCode": "HAD",
+        "tipCode": "2",
+        "tipLabel": {
+          "zh": "赛前归档 客胜 瑞典",
+          "en": "Pre-match archive: Away win (瑞典)"
+        },
+        "odds": 1.72,
+        "trustScore": 51,
+        "recommendationAction": "reference",
+        "recommendationTier": "immutable-five-hundred-analysis-reference",
+        "liveRecommendationAction": "withhold",
+        "liveRecommendationTier": "live-withhold",
+        "liveRecommendation": null,
+        "livePublicationEvidence": null,
+        "riskTags": [],
+        "explanation": {
+          "zh": "",
+          "en": ""
+        },
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      }
+    },
     "probabilityModel": {
       "version": "unified-poisson-bayes-v76",
       "ensemblePolicy": {
@@ -13369,44 +13406,7 @@
         },
         "livePublicationEvidence": null
       }
-    ],
-    "archivedPreMatchPrediction": {
-      "version": "archived-pre-match-prediction-v1",
-      "source": "immutable-pre-match-prediction-snapshot",
-      "sourceMatchId": "2041807",
-      "matchId": "fivehundred_2041807",
-      "kickoffTime": "2026-10-06T02:45:00+08:00",
-      "eventVersion": "2026-10-06T02:45:00+08:00",
-      "capturedAt": "2026-10-05T03:06:24.419Z",
-      "phase": "published",
-      "signature": "published-direction-attestation-v1:immutable-analysis-reference-decision:HAD:2:0:8b2758b5fbd78d4f2d402b70e4ee0570fa08bdbbbec992371ac79203b8bac8c9",
-      "cutoffTime": "2026-10-05 22:00:00",
-      "marketEvidenceScope": "result-pool",
-      "prediction": {
-        "marketType": "BEST",
-        "oddsPoolCode": "HAD",
-        "tipCode": "2",
-        "tipLabel": {
-          "zh": "赛前归档 客胜 瑞典",
-          "en": "Pre-match archive: Away win (瑞典)"
-        },
-        "odds": 1.72,
-        "trustScore": 51,
-        "recommendationAction": "reference",
-        "recommendationTier": "immutable-five-hundred-analysis-reference",
-        "liveRecommendationAction": "withhold",
-        "liveRecommendationTier": "live-withhold",
-        "liveRecommendation": null,
-        "livePublicationEvidence": null,
-        "riskTags": [],
-        "explanation": {
-          "zh": "",
-          "en": ""
-        },
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      }
-    }
+    ]
   },
   {
     "id": "fivehundred_2041808",
@@ -13418,7 +13418,7 @@
     "status": "SCHEDULED",
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T14:01:27.024Z",
+      "updatedAt": "2026-10-05T14:03:28.819Z",
       "sourceMatchId": "2041808",
       "fixtureId": "1398659",
       "matchNo": "周一004",
@@ -13453,7 +13453,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T14:00:04.458Z",
+        "updatedAt": "2026-10-05T14:01:57.319Z",
         "sourceMatchId": "2041808",
         "matchId": "fivehundred_2041808",
         "matchNo": "周一004",
@@ -13487,7 +13487,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -13523,7 +13523,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -13544,7 +13544,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -13767,14 +13767,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T14:01:38.782Z",
+        "lastCheckedAt": "2026-10-05T14:03:37.465Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T14:01:38.782Z",
+          "checkedAt": "2026-10-05T14:03:37.465Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -13817,7 +13817,7 @@
     "matchNo": "周一004",
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T14:01:40.187Z",
+      "generatedAt": "2026-10-05T14:03:38.858Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -14021,11 +14021,11 @@
       "decisionGeneratedAt": "2026-10-05T13:10:28.611Z",
       "updatedAt": "2026-10-05T13:59:58.618Z",
       "syncCapturedAt": "2026-10-05T13:10:23.436Z",
-      "publicationFinalizedAt": "2026-10-05T14:01:49.998Z",
+      "publicationFinalizedAt": "2026-10-05T14:03:43.974Z",
       "publicationGate": {
         "version": "prediction-publication-cutoff-gate-v1",
-        "syncCapturedAt": "2026-10-05T14:01:39.347Z",
-        "finalizedAt": "2026-10-05T14:01:49.998Z",
+        "syncCapturedAt": "2026-10-05T14:03:38.025Z",
+        "finalizedAt": "2026-10-05T14:03:43.974Z",
         "cutoffTime": "2026-10-05 22:00:00",
         "crossedCutoffDuringSync": false,
         "syncStartedAfterCutoff": true,
@@ -14610,6 +14610,43 @@
     "sourceStatus": "SCHEDULED",
     "effectiveStatus": "SCHEDULED",
     "statusReason": "source-scheduled",
+    "archivedPreMatchPrediction": {
+      "version": "archived-pre-match-prediction-v1",
+      "source": "immutable-pre-match-prediction-snapshot",
+      "sourceMatchId": "2041808",
+      "matchId": "fivehundred_2041808",
+      "kickoffTime": "2026-10-06T02:45:00+08:00",
+      "eventVersion": "2026-10-06T02:45:00+08:00",
+      "capturedAt": "2026-10-05T03:06:24.419Z",
+      "phase": "published",
+      "signature": "published-direction-attestation-v1:immutable-analysis-reference-decision:HAD:1:0:97a85b9fd4fa04b2423af946e6a389130acc3ec4ba95b8a79c86a1d5963d6707",
+      "cutoffTime": "2026-10-05 22:00:00",
+      "marketEvidenceScope": "result-pool",
+      "prediction": {
+        "marketType": "BEST",
+        "oddsPoolCode": "HAD",
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "赛前归档 主胜 意大利",
+          "en": "Pre-match archive: Home win (意大利)"
+        },
+        "odds": 1.37,
+        "trustScore": 65,
+        "recommendationAction": "reference",
+        "recommendationTier": "immutable-five-hundred-analysis-reference",
+        "liveRecommendationAction": "withhold",
+        "liveRecommendationTier": "live-withhold",
+        "liveRecommendation": null,
+        "livePublicationEvidence": null,
+        "riskTags": [],
+        "explanation": {
+          "zh": "",
+          "en": ""
+        },
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      }
+    },
     "probabilityModel": {
       "version": "unified-poisson-bayes-v76",
       "ensemblePolicy": {
@@ -17823,44 +17860,7 @@
         },
         "livePublicationEvidence": null
       }
-    ],
-    "archivedPreMatchPrediction": {
-      "version": "archived-pre-match-prediction-v1",
-      "source": "immutable-pre-match-prediction-snapshot",
-      "sourceMatchId": "2041808",
-      "matchId": "fivehundred_2041808",
-      "kickoffTime": "2026-10-06T02:45:00+08:00",
-      "eventVersion": "2026-10-06T02:45:00+08:00",
-      "capturedAt": "2026-10-05T03:06:24.419Z",
-      "phase": "published",
-      "signature": "published-direction-attestation-v1:immutable-analysis-reference-decision:HAD:1:0:97a85b9fd4fa04b2423af946e6a389130acc3ec4ba95b8a79c86a1d5963d6707",
-      "cutoffTime": "2026-10-05 22:00:00",
-      "marketEvidenceScope": "result-pool",
-      "prediction": {
-        "marketType": "BEST",
-        "oddsPoolCode": "HAD",
-        "tipCode": "1",
-        "tipLabel": {
-          "zh": "赛前归档 主胜 意大利",
-          "en": "Pre-match archive: Home win (意大利)"
-        },
-        "odds": 1.37,
-        "trustScore": 65,
-        "recommendationAction": "reference",
-        "recommendationTier": "immutable-five-hundred-analysis-reference",
-        "liveRecommendationAction": "withhold",
-        "liveRecommendationTier": "live-withhold",
-        "liveRecommendation": null,
-        "livePublicationEvidence": null,
-        "riskTags": [],
-        "explanation": {
-          "zh": "",
-          "en": ""
-        },
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      }
-    }
+    ]
   },
   {
     "id": "fivehundred_2041809",
@@ -17872,7 +17872,7 @@
     "status": "SCHEDULED",
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T14:01:27.024Z",
+      "updatedAt": "2026-10-05T14:03:28.819Z",
       "sourceMatchId": "2041809",
       "fixtureId": "1398609",
       "matchNo": "周一005",
@@ -17907,7 +17907,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T14:00:04.458Z",
+        "updatedAt": "2026-10-05T14:01:57.319Z",
         "sourceMatchId": "2041809",
         "matchId": "fivehundred_2041809",
         "matchNo": "周一005",
@@ -17941,7 +17941,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -17977,7 +17977,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -17998,7 +17998,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -18221,14 +18221,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T14:01:38.782Z",
+        "lastCheckedAt": "2026-10-05T14:03:37.465Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T14:01:38.782Z",
+          "checkedAt": "2026-10-05T14:03:37.465Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -18271,7 +18271,7 @@
     "matchNo": "周一005",
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T14:01:40.187Z",
+      "generatedAt": "2026-10-05T14:03:38.858Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -18475,11 +18475,11 @@
       "decisionGeneratedAt": "2026-10-05T12:41:10.039Z",
       "updatedAt": "2026-10-05T13:59:58.618Z",
       "syncCapturedAt": "2026-10-05T12:41:03.915Z",
-      "publicationFinalizedAt": "2026-10-05T14:01:50.001Z",
+      "publicationFinalizedAt": "2026-10-05T14:03:43.975Z",
       "publicationGate": {
         "version": "prediction-publication-cutoff-gate-v1",
-        "syncCapturedAt": "2026-10-05T14:01:39.347Z",
-        "finalizedAt": "2026-10-05T14:01:50.001Z",
+        "syncCapturedAt": "2026-10-05T14:03:38.025Z",
+        "finalizedAt": "2026-10-05T14:03:43.975Z",
         "cutoffTime": "2026-10-05 22:00:00",
         "crossedCutoffDuringSync": false,
         "syncStartedAfterCutoff": true,
@@ -19064,6 +19064,43 @@
     "sourceStatus": "SCHEDULED",
     "effectiveStatus": "SCHEDULED",
     "statusReason": "source-scheduled",
+    "archivedPreMatchPrediction": {
+      "version": "archived-pre-match-prediction-v1",
+      "source": "immutable-pre-match-prediction-snapshot",
+      "sourceMatchId": "2041809",
+      "matchId": "fivehundred_2041809",
+      "kickoffTime": "2026-10-06T02:45:00+08:00",
+      "eventVersion": "2026-10-06T02:45:00+08:00",
+      "capturedAt": "2026-10-05T04:47:20.304Z",
+      "phase": "published",
+      "signature": "published-direction-attestation-v1:immutable-analysis-reference-decision:HAD:1:0:b5a83263a3e9f2c90cd9f21f290408644f9f6394cc591371d49a5153f22a0975",
+      "cutoffTime": "2026-10-05 22:00:00",
+      "marketEvidenceScope": "result-pool",
+      "prediction": {
+        "marketType": "BEST",
+        "oddsPoolCode": "HAD",
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "赛前归档 主胜 北爱尔兰",
+          "en": "Pre-match archive: Home win (北爱尔兰)"
+        },
+        "odds": 2.2,
+        "trustScore": 40,
+        "recommendationAction": "reference",
+        "recommendationTier": "immutable-five-hundred-analysis-reference",
+        "liveRecommendationAction": "withhold",
+        "liveRecommendationTier": "live-withhold",
+        "liveRecommendation": null,
+        "livePublicationEvidence": null,
+        "riskTags": [],
+        "explanation": {
+          "zh": "",
+          "en": ""
+        },
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      }
+    },
     "probabilityModel": {
       "version": "unified-poisson-bayes-v76",
       "ensemblePolicy": {
@@ -22277,44 +22314,7 @@
         },
         "livePublicationEvidence": null
       }
-    ],
-    "archivedPreMatchPrediction": {
-      "version": "archived-pre-match-prediction-v1",
-      "source": "immutable-pre-match-prediction-snapshot",
-      "sourceMatchId": "2041809",
-      "matchId": "fivehundred_2041809",
-      "kickoffTime": "2026-10-06T02:45:00+08:00",
-      "eventVersion": "2026-10-06T02:45:00+08:00",
-      "capturedAt": "2026-10-05T04:47:20.304Z",
-      "phase": "published",
-      "signature": "published-direction-attestation-v1:immutable-analysis-reference-decision:HAD:1:0:b5a83263a3e9f2c90cd9f21f290408644f9f6394cc591371d49a5153f22a0975",
-      "cutoffTime": "2026-10-05 22:00:00",
-      "marketEvidenceScope": "result-pool",
-      "prediction": {
-        "marketType": "BEST",
-        "oddsPoolCode": "HAD",
-        "tipCode": "1",
-        "tipLabel": {
-          "zh": "赛前归档 主胜 北爱尔兰",
-          "en": "Pre-match archive: Home win (北爱尔兰)"
-        },
-        "odds": 2.2,
-        "trustScore": 40,
-        "recommendationAction": "reference",
-        "recommendationTier": "immutable-five-hundred-analysis-reference",
-        "liveRecommendationAction": "withhold",
-        "liveRecommendationTier": "live-withhold",
-        "liveRecommendation": null,
-        "livePublicationEvidence": null,
-        "riskTags": [],
-        "explanation": {
-          "zh": "",
-          "en": ""
-        },
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      }
-    }
+    ]
   },
   {
     "id": "fivehundred_2041810",
@@ -22326,7 +22326,7 @@
     "status": "SCHEDULED",
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T14:01:27.024Z",
+      "updatedAt": "2026-10-05T14:03:28.819Z",
       "sourceMatchId": "2041810",
       "fixtureId": "1398654",
       "matchNo": "周一006",
@@ -22361,7 +22361,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T14:00:04.458Z",
+        "updatedAt": "2026-10-05T14:01:57.319Z",
         "sourceMatchId": "2041810",
         "matchId": "fivehundred_2041810",
         "matchNo": "周一006",
@@ -22395,7 +22395,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -22431,7 +22431,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -22452,7 +22452,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -22675,14 +22675,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T14:01:38.782Z",
+        "lastCheckedAt": "2026-10-05T14:03:37.465Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T14:01:38.782Z",
+          "checkedAt": "2026-10-05T14:03:37.465Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -22724,7 +22724,7 @@
     "matchNo": "周一006",
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T14:01:40.187Z",
+      "generatedAt": "2026-10-05T14:03:38.858Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -22928,11 +22928,11 @@
       "decisionGeneratedAt": "2026-10-05T12:29:21.318Z",
       "updatedAt": "2026-10-05T13:59:58.619Z",
       "syncCapturedAt": "2026-10-05T12:29:14.158Z",
-      "publicationFinalizedAt": "2026-10-05T14:01:50.001Z",
+      "publicationFinalizedAt": "2026-10-05T14:03:43.975Z",
       "publicationGate": {
         "version": "prediction-publication-cutoff-gate-v1",
-        "syncCapturedAt": "2026-10-05T14:01:39.347Z",
-        "finalizedAt": "2026-10-05T14:01:50.001Z",
+        "syncCapturedAt": "2026-10-05T14:03:38.025Z",
+        "finalizedAt": "2026-10-05T14:03:43.975Z",
         "cutoffTime": "2026-10-05 22:00:00",
         "crossedCutoffDuringSync": false,
         "syncStartedAfterCutoff": true,
@@ -23517,6 +23517,43 @@
     "sourceStatus": "SCHEDULED",
     "effectiveStatus": "SCHEDULED",
     "statusReason": "source-scheduled",
+    "archivedPreMatchPrediction": {
+      "version": "archived-pre-match-prediction-v1",
+      "source": "immutable-pre-match-prediction-snapshot",
+      "sourceMatchId": "2041810",
+      "matchId": "fivehundred_2041810",
+      "kickoffTime": "2026-10-06T02:45:00+08:00",
+      "eventVersion": "2026-10-06T02:45:00+08:00",
+      "capturedAt": "2026-10-05T03:06:24.420Z",
+      "phase": "published",
+      "signature": "published-direction-attestation-v1:immutable-analysis-reference-decision:HAD:1:0:0a71aca00da3de6c2416bc29655b32b94a37dcfbc723faaebceb90b63b60d760",
+      "cutoffTime": "2026-10-05 22:00:00",
+      "marketEvidenceScope": "result-pool",
+      "prediction": {
+        "marketType": "BEST",
+        "oddsPoolCode": "HAD",
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "赛前归档 主胜 黑山",
+          "en": "Pre-match archive: Home win (黑山)"
+        },
+        "odds": 1.44,
+        "trustScore": 61,
+        "recommendationAction": "reference",
+        "recommendationTier": "immutable-five-hundred-analysis-reference",
+        "liveRecommendationAction": "withhold",
+        "liveRecommendationTier": "live-withhold",
+        "liveRecommendation": null,
+        "livePublicationEvidence": null,
+        "riskTags": [],
+        "explanation": {
+          "zh": "",
+          "en": ""
+        },
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      }
+    },
     "probabilityModel": {
       "version": "unified-poisson-bayes-v76",
       "ensemblePolicy": {
@@ -26743,44 +26780,7 @@
         },
         "livePublicationEvidence": null
       }
-    ],
-    "archivedPreMatchPrediction": {
-      "version": "archived-pre-match-prediction-v1",
-      "source": "immutable-pre-match-prediction-snapshot",
-      "sourceMatchId": "2041810",
-      "matchId": "fivehundred_2041810",
-      "kickoffTime": "2026-10-06T02:45:00+08:00",
-      "eventVersion": "2026-10-06T02:45:00+08:00",
-      "capturedAt": "2026-10-05T03:06:24.420Z",
-      "phase": "published",
-      "signature": "published-direction-attestation-v1:immutable-analysis-reference-decision:HAD:1:0:0a71aca00da3de6c2416bc29655b32b94a37dcfbc723faaebceb90b63b60d760",
-      "cutoffTime": "2026-10-05 22:00:00",
-      "marketEvidenceScope": "result-pool",
-      "prediction": {
-        "marketType": "BEST",
-        "oddsPoolCode": "HAD",
-        "tipCode": "1",
-        "tipLabel": {
-          "zh": "赛前归档 主胜 黑山",
-          "en": "Pre-match archive: Home win (黑山)"
-        },
-        "odds": 1.44,
-        "trustScore": 61,
-        "recommendationAction": "reference",
-        "recommendationTier": "immutable-five-hundred-analysis-reference",
-        "liveRecommendationAction": "withhold",
-        "liveRecommendationTier": "live-withhold",
-        "liveRecommendation": null,
-        "livePublicationEvidence": null,
-        "riskTags": [],
-        "explanation": {
-          "zh": "",
-          "en": ""
-        },
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      }
-    }
+    ]
   },
   {
     "id": "fivehundred_2041811",
@@ -26792,7 +26792,7 @@
     "status": "SCHEDULED",
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T14:01:27.024Z",
+      "updatedAt": "2026-10-05T14:03:28.819Z",
       "sourceMatchId": "2041811",
       "fixtureId": "1398615",
       "matchNo": "周一007",
@@ -26827,7 +26827,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T14:00:04.458Z",
+        "updatedAt": "2026-10-05T14:01:57.319Z",
         "sourceMatchId": "2041811",
         "matchId": "fivehundred_2041811",
         "matchNo": "周一007",
@@ -26861,7 +26861,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -26897,7 +26897,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -26918,7 +26918,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T13:59:41.641Z",
+              "sourceObservedAt": "2026-10-05T14:01:27.024Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -27141,14 +27141,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T14:01:38.782Z",
+        "lastCheckedAt": "2026-10-05T14:03:37.465Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T14:01:38.782Z",
+          "checkedAt": "2026-10-05T14:03:37.465Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -27191,7 +27191,7 @@
     "matchNo": "周一007",
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T14:01:40.187Z",
+      "generatedAt": "2026-10-05T14:03:38.858Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -27395,11 +27395,11 @@
       "decisionGeneratedAt": "2026-10-05T13:49:31.297Z",
       "updatedAt": "2026-10-05T13:59:58.619Z",
       "syncCapturedAt": "2026-10-05T13:49:23.668Z",
-      "publicationFinalizedAt": "2026-10-05T14:01:50.002Z",
+      "publicationFinalizedAt": "2026-10-05T14:03:43.976Z",
       "publicationGate": {
         "version": "prediction-publication-cutoff-gate-v1",
-        "syncCapturedAt": "2026-10-05T14:01:39.347Z",
-        "finalizedAt": "2026-10-05T14:01:50.002Z",
+        "syncCapturedAt": "2026-10-05T14:03:38.025Z",
+        "finalizedAt": "2026-10-05T14:03:43.976Z",
         "cutoffTime": "2026-10-05 22:00:00",
         "crossedCutoffDuringSync": false,
         "syncStartedAfterCutoff": true,
@@ -27984,6 +27984,43 @@
     "sourceStatus": "SCHEDULED",
     "effectiveStatus": "SCHEDULED",
     "statusReason": "source-scheduled",
+    "archivedPreMatchPrediction": {
+      "version": "archived-pre-match-prediction-v1",
+      "source": "immutable-pre-match-prediction-snapshot",
+      "sourceMatchId": "2041811",
+      "matchId": "fivehundred_2041811",
+      "kickoffTime": "2026-10-06T02:45:00+08:00",
+      "eventVersion": "2026-10-06T02:45:00+08:00",
+      "capturedAt": "2026-10-05T03:06:24.420Z",
+      "phase": "published",
+      "signature": "published-direction-attestation-v1:immutable-analysis-reference-decision:HAD:2:0:ef2ffd2b25cff6833d98590a2750bfec527bfb2e3ea90beb32e8a71ddcb8a2f6",
+      "cutoffTime": "2026-10-05 22:00:00",
+      "marketEvidenceScope": "result-pool",
+      "prediction": {
+        "marketType": "BEST",
+        "oddsPoolCode": "HAD",
+        "tipCode": "2",
+        "tipLabel": {
+          "zh": "赛前归档 客胜 波兰",
+          "en": "Pre-match archive: Away win (波兰)"
+        },
+        "odds": 2.08,
+        "trustScore": 43,
+        "recommendationAction": "reference",
+        "recommendationTier": "immutable-five-hundred-analysis-reference",
+        "liveRecommendationAction": "withhold",
+        "liveRecommendationTier": "live-withhold",
+        "liveRecommendation": null,
+        "livePublicationEvidence": null,
+        "riskTags": [],
+        "explanation": {
+          "zh": "",
+          "en": ""
+        },
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      }
+    },
     "probabilityModel": {
       "version": "unified-poisson-bayes-v76",
       "ensemblePolicy": {
@@ -31199,43 +31236,6 @@
         },
         "livePublicationEvidence": null
       }
-    ],
-    "archivedPreMatchPrediction": {
-      "version": "archived-pre-match-prediction-v1",
-      "source": "immutable-pre-match-prediction-snapshot",
-      "sourceMatchId": "2041811",
-      "matchId": "fivehundred_2041811",
-      "kickoffTime": "2026-10-06T02:45:00+08:00",
-      "eventVersion": "2026-10-06T02:45:00+08:00",
-      "capturedAt": "2026-10-05T03:06:24.420Z",
-      "phase": "published",
-      "signature": "published-direction-attestation-v1:immutable-analysis-reference-decision:HAD:2:0:ef2ffd2b25cff6833d98590a2750bfec527bfb2e3ea90beb32e8a71ddcb8a2f6",
-      "cutoffTime": "2026-10-05 22:00:00",
-      "marketEvidenceScope": "result-pool",
-      "prediction": {
-        "marketType": "BEST",
-        "oddsPoolCode": "HAD",
-        "tipCode": "2",
-        "tipLabel": {
-          "zh": "赛前归档 客胜 波兰",
-          "en": "Pre-match archive: Away win (波兰)"
-        },
-        "odds": 2.08,
-        "trustScore": 43,
-        "recommendationAction": "reference",
-        "recommendationTier": "immutable-five-hundred-analysis-reference",
-        "liveRecommendationAction": "withhold",
-        "liveRecommendationTier": "live-withhold",
-        "liveRecommendation": null,
-        "livePublicationEvidence": null,
-        "riskTags": [],
-        "explanation": {
-          "zh": "",
-          "en": ""
-        },
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      }
-    }
+    ]
   }
 ]
