@@ -41,7 +41,7 @@ export interface SupplementaryResearch {
 export interface SupplementaryResult {state:ResultState;actual?:string;score?:string|null;resultEventId?:string|null}
 export interface SupplementarySummary {exactScore:Summary;totalGoals:Summary;excludedWithoutFrozenPicks:number}
 export interface Settlement { state:ResultState; score?:string|null; actual?:Outcome; resultEventId?:string|null; legs?:Array<{decisionId:string;selectionId?:string;state:ResultState;score?:string|null}> }
-export interface SelectionQuality {version:'recommendation-selection-quality-v1'|'recommendation-selection-quality-v2';status:'watch'|'reference-qualified';qualified:boolean;reasons:string[];samples:{elo:{home:number|null;away:number|null};form:{home:number|null;away:number|null}}|null;probabilityLead:number|null;marketProbability:number|null;modelMarketGap:number|null;expectedValue:number|null;marketFavorite:boolean;directionSelectionMode?:'model-leader'|'market-edge-override';marketRole?:'favorite'|'draw'|'nonfavorite'|null;crossTrack?:{referenceTipCode:Outcome;referenceRecordedAt:string;knownAtPublication:boolean}}
+export interface SelectionQuality {version:'recommendation-selection-quality-v1'|'recommendation-selection-quality-v2';assessmentBasis?:'coherent-primary-anchor-v1';assessedMarket?:'HAD'|'HHAD';status:'watch'|'reference-qualified';qualified:boolean;reasons:string[];samples:{elo:{home:number|null;away:number|null};form:{home:number|null;away:number|null}}|null;probabilityLead:number|null;marketProbability:number|null;modelMarketGap:number|null;expectedValue:number|null;marketFavorite:boolean;directionSelectionMode?:'model-leader'|'market-edge-override';marketRole?:'favorite'|'draw'|'nonfavorite'|null;crossTrack?:{referenceTipCode:Outcome;referenceRecordedAt:string;knownAtPublication:boolean}}
 export interface PublishedScore {home:number;away:number;label:string;probability:number;hadCode:Outcome;hhadCode:Outcome|null}
 export interface PublishedTotalGoals {label:string;probability:number}
 export interface PublishedScores {status:'available'|'unavailable';version:'published-score-distribution-v1';decisionId:string;recordHash:string;topScores:PublishedScore[];alignedScores:PublishedScore[];totalGoals?:PublishedTotalGoals[]}
@@ -94,7 +94,14 @@ export function outcomeResearchReasonLabel(reason:string,zh:boolean):string{
   };
   return (labels[reason]??[reason,reason])[zh?0:1];
 }
-export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null;selectionQuality?:SelectionQuality|null;scoreDistribution?:PublishedScores|null;outcomeResearch?:OutcomeCategoryResearch|null;supplementarySettlement?:{exactScore:SupplementaryResult;totalGoals:SupplementaryResult}|null }
+export interface StrategyAssessment {
+  version:'evidence-price-recommendation-v1';id:string;contentHash:string;asOf:string;
+  decisionId:string;decisionRecordHash:string;scope:'shadow-reference-only';
+  selectionStatus:'observation'|'research-value-candidates'|'unavailable';reasons:string[];
+  formalEligible:false;primary:null;companion:null;calibration:{status:'unavailable'|'unverified'};
+  candidates:Array<{id:string;market:'HAD'|'HHAD';tipCode:Outcome;modelProbability:number|null;modelExpectedValue:number|null;researchValueEligible:boolean;reasons:string[];risks:string[]}>;
+}
+export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null;selectionQuality?:SelectionQuality|null;strategyAssessment?:StrategyAssessment|null;scoreDistribution?:PublishedScores|null;outcomeResearch?:OutcomeCategoryResearch|null;supplementarySettlement?:{exactScore:SupplementaryResult;totalGoals:SupplementaryResult}|null }
 export function boundOfficialHandicapSp(analysis:HandicapAnalysis|null|undefined,direction:Outcome|null|undefined):number|null{
   const quote=analysis?.marketReference;
   if(!direction||quote?.source!=='sporttery:HHAD')return null;
@@ -330,6 +337,68 @@ function settlement(v:unknown):Settlement{
   if(s.legs!=null)result.legs=list(s.legs).map(v=>{const l=object(v);return {decisionId:text(l.decisionId),selectionId:l.selectionId==null?undefined:text(l.selectionId),state:state(l.state),score:l.score==null?null:text(l.score)};});
   return result;
 }
+function strategyAssessment(value:unknown,d:Decision):StrategyAssessment|null|undefined{
+  if(value===undefined)return undefined;if(value===null)return null;
+  const a=object(value),calibration=object(a.calibration),codes=['1','X','2'] as const;
+  const finiteTree=(v:unknown,depth=0):void=>{
+    if(depth>20)throw new Error('Strategy assessment nesting invalid');
+    if(typeof v==='number')number(v);
+    else if(v&&typeof v==='object')Object.values(v).forEach(item=>finiteTree(item,depth+1));
+  };finiteTree(a);
+  if(a.version!=='evidence-price-recommendation-v1'||a.scope!=='shadow-reference-only'
+    ||a.decisionId!==d.decisionId||a.decisionRecordHash!==d.recordHash
+    ||a.sourceMatchId!==d.sourceMatchId||a.eventVersion!==d.eventVersion||a.businessDate!==d.businessDate
+    ||a.formalEligible!==false||a.primary!==null||a.companion!==null
+    ||!['observation','research-value-candidates','unavailable'].includes(String(a.selectionStatus))
+    ||!['unavailable','unverified'].includes(String(calibration.status))||calibration.conservativeProbability!==null
+    ||!/^assessment_[a-f0-9]{64}$/.test(text(a.id))||!/^[a-f0-9]{64}$/.test(text(a.contentHash)))throw new Error('Invalid strategy assessment binding');
+  const probability=(v:unknown)=>{const p=number(v);if(p<0||p>1)throw new Error('Invalid strategy probability');return p;};
+  const nullable=(v:unknown,parse:(value:unknown)=>number)=>v===null?null:parse(v);
+  const distributions=object(a.distributions);
+  const vectors={} as Record<'HAD'|'HHAD',Record<Outcome,number>|null>;
+  const fairVectors={} as typeof vectors,quoteVectors={} as typeof vectors;
+  for(const market of ['HAD','HHAD'] as const){
+    const row=object(distributions[market]);
+    if(row.probabilityBasis!=='unconditional'||row.modelValidation!=='unvalidated')throw new Error('Invalid strategy distribution basis');
+    let model:Record<Outcome,number>|null=null,fair:Record<Outcome,number>|null=null;
+    for(const key of ['modelProbabilities','marketProbabilities']){
+      if(row[key]===null)continue;const raw=object(row[key]),p={'1':probability(raw['1']),X:probability(raw.X),'2':probability(raw['2'])};
+      if(Math.abs(p['1']+p.X+p['2']-1)>1e-6)throw new Error('Invalid strategy probability vector');
+      if(key==='modelProbabilities')model=p;else fair=p;
+    }
+    const expected=market==='HAD'?d.probabilities:d.handicapAnalysis?.overallProbabilities;
+    if(model&&expected&&codes.some(code=>Math.abs(model![code]-expected[code])>1e-8))throw new Error('Strategy probabilities differ from frozen decision');
+    const quote=row.quoteOdds===null?null:frozenQuoteOdds(row.quoteOdds)??null;
+    const expectedQuote=market==='HAD'?d.quoteOdds:d.handicapAnalysis?.marketReference?.odds;
+    if(quote&&expectedQuote&&codes.some(code=>quote[code]!==expectedQuote[code]))throw new Error('Strategy prices differ from frozen decision');
+    if((fair===null)!==(quote===null)||fair&&quote&&codes.some(code=>Math.abs(fair![code]-(1/quote[code])/codes.reduce((sum,item)=>sum+1/quote[item],0))>1e-8))throw new Error('Invalid strategy market prices');
+    vectors[market]=model;fairVectors[market]=fair;quoteVectors[market]=quote;
+  }
+  const candidates=list(a.candidates).map((value):StrategyAssessment['candidates'][number]=>{
+    const c=object(value),market=c.market,tipCode=outcome(c.tipCode);
+    if((market!=='HAD'&&market!=='HHAD')||c.probabilityBasis!=='unconditional'||c.formalEligible!==false
+      ||c.calibratedProbability!==null||c.conservativeProbability!==null||c.conservativeExpectedValue!==null
+      ||typeof c.researchValueEligible!=='boolean')throw new Error('Invalid strategy candidate');
+    const modelProbability=nullable(c.modelProbability,probability),marketProbability=nullable(c.marketProbability,probability);
+    const odds=nullable(c.odds,number),ev=nullable(c.modelExpectedValue,number),gap=nullable(c.modelMarketGap,number),breakEven=nullable(c.breakEvenProbability,probability);
+    if(modelProbability!==(vectors[market]?.[tipCode]??null)||marketProbability!==(fairVectors[market]?.[tipCode]??null)||odds!==(quoteVectors[market]?.[tipCode]??null)||odds!==null&&odds<=1
+      ||(ev===null)!==(modelProbability===null||odds===null)||ev!==null&&Math.abs(ev-(modelProbability!*odds!-1))>1e-8
+      ||(gap===null)!==(modelProbability===null||marketProbability===null)||gap!==null&&Math.abs(gap-(modelProbability!-marketProbability!))>1e-8
+      ||(breakEven===null)!==(odds===null)||breakEven!==null&&Math.abs(breakEven-1/odds!)>1e-8)throw new Error('Invalid strategy price arithmetic');
+    const reasons=list(c.reasons).map(text),risks=list(c.risks).map(text);
+    if(c.researchValueEligible&&(reasons.length||ev===null||ev<=0))throw new Error('Invalid strategy research candidate');
+    return{id:text(c.id),market,tipCode,modelProbability,modelExpectedValue:ev,researchValueEligible:c.researchValueEligible,reasons,risks};
+  });
+  if(candidates.length!==6||new Set(candidates.map(c=>`${c.market}:${c.tipCode}`)).size!==6||new Set(candidates.map(c=>c.id)).size!==6)throw new Error('Incomplete strategy candidates');
+  const eligible=list(a.eligibleCandidates).map(value=>text(object(value).id)),expectedEligible=candidates.filter(c=>c.researchValueEligible).map(c=>c.id);
+  const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>[key,canonical(item)])):value;
+  if(list(a.eligibleCandidates).some(value=>JSON.stringify(canonical(value))!==JSON.stringify(canonical(list(a.candidates).find(candidate=>object(candidate).id===object(value).id)))))throw new Error('Strategy eligible candidate differs from source');
+  if(eligible.length!==expectedEligible.length||new Set(eligible).size!==eligible.length||eligible.some(id=>!expectedEligible.includes(id))
+    ||(a.selectionStatus==='research-value-candidates')!==(eligible.length>0))throw new Error('Invalid strategy eligibility summary');
+  return{version:'evidence-price-recommendation-v1',id:text(a.id),contentHash:text(a.contentHash),asOf:stamp(a.asOf),decisionId:d.decisionId,decisionRecordHash:d.recordHash,scope:'shadow-reference-only',
+    selectionStatus:a.selectionStatus as StrategyAssessment['selectionStatus'],reasons:list(a.reasons).map(text),formalEligible:false,primary:null,companion:null,
+    calibration:{status:calibration.status as StrategyAssessment['calibration']['status']},candidates};
+}
 function single(v:unknown):SingleRow{
   const x=object(v),d=decision(x.decision),s=settlement(x.settlement);
   if(['WON','LOST'].includes(s.state)&&(!s.actual||!s.score||(s.actual===d.tipCode)!==(s.state==='WON')))throw new Error('Settlement disagrees with decision');
@@ -353,9 +422,19 @@ function single(v:unknown):SingleRow{
         ||qualified||!quality.reasons.includes('cross-track-direction-conflict'))throw new Error('Invalid cross-track diagnostic');
       quality.crossTrack={referenceTipCode,referenceRecordedAt,knownAtPublication:c.knownAtPublication};
     }
-    // This diagnostic belongs to the frozen HAD decision, never to a later
-    // model update or an HHAD review selection.
-    if(quality.expectedValue!=null&&Math.abs(quality.expectedValue-(d.modelProbability*d.odds-1))>1e-8)throw new Error('Selection quality EV disagrees with frozen decision');
+    // The explicit current-view scope binds to the frozen coherent anchor.
+    // Unscoped historical records retain their original HAD assessment.
+    let assessedProbability:number|undefined=d.modelProbability,assessedOdds:number|undefined=d.odds;
+    if(q.assessmentBasis!==undefined){
+      if(q.assessmentBasis!=='coherent-primary-anchor-v1'||d.primaryPickPolicyVersion!=='coherent-market-primary-v1'||!d.coherentPrimary)throw new Error('Invalid selection quality assessment basis');
+      quality.assessmentBasis=q.assessmentBasis;quality.assessedMarket=d.coherentPrimary.anchorMarket;
+      if(d.coherentPrimary.anchorMarket==='HHAD'){
+        const code=d.coherentPrimary.anchorCode;
+        assessedProbability=d.handicapAnalysis?.overallProbabilities?.[code];
+        assessedOdds=d.handicapAnalysis?.marketReference?.odds?.[code];
+      }
+    }
+    if(quality.expectedValue!=null&&(assessedProbability==null||assessedOdds==null||Math.abs(quality.expectedValue-(assessedProbability*assessedOdds-1))>1e-8))throw new Error('Selection quality EV disagrees with frozen decision');
     if(qualified&&quality.reasons.length)throw new Error('Contradictory selection quality');
   }
   if(x.scoreDistribution!=null){
@@ -417,7 +496,7 @@ function single(v:unknown):SingleRow{
     research={version:'outcome-category-research-v1',decisionId:d.decisionId,recordHash:d.recordHash,researchOnly:true,formalPromotionEligible:false,
       category:category as OutcomeCategoryResearch['category'],candidateCode,modelLeaderCode,marketFavoriteCode,researchQualified,reasons,evidenceCodes,outcomes};
   }
-  return {decision:d,settlement:s,handicapSettlement:hs,supplementarySettlement:supplementaryResults(x.supplementarySettlement,d,s),selectionQuality:quality,scoreDistribution:x.scoreDistribution===undefined?undefined:scores,outcomeResearch:x.outcomeResearch===undefined?undefined:research};
+  return {decision:d,settlement:s,handicapSettlement:hs,supplementarySettlement:supplementaryResults(x.supplementarySettlement,d,s),selectionQuality:quality,strategyAssessment:strategyAssessment(x.strategyAssessment,d),scoreDistribution:x.scoreDistribution===undefined?undefined:scores,outcomeResearch:x.outcomeResearch===undefined?undefined:research};
 }
 function comboSelection(v:unknown,parent:Decision,rawParent:Obj):ComboSelection{
   const s=object(v),market=s.market,tipCode=outcome(s.tipCode),handicapLine=number(s.handicapLine),odds=number(s.odds),modelProbability=number(s.modelProbability);
@@ -727,11 +806,11 @@ export function handicapExtensionText(h:NonNullable<ReturnType<typeof primarySel
   const zh=language==='zh';
   const title=(code:Outcome)=>zh?({'1':'让胜',X:'让平','2':'让负'}[code]):({'1':'Handicap home',X:'Handicap draw','2':'Handicap away'}[code]);
   if(h.status==='recommend')return {
-    title:`${h.lineText} · ${title(h.code!)}`,
-    detail:`${h.conditional?(zh?'条件占比 ':'Conditional share '):''}${(h.probability!*100).toFixed(1)}%${h.odds?' · SP '+h.odds.toFixed(2):''}${!h.conditional?(zh?' · 低置信':' · low confidence'):h.calibrated?(zh?' · 已校准':' · calibrated'):''}`,
+    title:`${handicapLineLabel(h.line,zh)} · ${title(h.code!)}`,
+    detail:`${h.conditional?(zh?'条件占比 ':'Conditional share '):(zh?'无条件概率 ':'Unconditional probability ')}${(h.probability!*100).toFixed(1)}%${h.odds?' · SP '+h.odds.toFixed(2):''}${!h.conditional?(zh?' · 低置信':' · low confidence'):h.calibrated?(zh?' · 已校准':' · calibrated'):''}`,
   };
   return {
-    title:`${h.lineText} · ${zh?'不追让球':'Pass handicap'}`,
+    title:`${handicapLineLabel(h.line,zh)} · ${zh?'不追让球':'Pass handicap'}`,
     detail:`${h.conditional?(zh?'条件模型偏 ':'Conditional model leans '):(zh?'盘口模型偏 ':'Model leans ')}${title(h.riskCode!)} ${(h.riskProbability!*100).toFixed(1)}%${h.suggestedCode?(zh?' · 同向备选 ':' · aligned alternative ')+title(h.suggestedCode)+' '+(h.suggestedProbability!*100).toFixed(1)+'%':''}`,
   };
 }
@@ -748,5 +827,33 @@ export function publishedHandicapCode(d:Pick<Decision,'primaryPickPolicyVersion'
 }
 export function primaryMarketLabel(d:Pick<Decision,'coherentPrimary'>,market:'HAD'|'HHAD',zh:boolean):string{
   const name=market==='HAD'?(zh?'胜平负':'1X2'):(zh?'让球':'Handicap');
-  return name+(d.coherentPrimary?(d.coherentPrimary.anchorMarket===market?(zh?' · 主方向':' · primary'):(zh?' · 伴随方向':' · companion')):(zh?'首选':' primary'));
+  if(d.coherentPrimary&&market==='HHAD'&&!d.coherentPrimary.hhadCode)return name+(zh?' · 暂不可用':' · unavailable');
+  return name+(d.coherentPrimary?(d.coherentPrimary.anchorMarket===market?(zh?' · 主方向':' · primary'):(zh?' · 条件分支':' · conditional branch')):(zh?'首选':' primary'));
+}
+
+export function handicapLineLabel(line:number,zh:boolean):string{
+  const signed=`${line>0?'+':''}${line}`;
+  return zh?`主队${line<0?'让':'受让'}${Math.abs(line)}球（${signed}）`:`Home handicap ${signed}`;
+}
+
+export function coherentProbabilityNote(d:Pick<Decision,'primaryPickPolicyVersion'|'coherentPrimary'>,zh:boolean):string|null{
+  const c=d.primaryPickPolicyVersion==='coherent-market-primary-v1'?d.coherentPrimary:null;
+  if(!c?.hhadCode||c.companionConditionalProbability==null||c.jointProbability==null)return null;
+  const conditional=(c.companionConditionalProbability*100).toFixed(2),joint=(c.jointProbability*100).toFixed(2);
+  return zh?`主方向成立时，冻结条件分支占比 ${conditional}%；两方向同时成立的无条件概率 ${joint}%。条件分支不是独立推荐，接近一半的占比不代表明显优势。条件占比不用于串关，也不是实际命中率。`:
+    `If the primary lands, the frozen conditional branch has a ${conditional}% share. Both landing has ${joint}% unconditional probability. This branch is not an independent recommendation; a share near one half is not a clear advantage. Conditional shares are not used for combos and are not observed hit rates.`;
+}
+
+/** Counts and reasons are reported evidence, never inferred from an empty preview. */
+export function comboEligibilityEvidence(data:RecommendationCenterData|null|undefined,zh:boolean){
+  const lane=data?.lanes.combos;
+  const values:Array<[string,number|undefined]>=[
+    [zh?'合格候选':'Eligible candidates',lane?.candidateCount],
+    [zh?'参考':'Reference',lane?.referenceCount],
+    [zh?'观察':'Watch',lane?.watchCount],
+  ];
+  const summary=values.filter(([,value])=>value!==undefined).map(([label,value])=>`${label} ${value}`).join(' · ');
+  const coverage=data?.coverage?.businessDate===data?.businessDate?data?.coverage:undefined;
+  const reasons=coverage?.missing.map(row=>`${row.homeTeamName} - ${row.awayTeamName}：${row.reasonText}`)??[];
+  return {summary,reasons,partial:coverage?.hasMore===true};
 }

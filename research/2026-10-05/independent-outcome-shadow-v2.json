@@ -1,0 +1,4717 @@
+{
+  "version": "strategy-version-comparison-v1",
+  "kind": "shadow-experiment",
+  "experimentVersion": "independent-outcome-shadow-v2-20261005",
+  "generatedAt": "2026-10-05T15:16:36.519Z",
+  "businessDate": "2026-10-05",
+  "sourceObservedAt": "2026-10-05T22:53:23.173517+08:00",
+  "sourceSha256": "ed87eb6b1d560b565a0f358f4f1e342bf5fd7357e02d83f978e0e0b94692f70f",
+  "archiveContentHash": "4ac33e19824db028180caf0a43ea6dc9ce5527a6b35c615b98e4c9e6b6e8c751",
+  "publicReferenceArchiveContentHash": "c3c0738ebf0cb89161faeb9fc086e11f1b09ddd09da96e1a51f0500f5e75177f",
+  "codeCommit": "bcba5501afdf0110ce95da13f8425ce9f980cbd2",
+  "codeHashes": {
+    "scripts/recommendationPlatform/strategyVersionComparison.cjs": "c03879abb6f0656be27ee636b8af35e142cea27faa851033fb8abacbd341a941",
+    "src/services/evidencePriceRecommendationPolicy.cjs": "218def69f585c4b63315ebe1940776cd732e88c3c38a6c4d2f0ce3558786ee56",
+    "src/services/recommendationSelectionQuality.cjs": "956060c9a528161fba736fc8d33c6036778dc4e190625b3bed444a77ecbe001e",
+    "src/services/publishedScoreDistribution.cjs": "7e1b6ee858d656fac725f28ed29dcbc578bf6a7c7f07c399732e3e31e5811726",
+    "scripts/recommendationPlatform/results.cjs": "0f880b92c8a4bee235d695b5b1db7f1a5f97e02ddd384079206edf4320ebcfe4",
+    "scripts/recommendationPlatform/publicStrategyReferenceComparison.cjs": "844b627abe6510b73624fd57e295b37fd0ba1854b85b082eb2eb3960b0eb772e",
+    "scripts/runRecommendationVersionComparison.cjs": "b26ef24388c74c52d8f9ff8676ffa95f1f91cbe8d0ff0a54dad4a089b6292da4"
+  },
+  "productionWrites": 0,
+  "modelTrainingPerformed": false,
+  "probabilityCalibrationPerformed": false,
+  "formalHitRateEligible": false,
+  "comparisonScope": "Prospective pre-kickoff shadow. Sale-cutoff eligibility is not retrospective.",
+  "rows": [
+    {
+      "sourceMatchId": "2041805",
+      "eventVersion": "2026-10-05T16:00:00.000Z",
+      "homeTeamId": "team_1hw0ar",
+      "awayTeamId": "team_a5f675",
+      "matchNo": "周一001",
+      "homeTeamName": "塞浦路斯",
+      "awayTeamName": "拉脱维亚",
+      "kickoffTime": "2026-10-05T16:00:00.000Z",
+      "cutoffTime": "2026-10-05T14:00:00.000Z",
+      "decisionId": "decision_8f7c6549b5c12d863edbed50a944c4c1715526f5a23fdbd46e6a231217b36a18",
+      "decisionRecordHash": "f3af7aeb36545fb827e015933225f0c5eea28820b8546c7b4e85749732e4f087",
+      "inputPublishedAt": "2026-10-05T13:59:29.011Z",
+      "modelGeneratedAt": "2026-10-05T13:38:34.055Z",
+      "generatedAt": "2026-10-05T15:16:36.519Z",
+      "afterCutoff": true,
+      "beforeKickoff": true,
+      "formalHitRateEligible": false,
+      "researchComparisonEligible": true,
+      "probabilitiesUnchanged": true,
+      "formalEligible": false,
+      "primary": null,
+      "companion": null,
+      "referenceLabel": "model outcome tendency; uncalibrated; not a betting recommendation",
+      "modelTendency": {
+        "market": "HAD",
+        "tipCode": "1",
+        "handicapLine": 0,
+        "probability": 0.358,
+        "odds": 1.38
+      },
+      "marketBaseline": {
+        "market": "HAD",
+        "tipCode": "1",
+        "handicapLine": 0,
+        "probability": 0.6416598981023407,
+        "odds": 1.38
+      },
+      "independentHandicapTendency": {
+        "market": "HHAD",
+        "tipCode": "2",
+        "handicapLine": -1,
+        "probability": 0.642,
+        "odds": 2.55
+      },
+      "fullHADDistribution": {
+        "1": 0.358,
+        "2": 0.33399999999999996,
+        "X": 0.308
+      },
+      "fullHHADDistribution": {
+        "1": 0.15812,
+        "2": 0.642,
+        "X": 0.19988
+      },
+      "originalPrimary": {
+        "market": "HHAD",
+        "tipCode": "2",
+        "handicapLine": -1,
+        "probability": 0.642,
+        "odds": 2.55
+      },
+      "originalHAD": {
+        "market": "HAD",
+        "tipCode": "2",
+        "handicapLine": 0,
+        "probability": 0.33399999999999996,
+        "odds": 6.6
+      },
+      "originalHHAD": {
+        "market": "HHAD",
+        "tipCode": "2",
+        "handicapLine": -1,
+        "probability": 0.642,
+        "odds": 2.55
+      },
+      "originalExactScore": {
+        "label": "1-1",
+        "probability": 0.14570207943305213
+      },
+      "topScores": [
+        {
+          "label": "1-1",
+          "home": 1,
+          "away": 1,
+          "probability": 0.14570207943305213,
+          "hadCode": "X",
+          "hhadCode": "2",
+          "compatibleOriginalPrimary": true,
+          "compatibleModelTendency": false
+        },
+        {
+          "label": "1-0",
+          "home": 1,
+          "away": 0,
+          "probability": 0.10318174527316672,
+          "hadCode": "1",
+          "hhadCode": "X",
+          "compatibleOriginalPrimary": false,
+          "compatibleModelTendency": true
+        },
+        {
+          "label": "0-1",
+          "home": 0,
+          "away": 1,
+          "probability": 0.10159209475278753,
+          "hadCode": "2",
+          "hhadCode": "2",
+          "compatibleOriginalPrimary": true,
+          "compatibleModelTendency": false
+        }
+      ],
+      "scoreRule": "global-unconditional-top3; no conditional branch filter",
+      "sourceQuoteClocks": {
+        "HAD": "2026-10-05T13:57:13.194Z",
+        "HHAD": "2026-10-05T13:59:24.515Z"
+      },
+      "strategyAssessment": {
+        "version": "evidence-price-recommendation-v1",
+        "scope": "shadow-reference-only",
+        "asOf": "2026-10-05T13:59:29.011Z",
+        "decisionId": "decision_8f7c6549b5c12d863edbed50a944c4c1715526f5a23fdbd46e6a231217b36a18",
+        "decisionRecordHash": "f3af7aeb36545fb827e015933225f0c5eea28820b8546c7b4e85749732e4f087",
+        "sourceMatchId": "2041805",
+        "eventVersion": "2026-10-05T16:00:00.000Z",
+        "businessDate": "2026-10-05",
+        "modelVersion": "unified-poisson-bayes-v76",
+        "selectionStatus": "observation",
+        "reasons": [
+          "model-uncalibrated",
+          "calibration-evidence-missing",
+          "formal-calibration-adapter-unavailable",
+          "no-research-value-candidate"
+        ],
+        "formalEligible": false,
+        "primary": null,
+        "companion": null,
+        "eligibleCandidateScope": "research-value-only",
+        "materialAbsoluteMarketGap": 0.1,
+        "calibration": {
+          "status": "unavailable",
+          "suppliedEvidenceHash": null,
+          "conservativeProbability": null,
+          "formalAdapter": "not-integrated",
+          "trainingPerformed": false,
+          "reasons": [
+            "calibration-evidence-missing",
+            "formal-calibration-adapter-unavailable"
+          ]
+        },
+        "referenceDiagnostic": {
+          "status": "absent",
+          "referenceHash": null,
+          "event": null,
+          "sourceVerified": false,
+          "reasons": []
+        },
+        "distributions": {
+          "HAD": {
+            "modelProbabilities": {
+              "1": 0.358,
+              "2": 0.33399999999999996,
+              "X": 0.308
+            },
+            "marketProbabilities": {
+              "1": 0.6416598981023407,
+              "2": 0.13416525142139848,
+              "X": 0.22417485047626073
+            },
+            "modelLeader": "1",
+            "modelLeaderCodes": [
+              "1"
+            ],
+            "marketLeader": "1",
+            "marketLeaderCodes": [
+              "1"
+            ],
+            "quoteOdds": {
+              "1": 1.38,
+              "2": 6.6,
+              "X": 3.95
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "quoteSource": "500.com:jczq:HAD",
+            "handicapLine": 0,
+            "probabilityBasis": "unconditional",
+            "modelValidation": "unvalidated",
+            "quoteBinding": "frozen-decision-market-quote",
+            "sourceVerified": false,
+            "quoteReasons": []
+          },
+          "HHAD": {
+            "modelProbabilities": {
+              "1": 0.15812,
+              "2": 0.642,
+              "X": 0.19988
+            },
+            "marketProbabilities": {
+              "1": 0.3431870800158111,
+              "2": 0.34722457507482074,
+              "X": 0.3095883449093681
+            },
+            "modelLeader": "2",
+            "modelLeaderCodes": [
+              "2"
+            ],
+            "marketLeader": "2",
+            "marketLeaderCodes": [
+              "2"
+            ],
+            "quoteOdds": {
+              "1": 2.58,
+              "2": 2.55,
+              "X": 2.86
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "quoteSource": "sporttery:HHAD",
+            "handicapLine": -1,
+            "probabilityBasis": "unconditional",
+            "modelValidation": "unvalidated",
+            "quoteBinding": "frozen-decision-market-quote",
+            "sourceVerified": false,
+            "quoteReasons": []
+          }
+        },
+        "candidates": [
+          {
+            "id": "option_414b2719d5560f98cf0f563e307356226f926d12f2053d894e07e2d772081c43",
+            "market": "HAD",
+            "tipCode": "1",
+            "handicapLine": 0,
+            "modelProbability": 0.358,
+            "marketProbability": 0.6416598981023407,
+            "odds": 1.38,
+            "breakEvenProbability": 0.7246376811594204,
+            "modelExpectedValue": -0.5059600000000001,
+            "modelMarketGap": -0.2836598981023407,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient",
+                "model-lead-too-thin",
+                "material-model-market-disagreement"
+              ],
+              "inputEvidenceHash": "d3e0e50889cf82987a0f954bb75b41a2b08adefd6496a42be6220bc3d1598857",
+              "samples": {
+                "elo": {
+                  "away": 1,
+                  "home": 1
+                },
+                "form": {
+                  "away": 1,
+                  "home": 1
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.028333333333333335,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": 0.02400000000000002,
+              "marketProbability": 0.6416598981023407,
+              "modelMarketGap": -0.2836598981023407,
+              "expectedValue": -0.5059600000000001,
+              "marketFavorite": true,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "favorite",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "model-lead-too-thin",
+              "material-model-market-disagreement",
+              "nonpositive-model-expected-value",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_23db66f7648ae3b4ae5935cde6402c38b40da43e07c130f5a56bdb37779798b1",
+            "market": "HAD",
+            "tipCode": "X",
+            "handicapLine": 0,
+            "modelProbability": 0.308,
+            "marketProbability": 0.22417485047626073,
+            "odds": 3.95,
+            "breakEvenProbability": 0.2531645569620253,
+            "modelExpectedValue": 0.21660000000000013,
+            "modelMarketGap": 0.08382514952373926,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient",
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "d3e0e50889cf82987a0f954bb75b41a2b08adefd6496a42be6220bc3d1598857",
+              "samples": {
+                "elo": {
+                  "away": 1,
+                  "home": 1
+                },
+                "form": {
+                  "away": 1,
+                  "home": 1
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.028333333333333335,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.04999999999999999,
+              "marketProbability": 0.22417485047626073,
+              "modelMarketGap": 0.08382514952373926,
+              "expectedValue": 0.21660000000000013,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "draw",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "model-lead-too-thin"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_35cccd41e1274b6d63b638874fa7d74fee80dbb11849be60a53e8edcb09828df",
+            "market": "HAD",
+            "tipCode": "2",
+            "handicapLine": 0,
+            "modelProbability": 0.33399999999999996,
+            "marketProbability": 0.13416525142139848,
+            "odds": 6.6,
+            "breakEvenProbability": 0.15151515151515152,
+            "modelExpectedValue": 1.2043999999999997,
+            "modelMarketGap": 0.19983474857860148,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient",
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "d3e0e50889cf82987a0f954bb75b41a2b08adefd6496a42be6220bc3d1598857",
+              "samples": {
+                "elo": {
+                  "away": 1,
+                  "home": 1
+                },
+                "form": {
+                  "away": 1,
+                  "home": 1
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.028333333333333335,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.02400000000000002,
+              "marketProbability": 0.13416525142139848,
+              "modelMarketGap": 0.19983474857860148,
+              "expectedValue": 1.2043999999999997,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "nonfavorite",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "model-lead-too-thin",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_984e1886e0399036cdf03b0e8a09f75fafc282aa2a0f5fcbd7c3823bae715f51",
+            "market": "HHAD",
+            "tipCode": "1",
+            "handicapLine": -1,
+            "modelProbability": 0.15812,
+            "marketProbability": 0.3431870800158111,
+            "odds": 2.58,
+            "breakEvenProbability": 0.38759689922480617,
+            "modelExpectedValue": -0.5920504,
+            "modelMarketGap": -0.1850670800158111,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient",
+                "model-lead-too-thin",
+                "material-model-market-disagreement"
+              ],
+              "inputEvidenceHash": "d3e0e50889cf82987a0f954bb75b41a2b08adefd6496a42be6220bc3d1598857",
+              "samples": {
+                "elo": {
+                  "away": 1,
+                  "home": 1
+                },
+                "form": {
+                  "away": 1,
+                  "home": 1
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.028333333333333335,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.48388,
+              "marketProbability": 0.3431870800158111,
+              "modelMarketGap": -0.1850670800158111,
+              "expectedValue": -0.5920504,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "2"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "model-lead-too-thin",
+              "material-model-market-disagreement",
+              "nonpositive-model-expected-value",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_e2ec7126c828ff1d465295fc98dd4810786afca3b51b2c0a750e304a112e0735",
+            "market": "HHAD",
+            "tipCode": "X",
+            "handicapLine": -1,
+            "modelProbability": 0.19988,
+            "marketProbability": 0.3095883449093681,
+            "odds": 2.86,
+            "breakEvenProbability": 0.3496503496503497,
+            "modelExpectedValue": -0.42834320000000004,
+            "modelMarketGap": -0.1097083449093681,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient",
+                "model-lead-too-thin",
+                "material-model-market-disagreement"
+              ],
+              "inputEvidenceHash": "d3e0e50889cf82987a0f954bb75b41a2b08adefd6496a42be6220bc3d1598857",
+              "samples": {
+                "elo": {
+                  "away": 1,
+                  "home": 1
+                },
+                "form": {
+                  "away": 1,
+                  "home": 1
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.028333333333333335,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.44212,
+              "marketProbability": 0.3095883449093681,
+              "modelMarketGap": -0.1097083449093681,
+              "expectedValue": -0.42834320000000004,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "2"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "model-lead-too-thin",
+              "material-model-market-disagreement",
+              "nonpositive-model-expected-value",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_323b7ecbc0543de6953e4b9418e69db57dc1f55a5241a6d18d555c9c98b6d339",
+            "market": "HHAD",
+            "tipCode": "2",
+            "handicapLine": -1,
+            "modelProbability": 0.642,
+            "marketProbability": 0.34722457507482074,
+            "odds": 2.55,
+            "breakEvenProbability": 0.3921568627450981,
+            "modelExpectedValue": 0.6371,
+            "modelMarketGap": 0.2947754249251793,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient"
+              ],
+              "inputEvidenceHash": "d3e0e50889cf82987a0f954bb75b41a2b08adefd6496a42be6220bc3d1598857",
+              "samples": {
+                "elo": {
+                  "away": 1,
+                  "home": 1
+                },
+                "form": {
+                  "away": 1,
+                  "home": 1
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.028333333333333335,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": 0.44212,
+              "marketProbability": 0.34722457507482074,
+              "modelMarketGap": 0.2947754249251793,
+              "expectedValue": 0.6371,
+              "marketFavorite": true,
+              "marketFavoriteCodes": [
+                "2"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          }
+        ],
+        "eligibleCandidates": [],
+        "id": "assessment_0c155aec1cb8340bf1d31f791f08621172c925aa851afb39425ee21292c465d4",
+        "contentHash": "a67020f8ed94a441ef808ac4a979a2c4f873275d7127381adbb34a849e12defa"
+      }
+    },
+    {
+      "sourceMatchId": "2041806",
+      "eventVersion": "2026-10-05T18:45:00.000Z",
+      "homeTeamId": "team_17xz83b",
+      "awayTeamId": "team_15zn988",
+      "matchNo": "周一002",
+      "homeTeamName": "法国",
+      "awayTeamName": "比利时",
+      "kickoffTime": "2026-10-05T18:45:00.000Z",
+      "cutoffTime": "2026-10-05T14:00:00.000Z",
+      "decisionId": "decision_961a4ac0e019e9d6b5a679e554b9f072c39f713c44e0fb72620f077be2580b6b",
+      "decisionRecordHash": "c968c5011acbf12449f1ce518f7c39a1100581e4d0946249881ec9a5f1556925",
+      "inputPublishedAt": "2026-10-05T13:59:29.011Z",
+      "modelGeneratedAt": "2026-10-05T13:38:34.068Z",
+      "generatedAt": "2026-10-05T15:16:36.519Z",
+      "afterCutoff": true,
+      "beforeKickoff": true,
+      "formalHitRateEligible": false,
+      "researchComparisonEligible": true,
+      "probabilitiesUnchanged": true,
+      "formalEligible": false,
+      "primary": null,
+      "companion": null,
+      "referenceLabel": "model outcome tendency; uncalibrated; not a betting recommendation",
+      "modelTendency": {
+        "market": "HAD",
+        "tipCode": "1",
+        "handicapLine": 0,
+        "probability": 0.455,
+        "odds": 1.35
+      },
+      "marketBaseline": {
+        "market": "HAD",
+        "tipCode": "1",
+        "handicapLine": 0,
+        "probability": 0.6557626198661118,
+        "odds": 1.35
+      },
+      "independentHandicapTendency": {
+        "market": "HHAD",
+        "tipCode": "2",
+        "handicapLine": -1,
+        "probability": 0.545,
+        "odds": 2.7
+      },
+      "fullHADDistribution": {
+        "1": 0.455,
+        "2": 0.281,
+        "X": 0.264
+      },
+      "fullHHADDistribution": {
+        "1": 0.242629,
+        "2": 0.545,
+        "X": 0.212371
+      },
+      "originalPrimary": {
+        "market": "HHAD",
+        "tipCode": "2",
+        "handicapLine": -1,
+        "probability": 0.545,
+        "odds": 2.7
+      },
+      "originalHAD": {
+        "market": "HAD",
+        "tipCode": "2",
+        "handicapLine": 0,
+        "probability": 0.281,
+        "odds": 6.15
+      },
+      "originalHHAD": {
+        "market": "HHAD",
+        "tipCode": "2",
+        "handicapLine": -1,
+        "probability": 0.545,
+        "odds": 2.7
+      },
+      "originalExactScore": {
+        "label": "1-1",
+        "probability": 0.12142440917156744
+      },
+      "topScores": [
+        {
+          "label": "1-1",
+          "home": 1,
+          "away": 1,
+          "probability": 0.12142440917156744,
+          "hadCode": "X",
+          "hhadCode": "2",
+          "compatibleOriginalPrimary": true,
+          "compatibleModelTendency": false
+        },
+        {
+          "label": "2-1",
+          "home": 2,
+          "away": 1,
+          "probability": 0.09078749008593631,
+          "hadCode": "1",
+          "hhadCode": "X",
+          "compatibleOriginalPrimary": false,
+          "compatibleModelTendency": true
+        },
+        {
+          "label": "1-0",
+          "home": 1,
+          "away": 0,
+          "probability": 0.07986431335270344,
+          "hadCode": "1",
+          "hhadCode": "X",
+          "compatibleOriginalPrimary": false,
+          "compatibleModelTendency": true
+        }
+      ],
+      "scoreRule": "global-unconditional-top3; no conditional branch filter",
+      "sourceQuoteClocks": {
+        "HAD": "2026-10-05T13:57:13.194Z",
+        "HHAD": "2026-10-05T13:59:24.515Z"
+      },
+      "strategyAssessment": {
+        "version": "evidence-price-recommendation-v1",
+        "scope": "shadow-reference-only",
+        "asOf": "2026-10-05T13:59:29.011Z",
+        "decisionId": "decision_961a4ac0e019e9d6b5a679e554b9f072c39f713c44e0fb72620f077be2580b6b",
+        "decisionRecordHash": "c968c5011acbf12449f1ce518f7c39a1100581e4d0946249881ec9a5f1556925",
+        "sourceMatchId": "2041806",
+        "eventVersion": "2026-10-05T18:45:00.000Z",
+        "businessDate": "2026-10-05",
+        "modelVersion": "unified-poisson-bayes-v76",
+        "selectionStatus": "observation",
+        "reasons": [
+          "model-uncalibrated",
+          "calibration-evidence-missing",
+          "formal-calibration-adapter-unavailable",
+          "no-research-value-candidate"
+        ],
+        "formalEligible": false,
+        "primary": null,
+        "companion": null,
+        "eligibleCandidateScope": "research-value-only",
+        "materialAbsoluteMarketGap": 0.1,
+        "calibration": {
+          "status": "unavailable",
+          "suppliedEvidenceHash": null,
+          "conservativeProbability": null,
+          "formalAdapter": "not-integrated",
+          "trainingPerformed": false,
+          "reasons": [
+            "calibration-evidence-missing",
+            "formal-calibration-adapter-unavailable"
+          ]
+        },
+        "referenceDiagnostic": {
+          "status": "absent",
+          "referenceHash": null,
+          "event": null,
+          "sourceVerified": false,
+          "reasons": []
+        },
+        "distributions": {
+          "HAD": {
+            "modelProbabilities": {
+              "1": 0.455,
+              "2": 0.281,
+              "X": 0.264
+            },
+            "marketProbabilities": {
+              "1": 0.6557626198661118,
+              "2": 0.1439478921657319,
+              "X": 0.20028948796815635
+            },
+            "modelLeader": "1",
+            "modelLeaderCodes": [
+              "1"
+            ],
+            "marketLeader": "1",
+            "marketLeaderCodes": [
+              "1"
+            ],
+            "quoteOdds": {
+              "1": 1.35,
+              "2": 6.15,
+              "X": 4.42
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "quoteSource": "500.com:jczq:HAD",
+            "handicapLine": 0,
+            "probabilityBasis": "unconditional",
+            "modelValidation": "unvalidated",
+            "quoteBinding": "frozen-decision-market-quote",
+            "sourceVerified": false,
+            "quoteReasons": []
+          },
+          "HHAD": {
+            "modelProbabilities": {
+              "1": 0.242629,
+              "2": 0.545,
+              "X": 0.212371
+            },
+            "marketProbabilities": {
+              "1": 0.41825263344250685,
+              "2": 0.32840577144374616,
+              "X": 0.25334159511374704
+            },
+            "modelLeader": "2",
+            "modelLeaderCodes": [
+              "2"
+            ],
+            "marketLeader": "1",
+            "marketLeaderCodes": [
+              "1"
+            ],
+            "quoteOdds": {
+              "1": 2.12,
+              "2": 2.7,
+              "X": 3.5
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "quoteSource": "sporttery:HHAD",
+            "handicapLine": -1,
+            "probabilityBasis": "unconditional",
+            "modelValidation": "unvalidated",
+            "quoteBinding": "frozen-decision-market-quote",
+            "sourceVerified": false,
+            "quoteReasons": []
+          }
+        },
+        "candidates": [
+          {
+            "id": "option_15bbc4a888647608f6dc07cb7bd0942a9ceb8c741d272f2515c7626b11b7e1ee",
+            "market": "HAD",
+            "tipCode": "1",
+            "handicapLine": 0,
+            "modelProbability": 0.455,
+            "marketProbability": 0.6557626198661118,
+            "odds": 1.35,
+            "breakEvenProbability": 0.7407407407407407,
+            "modelExpectedValue": -0.3857499999999999,
+            "modelMarketGap": -0.20076261986611182,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "material-model-market-disagreement"
+              ],
+              "inputEvidenceHash": "0152939f7061ec27613280bd59a55e8dd8ae031012e8cf83fa8d6a9bbc461b7b",
+              "samples": {
+                "elo": {
+                  "away": 855,
+                  "home": 937
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": 0.174,
+              "marketProbability": 0.6557626198661118,
+              "modelMarketGap": -0.20076261986611182,
+              "expectedValue": -0.3857499999999999,
+              "marketFavorite": true,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "favorite",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "material-model-market-disagreement",
+              "nonpositive-model-expected-value",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_fc28f43659a5f3f292a051ea4ecfbd15948b854ef38f9e2400aa3619a5bc2de7",
+            "market": "HAD",
+            "tipCode": "X",
+            "handicapLine": 0,
+            "modelProbability": 0.264,
+            "marketProbability": 0.20028948796815635,
+            "odds": 4.42,
+            "breakEvenProbability": 0.22624434389140272,
+            "modelExpectedValue": 0.16688000000000014,
+            "modelMarketGap": 0.06371051203184366,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "0152939f7061ec27613280bd59a55e8dd8ae031012e8cf83fa8d6a9bbc461b7b",
+              "samples": {
+                "elo": {
+                  "away": 855,
+                  "home": 937
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.191,
+              "marketProbability": 0.20028948796815635,
+              "modelMarketGap": 0.06371051203184366,
+              "expectedValue": 0.16688000000000014,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "draw",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_504e9d40c1cacaeb75cf4fe960016afd6d9fddfeb636bdb98cb38e82033d178c",
+            "market": "HAD",
+            "tipCode": "2",
+            "handicapLine": 0,
+            "modelProbability": 0.281,
+            "marketProbability": 0.1439478921657319,
+            "odds": 6.15,
+            "breakEvenProbability": 0.16260162601626016,
+            "modelExpectedValue": 0.7281500000000003,
+            "modelMarketGap": 0.13705210783426813,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "0152939f7061ec27613280bd59a55e8dd8ae031012e8cf83fa8d6a9bbc461b7b",
+              "samples": {
+                "elo": {
+                  "away": 855,
+                  "home": 937
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.174,
+              "marketProbability": 0.1439478921657319,
+              "modelMarketGap": 0.13705210783426813,
+              "expectedValue": 0.7281500000000003,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "nonfavorite",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_e8a8e7e730c86493b4d4c3c719bdec4aecc64cf8e071903364ab820a874ca044",
+            "market": "HHAD",
+            "tipCode": "1",
+            "handicapLine": -1,
+            "modelProbability": 0.242629,
+            "marketProbability": 0.41825263344250685,
+            "odds": 2.12,
+            "breakEvenProbability": 0.4716981132075471,
+            "modelExpectedValue": -0.48562651999999995,
+            "modelMarketGap": -0.17562363344250684,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin",
+                "material-model-market-disagreement"
+              ],
+              "inputEvidenceHash": "0152939f7061ec27613280bd59a55e8dd8ae031012e8cf83fa8d6a9bbc461b7b",
+              "samples": {
+                "elo": {
+                  "away": 855,
+                  "home": 937
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.30237100000000006,
+              "marketProbability": 0.41825263344250685,
+              "modelMarketGap": -0.17562363344250684,
+              "expectedValue": -0.48562651999999995,
+              "marketFavorite": true,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin",
+              "material-model-market-disagreement",
+              "nonpositive-model-expected-value",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_96b9f2129bebead8dd7a0e6c881ab91db35ed5691e338d7721acda066ec41e3d",
+            "market": "HHAD",
+            "tipCode": "X",
+            "handicapLine": -1,
+            "modelProbability": 0.212371,
+            "marketProbability": 0.25334159511374704,
+            "odds": 3.5,
+            "breakEvenProbability": 0.2857142857142857,
+            "modelExpectedValue": -0.2567015,
+            "modelMarketGap": -0.04097059511374704,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "0152939f7061ec27613280bd59a55e8dd8ae031012e8cf83fa8d6a9bbc461b7b",
+              "samples": {
+                "elo": {
+                  "away": 855,
+                  "home": 937
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.33262900000000006,
+              "marketProbability": 0.25334159511374704,
+              "modelMarketGap": -0.04097059511374704,
+              "expectedValue": -0.2567015,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin",
+              "nonpositive-model-expected-value"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_e178b01144fc87f3a455c5a1d40c7b3d862f6d74dedea80a03b43bfdca56a434",
+            "market": "HHAD",
+            "tipCode": "2",
+            "handicapLine": -1,
+            "modelProbability": 0.545,
+            "marketProbability": 0.32840577144374616,
+            "odds": 2.7,
+            "breakEvenProbability": 0.37037037037037035,
+            "modelExpectedValue": 0.47150000000000025,
+            "modelMarketGap": 0.21659422855625388,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "reference-qualified",
+              "qualified": true,
+              "reasons": [],
+              "inputEvidenceHash": "0152939f7061ec27613280bd59a55e8dd8ae031012e8cf83fa8d6a9bbc461b7b",
+              "samples": {
+                "elo": {
+                  "away": 855,
+                  "home": 937
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": 0.30237100000000006,
+              "marketProbability": 0.32840577144374616,
+              "modelMarketGap": 0.21659422855625388,
+              "expectedValue": 0.47150000000000025,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          }
+        ],
+        "eligibleCandidates": [],
+        "id": "assessment_124966eacb10cd2d73bec9e53988c9bb043a60c0480331d57112b130a68d1df7",
+        "contentHash": "0ad71ab02a2cb908f1fbb26750f47ae50aafba7c0709e86c90fcd92c0bf20a9d"
+      }
+    },
+    {
+      "sourceMatchId": "2041807",
+      "eventVersion": "2026-10-05T18:45:00.000Z",
+      "homeTeamId": "team_1l53x1g",
+      "awayTeamId": "team_2os517",
+      "matchNo": "周一003",
+      "homeTeamName": "罗马尼亚",
+      "awayTeamName": "瑞典",
+      "kickoffTime": "2026-10-05T18:45:00.000Z",
+      "cutoffTime": "2026-10-05T14:00:00.000Z",
+      "decisionId": "decision_8546ee7b814c2e1e4f8ec6b25297707219442f9375b33c521161236c8e9771de",
+      "decisionRecordHash": "d626f94c1d355104d08fcebf0c64435e691bbb652159bcb808df74d1800e339e",
+      "inputPublishedAt": "2026-10-05T13:59:29.011Z",
+      "modelGeneratedAt": "2026-10-05T13:38:34.079Z",
+      "generatedAt": "2026-10-05T15:16:36.519Z",
+      "afterCutoff": true,
+      "beforeKickoff": true,
+      "formalHitRateEligible": false,
+      "researchComparisonEligible": true,
+      "probabilitiesUnchanged": true,
+      "formalEligible": false,
+      "primary": null,
+      "companion": null,
+      "referenceLabel": "model outcome tendency; uncalibrated; not a betting recommendation",
+      "modelTendency": {
+        "market": "HAD",
+        "tipCode": "2",
+        "handicapLine": 0,
+        "probability": 0.36200000000000004,
+        "odds": 1.48
+      },
+      "marketBaseline": {
+        "market": "HAD",
+        "tipCode": "2",
+        "handicapLine": 0,
+        "probability": 0.5990502861317423,
+        "odds": 1.48
+      },
+      "independentHandicapTendency": {
+        "market": "HHAD",
+        "tipCode": "1",
+        "handicapLine": 1,
+        "probability": 0.638,
+        "odds": 2.24
+      },
+      "fullHADDistribution": {
+        "1": 0.344,
+        "2": 0.36200000000000004,
+        "X": 0.294
+      },
+      "fullHHADDistribution": {
+        "1": 0.638,
+        "2": 0.171554,
+        "X": 0.190446
+      },
+      "originalPrimary": {
+        "market": "HHAD",
+        "tipCode": "1",
+        "handicapLine": 1,
+        "probability": 0.638,
+        "odds": 2.24
+      },
+      "originalHAD": {
+        "market": "HAD",
+        "tipCode": "1",
+        "handicapLine": 0,
+        "probability": 0.344,
+        "odds": 4.8
+      },
+      "originalHHAD": {
+        "market": "HHAD",
+        "tipCode": "1",
+        "handicapLine": 1,
+        "probability": 0.638,
+        "odds": 2.24
+      },
+      "originalExactScore": {
+        "label": "1-1",
+        "probability": 0.13867960964114934
+      },
+      "topScores": [
+        {
+          "label": "1-1",
+          "home": 1,
+          "away": 1,
+          "probability": 0.13867960964114934,
+          "hadCode": "X",
+          "hhadCode": "1",
+          "compatibleOriginalPrimary": true,
+          "compatibleModelTendency": false
+        },
+        {
+          "label": "0-1",
+          "home": 0,
+          "away": 1,
+          "probability": 0.08105368118760116,
+          "hadCode": "2",
+          "hhadCode": "X",
+          "compatibleOriginalPrimary": false,
+          "compatibleModelTendency": true
+        },
+        {
+          "label": "1-0",
+          "home": 1,
+          "away": 0,
+          "probability": 0.08044952032054001,
+          "hadCode": "1",
+          "hhadCode": "1",
+          "compatibleOriginalPrimary": true,
+          "compatibleModelTendency": false
+        }
+      ],
+      "scoreRule": "global-unconditional-top3; no conditional branch filter",
+      "sourceQuoteClocks": {
+        "HAD": "2026-10-05T13:57:13.194Z",
+        "HHAD": "2026-10-05T13:59:24.515Z"
+      },
+      "strategyAssessment": {
+        "version": "evidence-price-recommendation-v1",
+        "scope": "shadow-reference-only",
+        "asOf": "2026-10-05T13:59:29.011Z",
+        "decisionId": "decision_8546ee7b814c2e1e4f8ec6b25297707219442f9375b33c521161236c8e9771de",
+        "decisionRecordHash": "d626f94c1d355104d08fcebf0c64435e691bbb652159bcb808df74d1800e339e",
+        "sourceMatchId": "2041807",
+        "eventVersion": "2026-10-05T18:45:00.000Z",
+        "businessDate": "2026-10-05",
+        "modelVersion": "unified-poisson-bayes-v76",
+        "selectionStatus": "observation",
+        "reasons": [
+          "model-uncalibrated",
+          "calibration-evidence-missing",
+          "formal-calibration-adapter-unavailable",
+          "no-research-value-candidate"
+        ],
+        "formalEligible": false,
+        "primary": null,
+        "companion": null,
+        "eligibleCandidateScope": "research-value-only",
+        "materialAbsoluteMarketGap": 0.1,
+        "calibration": {
+          "status": "unavailable",
+          "suppliedEvidenceHash": null,
+          "conservativeProbability": null,
+          "formalAdapter": "not-integrated",
+          "trainingPerformed": false,
+          "reasons": [
+            "calibration-evidence-missing",
+            "formal-calibration-adapter-unavailable"
+          ]
+        },
+        "referenceDiagnostic": {
+          "status": "absent",
+          "referenceHash": null,
+          "event": null,
+          "sourceVerified": false,
+          "reasons": []
+        },
+        "distributions": {
+          "HAD": {
+            "modelProbabilities": {
+              "1": 0.344,
+              "2": 0.36200000000000004,
+              "X": 0.294
+            },
+            "marketProbabilities": {
+              "1": 0.18470717155728722,
+              "2": 0.5990502861317423,
+              "X": 0.2162425423109704
+            },
+            "modelLeader": "2",
+            "modelLeaderCodes": [
+              "2"
+            ],
+            "marketLeader": "2",
+            "marketLeaderCodes": [
+              "2"
+            ],
+            "quoteOdds": {
+              "1": 4.8,
+              "2": 1.48,
+              "X": 4.1
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "quoteSource": "500.com:jczq:HAD",
+            "handicapLine": 0,
+            "probabilityBasis": "unconditional",
+            "modelValidation": "unvalidated",
+            "quoteBinding": "frozen-decision-market-quote",
+            "sourceVerified": false,
+            "quoteReasons": []
+          },
+          "HHAD": {
+            "modelProbabilities": {
+              "1": 0.638,
+              "2": 0.171554,
+              "X": 0.190446
+            },
+            "marketProbabilities": {
+              "1": 0.39549950251920635,
+              "2": 0.3368512873167385,
+              "X": 0.2676492101640551
+            },
+            "modelLeader": "1",
+            "modelLeaderCodes": [
+              "1"
+            ],
+            "marketLeader": "1",
+            "marketLeaderCodes": [
+              "1"
+            ],
+            "quoteOdds": {
+              "1": 2.24,
+              "2": 2.63,
+              "X": 3.31
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "quoteSource": "sporttery:HHAD",
+            "handicapLine": 1,
+            "probabilityBasis": "unconditional",
+            "modelValidation": "unvalidated",
+            "quoteBinding": "frozen-decision-market-quote",
+            "sourceVerified": false,
+            "quoteReasons": []
+          }
+        },
+        "candidates": [
+          {
+            "id": "option_455f6636dd7d69544b549f21e4b245fdd0bae24a40e13f026697840de0b79580",
+            "market": "HAD",
+            "tipCode": "1",
+            "handicapLine": 0,
+            "modelProbability": 0.344,
+            "marketProbability": 0.18470717155728722,
+            "odds": 4.8,
+            "breakEvenProbability": 0.20833333333333334,
+            "modelExpectedValue": 0.6511999999999998,
+            "modelMarketGap": 0.15929282844271275,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "057ce9c33528d5721516d723527193127ed03d9c0130d33731dd7d45b1790d25",
+              "samples": {
+                "elo": {
+                  "away": 1103,
+                  "home": 768
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.01800000000000007,
+              "marketProbability": 0.18470717155728722,
+              "modelMarketGap": 0.15929282844271275,
+              "expectedValue": 0.6511999999999998,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "2"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "nonfavorite",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_fb528be2dd47075513eafe3f63448e545c7896fc47d59a531e9182c231476a5a",
+            "market": "HAD",
+            "tipCode": "X",
+            "handicapLine": 0,
+            "modelProbability": 0.294,
+            "marketProbability": 0.2162425423109704,
+            "odds": 4.1,
+            "breakEvenProbability": 0.24390243902439027,
+            "modelExpectedValue": 0.2053999999999998,
+            "modelMarketGap": 0.07775745768902959,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "057ce9c33528d5721516d723527193127ed03d9c0130d33731dd7d45b1790d25",
+              "samples": {
+                "elo": {
+                  "away": 1103,
+                  "home": 768
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.06800000000000006,
+              "marketProbability": 0.2162425423109704,
+              "modelMarketGap": 0.07775745768902959,
+              "expectedValue": 0.2053999999999998,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "2"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "draw",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_a310aa9afe8f942ebd6683d7e3c506cac7fbde39f277a2eefc44f45ef683f5bd",
+            "market": "HAD",
+            "tipCode": "2",
+            "handicapLine": 0,
+            "modelProbability": 0.36200000000000004,
+            "marketProbability": 0.5990502861317423,
+            "odds": 1.48,
+            "breakEvenProbability": 0.6756756756756757,
+            "modelExpectedValue": -0.46424,
+            "modelMarketGap": -0.23705028613174223,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin",
+                "material-model-market-disagreement"
+              ],
+              "inputEvidenceHash": "057ce9c33528d5721516d723527193127ed03d9c0130d33731dd7d45b1790d25",
+              "samples": {
+                "elo": {
+                  "away": 1103,
+                  "home": 768
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": 0.01800000000000007,
+              "marketProbability": 0.5990502861317423,
+              "modelMarketGap": -0.23705028613174223,
+              "expectedValue": -0.46424,
+              "marketFavorite": true,
+              "marketFavoriteCodes": [
+                "2"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "favorite",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin",
+              "material-model-market-disagreement",
+              "nonpositive-model-expected-value",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_b9a004af587c5fb6e33f358dbcfff1a54da1c3997beef48dc03514b82b1f9dd7",
+            "market": "HHAD",
+            "tipCode": "1",
+            "handicapLine": 1,
+            "modelProbability": 0.638,
+            "marketProbability": 0.39549950251920635,
+            "odds": 2.24,
+            "breakEvenProbability": 0.4464285714285714,
+            "modelExpectedValue": 0.42912000000000017,
+            "modelMarketGap": 0.24250049748079366,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "reference-qualified",
+              "qualified": true,
+              "reasons": [],
+              "inputEvidenceHash": "057ce9c33528d5721516d723527193127ed03d9c0130d33731dd7d45b1790d25",
+              "samples": {
+                "elo": {
+                  "away": 1103,
+                  "home": 768
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": 0.447554,
+              "marketProbability": 0.39549950251920635,
+              "modelMarketGap": 0.24250049748079366,
+              "expectedValue": 0.42912000000000017,
+              "marketFavorite": true,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_c5ae855ccba331d547566e4978dd3e8d5e29e0c355821fab0bab3bbced232079",
+            "market": "HHAD",
+            "tipCode": "X",
+            "handicapLine": 1,
+            "modelProbability": 0.190446,
+            "marketProbability": 0.2676492101640551,
+            "odds": 3.31,
+            "breakEvenProbability": 0.3021148036253776,
+            "modelExpectedValue": -0.36962374,
+            "modelMarketGap": -0.07720321016405507,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "057ce9c33528d5721516d723527193127ed03d9c0130d33731dd7d45b1790d25",
+              "samples": {
+                "elo": {
+                  "away": 1103,
+                  "home": 768
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.447554,
+              "marketProbability": 0.2676492101640551,
+              "modelMarketGap": -0.07720321016405507,
+              "expectedValue": -0.36962374,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin",
+              "nonpositive-model-expected-value"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_b888dd67d03484fe2bdcc86a858e24ad194335833957a12179311113bc5f1a00",
+            "market": "HHAD",
+            "tipCode": "2",
+            "handicapLine": 1,
+            "modelProbability": 0.171554,
+            "marketProbability": 0.3368512873167385,
+            "odds": 2.63,
+            "breakEvenProbability": 0.3802281368821293,
+            "modelExpectedValue": -0.54881298,
+            "modelMarketGap": -0.1652972873167385,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin",
+                "material-model-market-disagreement"
+              ],
+              "inputEvidenceHash": "057ce9c33528d5721516d723527193127ed03d9c0130d33731dd7d45b1790d25",
+              "samples": {
+                "elo": {
+                  "away": 1103,
+                  "home": 768
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.466446,
+              "marketProbability": 0.3368512873167385,
+              "modelMarketGap": -0.1652972873167385,
+              "expectedValue": -0.54881298,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin",
+              "material-model-market-disagreement",
+              "nonpositive-model-expected-value",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          }
+        ],
+        "eligibleCandidates": [],
+        "id": "assessment_ed889a2b5741db9dbc428ea16e05b2bfbb4b2b2873127a4026091be3f0711698",
+        "contentHash": "bebb0f7eae982d94b93d383ca22668fcee94aac4ed442924240b7de97c62ec42"
+      }
+    },
+    {
+      "sourceMatchId": "2041808",
+      "eventVersion": "2026-10-05T18:45:00.000Z",
+      "homeTeamId": "team_1fsjli",
+      "awayTeamId": "team_1qmc1dv",
+      "matchNo": "周一004",
+      "homeTeamName": "意大利",
+      "awayTeamName": "土耳其",
+      "kickoffTime": "2026-10-05T18:45:00.000Z",
+      "cutoffTime": "2026-10-05T14:00:00.000Z",
+      "decisionId": "decision_65d2c9933bd1ead72ab24b35f19d62f882c57a8930bc253dd763acfd1ccf798c",
+      "decisionRecordHash": "49f55a222d0f2785dc5988937b6bcb73956485f8b557cd6101b45a26831b0d04",
+      "inputPublishedAt": "2026-10-05T13:59:29.011Z",
+      "modelGeneratedAt": "2026-10-05T13:38:34.090Z",
+      "generatedAt": "2026-10-05T15:16:36.519Z",
+      "afterCutoff": true,
+      "beforeKickoff": true,
+      "formalHitRateEligible": false,
+      "researchComparisonEligible": true,
+      "probabilitiesUnchanged": true,
+      "formalEligible": false,
+      "primary": null,
+      "companion": null,
+      "referenceLabel": "model outcome tendency; uncalibrated; not a betting recommendation",
+      "modelTendency": {
+        "market": "HAD",
+        "tipCode": "1",
+        "handicapLine": 0,
+        "probability": 0.47947947947947944,
+        "odds": 1.24
+      },
+      "marketBaseline": {
+        "market": "HAD",
+        "tipCode": "1",
+        "handicapLine": 0,
+        "probability": 0.713889658996396,
+        "odds": 1.24
+      },
+      "independentHandicapTendency": {
+        "market": "HHAD",
+        "tipCode": "2",
+        "handicapLine": -1,
+        "probability": 0.52052,
+        "odds": 3.15
+      },
+      "fullHADDistribution": {
+        "1": 0.47947947947947944,
+        "2": 0.25925925925925924,
+        "X": 0.26126126126126126
+      },
+      "fullHHADDistribution": {
+        "1": 0.26596,
+        "2": 0.52052,
+        "X": 0.21352
+      },
+      "originalPrimary": {
+        "market": "HHAD",
+        "tipCode": "2",
+        "handicapLine": -1,
+        "probability": 0.52052,
+        "odds": 3.15
+      },
+      "originalHAD": {
+        "market": "HAD",
+        "tipCode": "X",
+        "handicapLine": 0,
+        "probability": 0.26126126126126126,
+        "odds": 5.15
+      },
+      "originalHHAD": {
+        "market": "HHAD",
+        "tipCode": "2",
+        "handicapLine": -1,
+        "probability": 0.52052,
+        "odds": 3.15
+      },
+      "originalExactScore": {
+        "label": "1-1",
+        "probability": 0.12152141665266478
+      },
+      "topScores": [
+        {
+          "label": "1-1",
+          "home": 1,
+          "away": 1,
+          "probability": 0.12152141665266478,
+          "hadCode": "X",
+          "hhadCode": "2",
+          "compatibleOriginalPrimary": true,
+          "compatibleModelTendency": false
+        },
+        {
+          "label": "2-1",
+          "home": 2,
+          "away": 1,
+          "probability": 0.09047005290141462,
+          "hadCode": "1",
+          "hhadCode": "X",
+          "compatibleOriginalPrimary": false,
+          "compatibleModelTendency": true
+        },
+        {
+          "label": "1-0",
+          "home": 1,
+          "away": 0,
+          "probability": 0.0841430296278046,
+          "hadCode": "1",
+          "hhadCode": "X",
+          "compatibleOriginalPrimary": false,
+          "compatibleModelTendency": true
+        }
+      ],
+      "scoreRule": "global-unconditional-top3; no conditional branch filter",
+      "sourceQuoteClocks": {
+        "HAD": "2026-10-05T13:57:13.194Z",
+        "HHAD": "2026-10-05T13:59:24.515Z"
+      },
+      "strategyAssessment": {
+        "version": "evidence-price-recommendation-v1",
+        "scope": "shadow-reference-only",
+        "asOf": "2026-10-05T13:59:29.011Z",
+        "decisionId": "decision_65d2c9933bd1ead72ab24b35f19d62f882c57a8930bc253dd763acfd1ccf798c",
+        "decisionRecordHash": "49f55a222d0f2785dc5988937b6bcb73956485f8b557cd6101b45a26831b0d04",
+        "sourceMatchId": "2041808",
+        "eventVersion": "2026-10-05T18:45:00.000Z",
+        "businessDate": "2026-10-05",
+        "modelVersion": "unified-poisson-bayes-v76",
+        "selectionStatus": "observation",
+        "reasons": [
+          "model-uncalibrated",
+          "calibration-evidence-missing",
+          "formal-calibration-adapter-unavailable",
+          "no-research-value-candidate"
+        ],
+        "formalEligible": false,
+        "primary": null,
+        "companion": null,
+        "eligibleCandidateScope": "research-value-only",
+        "materialAbsoluteMarketGap": 0.1,
+        "calibration": {
+          "status": "unavailable",
+          "suppliedEvidenceHash": null,
+          "conservativeProbability": null,
+          "formalAdapter": "not-integrated",
+          "trainingPerformed": false,
+          "reasons": [
+            "calibration-evidence-missing",
+            "formal-calibration-adapter-unavailable"
+          ]
+        },
+        "referenceDiagnostic": {
+          "status": "absent",
+          "referenceHash": null,
+          "event": null,
+          "sourceVerified": false,
+          "reasons": []
+        },
+        "distributions": {
+          "HAD": {
+            "modelProbabilities": {
+              "1": 0.47947947947947944,
+              "2": 0.25925925925925924,
+              "X": 0.26126126126126126
+            },
+            "marketProbabilities": {
+              "1": 0.713889658996396,
+              "2": 0.11422234543942335,
+              "X": 0.17188799556418077
+            },
+            "modelLeader": "1",
+            "modelLeaderCodes": [
+              "1"
+            ],
+            "marketLeader": "1",
+            "marketLeaderCodes": [
+              "1"
+            ],
+            "quoteOdds": {
+              "1": 1.24,
+              "2": 7.75,
+              "X": 5.15
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "quoteSource": "500.com:jczq:HAD",
+            "handicapLine": 0,
+            "probabilityBasis": "unconditional",
+            "modelValidation": "unvalidated",
+            "quoteBinding": "frozen-decision-market-quote",
+            "sourceVerified": false,
+            "quoteReasons": []
+          },
+          "HHAD": {
+            "modelProbabilities": {
+              "1": 0.26596,
+              "2": 0.52052,
+              "X": 0.21352
+            },
+            "marketProbabilities": {
+              "1": 0.4918918918918919,
+              "2": 0.2810810810810811,
+              "X": 0.22702702702702707
+            },
+            "modelLeader": "2",
+            "modelLeaderCodes": [
+              "2"
+            ],
+            "marketLeader": "1",
+            "marketLeaderCodes": [
+              "1"
+            ],
+            "quoteOdds": {
+              "1": 1.8,
+              "2": 3.15,
+              "X": 3.9
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "quoteSource": "sporttery:HHAD",
+            "handicapLine": -1,
+            "probabilityBasis": "unconditional",
+            "modelValidation": "unvalidated",
+            "quoteBinding": "frozen-decision-market-quote",
+            "sourceVerified": false,
+            "quoteReasons": []
+          }
+        },
+        "candidates": [
+          {
+            "id": "option_2316a4198e0789d77f63c21e0c8ce6d15073b2fdd5aa4f89a1c3730235048f3a",
+            "market": "HAD",
+            "tipCode": "1",
+            "handicapLine": 0,
+            "modelProbability": 0.47947947947947944,
+            "marketProbability": 0.713889658996396,
+            "odds": 1.24,
+            "breakEvenProbability": 0.8064516129032259,
+            "modelExpectedValue": -0.4054454454454455,
+            "modelMarketGap": -0.23441017951691656,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "material-model-market-disagreement"
+              ],
+              "inputEvidenceHash": "7f807ef8d83182c073308e1d2361a37bc335d5fc653d6bc2a639bc47ce946bf4",
+              "samples": {
+                "elo": {
+                  "away": 644,
+                  "home": 895
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": 0.21821821821821819,
+              "marketProbability": 0.713889658996396,
+              "modelMarketGap": -0.23441017951691656,
+              "expectedValue": -0.4054454454454455,
+              "marketFavorite": true,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "favorite",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "material-model-market-disagreement",
+              "nonpositive-model-expected-value",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_06d37b178777546d7b956e060fbe86fe054f405e8684d98ad134a07b2bfc5f8e",
+            "market": "HAD",
+            "tipCode": "X",
+            "handicapLine": 0,
+            "modelProbability": 0.26126126126126126,
+            "marketProbability": 0.17188799556418077,
+            "odds": 5.15,
+            "breakEvenProbability": 0.1941747572815534,
+            "modelExpectedValue": 0.34549549549549563,
+            "modelMarketGap": 0.08937326569708048,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "7f807ef8d83182c073308e1d2361a37bc335d5fc653d6bc2a639bc47ce946bf4",
+              "samples": {
+                "elo": {
+                  "away": 644,
+                  "home": 895
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.21821821821821819,
+              "marketProbability": 0.17188799556418077,
+              "modelMarketGap": 0.08937326569708048,
+              "expectedValue": 0.34549549549549563,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "draw",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_658b5787e2d2cb93dba5ee174503940cf658c470f3fd0f3a6a64e6a87de184b4",
+            "market": "HAD",
+            "tipCode": "2",
+            "handicapLine": 0,
+            "modelProbability": 0.25925925925925924,
+            "marketProbability": 0.11422234543942335,
+            "odds": 7.75,
+            "breakEvenProbability": 0.12903225806451613,
+            "modelExpectedValue": 1.009259259259259,
+            "modelMarketGap": 0.1450369138198359,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "7f807ef8d83182c073308e1d2361a37bc335d5fc653d6bc2a639bc47ce946bf4",
+              "samples": {
+                "elo": {
+                  "away": 644,
+                  "home": 895
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.2202202202202202,
+              "marketProbability": 0.11422234543942335,
+              "modelMarketGap": 0.1450369138198359,
+              "expectedValue": 1.009259259259259,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "nonfavorite",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_d138cc7ce904c16568c036e816e2d119444f6fa031619fb4e89d039ca04082c0",
+            "market": "HHAD",
+            "tipCode": "1",
+            "handicapLine": -1,
+            "modelProbability": 0.26596,
+            "marketProbability": 0.4918918918918919,
+            "odds": 1.8,
+            "breakEvenProbability": 0.5555555555555556,
+            "modelExpectedValue": -0.521272,
+            "modelMarketGap": -0.22593189189189194,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin",
+                "material-model-market-disagreement"
+              ],
+              "inputEvidenceHash": "7f807ef8d83182c073308e1d2361a37bc335d5fc653d6bc2a639bc47ce946bf4",
+              "samples": {
+                "elo": {
+                  "away": 644,
+                  "home": 895
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.25456,
+              "marketProbability": 0.4918918918918919,
+              "modelMarketGap": -0.22593189189189194,
+              "expectedValue": -0.521272,
+              "marketFavorite": true,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin",
+              "material-model-market-disagreement",
+              "nonpositive-model-expected-value",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_c905f3ed478a7d4961eb362bcdf59e7c9941598b2ade21796341376a82858e00",
+            "market": "HHAD",
+            "tipCode": "X",
+            "handicapLine": -1,
+            "modelProbability": 0.21352,
+            "marketProbability": 0.22702702702702707,
+            "odds": 3.9,
+            "breakEvenProbability": 0.25641025641025644,
+            "modelExpectedValue": -0.1672720000000001,
+            "modelMarketGap": -0.01350702702702708,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "7f807ef8d83182c073308e1d2361a37bc335d5fc653d6bc2a639bc47ce946bf4",
+              "samples": {
+                "elo": {
+                  "away": 644,
+                  "home": 895
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.307,
+              "marketProbability": 0.22702702702702707,
+              "modelMarketGap": -0.01350702702702708,
+              "expectedValue": -0.1672720000000001,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin",
+              "nonpositive-model-expected-value"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_5f040d379c40bcc0a8271289ecc2f111e29ada7769d115fe0f4b125df0ff2480",
+            "market": "HHAD",
+            "tipCode": "2",
+            "handicapLine": -1,
+            "modelProbability": 0.52052,
+            "marketProbability": 0.2810810810810811,
+            "odds": 3.15,
+            "breakEvenProbability": 0.31746031746031744,
+            "modelExpectedValue": 0.6396379999999999,
+            "modelMarketGap": 0.23943891891891889,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "reference-qualified",
+              "qualified": true,
+              "reasons": [],
+              "inputEvidenceHash": "7f807ef8d83182c073308e1d2361a37bc335d5fc653d6bc2a639bc47ce946bf4",
+              "samples": {
+                "elo": {
+                  "away": 644,
+                  "home": 895
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": 0.25456,
+              "marketProbability": 0.2810810810810811,
+              "modelMarketGap": 0.23943891891891889,
+              "expectedValue": 0.6396379999999999,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          }
+        ],
+        "eligibleCandidates": [],
+        "id": "assessment_69fe232a6bdeb2da768520f04bfb251a2145b77a471c89adff68ce275dfa35fc",
+        "contentHash": "edf5cd3c1e22cd89dcd0750246d9d48708c391db7924705284f5907637ce9bff"
+      }
+    },
+    {
+      "sourceMatchId": "2041809",
+      "eventVersion": "2026-10-05T18:45:00.000Z",
+      "homeTeamId": "team_1l8lpex",
+      "awayTeamId": "team_qszfwt",
+      "matchNo": "周一005",
+      "homeTeamName": "北爱尔兰",
+      "awayTeamName": "格鲁吉亚",
+      "kickoffTime": "2026-10-05T18:45:00.000Z",
+      "cutoffTime": "2026-10-05T14:00:00.000Z",
+      "decisionId": "decision_96e9b734bd51a5784a8aee26951505c7fa49eafe907a2b69ee566be8171e44e4",
+      "decisionRecordHash": "09c0872e8f47e5bde29589ac109226a2680e596f9c17a77f845f506ca260bc33",
+      "inputPublishedAt": "2026-10-05T13:59:29.011Z",
+      "modelGeneratedAt": "2026-10-05T13:38:34.101Z",
+      "generatedAt": "2026-10-05T15:16:36.519Z",
+      "afterCutoff": true,
+      "beforeKickoff": true,
+      "formalHitRateEligible": false,
+      "researchComparisonEligible": true,
+      "probabilitiesUnchanged": true,
+      "formalEligible": false,
+      "primary": null,
+      "companion": null,
+      "referenceLabel": "model outcome tendency; uncalibrated; not a betting recommendation",
+      "modelTendency": {
+        "market": "HAD",
+        "tipCode": "1",
+        "handicapLine": 0,
+        "probability": 0.37799999999999995,
+        "odds": 2.1
+      },
+      "marketBaseline": {
+        "market": "HAD",
+        "tipCode": "1",
+        "handicapLine": 0,
+        "probability": 0.42188898836168304,
+        "odds": 2.1
+      },
+      "independentHandicapTendency": {
+        "market": "HHAD",
+        "tipCode": "2",
+        "handicapLine": -1,
+        "probability": 0.622,
+        "odds": 1.55
+      },
+      "fullHADDistribution": {
+        "1": 0.37799999999999995,
+        "2": 0.33,
+        "X": 0.292
+      },
+      "fullHHADDistribution": {
+        "1": 0.165217,
+        "2": 0.622,
+        "X": 0.212783
+      },
+      "originalPrimary": {
+        "market": "HHAD",
+        "tipCode": "2",
+        "handicapLine": -1,
+        "probability": 0.622,
+        "odds": 1.55
+      },
+      "originalHAD": {
+        "market": "HAD",
+        "tipCode": "2",
+        "handicapLine": 0,
+        "probability": 0.33,
+        "odds": 3.25
+      },
+      "originalHHAD": {
+        "market": "HHAD",
+        "tipCode": "2",
+        "handicapLine": -1,
+        "probability": 0.622,
+        "odds": 1.55
+      },
+      "originalExactScore": {
+        "label": "1-1",
+        "probability": 0.13770492725436995
+      },
+      "topScores": [
+        {
+          "label": "1-1",
+          "home": 1,
+          "away": 1,
+          "probability": 0.13770492725436995,
+          "hadCode": "X",
+          "hhadCode": "2",
+          "compatibleOriginalPrimary": true,
+          "compatibleModelTendency": false
+        },
+        {
+          "label": "1-0",
+          "home": 1,
+          "away": 0,
+          "probability": 0.11201907537313287,
+          "hadCode": "1",
+          "hhadCode": "X",
+          "compatibleOriginalPrimary": false,
+          "compatibleModelTendency": true
+        },
+        {
+          "label": "0-1",
+          "home": 0,
+          "away": 1,
+          "probability": 0.10302975785041348,
+          "hadCode": "2",
+          "hhadCode": "2",
+          "compatibleOriginalPrimary": true,
+          "compatibleModelTendency": false
+        }
+      ],
+      "scoreRule": "global-unconditional-top3; no conditional branch filter",
+      "sourceQuoteClocks": {
+        "HAD": "2026-10-05T13:57:13.194Z",
+        "HHAD": "2026-10-05T13:59:24.515Z"
+      },
+      "strategyAssessment": {
+        "version": "evidence-price-recommendation-v1",
+        "scope": "shadow-reference-only",
+        "asOf": "2026-10-05T13:59:29.011Z",
+        "decisionId": "decision_96e9b734bd51a5784a8aee26951505c7fa49eafe907a2b69ee566be8171e44e4",
+        "decisionRecordHash": "09c0872e8f47e5bde29589ac109226a2680e596f9c17a77f845f506ca260bc33",
+        "sourceMatchId": "2041809",
+        "eventVersion": "2026-10-05T18:45:00.000Z",
+        "businessDate": "2026-10-05",
+        "modelVersion": "unified-poisson-bayes-v76",
+        "selectionStatus": "observation",
+        "reasons": [
+          "model-uncalibrated",
+          "calibration-evidence-missing",
+          "formal-calibration-adapter-unavailable",
+          "no-research-value-candidate"
+        ],
+        "formalEligible": false,
+        "primary": null,
+        "companion": null,
+        "eligibleCandidateScope": "research-value-only",
+        "materialAbsoluteMarketGap": 0.1,
+        "calibration": {
+          "status": "unavailable",
+          "suppliedEvidenceHash": null,
+          "conservativeProbability": null,
+          "formalAdapter": "not-integrated",
+          "trainingPerformed": false,
+          "reasons": [
+            "calibration-evidence-missing",
+            "formal-calibration-adapter-unavailable"
+          ]
+        },
+        "referenceDiagnostic": {
+          "status": "absent",
+          "referenceHash": null,
+          "event": null,
+          "sourceVerified": false,
+          "reasons": []
+        },
+        "distributions": {
+          "HAD": {
+            "modelProbabilities": {
+              "1": 0.37799999999999995,
+              "2": 0.33,
+              "X": 0.292
+            },
+            "marketProbabilities": {
+              "1": 0.42188898836168304,
+              "2": 0.27260519247985676,
+              "X": 0.30550581915846015
+            },
+            "modelLeader": "1",
+            "modelLeaderCodes": [
+              "1"
+            ],
+            "marketLeader": "1",
+            "marketLeaderCodes": [
+              "1"
+            ],
+            "quoteOdds": {
+              "1": 2.1,
+              "2": 3.25,
+              "X": 2.9
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "quoteSource": "500.com:jczq:HAD",
+            "handicapLine": 0,
+            "probabilityBasis": "unconditional",
+            "modelValidation": "unvalidated",
+            "quoteBinding": "frozen-decision-market-quote",
+            "sourceVerified": false,
+            "quoteReasons": []
+          },
+          "HHAD": {
+            "modelProbabilities": {
+              "1": 0.165217,
+              "2": 0.622,
+              "X": 0.212783
+            },
+            "marketProbabilities": {
+              "1": 0.180831649612201,
+              "2": 0.5716613439353452,
+              "X": 0.24750700645245388
+            },
+            "modelLeader": "2",
+            "modelLeaderCodes": [
+              "2"
+            ],
+            "marketLeader": "2",
+            "marketLeaderCodes": [
+              "2"
+            ],
+            "quoteOdds": {
+              "1": 4.9,
+              "2": 1.55,
+              "X": 3.58
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "quoteSource": "sporttery:HHAD",
+            "handicapLine": -1,
+            "probabilityBasis": "unconditional",
+            "modelValidation": "unvalidated",
+            "quoteBinding": "frozen-decision-market-quote",
+            "sourceVerified": false,
+            "quoteReasons": []
+          }
+        },
+        "candidates": [
+          {
+            "id": "option_78bed0be6226da3a3ff18fbca72e2b119ae5d2d16d55c1818f4341f9262b68fc",
+            "market": "HAD",
+            "tipCode": "1",
+            "handicapLine": 0,
+            "modelProbability": 0.37799999999999995,
+            "marketProbability": 0.42188898836168304,
+            "odds": 2.1,
+            "breakEvenProbability": 0.47619047619047616,
+            "modelExpectedValue": -0.20620000000000005,
+            "modelMarketGap": -0.04388898836168309,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient",
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "94a9979d16e53fd2ae12b851d707f97ca63f924db2bc6a89befb1566e2a498f2",
+              "samples": {
+                "elo": {
+                  "away": 1,
+                  "home": 2
+                },
+                "form": {
+                  "away": 1,
+                  "home": 2
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.028333333333333335,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": 0.04799999999999993,
+              "marketProbability": 0.42188898836168304,
+              "modelMarketGap": -0.04388898836168309,
+              "expectedValue": -0.20620000000000005,
+              "marketFavorite": true,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "favorite",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "model-lead-too-thin",
+              "nonpositive-model-expected-value"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_fc5a30edef4ddd021466319f2cff6f062752a9f3310f3d0ac23cb55ec1142c69",
+            "market": "HAD",
+            "tipCode": "X",
+            "handicapLine": 0,
+            "modelProbability": 0.292,
+            "marketProbability": 0.30550581915846015,
+            "odds": 2.9,
+            "breakEvenProbability": 0.3448275862068966,
+            "modelExpectedValue": -0.1532000000000001,
+            "modelMarketGap": -0.013505819158460164,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient",
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "94a9979d16e53fd2ae12b851d707f97ca63f924db2bc6a89befb1566e2a498f2",
+              "samples": {
+                "elo": {
+                  "away": 1,
+                  "home": 2
+                },
+                "form": {
+                  "away": 1,
+                  "home": 2
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.028333333333333335,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.08599999999999997,
+              "marketProbability": 0.30550581915846015,
+              "modelMarketGap": -0.013505819158460164,
+              "expectedValue": -0.1532000000000001,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "draw",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "model-lead-too-thin",
+              "nonpositive-model-expected-value"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_485b848b56e6ed19576d2071bd706a21aa35502a22d478229547ca2d2229082a",
+            "market": "HAD",
+            "tipCode": "2",
+            "handicapLine": 0,
+            "modelProbability": 0.33,
+            "marketProbability": 0.27260519247985676,
+            "odds": 3.25,
+            "breakEvenProbability": 0.3076923076923077,
+            "modelExpectedValue": 0.07250000000000001,
+            "modelMarketGap": 0.057394807520143254,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient",
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "94a9979d16e53fd2ae12b851d707f97ca63f924db2bc6a89befb1566e2a498f2",
+              "samples": {
+                "elo": {
+                  "away": 1,
+                  "home": 2
+                },
+                "form": {
+                  "away": 1,
+                  "home": 2
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.028333333333333335,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.04799999999999993,
+              "marketProbability": 0.27260519247985676,
+              "modelMarketGap": 0.057394807520143254,
+              "expectedValue": 0.07250000000000001,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "nonfavorite",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "model-lead-too-thin"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_2d063e119ec542a6a32757fd4060d62095c120be3c1a6d2b3ec176b3340bb447",
+            "market": "HHAD",
+            "tipCode": "1",
+            "handicapLine": -1,
+            "modelProbability": 0.165217,
+            "marketProbability": 0.180831649612201,
+            "odds": 4.9,
+            "breakEvenProbability": 0.2040816326530612,
+            "modelExpectedValue": -0.1904366999999999,
+            "modelMarketGap": -0.015614649612200993,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient",
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "94a9979d16e53fd2ae12b851d707f97ca63f924db2bc6a89befb1566e2a498f2",
+              "samples": {
+                "elo": {
+                  "away": 1,
+                  "home": 2
+                },
+                "form": {
+                  "away": 1,
+                  "home": 2
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.028333333333333335,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.456783,
+              "marketProbability": 0.180831649612201,
+              "modelMarketGap": -0.015614649612200993,
+              "expectedValue": -0.1904366999999999,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "2"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "model-lead-too-thin",
+              "nonpositive-model-expected-value"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_3385b3d41f0a00f27d8e8267de97f12d34ace7256d42432f38390bbe16bfd8fe",
+            "market": "HHAD",
+            "tipCode": "X",
+            "handicapLine": -1,
+            "modelProbability": 0.212783,
+            "marketProbability": 0.24750700645245388,
+            "odds": 3.58,
+            "breakEvenProbability": 0.27932960893854747,
+            "modelExpectedValue": -0.23823686,
+            "modelMarketGap": -0.03472400645245388,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient",
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "94a9979d16e53fd2ae12b851d707f97ca63f924db2bc6a89befb1566e2a498f2",
+              "samples": {
+                "elo": {
+                  "away": 1,
+                  "home": 2
+                },
+                "form": {
+                  "away": 1,
+                  "home": 2
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.028333333333333335,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.409217,
+              "marketProbability": 0.24750700645245388,
+              "modelMarketGap": -0.03472400645245388,
+              "expectedValue": -0.23823686,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "2"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "model-lead-too-thin",
+              "nonpositive-model-expected-value"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_3df8232b3289b627d70197ac71af0cd23fd068541dfdf570aa29e9e0767c3aa6",
+            "market": "HHAD",
+            "tipCode": "2",
+            "handicapLine": -1,
+            "modelProbability": 0.622,
+            "marketProbability": 0.5716613439353452,
+            "odds": 1.55,
+            "breakEvenProbability": 0.6451612903225806,
+            "modelExpectedValue": -0.03589999999999993,
+            "modelMarketGap": 0.05033865606465482,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient"
+              ],
+              "inputEvidenceHash": "94a9979d16e53fd2ae12b851d707f97ca63f924db2bc6a89befb1566e2a498f2",
+              "samples": {
+                "elo": {
+                  "away": 1,
+                  "home": 2
+                },
+                "form": {
+                  "away": 1,
+                  "home": 2
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.028333333333333335,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": 0.409217,
+              "marketProbability": 0.5716613439353452,
+              "modelMarketGap": 0.05033865606465482,
+              "expectedValue": -0.03589999999999993,
+              "marketFavorite": true,
+              "marketFavoriteCodes": [
+                "2"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "nonpositive-model-expected-value"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          }
+        ],
+        "eligibleCandidates": [],
+        "id": "assessment_944c28791d5970d16ceba4160d0e1bca29fc659926decd6420ab4fe31cda0e43",
+        "contentHash": "e0c48ea200f1722c4e6092f25ac55a88dd878654602d2ee32e14e2e7a0c9d2c6"
+      }
+    },
+    {
+      "sourceMatchId": "2041810",
+      "eventVersion": "2026-10-05T18:45:00.000Z",
+      "homeTeamId": "team_1p7g0af",
+      "awayTeamId": "team_u4waov",
+      "matchNo": "周一006",
+      "homeTeamName": "黑山",
+      "awayTeamName": "亚美尼亚",
+      "kickoffTime": "2026-10-05T18:45:00.000Z",
+      "cutoffTime": "2026-10-05T14:00:00.000Z",
+      "decisionId": "decision_bba93e3d55ecb09a4aa1f7d942d585931d165a3a2644030d7f5c1afa9106c07b",
+      "decisionRecordHash": "e99cc16f8b4d303ed01dccdbbb1d74f94c11bc7af3d9e0d1886d9c8091e5afad",
+      "inputPublishedAt": "2026-10-05T13:59:29.011Z",
+      "modelGeneratedAt": "2026-10-05T13:38:34.116Z",
+      "generatedAt": "2026-10-05T15:16:36.519Z",
+      "afterCutoff": true,
+      "beforeKickoff": true,
+      "formalHitRateEligible": false,
+      "researchComparisonEligible": true,
+      "probabilitiesUnchanged": true,
+      "formalEligible": false,
+      "primary": null,
+      "companion": null,
+      "referenceLabel": "model outcome tendency; uncalibrated; not a betting recommendation",
+      "modelTendency": {
+        "market": "HAD",
+        "tipCode": "1",
+        "handicapLine": 0,
+        "probability": 0.362,
+        "odds": 1.34
+      },
+      "marketBaseline": {
+        "market": "HAD",
+        "tipCode": "1",
+        "handicapLine": 0,
+        "probability": 0.6605366860574217,
+        "odds": 1.34
+      },
+      "independentHandicapTendency": {
+        "market": "HHAD",
+        "tipCode": "2",
+        "handicapLine": -1,
+        "probability": 0.638,
+        "odds": 2.65
+      },
+      "fullHADDistribution": {
+        "1": 0.362,
+        "2": 0.33699999999999997,
+        "X": 0.301
+      },
+      "fullHHADDistribution": {
+        "1": 0.163142,
+        "2": 0.638,
+        "X": 0.198858
+      },
+      "originalPrimary": {
+        "market": "HHAD",
+        "tipCode": "2",
+        "handicapLine": -1,
+        "probability": 0.638,
+        "odds": 2.65
+      },
+      "originalHAD": {
+        "market": "HAD",
+        "tipCode": "2",
+        "handicapLine": 0,
+        "probability": 0.33699999999999997,
+        "odds": 6.4
+      },
+      "originalHHAD": {
+        "market": "HHAD",
+        "tipCode": "2",
+        "handicapLine": -1,
+        "probability": 0.638,
+        "odds": 2.65
+      },
+      "originalExactScore": {
+        "label": "1-1",
+        "probability": 0.14303509152507513
+      },
+      "topScores": [
+        {
+          "label": "1-1",
+          "home": 1,
+          "away": 1,
+          "probability": 0.14303509152507513,
+          "hadCode": "X",
+          "hhadCode": "2",
+          "compatibleOriginalPrimary": true,
+          "compatibleModelTendency": false
+        },
+        {
+          "label": "1-0",
+          "home": 1,
+          "away": 0,
+          "probability": 0.09792238527012762,
+          "hadCode": "1",
+          "hhadCode": "X",
+          "compatibleOriginalPrimary": false,
+          "compatibleModelTendency": true
+        },
+        {
+          "label": "0-1",
+          "home": 0,
+          "away": 1,
+          "probability": 0.09607228707685951,
+          "hadCode": "2",
+          "hhadCode": "2",
+          "compatibleOriginalPrimary": true,
+          "compatibleModelTendency": false
+        }
+      ],
+      "scoreRule": "global-unconditional-top3; no conditional branch filter",
+      "sourceQuoteClocks": {
+        "HAD": "2026-10-05T13:57:13.194Z",
+        "HHAD": "2026-10-05T13:59:24.515Z"
+      },
+      "strategyAssessment": {
+        "version": "evidence-price-recommendation-v1",
+        "scope": "shadow-reference-only",
+        "asOf": "2026-10-05T13:59:29.011Z",
+        "decisionId": "decision_bba93e3d55ecb09a4aa1f7d942d585931d165a3a2644030d7f5c1afa9106c07b",
+        "decisionRecordHash": "e99cc16f8b4d303ed01dccdbbb1d74f94c11bc7af3d9e0d1886d9c8091e5afad",
+        "sourceMatchId": "2041810",
+        "eventVersion": "2026-10-05T18:45:00.000Z",
+        "businessDate": "2026-10-05",
+        "modelVersion": "unified-poisson-bayes-v76",
+        "selectionStatus": "observation",
+        "reasons": [
+          "model-uncalibrated",
+          "calibration-evidence-missing",
+          "formal-calibration-adapter-unavailable",
+          "no-research-value-candidate"
+        ],
+        "formalEligible": false,
+        "primary": null,
+        "companion": null,
+        "eligibleCandidateScope": "research-value-only",
+        "materialAbsoluteMarketGap": 0.1,
+        "calibration": {
+          "status": "unavailable",
+          "suppliedEvidenceHash": null,
+          "conservativeProbability": null,
+          "formalAdapter": "not-integrated",
+          "trainingPerformed": false,
+          "reasons": [
+            "calibration-evidence-missing",
+            "formal-calibration-adapter-unavailable"
+          ]
+        },
+        "referenceDiagnostic": {
+          "status": "absent",
+          "referenceHash": null,
+          "event": null,
+          "sourceVerified": false,
+          "reasons": []
+        },
+        "distributions": {
+          "HAD": {
+            "modelProbabilities": {
+              "1": 0.362,
+              "2": 0.33699999999999997,
+              "X": 0.301
+            },
+            "marketProbabilities": {
+              "1": 0.6605366860574217,
+              "2": 0.13829986864327268,
+              "X": 0.2011634452993057
+            },
+            "modelLeader": "1",
+            "modelLeaderCodes": [
+              "1"
+            ],
+            "marketLeader": "1",
+            "marketLeaderCodes": [
+              "1"
+            ],
+            "quoteOdds": {
+              "1": 1.34,
+              "2": 6.4,
+              "X": 4.4
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "quoteSource": "500.com:jczq:HAD",
+            "handicapLine": 0,
+            "probabilityBasis": "unconditional",
+            "modelValidation": "unvalidated",
+            "quoteBinding": "frozen-decision-market-quote",
+            "sourceVerified": false,
+            "quoteReasons": []
+          },
+          "HHAD": {
+            "modelProbabilities": {
+              "1": 0.163142,
+              "2": 0.638,
+              "X": 0.198858
+            },
+            "marketProbabilities": {
+              "1": 0.3938185216420121,
+              "2": 0.3343742164885009,
+              "X": 0.2718072618694869
+            },
+            "modelLeader": "2",
+            "modelLeaderCodes": [
+              "2"
+            ],
+            "marketLeader": "1",
+            "marketLeaderCodes": [
+              "1"
+            ],
+            "quoteOdds": {
+              "1": 2.25,
+              "2": 2.65,
+              "X": 3.26
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "quoteSource": "sporttery:HHAD",
+            "handicapLine": -1,
+            "probabilityBasis": "unconditional",
+            "modelValidation": "unvalidated",
+            "quoteBinding": "frozen-decision-market-quote",
+            "sourceVerified": false,
+            "quoteReasons": []
+          }
+        },
+        "candidates": [
+          {
+            "id": "option_d6c740f6cfc4dc94a846703b6af303045c2008d6a7fe4029b4c866c7f6ac253d",
+            "market": "HAD",
+            "tipCode": "1",
+            "handicapLine": 0,
+            "modelProbability": 0.362,
+            "marketProbability": 0.6605366860574217,
+            "odds": 1.34,
+            "breakEvenProbability": 0.7462686567164178,
+            "modelExpectedValue": -0.51492,
+            "modelMarketGap": -0.2985366860574217,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient",
+                "model-lead-too-thin",
+                "material-model-market-disagreement"
+              ],
+              "inputEvidenceHash": "27c0ebcda3acfc3e455e62812366f48059b393d806821b476ac20707b687051e",
+              "samples": {
+                "elo": {
+                  "away": 2,
+                  "home": 2
+                },
+                "form": {
+                  "away": 2,
+                  "home": 2
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.05666666666666667,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": 0.025000000000000022,
+              "marketProbability": 0.6605366860574217,
+              "modelMarketGap": -0.2985366860574217,
+              "expectedValue": -0.51492,
+              "marketFavorite": true,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "favorite",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "model-lead-too-thin",
+              "material-model-market-disagreement",
+              "nonpositive-model-expected-value",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_9c59ed8cc8e83800f8517d3886cc61ae68c72f2b86d73415b345502fb309c8b5",
+            "market": "HAD",
+            "tipCode": "X",
+            "handicapLine": 0,
+            "modelProbability": 0.301,
+            "marketProbability": 0.2011634452993057,
+            "odds": 4.4,
+            "breakEvenProbability": 0.22727272727272727,
+            "modelExpectedValue": 0.3244,
+            "modelMarketGap": 0.0998365547006943,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient",
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "27c0ebcda3acfc3e455e62812366f48059b393d806821b476ac20707b687051e",
+              "samples": {
+                "elo": {
+                  "away": 2,
+                  "home": 2
+                },
+                "form": {
+                  "away": 2,
+                  "home": 2
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.05666666666666667,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.061,
+              "marketProbability": 0.2011634452993057,
+              "modelMarketGap": 0.0998365547006943,
+              "expectedValue": 0.3244,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "draw",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "model-lead-too-thin"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_8aa754669d67089fb98a713fc08cbdc9eb095d54928bb940914d344f0c0b9301",
+            "market": "HAD",
+            "tipCode": "2",
+            "handicapLine": 0,
+            "modelProbability": 0.33699999999999997,
+            "marketProbability": 0.13829986864327268,
+            "odds": 6.4,
+            "breakEvenProbability": 0.15625,
+            "modelExpectedValue": 1.1568,
+            "modelMarketGap": 0.1987001313567273,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient",
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "27c0ebcda3acfc3e455e62812366f48059b393d806821b476ac20707b687051e",
+              "samples": {
+                "elo": {
+                  "away": 2,
+                  "home": 2
+                },
+                "form": {
+                  "away": 2,
+                  "home": 2
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.05666666666666667,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.025000000000000022,
+              "marketProbability": 0.13829986864327268,
+              "modelMarketGap": 0.1987001313567273,
+              "expectedValue": 1.1568,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "nonfavorite",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "model-lead-too-thin",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_b4f42b138f0d0db7cc1f2d5802fae13e165383af32fb1f6f70bdac21231d29f8",
+            "market": "HHAD",
+            "tipCode": "1",
+            "handicapLine": -1,
+            "modelProbability": 0.163142,
+            "marketProbability": 0.3938185216420121,
+            "odds": 2.25,
+            "breakEvenProbability": 0.4444444444444444,
+            "modelExpectedValue": -0.6329305,
+            "modelMarketGap": -0.23067652164201208,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient",
+                "model-lead-too-thin",
+                "material-model-market-disagreement"
+              ],
+              "inputEvidenceHash": "27c0ebcda3acfc3e455e62812366f48059b393d806821b476ac20707b687051e",
+              "samples": {
+                "elo": {
+                  "away": 2,
+                  "home": 2
+                },
+                "form": {
+                  "away": 2,
+                  "home": 2
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.05666666666666667,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.474858,
+              "marketProbability": 0.3938185216420121,
+              "modelMarketGap": -0.23067652164201208,
+              "expectedValue": -0.6329305,
+              "marketFavorite": true,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "model-lead-too-thin",
+              "material-model-market-disagreement",
+              "nonpositive-model-expected-value",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_691e93288043d6692bba6397a8eb44e4d1b4a733ea9ff8fca5d90b08871ea663",
+            "market": "HHAD",
+            "tipCode": "X",
+            "handicapLine": -1,
+            "modelProbability": 0.198858,
+            "marketProbability": 0.2718072618694869,
+            "odds": 3.26,
+            "breakEvenProbability": 0.3067484662576687,
+            "modelExpectedValue": -0.35172292000000005,
+            "modelMarketGap": -0.07294926186948689,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient",
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "27c0ebcda3acfc3e455e62812366f48059b393d806821b476ac20707b687051e",
+              "samples": {
+                "elo": {
+                  "away": 2,
+                  "home": 2
+                },
+                "form": {
+                  "away": 2,
+                  "home": 2
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.05666666666666667,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.43914200000000003,
+              "marketProbability": 0.2718072618694869,
+              "modelMarketGap": -0.07294926186948689,
+              "expectedValue": -0.35172292000000005,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "model-lead-too-thin",
+              "nonpositive-model-expected-value"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_0f6857154d5bfe920309fa3631ae0a5f379a739a1a41bdc4858e720959a627fa",
+            "market": "HHAD",
+            "tipCode": "2",
+            "handicapLine": -1,
+            "modelProbability": 0.638,
+            "marketProbability": 0.3343742164885009,
+            "odds": 2.65,
+            "breakEvenProbability": 0.37735849056603776,
+            "modelExpectedValue": 0.6906999999999999,
+            "modelMarketGap": 0.3036257835114991,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "team-samples-insufficient"
+              ],
+              "inputEvidenceHash": "27c0ebcda3acfc3e455e62812366f48059b393d806821b476ac20707b687051e",
+              "samples": {
+                "elo": {
+                  "away": 2,
+                  "home": 2
+                },
+                "form": {
+                  "away": 2,
+                  "home": 2
+                }
+              },
+              "weights": {
+                "elo": 0,
+                "form": 0.05666666666666667,
+                "market": 0.15,
+                "poisson": 0.5,
+                "teamStrength": 0.35,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": 0.43914200000000003,
+              "marketProbability": 0.3343742164885009,
+              "modelMarketGap": 0.3036257835114991,
+              "expectedValue": 0.6906999999999999,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "team-samples-insufficient",
+              "market-disagreement-needs-validation"
+            ],
+            "risks": [
+              "material-absolute-model-market-gap"
+            ],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          }
+        ],
+        "eligibleCandidates": [],
+        "id": "assessment_4777d898199c678c781567d0741576d728d10d317c737d1c3d0fbe9738a51850",
+        "contentHash": "7a2c7ab43998106579faa2d85216b66255a9e9d7a1e7c6e0b2cc898cbf14eba7"
+      }
+    },
+    {
+      "sourceMatchId": "2041811",
+      "eventVersion": "2026-10-05T18:45:00.000Z",
+      "homeTeamId": "team_1fqvv4s",
+      "awayTeamId": "team_7xmv4f",
+      "matchNo": "周一007",
+      "homeTeamName": "波黑",
+      "awayTeamName": "波兰",
+      "kickoffTime": "2026-10-05T18:45:00.000Z",
+      "cutoffTime": "2026-10-05T14:00:00.000Z",
+      "decisionId": "decision_7b8b33c6584beabab59a78e11ff25877d4409557f3b95d68a7512a1ce1b31cb5",
+      "decisionRecordHash": "afa4e60b86b0120bbebd601b154bffcefb145754619f1b724c623e37b5b15953",
+      "inputPublishedAt": "2026-10-05T13:59:29.011Z",
+      "modelGeneratedAt": "2026-10-05T13:38:34.126Z",
+      "generatedAt": "2026-10-05T15:16:36.519Z",
+      "afterCutoff": true,
+      "beforeKickoff": true,
+      "formalHitRateEligible": false,
+      "researchComparisonEligible": true,
+      "probabilitiesUnchanged": true,
+      "formalEligible": false,
+      "primary": null,
+      "companion": null,
+      "referenceLabel": "model outcome tendency; uncalibrated; not a betting recommendation",
+      "modelTendency": {
+        "market": "HAD",
+        "tipCode": "2",
+        "handicapLine": 0,
+        "probability": 0.365,
+        "odds": 2.29
+      },
+      "marketBaseline": {
+        "market": "HAD",
+        "tipCode": "2",
+        "handicapLine": 0,
+        "probability": 0.3868780166943052,
+        "odds": 2.29
+      },
+      "independentHandicapTendency": {
+        "market": "HHAD",
+        "tipCode": "1",
+        "handicapLine": 1,
+        "probability": 0.635,
+        "odds": 1.46
+      },
+      "fullHADDistribution": {
+        "1": 0.36,
+        "2": 0.365,
+        "X": 0.275
+      },
+      "fullHHADDistribution": {
+        "1": 0.635,
+        "2": 0.15819,
+        "X": 0.20681
+      },
+      "originalPrimary": {
+        "market": "HHAD",
+        "tipCode": "1",
+        "handicapLine": 1,
+        "probability": 0.635,
+        "odds": 1.46
+      },
+      "originalHAD": {
+        "market": "HAD",
+        "tipCode": "1",
+        "handicapLine": 0,
+        "probability": 0.36,
+        "odds": 2.88
+      },
+      "originalHHAD": {
+        "market": "HHAD",
+        "tipCode": "1",
+        "handicapLine": 1,
+        "probability": 0.635,
+        "odds": 1.46
+      },
+      "originalExactScore": {
+        "label": "1-1",
+        "probability": 0.13059878194490823
+      },
+      "topScores": [
+        {
+          "label": "1-1",
+          "home": 1,
+          "away": 1,
+          "probability": 0.13059878194490823,
+          "hadCode": "X",
+          "hhadCode": "1",
+          "compatibleOriginalPrimary": true,
+          "compatibleModelTendency": false
+        },
+        {
+          "label": "0-1",
+          "home": 0,
+          "away": 1,
+          "probability": 0.09388845087050118,
+          "hadCode": "2",
+          "hhadCode": "X",
+          "compatibleOriginalPrimary": false,
+          "compatibleModelTendency": true
+        },
+        {
+          "label": "1-0",
+          "home": 1,
+          "away": 0,
+          "probability": 0.08677319524974031,
+          "hadCode": "1",
+          "hhadCode": "1",
+          "compatibleOriginalPrimary": true,
+          "compatibleModelTendency": false
+        }
+      ],
+      "scoreRule": "global-unconditional-top3; no conditional branch filter",
+      "sourceQuoteClocks": {
+        "HAD": "2026-10-05T13:57:13.194Z",
+        "HHAD": "2026-10-05T13:59:24.515Z"
+      },
+      "strategyAssessment": {
+        "version": "evidence-price-recommendation-v1",
+        "scope": "shadow-reference-only",
+        "asOf": "2026-10-05T13:59:29.011Z",
+        "decisionId": "decision_7b8b33c6584beabab59a78e11ff25877d4409557f3b95d68a7512a1ce1b31cb5",
+        "decisionRecordHash": "afa4e60b86b0120bbebd601b154bffcefb145754619f1b724c623e37b5b15953",
+        "sourceMatchId": "2041811",
+        "eventVersion": "2026-10-05T18:45:00.000Z",
+        "businessDate": "2026-10-05",
+        "modelVersion": "unified-poisson-bayes-v76",
+        "selectionStatus": "observation",
+        "reasons": [
+          "model-uncalibrated",
+          "calibration-evidence-missing",
+          "formal-calibration-adapter-unavailable",
+          "no-research-value-candidate"
+        ],
+        "formalEligible": false,
+        "primary": null,
+        "companion": null,
+        "eligibleCandidateScope": "research-value-only",
+        "materialAbsoluteMarketGap": 0.1,
+        "calibration": {
+          "status": "unavailable",
+          "suppliedEvidenceHash": null,
+          "conservativeProbability": null,
+          "formalAdapter": "not-integrated",
+          "trainingPerformed": false,
+          "reasons": [
+            "calibration-evidence-missing",
+            "formal-calibration-adapter-unavailable"
+          ]
+        },
+        "referenceDiagnostic": {
+          "status": "absent",
+          "referenceHash": null,
+          "event": null,
+          "sourceVerified": false,
+          "reasons": []
+        },
+        "distributions": {
+          "HAD": {
+            "modelProbabilities": {
+              "1": 0.36,
+              "2": 0.365,
+              "X": 0.275
+            },
+            "marketProbabilities": {
+              "1": 0.30762175632984684,
+              "2": 0.3868780166943052,
+              "X": 0.30550022697584794
+            },
+            "modelLeader": "2",
+            "modelLeaderCodes": [
+              "2"
+            ],
+            "marketLeader": "2",
+            "marketLeaderCodes": [
+              "2"
+            ],
+            "quoteOdds": {
+              "1": 2.88,
+              "2": 2.29,
+              "X": 2.9
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "quoteSource": "500.com:jczq:HAD",
+            "handicapLine": 0,
+            "probabilityBasis": "unconditional",
+            "modelValidation": "unvalidated",
+            "quoteBinding": "frozen-decision-market-quote",
+            "sourceVerified": false,
+            "quoteReasons": []
+          },
+          "HHAD": {
+            "modelProbabilities": {
+              "1": 0.635,
+              "2": 0.15819,
+              "X": 0.20681
+            },
+            "marketProbabilities": {
+              "1": 0.6062065592720483,
+              "2": 0.17525971812617633,
+              "X": 0.21853372260177542
+            },
+            "modelLeader": "1",
+            "modelLeaderCodes": [
+              "1"
+            ],
+            "marketLeader": "1",
+            "marketLeaderCodes": [
+              "1"
+            ],
+            "quoteOdds": {
+              "1": 1.46,
+              "2": 5.05,
+              "X": 4.05
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "quoteSource": "sporttery:HHAD",
+            "handicapLine": 1,
+            "probabilityBasis": "unconditional",
+            "modelValidation": "unvalidated",
+            "quoteBinding": "frozen-decision-market-quote",
+            "sourceVerified": false,
+            "quoteReasons": []
+          }
+        },
+        "candidates": [
+          {
+            "id": "option_1cc08177a6664486622a782abc7c8905f153a76b32aa366ca67d8d7fed123809",
+            "market": "HAD",
+            "tipCode": "1",
+            "handicapLine": 0,
+            "modelProbability": 0.36,
+            "marketProbability": 0.30762175632984684,
+            "odds": 2.88,
+            "breakEvenProbability": 0.3472222222222222,
+            "modelExpectedValue": 0.036799999999999944,
+            "modelMarketGap": 0.052378243670153146,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "43a1752cf44cc0beafb5b065f73a81678564210be2abda92b5c39a0ee389a07b",
+              "samples": {
+                "elo": {
+                  "away": 894,
+                  "home": 285
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.0050000000000000044,
+              "marketProbability": 0.30762175632984684,
+              "modelMarketGap": 0.052378243670153146,
+              "expectedValue": 0.036799999999999944,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "2"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "nonfavorite",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_1cce9708da0fc0e72b57d95c05705dd58d634171e981c3572fec47e02720322f",
+            "market": "HAD",
+            "tipCode": "X",
+            "handicapLine": 0,
+            "modelProbability": 0.275,
+            "marketProbability": 0.30550022697584794,
+            "odds": 2.9,
+            "breakEvenProbability": 0.3448275862068966,
+            "modelExpectedValue": -0.2025,
+            "modelMarketGap": -0.03050022697584792,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "43a1752cf44cc0beafb5b065f73a81678564210be2abda92b5c39a0ee389a07b",
+              "samples": {
+                "elo": {
+                  "away": 894,
+                  "home": 285
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.08999999999999997,
+              "marketProbability": 0.30550022697584794,
+              "modelMarketGap": -0.03050022697584792,
+              "expectedValue": -0.2025,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "2"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "draw",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin",
+              "nonpositive-model-expected-value"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_e641deb49eecd596ae8d9f5077c161de4679136c4d019871e026ceaa041c9dac",
+            "market": "HAD",
+            "tipCode": "2",
+            "handicapLine": 0,
+            "modelProbability": 0.365,
+            "marketProbability": 0.3868780166943052,
+            "odds": 2.29,
+            "breakEvenProbability": 0.4366812227074236,
+            "modelExpectedValue": -0.16415000000000002,
+            "modelMarketGap": -0.021878016694305225,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "43a1752cf44cc0beafb5b065f73a81678564210be2abda92b5c39a0ee389a07b",
+              "samples": {
+                "elo": {
+                  "away": 894,
+                  "home": 285
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": 0.0050000000000000044,
+              "marketProbability": 0.3868780166943052,
+              "modelMarketGap": -0.021878016694305225,
+              "expectedValue": -0.16415000000000002,
+              "marketFavorite": true,
+              "marketFavoriteCodes": [
+                "2"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": "favorite",
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:57:13.194Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin",
+              "nonpositive-model-expected-value"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_0ef4eec740ab9a6df0f88282bda4ae53aa676d43daef41195326f7c42894d7e0",
+            "market": "HHAD",
+            "tipCode": "1",
+            "handicapLine": 1,
+            "modelProbability": 0.635,
+            "marketProbability": 0.6062065592720483,
+            "odds": 1.46,
+            "breakEvenProbability": 0.684931506849315,
+            "modelExpectedValue": -0.07289999999999996,
+            "modelMarketGap": 0.028793440727951758,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "reference-qualified",
+              "qualified": true,
+              "reasons": [],
+              "inputEvidenceHash": "43a1752cf44cc0beafb5b065f73a81678564210be2abda92b5c39a0ee389a07b",
+              "samples": {
+                "elo": {
+                  "away": 894,
+                  "home": 285
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": 0.42819,
+              "marketProbability": 0.6062065592720483,
+              "modelMarketGap": 0.028793440727951758,
+              "expectedValue": -0.07289999999999996,
+              "marketFavorite": true,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "nonpositive-model-expected-value"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_e71fd47d80ae9a35d646363288cb700adb2a7390d97c37dd81950d3fe860c084",
+            "market": "HHAD",
+            "tipCode": "X",
+            "handicapLine": 1,
+            "modelProbability": 0.20681,
+            "marketProbability": 0.21853372260177542,
+            "odds": 4.05,
+            "breakEvenProbability": 0.2469135802469136,
+            "modelExpectedValue": -0.16241950000000005,
+            "modelMarketGap": -0.011723722601775427,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "43a1752cf44cc0beafb5b065f73a81678564210be2abda92b5c39a0ee389a07b",
+              "samples": {
+                "elo": {
+                  "away": 894,
+                  "home": 285
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.42819,
+              "marketProbability": 0.21853372260177542,
+              "modelMarketGap": -0.011723722601775427,
+              "expectedValue": -0.16241950000000005,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin",
+              "nonpositive-model-expected-value"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          },
+          {
+            "id": "option_19c4023da443820e016222f020c13a2f9701e8efbc52c34f555abad29902b10a",
+            "market": "HHAD",
+            "tipCode": "2",
+            "handicapLine": 1,
+            "modelProbability": 0.15819,
+            "marketProbability": 0.17525971812617633,
+            "odds": 5.05,
+            "breakEvenProbability": 0.19801980198019803,
+            "modelExpectedValue": -0.20114050000000006,
+            "modelMarketGap": -0.01706971812617633,
+            "probabilityBasis": "unconditional",
+            "rawQuality": {
+              "version": "recommendation-selection-quality-v2",
+              "status": "watch",
+              "qualified": false,
+              "reasons": [
+                "model-lead-too-thin"
+              ],
+              "inputEvidenceHash": "43a1752cf44cc0beafb5b065f73a81678564210be2abda92b5c39a0ee389a07b",
+              "samples": {
+                "elo": {
+                  "away": 894,
+                  "home": 285
+                },
+                "form": {
+                  "away": 12,
+                  "home": 12
+                }
+              },
+              "weights": {
+                "elo": 0.3,
+                "form": 0.34,
+                "market": 0.1,
+                "poisson": 0.45,
+                "teamStrength": 0.15,
+                "worldCupPrior": 0
+              },
+              "arithmeticStatus": "verified",
+              "probabilityLead": -0.47681,
+              "marketProbability": 0.17525971812617633,
+              "modelMarketGap": -0.01706971812617633,
+              "expectedValue": -0.20114050000000006,
+              "marketFavorite": false,
+              "marketFavoriteCodes": [
+                "1"
+              ],
+              "directionSelectionMode": "model-leader",
+              "marketRole": null,
+              "validation": "unvalidated",
+              "priceFilterApplied": true
+            },
+            "quoteObservedAt": "2026-10-05T13:59:24.515Z",
+            "researchValueEligible": false,
+            "formalEligible": false,
+            "calibratedProbability": null,
+            "conservativeProbability": null,
+            "conservativeExpectedValue": null,
+            "reasons": [
+              "model-lead-too-thin",
+              "nonpositive-model-expected-value"
+            ],
+            "risks": [],
+            "referenceConflict": {
+              "referenceHash": null,
+              "structuralConflict": null,
+              "blocking": false,
+              "evidenceStatus": "absent",
+              "sourceVerified": false
+            }
+          }
+        ],
+        "eligibleCandidates": [],
+        "id": "assessment_fb2b5c2f8d86624dee980e66a4894f57c9b6e9123a44b39b66f63d5e6fa21e95",
+        "contentHash": "598662ce78c0152702b3e30da73cf24741ee4a83f547ca55bda932da22a6026b"
+      }
+    }
+  ],
+  "contentHash": "53b846177dd372f7cd3b2551f2b0aea4e80b94e1c34cd953ab528fbf9440a31a"
+}

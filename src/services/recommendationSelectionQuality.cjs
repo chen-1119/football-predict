@@ -58,4 +58,29 @@ function selectionQuality(decision,selection=null){
   validation:'unvalidated',priceFilterApplied:isV2};
 }
 function isQualifiedSelection({decision,selection}){return selectionQuality(decision,selection).qualified;}
-module.exports={VERSION,LEGACY_VERSION,MIN_PROBABILITY_LEAD,MATERIAL_MARKET_GAP,MATERIAL_MODEL_EV,prospectiveRiskReasons,selectionQuality,isQualifiedSelection};
+// The evidence/price shadow policy inspects every unconditional option. This
+// exposes the existing arithmetic only; it does not change archived admission.
+function rawSelectionQuality(decision,selection){return selectionQuality(decision,selection);}
+/** Current publication quality follows the frozen primary market. Keep
+ * selectionQuality's HAD default for archived cohorts and HAD-only research.
+ * Reuse the exact combo selection binding so an absent/invalid HHAD quote can
+ * never silently fall back to assessing the HAD companion. */
+function publishedSelectionQuality(decision,{now}={}){
+ if(decision?.primaryPickPolicyVersion!=='coherent-market-primary-v1')return selectionQuality(decision);
+ const anchor=decision.coherentPrimary;
+ let selection=null;
+ try{
+  selection=require('../../scripts/recommendationPlatform/comboSelections.cjs').selectionFor(decision,anchor?.anchorMarket);
+ }catch{/* A malformed frozen selection has no usable primary-market price. */}
+ if(selection?.tipCode!==anchor?.anchorCode)selection=null;
+ const quality=selectionQuality(decision,selection||{market:anchor?.anchorMarket,tipCode:anchor?.anchorCode,probabilities:{},quoteOdds:{}});
+ const reasons=selection?[...quality.reasons]:quality.reasons.filter(reason=>reason!=='model-lead-too-thin');
+ if(!selection)reasons.push('anchor-market-unavailable');
+ else{
+  const {time}=require('./publishedForecastPolicy.cjs');
+  const at=now===undefined?time(decision.publishedAt):now,quoted=time(selection.quoteObservedAt);
+  if(!Number.isFinite(at)||!Number.isFinite(quoted)||quoted>at||at-quoted>15*60000)reasons.push('quote-stale');
+ }
+ return {...quality,assessmentBasis:'coherent-primary-anchor-v1',status:reasons.length?'watch':'reference-qualified',qualified:reasons.length===0,reasons};
+}
+module.exports={VERSION,LEGACY_VERSION,MIN_PROBABILITY_LEAD,MATERIAL_MARKET_GAP,MATERIAL_MODEL_EV,prospectiveRiskReasons,selectionQuality,rawSelectionQuality,publishedSelectionQuality,isQualifiedSelection};

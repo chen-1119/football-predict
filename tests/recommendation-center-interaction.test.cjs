@@ -1,8 +1,10 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
-const {memoryPorts,validators}=require('./recommendationFixture.cjs');
+const {NOW,match,publication,memoryPorts,validators}=require('./recommendationFixture.cjs');
+const {makeDecision}=require('../scripts/recommendationPlatform/decision.cjs');
 function compile(file,requireFn){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>id.endsWith('/coherentPrimarySelection.cjs')?require('../src/services/coherentPrimarySelection.cjs'):id.endsWith('/publishedRecommendationStatus.cjs')?require('../src/services/publishedRecommendationStatus.cjs'):requireFn(id),Date,window:{setInterval:()=>0,clearInterval:()=>{},setTimeout:fn=>{fn();return 0;},clearTimeout:()=>{}}});return module.exports;}
+const publishedResults=compile(require.resolve('../src/services/publishedMatchRecommendation.ts'),require);
 function aggregate(rows){const values=rows.map(row=>row.settlement?.state||'PENDING'),count=state=>values.filter(value=>value===state).length;const won=count('WON'),lost=count('LOST'),settled=won+lost;return{published:rows.length,settled,won,lost,pending:count('PENDING'),void:count('VOID'),disputed:count('DISPUTED'),hitRate:settled?won/settled:null};}
 async function harness({missingInputEvidence=false,reviewFailure=false,withHandicap=false,mode='review'}={}){
   const p=memoryPorts();if(missingInputEvidence)for(const m of p.current){const {version,generatedAt,oneXTwo}=m.probabilityModel;m.probabilityModel={version,generatedAt,oneXTwo};}
@@ -22,9 +24,11 @@ async function harness({missingInputEvidence=false,reviewFailure=false,withHandi
       return filters.market==='MIXED'?markets.size>1:markets.size===1&&markets.has(filters.market);
     });
     const cohort=marketRows.filter(row=>!filters.version||filters.version===versionKey),needle=filters.q.toLocaleLowerCase();
-    const filtered=cohort.filter(row=>(!filters.date||(row.decision?.businessDate||row.combo?.businessDate)===filters.date)&&(!needle||[...(row.decision?[row.decision]:row.combo.legs)].flatMap(d=>[d.homeTeamName,d.awayTeamName,d.matchNo,d.sourceMatchId]).join(' ').normalize('NFKC').toLocaleLowerCase().includes(needle))&&(filters.state==='ALL'||row.settlement?.state===filters.state));
-    const rows=filtered.slice((filters.page-1)*filters.pageSize,filters.page*filters.pageSize).map(row=>({...row,selectedMarket:filters.kind==='single'?(filters.market==='HHAD'?'HHAD':'HAD'):'HAD',selectedSettlement:row.settlement,selectedOdds:row.decision?.odds||row.combo?.totalOdds||null,oddsState:'available',versionKey,versionLabel:'fixture-model · fixture-policy'}));
-    return {data:{rows,total:filtered.length,page:filters.page,pageCount:Math.ceil(filtered.length/filters.pageSize),summary:{all:aggregate(cohort),windows:{last7:aggregate(cohort),last30:aggregate(cohort)}},versions:[{key:versionKey,label:'fixture-model · fixture-policy',count:all.length}]},loading:false,failed:false,authorizationRequired:false,refresh:()=>{}};
+    const selectedSettlement=row=>filters.kind==='single'&&filters.market==='HHAD'?row.handicapSettlement??null:row.settlement;
+    const filtered=cohort.filter(row=>(!filters.date||(row.decision?.businessDate||row.combo?.businessDate)===filters.date)&&(!needle||[...(row.decision?[row.decision]:row.combo.legs)].flatMap(d=>[d.homeTeamName,d.awayTeamName,d.matchNo,d.sourceMatchId]).join(' ').normalize('NFKC').toLocaleLowerCase().includes(needle))&&(filters.state==='ALL'||selectedSettlement(row)?.state===filters.state));
+    const rows=filtered.slice((filters.page-1)*filters.pageSize,filters.page*filters.pageSize).map(row=>({...row,selectedMarket:filters.kind==='single'?(filters.market==='HHAD'?'HHAD':'HAD'):'HAD',selectedSettlement:selectedSettlement(row),selectedOdds:row.decision?.odds||row.combo?.totalOdds||null,oddsState:'available',versionKey,versionLabel:'fixture-model · fixture-policy'}));
+    const summary=aggregate(cohort.map(row=>({...row,settlement:selectedSettlement(row)})));
+    return {data:{rows,total:filtered.length,page:filters.page,pageCount:Math.ceil(filtered.length/filters.pageSize),summary:{all:summary,windows:{last7:summary,last30:summary}},versions:[{key:versionKey,label:'fixture-model · fixture-policy',count:all.length}]},loading:false,failed:false,authorizationRequired:false,refresh:()=>{}};
   };
   const component=compile(require.resolve('../src/components/recommendations/RecommendationCenter.tsx'),id=>{
     if(id==='react')return {useEffect:callback=>callback(),useState:initial=>{const index=cursor++;if(!(index in state))state[index]=typeof initial==='function'?initial():initial;return [state[index],value=>{state[index]=typeof value==='function'?value(state[index]):value;}];}};
@@ -36,6 +40,7 @@ async function harness({missingInputEvidence=false,reviewFailure=false,withHandi
     if(id==='../../hooks/useRecommendationReviewPage')return {useRecommendationReviewPage:reviewPage};
     if(id==='../FollowButton')return {FollowButton:()=>null};
     if(id==='../TeamBadge')return {TeamBadge:({team,size})=>({type:'span',props:{'data-badge-name':team.name.zh,'data-badge-id':team.id,'data-badge-size':size}})};
+    if(id==='../../services/publishedMatchRecommendation')return publishedResults;
     if(id==='../../services/recommendationCenterView')return view;if(id==='./DualResearchV2')return {DualResearchV2:()=>null};if(id==='lucide-react')return new Proxy({},{get:()=>()=>null});if(id.endsWith('.css'))return {};throw Error(id);
   });
   const expand=node=>Array.isArray(node)?node.map(expand):node&&typeof node==='object'?(typeof node.type==='function'?expand(node.type(node.props)):{...node,props:{...node.props,children:expand(node.props?.children)}}):node;
@@ -45,6 +50,57 @@ function nodes(node,predicate){if(!node||typeof node!=='object')return [];if(Arr
 function words(node){if(node==null||typeof node==='boolean')return '';if(Array.isArray(node))return node.map(words).join('');return typeof node==='object'?words(node.props?.children):String(node);}
 const byClass=(tree,name)=>nodes(tree,n=>(n.props?.className||'').split(' ').includes(name));
 const button=(tree,label)=>nodes(tree,n=>n.type==='button'&&words(n)===label)[0];
+
+function franceResultRow(){
+  const source=match(2041806,NOW,{homeTeamName:'法国',awayTeamName:'比利时',odds:{odds1:1.32,oddsX:4.6,odds2:6.3},
+    handicapLine:-1,handicapOdds:{odds1:2.4,oddsX:3.3,odds2:2.74},handicapOddsSource:'sporttery:HHAD',handicapOddsUpdatedAt:new Date(NOW).toISOString(),
+    probabilityModel:{version:'coherent-result-ui-regression',generatedAt:new Date(NOW).toISOString(),oneXTwo:{final:{home:45.6,draw:26.4,away:28}},calculationTrace:{poisson:{lambdas:{home:1.7175127632029212,away:1.3237417615322957}}}}});
+  const decision=makeDecision(source,{now:NOW,publication:publication(NOW),primaryPolicy:'coherent-market-primary-v1'}).decision;
+  assert.equal(decision.coherentPrimary.anchorMarket,'HHAD');assert.equal(decision.coherentPrimary.hhadCode,'2');assert.equal(decision.tipCode,'2');
+  return {decision,settlement:{state:'LOST',score:'1-1',actual:'X',resultEventId:'france-1-1'},handicapSettlement:{state:'WON',score:'1-1',actual:'2',resultEventId:'france-1-1'}};
+}
+
+test('current center shows the won HHAD primary and lost HAD companion while statistics remain HAD-only',async()=>{
+  const ui=await harness({mode:'recommendations'}),row=franceResultRow();
+  ui.data.current=[row];ui.data.businessDate=new Date(Date.now()+8*3600000).toISOString().slice(0,10);
+  ui.data.review.statistics.single=aggregate([row]);
+  const before=JSON.stringify(ui.data),tree=ui.render(),card=byClass(tree,'rc-pick')[0];assert(card);
+  const primary=nodes(card,node=>node.props?.['data-result-market']==='HHAD');assert.equal(primary.length,1);
+  assert.equal(words(primary[0]),'让球 · 主方向：命中');assert.match(primary[0].props.className,/rc-state--WON/);
+  const companion=nodes(card,node=>node.props?.['data-companion-result-market']==='HAD');assert.equal(companion.length,1);
+  assert.equal(words(companion[0]),'胜平负 · 条件分支：未命中');
+  const stats=byClass(tree,'rc-stats-wrap')[0];assert.match(words(stats),/胜平负归档统计（HAD）/);assert.match(words(stats),/沿用 HAD 冻结方向结算，不代表当前主方向汇总/);
+  assert.match(words(byClass(stats,'rc-stats')[0]),/0\.0%.*0 \/ 1/);assert.equal(JSON.stringify(ui.data),before);
+});
+
+test('review HAD baseline and explicit HHAD filter override the coherent primary without relabeling historical aggregates',async()=>{
+  const ui=await harness(),row=franceResultRow();ui.data.review.singles=[row];ui.data.review.statistics.single=aggregate([row]);
+  ui.data.review.statistics.handicapBreakdown.coherentPrimaryV1=aggregate([{settlement:row.handicapSettlement}]);
+  const before=JSON.stringify(ui.data);
+  let tree=ui.render(),card=byClass(tree,'rc-pick')[0],result=nodes(card,node=>Boolean(node.props?.['data-result-market']))[0];
+  // The review endpoint explicitly selects HAD for its default baseline.
+  assert.equal(result.props['data-result-market'],'HAD');assert.equal(words(result),'胜平负 · 条件分支：未命中');assert.match(result.props.className,/rc-state--LOST/);
+  assert.equal(nodes(card,node=>Boolean(node.props?.['data-companion-result-market'])).length,0);
+  assert.match(words(byClass(tree,'rc-stats-wrap')[0]),/胜平负归档统计（HAD）/);assert.match(words(byClass(tree,'rc-stats')[0]),/0\.0%.*0 \/ 1/);
+  const coherentBreakdown=nodes(tree,node=>node.type==='article'&&words(node).includes('兼容策略 · HHAD方向'));
+  assert.equal(coherentBreakdown.length,1);assert.match(words(coherentBreakdown[0]),/含主方向与伴随方向，不是主方向汇总/);assert.match(words(coherentBreakdown[0]),/100\.0%.*1 \/ 1/);
+  nodes(tree,node=>node.type==='select')[0].props.onChange({target:{value:'HHAD'}});tree=ui.render();card=byClass(tree,'rc-pick')[0];result=nodes(card,node=>Boolean(node.props?.['data-result-market']))[0];
+  assert.equal(result.props['data-result-market'],'HHAD');assert.equal(words(result),'让球 · 主方向：命中');assert.match(result.props.className,/rc-state--WON/);
+  assert.equal(nodes(card,node=>Boolean(node.props?.['data-companion-result-market'])).length,0);
+  assert.match(words(byClass(tree,'rc-stats-wrap')[0]),/归档让球方向诊断.*不是主方向汇总/);assert.match(words(byClass(tree,'rc-stats')[0]),/100\.0%.*1 \/ 1/);
+  nodes(tree,node=>node.type==='select')[2].props.onChange({target:{value:'LOST'}});tree=ui.render();assert.equal(byClass(tree,'rc-pick').length,0);
+  assert.match(words(byClass(tree,'rc-stats')[0]),/100\.0%.*1 \/ 1/,'result filters retain the HHAD cohort denominator');
+  button(tree,'清除筛选').props.onClick();tree=ui.renderSettled();result=nodes(byClass(tree,'rc-pick')[0],node=>Boolean(node.props?.['data-result-market']))[0];
+  assert.equal(result.props['data-result-market'],'HAD');assert.equal(words(result),'胜平负 · 条件分支：未命中');assert.equal(JSON.stringify(ui.data),before);
+});
+
+test('current center leaves a missing HHAD primary unresolved beside the recorded HAD outcome',async()=>{
+  const ui=await harness({mode:'recommendations'}),row=franceResultRow();delete row.handicapSettlement;
+  ui.data.current=[row];ui.data.businessDate=new Date(Date.now()+8*3600000).toISOString().slice(0,10);
+  const card=byClass(ui.render(),'rc-pick')[0],result=nodes(card,node=>node.props?.['data-result-market']==='HHAD')[0];
+  assert.match(words(result),/^让球 · 主方向：.*待核$/);assert.doesNotMatch(result.props.className,/rc-state--LOST|rc-state--WON/);
+  assert.equal(words(nodes(card,node=>node.props?.['data-companion-result-market']==='HAD')[0]),'胜平负 · 条件分支：未命中');
+});
 
 test('review reads real pages of twelve out of sixty-nine without changing aggregate statistics',async()=>{
   const ui=await harness();let tree=ui.render();assert.equal(byClass(tree,'rc-pick').length,12);assert.match(words(tree),/共 69 条明细 · 第 1 页，每页 12 条/);assert.match(words(byClass(tree,'rc-stats')[0]),/50\.7%/);
@@ -150,7 +206,7 @@ test('versioned performance and per-match probability details are closed by defa
   const ui=await harness(),tree=ui.render();const insights=byClass(tree,'rc-review-insights').find(node=>words(node).includes('让球复盘与模型校准'));assert.equal(insights.type,'details');assert.notEqual(insights.props.open,true);assert.match(words(insights),/分母：全部该版已结算场次/);assert.match(words(insights),/仅胜平负首选命中的场次/);
   const spReview=nodes(tree,node=>node.props?.['data-sp-band-review']==='observational')[0];assert.equal(spReview.type,'details');assert.notEqual(spReview.props.open,true);assert.match(words(spReview),/SP ≤ 1.45/);assert.match(words(spReview),/不是提高 SP 的选场规则/);
   assert.equal(byClass(tree,'rc-analysis').length,12);assert(byClass(tree,'rc-analysis').every(node=>node.type==='details'&&!node.props.open));assert(byClass(tree,'rc-details').every(node=>!node.props.open));
-  const first=byClass(tree,'rc-pick')[0],children=first.props.children;assert(children.findIndex(node=>node.props?.className==='rc-pick__main')<children.findIndex(node=>node.props?.className==='rc-primary-picks'));assert.match(words(first),/1 : 0/);
+  const first=byClass(tree,'rc-pick')[0],sections=nodes(first,node=>node.props?.className==='rc-pick__main'||node.props?.className==='rc-primary-picks');assert.deepEqual(sections.map(node=>node.props.className),['rc-pick__main','rc-primary-picks']);assert.match(words(first),/1 : 0/);
 });
 
 test('changing review kind resets pagination and searches archived combo legs',async()=>{

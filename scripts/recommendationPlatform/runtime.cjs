@@ -5,10 +5,11 @@ const {key,collectResults,settleDecision,settleHandicapDecision,settleSupplement
 const {validCombo}=require('./comboSelections.cjs');
 const {day,time,hash}=require('../../src/services/publishedForecastPolicy.cjs');
 const {buildHandicapCalibration}=require('../../src/services/handicapCalibration.cjs');
-const {selectionQuality,prospectiveRiskReasons,isQualifiedSelection}=require('../../src/services/recommendationSelectionQuality.cjs');
+const {selectionQuality,publishedSelectionQuality,prospectiveRiskReasons,isQualifiedSelection}=require('../../src/services/recommendationSelectionQuality.cjs');
 const {classifyOutcomeResearch}=require('../../src/services/outcomeCategoryResearch.cjs');
 const {conflictForDecision}=require('../../src/services/recommendationCrossTrackConflict.cjs');
 const {buildPublishedScoreDistribution}=require('../../src/services/publishedScoreDistribution.cjs');
+const {evaluateEvidencePriceRecommendation}=require('../../src/services/evidencePriceRecommendationPolicy.cjs');
 const {buildQualityReport}=require('./qualityReport.cjs');
 const {buildDataCoverage}=require('../dataCoverage.cjs');
 const {createDualResearchRecord}=require('./dualChoiceResearch.cjs');
@@ -224,15 +225,26 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     const previews=lanes.combos?.status==='ok' ? (lanes.combos.previews||[]).filter(c=>c.businessDate===day(now)&&validCombo(c,{now})
       && c.legs.every(d=>!conflictForDecision(targetMatches,d,now))) : [];
     const selected=singles.filter(r=>r.decision.businessDate===day(now)).map(row=>{
+      // Current primary-market quality is separate from the immutable HAD
+      // review cohort above. Never silently change its qualified denominator.
+      const open=now<Math.min(time(row.decision.cutoffTime),time(row.decision.kickoffTime))
+        && row.settlement.state==='PENDING';
+      const quality=publishedSelectionQuality(row.decision,open?{now}:{});
       const conflict=conflictForDecision(targetMatches,row.decision,now);
-      const risk=prospectiveRiskReasons(row.selectionQuality);
-      const current=(!conflict&&!risk.length)?row:{...row,selectionQuality:{...row.selectionQuality,status:'watch',qualified:false,
-        reasons:[...new Set([...(row.selectionQuality.reasons||[]),...risk,...(conflict?[conflict.reason]:[])])],
+      const referenceMatch=targetMatches.find(match=>String(match?.sourceMatchId||match?.id||'').replace(/^sporttery_/,'')===row.decision.sourceMatchId
+        && time(match.eventVersion||match.kickoffTime)===time(row.decision.eventVersion)
+        && match.homeTeamId===row.decision.homeTeamId && match.awayTeamId===row.decision.awayTeamId)||null;
+      // A current, read-only strategy assessment never replaces the frozen
+      // publication, its primary/conditional branch, or historical denominators.
+      // No calibration authorization adapter is installed: formal picks remain
+      // withheld, while unconditional model tendencies can be compared later.
+      const strategyAssessment=evaluateEvidencePriceRecommendation(row.decision,{asOf:now,referenceMatch});
+      const risk=quality.assessmentBasis==='coherent-primary-anchor-v1'?[]:prospectiveRiskReasons(quality);
+      const current=(!conflict&&!risk.length)?{...row,strategyAssessment,selectionQuality:quality}:{...row,strategyAssessment,selectionQuality:{...quality,status:'watch',qualified:false,
+        reasons:[...new Set([...(quality.reasons||[]),...risk,...(conflict?[conflict.reason]:[])])],
         ...(conflict?{crossTrack:conflict}:{})}};
       // The research projection is read-only and exists only for an open
       // pre-match row. It never changes the published decision or settlement.
-      const open=now<Math.min(time(row.decision.cutoffTime),time(row.decision.kickoffTime))
-        && row.settlement.state==='PENDING';
       if(!open)return current;
       const research=classifyOutcomeResearch(row);
       const staleQuote=!Number.isFinite(time(row.decision.quoteObservedAt))
