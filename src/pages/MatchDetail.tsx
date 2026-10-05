@@ -1861,8 +1861,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   const publishedTotals = publishedMatrix?.status === 'available' ? publishedMatrix.totalGoals : undefined;
   const leadingPublishedTotal = publishedTotals?.reduce((best, row) => row.probability > best.probability ? row : best);
   const publishedHandicap = unifiedRow?.decision.handicapAnalysis;
-  const publishedHandicapDirection = publishedHandicap?.overallTipCode ?? publishedHandicap?.tipCode;
-  const publishedHandicapProbability = publishedHandicap?.overallModelProbability ?? publishedHandicap?.modelProbability;
+  const publishedHandicapDirection = unifiedRow?.decision.coherentPrimary?.hhadCode ?? (unifiedRow?.decision.primaryPickPolicyVersion==='coherent-market-primary-v1'?null:publishedHandicap?.overallTipCode ?? publishedHandicap?.tipCode);
+  const publishedHandicapProbability = publishedHandicapDirection ? publishedHandicap?.overallProbabilities?.[publishedHandicapDirection] ?? publishedHandicap?.modelProbability : null;
   const publishedHandicapSp = boundOfficialHandicapSp(publishedHandicap, publishedHandicapDirection);
   const publishedHadNames = language === 'zh'
     ? { '1': '主胜', X: '平局', '2': '客胜' }

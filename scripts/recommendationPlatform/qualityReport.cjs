@@ -98,7 +98,8 @@ function buildHitRateTarget(latest,asOf,invalidRecords,futurePublications){
     if(!validBusinessDate(d.businessDate)){exclusions.invalidBusinessDate++;continue;}
     if(d.businessDate>through){exclusions.futureBusinessDate++;continue;}
     if(typeof d.upstreamModelVersion!=='string'||!d.upstreamModelVersion.trim()||d.upstreamModelVersion==='unknown'){exclusions.missingModelVersion++;continue;}
-    const group=groups.get(d.upstreamModelVersion)||[];group.push(row);groups.set(d.upstreamModelVersion,group);
+    const versionKey=d.upstreamModelVersion+(d.primaryPickPolicyVersion==='coherent-market-primary-v1'?' / '+d.primaryPickPolicyVersion:'');
+    const group=groups.get(versionKey)||[];group.push(row);groups.set(versionKey,group);
   }
   const byModelVersion=[...groups].sort(([a],[b])=>a.localeCompare(b)).map(([modelVersion,rows])=>{
     const window=days=>{const from=new Date(Date.parse(through+'T00:00:00Z')-(days-1)*86400000).toISOString().slice(0,10);

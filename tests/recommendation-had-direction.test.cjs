@@ -2,7 +2,9 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {selectHadDirection,validHadDirectionSelection}=require('../src/services/hadDirectionSelection.cjs');
-const {makeDecision,validDecision,chooseCombo}=require('../scripts/recommendationPlatform/decision.cjs');
+const {makeDecision:makePolicyDecision,validDecision,chooseCombo}=require('../scripts/recommendationPlatform/decision.cjs');
+// Replay the historical policy; new coherent publications have separate tests.
+const makeDecision=(m,o)=>makePolicyDecision(m,{...o,primaryPolicy:'independent-market-primary-v1'});
 const {selectionFor}=require('../scripts/recommendationPlatform/comboSelections.cjs');
 const {selectionQuality}=require('../src/services/recommendationSelectionQuality.cjs');
 const {buildQualityReport}=require('../scripts/recommendationPlatform/qualityReport.cjs');

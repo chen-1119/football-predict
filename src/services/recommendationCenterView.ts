@@ -1,3 +1,4 @@
+import { validCoherentPrimary, type CoherentPrimary } from './coherentPrimarySelection.cjs';
 export { publicationLifecycle, publicationLifecycleLabel } from './publishedRecommendationStatus.cjs';
 export type Outcome = '1' | 'X' | '2';
 export type ResultState = 'PENDING' | 'WON' | 'LOST' | 'VOID' | 'DISPUTED';
@@ -28,7 +29,8 @@ export interface Decision {
   modelProbability:number; modelGeneratedAt:string; quoteObservedAt:string; recordHash:string; quoteSource?:string|null; quoteOdds?:Record<Outcome,number>;
   handicapAnalysis?:HandicapAnalysis|null;
   directionSelection?:HadDirectionSelection|null;
-  primaryPickPolicyVersion?:'independent-market-primary-v1';
+  primaryPickPolicyVersion?:'independent-market-primary-v1'|'coherent-market-primary-v1';
+  coherentPrimary?:CoherentPrimary;
   supplementaryResearch?:SupplementaryResearch|null;
 }
 export interface SupplementaryResearch {
@@ -121,7 +123,7 @@ export interface DualResearchV2Row {
   settlement:{state:ResultState;grossReturn:number|null;netProfit:number|null;resultEventId:string|null};
 }
 export interface Summary { published:number;settled:number;won:number;lost:number;pending:number;void:number;disputed:number;hitRate:number|null;brier?:number|null;logLoss?:number|null;marketBrier?:number|null }
-export interface HandicapBreakdown {independentPrimaryV1?:Summary;standaloneV1:Summary;companionV2All:Summary;companionV2WhenHadWon:Summary;companionV2BothWon:Summary;companionV3All?:Summary;companionV3WhenHadWon?:Summary;companionV3BothWon?:Summary}
+export interface HandicapBreakdown {coherentPrimaryV1?:Summary;independentPrimaryV1?:Summary;standaloneV1:Summary;companionV2All:Summary;companionV2WhenHadWon:Summary;companionV2BothWon:Summary;companionV3All?:Summary;companionV3WhenHadWon?:Summary;companionV3BothWon?:Summary}
 export interface Lane {status:'ok'|'error';lastSuccessAt?:string;lastAttemptAt:string;errorCode?:string|null;inputAsOf?:string;candidateCount?:number;eligibleCount?:number;bindingFailures?:number;referenceCount?:number;watchCount?:number}
 export interface ModelQualityCohort {settled:number;won:number;hitRate:number|null;brier:number|null;marketBrier:number|null;logLoss:number|null;marketLogLoss:number|null;flatStakeNetUnits:number|null;flatStakeRoi:number|null;independentMatchDays:number}
 export interface HitRateTargetCohort {
@@ -256,7 +258,7 @@ function decision(v:unknown):Decision{
     directionSelection={version:ds.version as HadDirectionSelection['version'],mode:mode as HadDirectionSelection['mode'],
       category:category as HadDirectionSelection['category'],tipCode:selectionTip,modelLeaderCode,marketFavoriteCodes:favorites,
       marketRole:marketRole as HadDirectionSelection['marketRole'],validation:'prospective-guarded-unvalidated',selected:parsedSelected};
-  } else if(Object.entries(probabilities).some(([c,n])=>c!==tipCode&&n>=modelProbability))throw new Error('Legacy direction is not the model leader');
+  } else if(d.primaryPickPolicyVersion!=='coherent-market-primary-v1'&&Object.entries(probabilities).some(([c,n])=>c!==tipCode&&n>=modelProbability))throw new Error('Legacy direction is not the model leader');
   const parsedHandicap=d.handicapAnalysis==null?null:handicapAnalysis(d.handicapAnalysis);
   if(parsedHandicap&&parsedHandicap.straightTipCode!==tipCode)throw new Error('Handicap analysis is not bound to the straight pick');
   if(parsedHandicap?.marketReference&&(
@@ -274,9 +276,10 @@ function decision(v:unknown):Decision{
       ||! /^[a-f0-9]{64}$/.test(text(receipt.receiptHash))) throw new Error('Invalid copied lottery SP receipt');
   }
 
-  if(d.primaryPickPolicyVersion!==undefined&&d.primaryPickPolicyVersion!=='independent-market-primary-v1')throw new Error('Unknown primary pick policy');
+  if(d.primaryPickPolicyVersion!==undefined&&!['independent-market-primary-v1','coherent-market-primary-v1'].includes(String(d.primaryPickPolicyVersion)))throw new Error('Unknown primary pick policy');
   if(d.primaryPickPolicyVersion!==undefined&&d.supplementaryPolicyVersion!=='supplementary-research-v2')throw new Error('Inconsistent primary pick policy');
-  return {primaryPickPolicyVersion:d.primaryPickPolicyVersion as Decision['primaryPickPolicyVersion'],decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash,quoteSource,...(quoteOdds?{quoteOdds}:{}),handicapAnalysis:parsedHandicap,directionSelection, supplementaryResearch:parseSupplementaryResearch(d)};
+  if(d.primaryPickPolicyVersion==='coherent-market-primary-v1'&&(!validCoherentPrimary(d.coherentPrimary,probabilities,parsedHandicap?.overallProbabilities,parsedHandicap?.handicapLine,Boolean(parsedHandicap?.marketReference))||object(d.coherentPrimary).hadCode!==tipCode||directionSelection||parsedHandicap?.historicalCalibration?.applied))throw new Error('Invalid coherent primary selection');
+  return {coherentPrimary:d.coherentPrimary as CoherentPrimary|undefined,primaryPickPolicyVersion:d.primaryPickPolicyVersion as Decision['primaryPickPolicyVersion'],decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash,quoteSource,...(quoteOdds?{quoteOdds}:{}),handicapAnalysis:parsedHandicap,directionSelection, supplementaryResearch:parseSupplementaryResearch(d)};
 }
 function parseSupplementaryResearch(d:Obj):SupplementaryResearch|null{
   if(d.supplementaryPolicyVersion===undefined){if(d.supplementaryResearch!==undefined)throw new Error('Unversioned supplementary picks');return null;}
@@ -331,7 +334,7 @@ function single(v:unknown):SingleRow{
   const x=object(v),d=decision(x.decision),s=settlement(x.settlement);
   if(['WON','LOST'].includes(s.state)&&(!s.actual||!s.score||(s.actual===d.tipCode)!==(s.state==='WON')))throw new Error('Settlement disagrees with decision');
   const hs=x.handicapSettlement==null?null:settlement(x.handicapSettlement);
-  if(hs&&['WON','LOST'].includes(hs.state)&&d.handicapAnalysis&&(!hs.actual||!hs.score||(hs.actual===(d.primaryPickPolicyVersion?d.handicapAnalysis.overallTipCode:d.handicapAnalysis.tipCode))!==(hs.state==='WON')))throw new Error('Handicap settlement disagrees with decision');
+  if(hs&&['WON','LOST'].includes(hs.state)&&d.handicapAnalysis&&(!hs.actual||!hs.score||(hs.actual===(publishedHandicapCode(d)))!==(hs.state==='WON')))throw new Error('Handicap settlement disagrees with decision');
   let quality:SelectionQuality|null=null,scores:PublishedScores|null=null,research:OutcomeCategoryResearch|null=null;
   if(x.selectionQuality!=null){
     const q=object(x.selectionQuality),qualified=q.qualified===true;
@@ -371,7 +374,7 @@ function single(v:unknown):SingleRow{
         ||totalGoals.some((row,index)=>row.probability+1e-9<topScores.filter(score=>Math.min(7,score.home+score.away)===index).reduce((sum,score)=>sum+score.probability,0))
       :totalGoals.length!==0))throw new Error('Invalid total-goals binding');
     scores={version:p.version,status:p.status as PublishedScores['status'],decisionId:d.decisionId,recordHash:d.recordHash,topScores,alignedScores,totalGoals};
-    if(scores.alignedScores.some(r=>r.hadCode!==d.tipCode||r.hhadCode!==(d.handicapAnalysis?.tipCode??null)))throw new Error('Incoherent aligned score');
+    if(scores.alignedScores.some(r=>r.hadCode!==d.tipCode||(d.primaryPickPolicyVersion==='coherent-market-primary-v1'?d.coherentPrimary?.hhadCode!=null&&r.hhadCode!==d.coherentPrimary.hhadCode:r.hhadCode!==(d.handicapAnalysis?.tipCode??null))))throw new Error('Incoherent aligned score');
   }
   if(d.supplementaryResearch&&scores?.status==='available'){
     const frozen=d.supplementaryResearch,aligned=frozen.version==='supplementary-research-v2'?scores.topScores[0]:scores.alignedScores[0];
@@ -511,6 +514,7 @@ function supplementarySummary(v:unknown):SupplementarySummary{
 export const parseRecommendationSummary=(value:unknown):Summary=>summary(value);
 function handicapBreakdown(v:unknown):HandicapBreakdown{
   const b=object(v),r:HandicapBreakdown={standaloneV1:summary(b.standaloneV1),companionV2All:summary(b.companionV2All),companionV2WhenHadWon:summary(b.companionV2WhenHadWon),companionV2BothWon:summary(b.companionV2BothWon)};
+  if(b.coherentPrimaryV1!=null)r.coherentPrimaryV1=summary(b.coherentPrimaryV1);
   if(b.independentPrimaryV1!=null)r.independentPrimaryV1=summary(b.independentPrimaryV1);
   if(b.companionV3All!=null||b.companionV3WhenHadWon!=null||b.companionV3BothWon!=null){r.companionV3All=summary(b.companionV3All);r.companionV3WhenHadWon=summary(b.companionV3WhenHadWon);r.companionV3BothWon=summary(b.companionV3BothWon);}
   for(const [all,conditional,both] of [[r.companionV2All,r.companionV2WhenHadWon,r.companionV2BothWon],[r.companionV3All,r.companionV3WhenHadWon,r.companionV3BothWon]])if(all&&conditional&&both&&(conditional.published>all.published||both.published!==all.published||both.won>all.won||both.won!==conditional.won))throw new Error('Inconsistent handicap cohort statistics');
@@ -681,9 +685,16 @@ function independentHandicapConflicts(straight:Outcome, handicap:Outcome, line:n
   const hhadUpper=handicap==='2'?-1-line:handicap==='X'?-line:Infinity;
   return Math.max(hadLower,hhadLower)>Math.min(hadUpper,hhadUpper);
 }
-export function primarySelectionSummary(d:Pick<Decision,'tipCode'|'odds'|'modelProbability'|'handicapAnalysis'|'primaryPickPolicyVersion'>){
+export function primarySelectionSummary(d:Pick<Decision,'tipCode'|'odds'|'modelProbability'|'handicapAnalysis'|'primaryPickPolicyVersion'|'coherentPrimary'>){
   const h=d.handicapAnalysis;
   if(!h)return {had:{code:d.tipCode,odds:d.odds,probability:d.modelProbability},handicap:null};
+  if(d.primaryPickPolicyVersion==='coherent-market-primary-v1'){
+    const code=d.coherentPrimary?.hhadCode;
+    return {had:{code:d.tipCode,odds:d.odds,probability:d.modelProbability},handicap:code&&h.overallProbabilities?{
+      status:'recommend' as const,code,line:h.handicapLine,lineText:h.handicapLineText,
+      probability:h.overallProbabilities[code],odds:h.marketReference?.odds?.[code]??null,
+      calibrated:false,conditional:false,overallCode:h.overallTipCode??null,riskCode:null,riskProbability:null,suggestedCode:null,suggestedProbability:null}:null};
+  }
   if(d.primaryPickPolicyVersion==='independent-market-primary-v1'&&h.overallTipCode&&h.overallProbabilities){
     const code=h.overallTipCode;
     const conflict=independentHandicapConflicts(d.tipCode,code,h.handicapLine);
@@ -729,4 +740,13 @@ export function quoteSourceLabel(d:Pick<Decision,'quoteSource'>,language:'zh'|'e
   if(d.quoteSource==='500.com:jczq:HAD')return language==='zh'?'500竞彩页面转录':'500 JCZQ SP copy';
   if(/^sporttery:(?:had|hhad)(?:$|:)/i.test(d.quoteSource||''))return language==='zh'?'竞彩网来源SP':'Sporttery-sourced SP';
   return language==='zh'?'已存档SP，来源见原记录':'Archived SP; see original source';
+}
+
+export function publishedHandicapCode(d:Pick<Decision,'primaryPickPolicyVersion'|'coherentPrimary'|'handicapAnalysis'>):Outcome|null{
+  return d.primaryPickPolicyVersion==='coherent-market-primary-v1'?d.coherentPrimary?.hhadCode??null:
+    d.primaryPickPolicyVersion==='independent-market-primary-v1'?d.handicapAnalysis?.overallTipCode??null:d.handicapAnalysis?.tipCode??null;
+}
+export function primaryMarketLabel(d:Pick<Decision,'coherentPrimary'>,market:'HAD'|'HHAD',zh:boolean):string{
+  const name=market==='HAD'?(zh?'胜平负':'1X2'):(zh?'让球':'Handicap');
+  return name+(d.coherentPrimary?(d.coherentPrimary.anchorMarket===market?(zh?' · 主方向':' · primary'):(zh?' · 伴随方向':' · companion')):(zh?'首选':' primary'));
 }

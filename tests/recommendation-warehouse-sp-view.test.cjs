@@ -6,6 +6,7 @@ after(()=>fs.rmSync(dir,{recursive:true,force:true}));
 const source=fs.readFileSync(path.join(__dirname,'../src/services/recommendationCenterView.ts'),'utf8');
 fs.writeFileSync(path.join(dir,'view.cjs'),ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText);
 fs.copyFileSync(path.join(__dirname,'../src/services/publishedRecommendationStatus.cjs'),path.join(dir,'publishedRecommendationStatus.cjs'));
+fs.copyFileSync(path.join(__dirname,'../src/services/coherentPrimarySelection.cjs'),path.join(dir,'coherentPrimarySelection.cjs'));
 const {parseRecommendationCenter,quoteSourceLabel}=require(path.join(dir,'view.cjs'));
 const {normalizeRows,hash,SOURCE}=require('../collectors/market/policy.cjs');
 const {projectSignalRows}=require('../collectors/market/signalBridge.cjs');

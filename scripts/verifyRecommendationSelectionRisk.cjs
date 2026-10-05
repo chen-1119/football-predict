@@ -46,6 +46,7 @@ delete legacyBody.recordHash;
 delete legacyBody.supplementaryPolicyVersion;
 delete legacyBody.supplementaryResearch;
 delete legacyBody.primaryPickPolicyVersion;
+delete legacyBody.coherentPrimary;
 delete legacyBody.scoreModelInput;
 legacyBody.inputHash=hash({hadInputHash:thin.hadInputHash,handicapInputHash:thin.handicapAnalysis?.inputHash||null,
  selectionPolicyVersion:LEGACY_VERSION,modelInputEvidenceHash:thin.inputEvidence.model.inputEvidence.contentHash});

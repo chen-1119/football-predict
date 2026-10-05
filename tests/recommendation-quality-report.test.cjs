@@ -1,6 +1,8 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {makeDecision}=require('../scripts/recommendationPlatform/decision.cjs');
+const {makeDecision:makePolicyDecision}=require('../scripts/recommendationPlatform/decision.cjs');
+// Retain replay coverage of the archived independent-market policy.
+const makeDecision=(m,o)=>makePolicyDecision(m,{...o,primaryPolicy:'independent-market-primary-v1'});
 const {buildQualityReport,measure}=require('../scripts/recommendationPlatform/qualityReport.cjs');
 const now=Date.parse('2026-09-18T02:00:00Z');
 function row(id,offset=0,actual='1',patch={}){

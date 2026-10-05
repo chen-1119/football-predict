@@ -4,7 +4,9 @@ const assert=require('node:assert/strict');
 const {marginDistribution,conditionalHandicapDistribution,coherentHandicapDistribution,buildHandicapMarginDecision,validHandicapMarginDecision}=require('../src/services/handicapMarginDecision.cjs');
 const {hash}=require('../src/services/publishedForecastPolicy.cjs');
 const {buildHandicapCalibration,calibrateHandicapProbabilities,lineGroup}=require('../src/services/handicapCalibration.cjs');
-const {makeDecision,validDecision}=require('../scripts/recommendationPlatform/decision.cjs');
+const {makeDecision:makePolicyDecision,validDecision}=require('../scripts/recommendationPlatform/decision.cjs');
+// Replay the historical policy; new coherent publications have separate tests.
+const makeDecision=(m,o)=>makePolicyDecision(m,{...o,primaryPolicy:'independent-market-primary-v1'});
 const {settleHandicapDecision,handicapSummary}=require('../scripts/recommendationPlatform/results.cjs');
 
 const NOW=Date.parse('2026-09-20T02:00:00Z');

@@ -54,6 +54,7 @@ function versionFor(decisions, markets = null) {
   const versions = [...new Set(decisions.map((d, i) => {
     const market = markets?.[i];
     const basis = [modelVersion(d), policyVersion(d)];
+    if(d.primaryPickPolicyVersion==='coherent-market-primary-v1')basis.push(d.primaryPickPolicyVersion);
     if (market === 'HHAD') basis.push('HHAD', String(d?.handicapAnalysis?.version || 'unknown'),
       String(d?.primaryPickPolicyVersion || d?.handicapAnalysis?.companionPolicyVersion || 'none'));
     else if (market === 'HAD' && markets?.length > 1) basis.push('HAD');
@@ -79,7 +80,9 @@ function singleReviewRow(decision, head, market) {
   const supplementarySettlement = settleSupplementaryResearch(decision, head);
   const selectedSettlement = market === 'HHAD' ? handicapSettlement : settlement;
   const selectedOdds = market === 'HHAD'
-    ? (decision.primaryPickPolicyVersion === 'independent-market-primary-v1'
+    ? (decision.primaryPickPolicyVersion === 'coherent-market-primary-v1'
+      ? decision.handicapAnalysis?.marketReference?.odds?.[decision.coherentPrimary?.hhadCode] ?? null
+      : decision.primaryPickPolicyVersion === 'independent-market-primary-v1'
       ? decision.handicapAnalysis?.marketReference?.odds?.[decision.handicapAnalysis.overallTipCode] ?? null
       : decision.handicapAnalysis?.marketReference?.selectedOdds ?? null) : decision.odds;
   return {
@@ -156,7 +159,7 @@ function buildRecommendationReviewPage(source, filters, now = Date.now()) {
     if (!safeValidDecision(decision) || !dateKey(decision.businessDate)) { excludedCorruptRecords++; continue; }
     const head = heads.get(key(decision));
     allSingles.push(singleReviewRow(decision, head, 'HAD'));
-    if (decision.handicapAnalysis?.tipCode) allSingles.push(singleReviewRow(decision, head, 'HHAD'));
+    if (decision.handicapAnalysis?.tipCode && (decision.primaryPickPolicyVersion!=='coherent-market-primary-v1'||decision.coherentPrimary?.hhadCode)) allSingles.push(singleReviewRow(decision, head, 'HHAD'));
   }
   const allCombos = [];
   for (const combo of source.combos || []) {

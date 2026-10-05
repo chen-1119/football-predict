@@ -1,5 +1,5 @@
 import type { SingleRow } from '../../services/recommendationCenterView';
-import { publicationLifecycle, publicationLifecycleLabel, primarySelectionSummary, handicapExtensionText, quoteSourceLabel, outcomeCategoryLabel, outcomeResearchReasonLabel, outcomeResearchFavoriteValueWarning } from '../../services/recommendationCenterView';
+import { publicationLifecycle, publicationLifecycleLabel, primaryMarketLabel, primarySelectionSummary, handicapExtensionText, quoteSourceLabel, outcomeCategoryLabel, outcomeResearchReasonLabel, outcomeResearchFavoriteValueWarning } from '../../services/recommendationCenterView';
 import { publishedPickLabel, publishedResultLabel } from '../../services/publishedMatchRecommendation';
 import './published-match-pick.css';
 import { SelectionQualityNote, selectionReferenceLabel, SupplementaryResearchNote } from './SelectionQualityNote';
@@ -20,8 +20,8 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
   const favoriteValueWarning=row.outcomeResearch?outcomeResearchFavoriteValueWarning(row.outcomeResearch,zh):null;
   return <div className={`published-match-pick${compact?' is-compact':''}`} data-decision-id={d.decisionId} data-record-hash={d.recordHash}>
     <div className="published-match-pick__directions">
-      <div><small>{zh?'胜平负首选':'1X2 primary'}</small><strong>{publishedPickLabel(s.had.code,language)}</strong><span>SP {s.had.odds.toFixed(2)} · {(s.had.probability*100).toFixed(1)}%</span></div>
-      <div className={h?.status==='pass'?'is-pass':undefined} data-handicap-extension={h?.status??'unavailable'}><small>{h?.status==='pass'?(zh?'让球不追':'Pass handicap'):d.primaryPickPolicyVersion?(zh?'让球首选':'Handicap primary'):(zh?'让球延伸':'Handicap extension')}</small><strong>{extension?.title??'—'}</strong><span>{extension?.detail??(zh?'等待有效让球数据':'Awaiting handicap data')}</span></div>
+      <div><small>{primaryMarketLabel(d,'HAD',zh)}</small><strong>{publishedPickLabel(s.had.code,language)}</strong><span>SP {s.had.odds.toFixed(2)} · {(s.had.probability*100).toFixed(1)}%</span></div>
+      <div className={h?.status==='pass'?'is-pass':undefined} data-handicap-extension={h?.status??'unavailable'}><small>{h?.status==='pass'?(zh?'让球不追':'Pass handicap'):d.primaryPickPolicyVersion?primaryMarketLabel(d,'HHAD',zh):(zh?'让球延伸':'Handicap extension')}</small><strong>{extension?.title??'—'}</strong><span>{extension?.detail??(zh?'等待有效让球数据':'Awaiting handicap data')}</span></div>
     </div>
     <small className="published-match-pick__status" data-selection-status={row.selectionQuality?.status??'reference'}>{selectionReferenceLabel(row.selectionQuality,language)}{lifecycle!=='open'?` · ${publicationLifecycleLabel(lifecycle,language)}`:''}{failed?(zh?' · 更新暂时失败':' · Update temporarily failed'):''}</small>
     {compact&&<small className="published-match-pick__quote-time">{zh?'冻结 SP 采集':'Frozen SP observed'} {time(d.quoteObservedAt,language)}</small>}
@@ -38,6 +38,7 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
     </div>}
     {compact&&<SupplementaryResearchNote research={d.supplementaryResearch} settlement={row.supplementarySettlement} language={language}/>}
     {!compact&&<><p>{zh?'本场方向、SP和版本与今日推荐保持一致。串关可选择同一场的不同玩法；已冻结的串关保留选定时的版本。':'Direction, SP and version match Today. A combo may use another market; a frozen combo retains its selected version.'}</p>
+      {d.coherentPrimary?.hhadCode&&<p>{zh?'主方向取有效玩法中的最高模型概率；伴随方向从主方向成立时最可能的兼容结果中选择。显示概率仍是无条件概率。':'The primary is the highest model probability among available markets; the companion is the most likely compatible result. Displayed probabilities remain unconditional.'}</p>}
       {h?.conditional&&<p>{zh?'让球伴随占比以胜平负首选成立为前提，不是独立让球命中率。':'The companion shares are conditional on the 1X2 pick landing, not standalone handicap win rates.'}</p>}
       {h?.status==='pass'&&<p className="published-match-pick__warning">{d.primaryPickPolicyVersion?(zh?'两个最高概率方向无法在同一比分下同时命中；让球只作风险诊断，不作为本场第二条推荐。已冻结记录和独立盘口统计保留原值。':'The two marginal leaders cannot both win on any scoreline. HHAD is a risk diagnostic here, not a second recommendation; frozen records and standalone statistics are unchanged.'):(zh?'不追让球：盘口风险方向未作为胜平负首选的延伸。同向备选仅供比较，完整概率和已冻结串关仍保留原记录。':'Pass handicap: the model risk direction is not an extension of the 1X2 pick. Aligned alternatives are comparisons; full probabilities and frozen combos retain their original records.')}</p>}
       {quoteStale&&<p role="status">{zh?'当前展示上次发布时的SP，已超过15分钟；等待真实新报价后更新，不作为当前可用串关报价。':'These are previously published prices, now over 15 minutes old. New verified quotes are required for current combo selection.'}</p>}

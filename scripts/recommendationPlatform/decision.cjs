@@ -3,7 +3,9 @@
 const { evaluateForecast, hash, time, day } = require('../../src/services/publishedForecastPolicy.cjs');
 const { buildHandicapMarginDecision, validHandicapMarginDecision } = require('../../src/services/handicapMarginDecision.cjs');
 const VERSION = 'unified-decision-v1';
-const PRIMARY_POLICY = 'independent-market-primary-v1';
+const PRIMARY_POLICY = 'coherent-market-primary-v1';
+const LEGACY_PRIMARY_POLICY = 'independent-market-primary-v1';
+const coherentPolicy = require('../../src/services/coherentPrimarySelection.cjs');
 const { COMBO_VERSION, candidatesFor, validCombo } = require('./comboSelections.cjs');
 const FLOORS = Object.freeze({ 2: 2.5, 3: 5 });
 const immutable = value => {
@@ -14,32 +16,52 @@ const immutable = value => {
 };
 const eventKey = row => JSON.stringify([String(row.sourceMatchId || row.id || '').replace(/^sporttery_/, ''), new Date(time(row.eventVersion || row.kickoffTime)).toISOString(), row.market || 'HAD']);
 
-/** Policy validation is shared with single publications. No second direction
- * inference, market blending, confidence gate, or BEST prerequisite exists here. */
-function makeDecision(match, { now, publication, handicapCalibration=null }) {
+/** Freeze a single compatible pair from the prospective score distribution.
+ * Legacy policy replay remains available for archived records only. */
+function makeDecision(match, { now, publication, handicapCalibration=null, primaryPolicy=PRIMARY_POLICY }) {
   const result = evaluateForecast(match, { now, publication });
   if (!result.eligible) return { decision: null, reason: result.reason };
-  const candidate = result.candidate;
+  let candidate = result.candidate;
   const input = require('../../src/services/prospectiveForecastInput.cjs').forecastInputFor(match);
   if (!input) return { decision:null, reason:'prospective-input-invalid' };
   if (Object.values(candidate.quoteOdds).some(value => units(value) === null)) return { decision: null, reason: 'unsupported-sp-precision' };
-  const handicapAnalysis = buildHandicapMarginDecision(input, { now, cutoffTime:candidate.cutoffTime, straightTipCode:candidate.tipCode, calibrationProfile:handicapCalibration });
+  // A single joint distribution must precede anchor selection. A residual fitted
+  // conditional on the old HAD leader cannot be applied to a different anchor.
+  if(![PRIMARY_POLICY,LEGACY_PRIMARY_POLICY].includes(primaryPolicy))return {decision:null,reason:'primary-policy-invalid'};
+  let handicapAnalysis = buildHandicapMarginDecision(input, { now, cutoffTime:candidate.cutoffTime, straightTipCode:candidate.tipCode,calibrationProfile:primaryPolicy===LEGACY_PRIMARY_POLICY?handicapCalibration:null });
+  const margin = require('../../src/services/handicapMarginDecision.cjs');
+  const matrix = handicapAnalysis ? margin.coherentHandicapDistribution(handicapAnalysis.lambdas.home,handicapAnalysis.lambdas.away,
+    handicapAnalysis.handicapLine,candidate.probabilities,candidate.tipCode,null,handicapAnalysis.scoreSupportPolicy) : null;
+  const coherentPrimary = primaryPolicy===PRIMARY_POLICY?coherentPolicy.selectCoherentPrimary(candidate.probabilities,handicapAnalysis?.overallProbabilities,
+    matrix?.jointProbabilities,handicapAnalysis?.handicapLine,Boolean(handicapAnalysis?.marketReference)):null;
+  if (primaryPolicy===PRIMARY_POLICY&&!coherentPrimary) return {decision:null,reason:'coherent-primary-unavailable'};
+  const originalHadInputHash = candidate.inputHash;
+  if(coherentPrimary){
+    const {directionSelection,directionPolicyVersion,...frozenCandidate} = candidate;
+    const tipCode = coherentPrimary.hadCode;
+    candidate = {...frozenCandidate,tipCode,odds:candidate.quoteOdds[tipCode],modelProbability:candidate.probabilities[tipCode],
+      modelMarketGap:candidate.probabilities[tipCode]-candidate.marketProbabilities[tipCode],
+      modelExpectedValue:candidate.probabilities[tipCode]*candidate.quoteOdds[tipCode]-1};
+    if (handicapAnalysis && handicapAnalysis.straightTipCode !== tipCode) {
+      handicapAnalysis = buildHandicapMarginDecision(input,{now,cutoffTime:candidate.cutoffTime,straightTipCode:tipCode});
+    }
+  }
   const {buildInputEvidence,validInputEvidence}=require('../../src/services/recommendationInputEvidence.cjs');
   const proposedEvidence=input.probabilityModel.inputEvidence||buildInputEvidence(input.probabilityModel,input);
   const modelInputEvidence=validInputEvidence(proposedEvidence,input.probabilityModel,input)?proposedEvidence:null;
   const selectionPolicyVersion=require('../../src/services/recommendationSelectionQuality.cjs').VERSION;
-  const hadInputHash = candidate.inputHash;
+  const hadInputHash = originalHadInputHash;
   const supplementaryPolicy = require('../../src/services/supplementaryResearch.cjs');
   const supplementaryPolicyVersion = supplementaryPolicy.VERSION;
-  const primaryPickPolicyVersion = PRIMARY_POLICY;
+  const primaryPickPolicyVersion = primaryPolicy;
   const scoreModelInput = require('../../src/services/handicapMarginDecision.cjs').lambdasFor(input.probabilityModel);
   const supplementaryResearch = supplementaryPolicy.buildSupplementaryResearch({ ...candidate, hadInputHash, handicapAnalysis, scoreModelInput, supplementaryPolicyVersion });
   const inputHash = hash({ hadInputHash, handicapInputHash: handicapAnalysis?.inputHash || null,selectionPolicyVersion,modelInputEvidenceHash:modelInputEvidence?.contentHash||null,
-    supplementaryPolicyVersion, supplementaryResearchHash: supplementaryResearch?.contentHash || null, primaryPickPolicyVersion, scoreModelInput });
+    supplementaryPolicyVersion, supplementaryResearchHash: supplementaryResearch?.contentHash || null, primaryPickPolicyVersion, scoreModelInput, ...(coherentPrimary?{coherentPrimary}:{}) });
   const identity = [VERSION, candidate.sourceMatchId, candidate.eventVersion, candidate.market, inputHash];
   const decisionId = `decision_${hash(identity)}`;
   const body = { ...candidate, hadInputHash, inputHash, handicapAnalysis, version: VERSION, policyVersion: VERSION, decisionId, id: decisionId,
-    statisticsTrack: 'unified-decision', selectionPolicyVersion, supplementaryPolicyVersion, supplementaryResearch, primaryPickPolicyVersion, scoreModelInput,
+    statisticsTrack: 'unified-decision', selectionPolicyVersion, supplementaryPolicyVersion, supplementaryResearch, primaryPickPolicyVersion, scoreModelInput, ...(coherentPrimary?{coherentPrimary}:{}),
     publishedAt: new Date(now).toISOString(), publicationStatus: 'PUBLISHED',
     evaluationRule: 'latest-published-input-before-cutoff-per-event', modelValidation: 'unvalidated',
     upstreamModelVersion: String(input?.probabilityModel?.version || 'unknown'),
@@ -63,9 +85,10 @@ function validDecision(row) {
     if(model?.inputEvidence&&!require('../../src/services/recommendationInputEvidence.cjs').validInputEvidence(model.inputEvidence,model,row))return false;
   }
   const primaryBinding = row.primaryPickPolicyVersion === undefined ? {} : {
-    primaryPickPolicyVersion: row.primaryPickPolicyVersion, scoreModelInput: row.scoreModelInput };
+    primaryPickPolicyVersion: row.primaryPickPolicyVersion, scoreModelInput: row.scoreModelInput,
+    ...(row.primaryPickPolicyVersion === PRIMARY_POLICY ? {coherentPrimary:row.coherentPrimary} : {}) };
   if (row.primaryPickPolicyVersion !== undefined) {
-    if (row.primaryPickPolicyVersion !== PRIMARY_POLICY || row.supplementaryPolicyVersion !== 'supplementary-research-v2') return false;
+    if (![PRIMARY_POLICY,LEGACY_PRIMARY_POLICY].includes(row.primaryPickPolicyVersion) || row.supplementaryPolicyVersion !== 'supplementary-research-v2') return false;
     const l = row.scoreModelInput;
     if (l !== null && (!l || typeof l.source !== 'string' || !['home','away'].every(k => typeof l[k] === 'number' && Number.isFinite(l[k]) && l[k] >= 0 && l[k] <= 12))) return false;
     if (row.handicapAnalysis && hash(l) !== hash(row.handicapAnalysis.lambdas)) return false;
@@ -92,7 +115,15 @@ function validDecision(row) {
   const p = row.probabilities;
   if (!p || !['1','X','2'].includes(row.tipCode) || !['1','X','2'].every(c => typeof p[c] === 'number' && Number.isFinite(p[c]) && p[c] >= 0 && p[c] <= 1)) return false;
   if (Math.abs(p['1'] + p.X + p['2'] - 1) > 1e-8 || p[row.tipCode] !== row.modelProbability) return false;
-  if (row.directionSelection !== undefined || row.directionPolicyVersion !== undefined) {
+  if (row.primaryPickPolicyVersion === PRIMARY_POLICY) {
+    const h=row.handicapAnalysis;
+    if(row.directionSelection!==undefined||row.directionPolicyVersion!==undefined||h?.historicalCalibration?.applied)return false;
+    const margin=require('../../src/services/handicapMarginDecision.cjs');
+    const matrix=h?margin.coherentHandicapDistribution(h.lambdas.home,h.lambdas.away,h.handicapLine,p,row.tipCode,null,h.scoreSupportPolicy):null;
+    const expected=coherentPolicy.selectCoherentPrimary(p,h?.overallProbabilities,matrix?.jointProbabilities,h?.handicapLine,Boolean(h?.marketReference));
+    if(!expected||hash(expected)!==hash(row.coherentPrimary)||expected.hadCode!==row.tipCode)return false;
+  } else if (row.coherentPrimary!==undefined) return false;
+  else if (row.directionSelection !== undefined || row.directionPolicyVersion !== undefined) {
     const directionPolicy=require('../../src/services/hadDirectionSelection.cjs');
     if(row.directionPolicyVersion!==row.directionSelection?.version
       ||!directionPolicy.validHadDirectionSelection(row.directionSelection,p,row.quoteOdds)
