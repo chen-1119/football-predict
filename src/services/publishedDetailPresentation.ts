@@ -21,9 +21,9 @@ export function publishedDetailPresentation(decision: Decision | null, distribut
       && rows.reduce((sum, row) => sum + row.probability, 0) <= 1 + 1e-6;
     if (boundDistribution?.status === 'available' && boundDistribution.version === 'published-score-distribution-v1'
       && boundDistribution.decisionId === decision.decisionId && boundDistribution.recordHash === decision.recordHash
-      && ((!h && decision.primaryPickPolicyVersion === 'independent-market-primary-v1') || (h?.version === 'handicap-margin-v3' && Number.isSafeInteger(h.handicapLine) && h.handicapLine !== 0))
+      && ((!h && !!decision.primaryPickPolicyVersion) || (h?.version === 'handicap-margin-v3' && Number.isSafeInteger(h.handicapLine) && h.handicapLine !== 0))
       && validRows(boundDistribution.topScores) && validRows(boundDistribution.alignedScores)
-      && boundDistribution.alignedScores.every(row => row.hadCode === decision.tipCode && row.hhadCode === (h?.tipCode ?? null)
+      && boundDistribution.alignedScores.every(row => row.hadCode === decision.tipCode && (decision.primaryPickPolicyVersion==='coherent-market-primary-v1'?(!decision.coherentPrimary?.hhadCode||row.hhadCode===decision.coherentPrimary.hhadCode):row.hhadCode === (h?.tipCode ?? null))
         && boundDistribution.topScores.every(top => top.label !== row.label || top.probability === row.probability))) {
       const percentScore = (row: PublishedScore): ScoreProbability => ({ home: row.home, away: row.away, label: row.label, probability: row.probability * 100 });
       scores = boundDistribution.topScores.map(percentScore);

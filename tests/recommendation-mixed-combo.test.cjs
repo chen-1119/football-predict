@@ -1,6 +1,8 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {makeDecision,validDecision,chooseCombo,freezeCombo,product}=require('../scripts/recommendationPlatform/decision.cjs');
+const {makeDecision:makePolicyDecision,validDecision,chooseCombo,freezeCombo,product}=require('../scripts/recommendationPlatform/decision.cjs');
+// Retain replay coverage of the archived independent-market policy.
+const makeDecision=(m,o)=>makePolicyDecision(m,{...o,primaryPolicy:'independent-market-primary-v1'});
 const {selectionFor,validSelection,validCombo,candidatesFor}=require('../scripts/recommendationPlatform/comboSelections.cjs');
 const {key,settleCombo,handicapBreakdown,marketBaseline,dailySummary}=require('../scripts/recommendationPlatform/results.cjs');
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');

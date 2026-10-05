@@ -2,7 +2,9 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeDecision, validDecision, chooseCombo, freezeCombo } = require('../scripts/recommendationPlatform/decision.cjs');
+const { makeDecision:makePolicyDecision, validDecision, chooseCombo, freezeCombo } = require('../scripts/recommendationPlatform/decision.cjs');
+// Retain replay coverage of the archived independent-market policy.
+const makeDecision=(m,o)=>makePolicyDecision(m,{...o,primaryPolicy:'independent-market-primary-v1'});
 const { collectResults } = require('../scripts/recommendationPlatform/results.cjs');
 const { hash } = require('../src/services/publishedForecastPolicy.cjs');
 const { NOW, match, publication, validators } = require('./recommendationFixture.cjs');

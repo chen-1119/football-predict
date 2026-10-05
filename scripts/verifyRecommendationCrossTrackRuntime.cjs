@@ -33,6 +33,7 @@ const legacyBody={...v2Thin,selectionPolicyVersion:LEGACY_VERSION};delete legacy
 delete legacyBody.supplementaryPolicyVersion;
 delete legacyBody.supplementaryResearch;
 delete legacyBody.primaryPickPolicyVersion;
+delete legacyBody.coherentPrimary;
 delete legacyBody.scoreModelInput;
 legacyBody.inputHash=hash({hadInputHash:v2Thin.hadInputHash,handicapInputHash:v2Thin.handicapAnalysis?.inputHash||null,
  selectionPolicyVersion:LEGACY_VERSION,modelInputEvidenceHash:v2Thin.inputEvidence.model.inputEvidence.contentHash});

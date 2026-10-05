@@ -118,7 +118,8 @@ function projectFrozenScoreDistribution(decision, options = {}) {
       return unavailable('score-matrix-inconsistent');
     }
     const limit = Number.isSafeInteger(options?.limit) && options.limit > 0 ? Math.min(options.limit, MAX_SCORES) : 5;
-    const aligned = scores.filter(row => row.hadCode === decision.tipCode && row.hhadCode === h.tipCode);
+    const selectedHandicapCode=decision.primaryPickPolicyVersion==='coherent-market-primary-v1'?decision.coherentPrimary?.hhadCode:h.tipCode;
+    const aligned = scores.filter(row => row.hadCode === decision.tipCode && (selectedHandicapCode?row.hhadCode === selectedHandicapCode:true));
     const topScores = scores.slice(0, limit);
     const topScoresProbability = topScores.reduce((sum, row) => sum + row.probability, 0);
     return {
@@ -126,7 +127,7 @@ function projectFrozenScoreDistribution(decision, options = {}) {
       handicapInputHash: h.inputHash, distributionBasis: h.distributionBasis,
       probabilityBasis: 'unconditional-score-matrix', modelValidation: decision.modelValidation,
       modelGeneratedAt: decision.modelGeneratedAt, publishedAt: decision.publishedAt,
-      handicapLine: h.handicapLine, straightTipCode: decision.tipCode, handicapTipCode: h.tipCode,
+      handicapLine: h.handicapLine, straightTipCode: decision.tipCode, handicapTipCode: selectedHandicapCode??null,
       topScores, alignedScores: aligned.slice(0, limit), totalGoals, topScoresProbability,
       omittedProbability: Math.max(0, 1 - topScoresProbability),
       alignedProbability: aligned.reduce((sum, row) => sum + row.probability, 0),

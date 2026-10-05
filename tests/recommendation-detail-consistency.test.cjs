@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 const fixture=require('./fixtures/recommendation-detail-20260922.json');
-const compile=(file,load=require)=>{const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve(file),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>id.endsWith('/publishedRecommendationStatus.cjs')?require('../src/services/publishedRecommendationStatus.cjs'):load(id),Date,Intl,Set});return module.exports;};
+const compile=(file,load=require)=>{const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve(file),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>id.endsWith('/coherentPrimarySelection.cjs')?require('../src/services/coherentPrimarySelection.cjs'):id.endsWith('/publishedRecommendationStatus.cjs')?require('../src/services/publishedRecommendationStatus.cjs'):load(id),Date,Intl,Set});return module.exports;};
 const presentation=compile('../src/services/publishedDetailPresentation.ts');
 const published=compile('../src/services/publishedMatchRecommendation.ts');
 const view=compile('../src/services/recommendationCenterView.ts');
@@ -105,7 +105,8 @@ test('score selection rejects invented/invalid rows, ranks existing rows and nev
  assert.equal(result.primaryScore.label,'1-0');assert.equal(result.alternativeScore.label,'2-0');assert.equal(JSON.stringify(scores),before);
 });
 
-const {makeDecision}=require('../scripts/recommendationPlatform/decision.cjs');
+const {makeDecision:makePolicyDecision}=require('../scripts/recommendationPlatform/decision.cjs');
+const makeDecision=(m,o)=>makePolicyDecision(m,{...o,primaryPolicy:'independent-market-primary-v1'});
 const {buildPublishedScoreDistribution}=require('../src/services/publishedScoreDistribution.cjs');
 function scorePublication(){
  const now=Date.parse('2026-09-20T02:00:00Z'),at=new Date(now).toISOString();

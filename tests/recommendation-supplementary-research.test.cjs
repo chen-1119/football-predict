@@ -1,6 +1,8 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {makeDecision,validDecision}=require('../scripts/recommendationPlatform/decision.cjs');
+const {makeDecision:makePolicyDecision,validDecision}=require('../scripts/recommendationPlatform/decision.cjs');
+// Replay the historical policy; new coherent publications have separate tests.
+const makeDecision=(m,o)=>makePolicyDecision(m,{...o,primaryPolicy:'independent-market-primary-v1'});
 const {buildPublishedScoreDistribution}=require('../src/services/publishedScoreDistribution.cjs');
 const {collectResults,settleSupplementaryResearch,supplementarySummary,key}=require('../scripts/recommendationPlatform/results.cjs');
 const {hash}=require('../src/services/publishedForecastPolicy.cjs');

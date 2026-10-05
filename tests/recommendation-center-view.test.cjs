@@ -7,6 +7,7 @@ after(()=>fs.rmSync(dir,{recursive:true,force:true}));
 const source=fs.readFileSync(path.join(__dirname,'../src/services/recommendationCenterView.ts'),'utf8');
 fs.writeFileSync(path.join(dir,'view.cjs'),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText);
 fs.copyFileSync(path.join(__dirname,'../src/services/publishedRecommendationStatus.cjs'),path.join(dir,'publishedRecommendationStatus.cjs'));
+fs.copyFileSync(path.join(__dirname,'../src/services/coherentPrimarySelection.cjs'),path.join(dir,'coherentPrimarySelection.cjs'));
 const view=require(path.join(dir,'view.cjs'));
 const {parseRecommendationCenter,visiblePreview,primarySelectionSummary,comboLegSelection,handicapAnalysisBasis,calibrationSampleBasis,sameDirectionConcentration,boundOfficialHandicapSp}=view;
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
@@ -32,7 +33,7 @@ async function targetPayload(){
 test('65 percent target parser keeps model versions, settled denominators and pending-only rates separate; old payloads remain valid',async()=>{
  const payload=await targetPayload(),parsed=parseRecommendationCenter(payload).review.qualityReport.hitRateTarget;
  assert.equal(parsed.targetHitRate,.65);assert.equal(parsed.formalPromotion,false);
- const [a,b]=parsed.byModelVersion;assert.equal(a.modelVersion,'target-a');assert.equal(a.windows.last7.hitRate,.5);assert.equal(a.windows.last7.won,1);assert.equal(a.windows.last7.settled,2);
+ const [a,b]=parsed.byModelVersion;assert.equal(a.modelVersion,'target-a / coherent-market-primary-v1');assert.equal(a.windows.last7.hitRate,.5);assert.equal(a.windows.last7.won,1);assert.equal(a.windows.last7.settled,2);
  assert.equal(b.windows.last30.hitRate,null);assert.equal(b.windows.last30.pending,1);assert.equal(b.windows.last30.numericTargetReached,null);assert.equal(b.windows.last30.evidenceSufficient,false);
  delete payload.recommendationCenter.review.qualityReport.hitRateTarget;
  assert.equal(parseRecommendationCenter(payload).review.qualityReport.hitRateTarget,undefined);
@@ -286,7 +287,7 @@ test('rendered mixed combo shows selected HHAD line and SP plus unconditional ex
   const payload=await mixedSample(),c=payload.recommendationCenter.previews.find(c=>c.size===2);c.frozenAt=c.generatedAt;
   payload.recommendationCenter.review.combos=[{combo:c,settlement:{state:'PENDING'}}];
   const html=renderedText(parseRecommendationCenter(payload),{mode:'review',initialTab:'two'});
-  assert.match(html,/让球胜平负<!-- --> \+1|让球胜平负 \+1/);assert.match(html,/SP 1\.65/);assert.match(html,/SP 2\.97/);assert.match(html,/完整让球概率中最高的方向/);assert.match(html,/sporttery:HHAD/);
+  assert.match(html,/让球胜平负<!-- --> \+1|让球胜平负 \+1/);assert.match(html,/SP 1\.65/);assert.match(html,/SP 2\.97/);assert.match(html,/本腿复用本场已发布的兼容方向/);assert.match(html,/sporttery:HHAD/);
 });
 
 function extensionDecision(straight,line,tip,probabilities){
@@ -350,13 +351,13 @@ test('new v3 narrow-win record renders the same independent selection in recomme
     assert.ok(html.includes(copy.title));assert.ok(html.includes(copy.detail));assert.match(html,/data-handicap-extension="recommend"/);
     assert.ok(html.includes(row.decision.decisionId));assert.ok(html.includes(row.decision.recordHash));
   }
-  const detailed=renderedText(data,{},p.now);assert.match(detailed,/完整概率/);assert.match(detailed,/条件概率仅用于下方解释/);
+  const detailed=renderedText(data,{},p.now);assert.match(detailed,/无条件概率/);assert.match(detailed,/主方向确定后/);
   const combo=renderedText(data,{mode:'review',initialTab:frozen.size===2?'two':'three'});
   assert.match(combo,/让球胜平负<!-- --> -2|让球胜平负 -2/);assert.match(combo,/SP 1\.60/);
   assert.equal(JSON.stringify(data),before);
 });
 
-test('runtime value-draw publication survives projection and client parsing without reverting to the favorite',async()=>{
+test('runtime coherent policy chooses the probability anchor rather than the former price override',async()=>{
  const p=memoryPorts(),base=match(81);
  base.odds={odds1:2.00,oddsX:3.40,odds2:4.00};
  base.oddsUpdatedAt=new Date(p.now).toISOString();
@@ -366,9 +367,7 @@ test('runtime value-draw publication survives projection and client parsing with
  const parsed=parseRecommendationCenter({recommendationCenter:p.state.view});
  assert.equal(parsed.current.length,1);
  const d=parsed.current[0].decision;
- assert.equal(d.tipCode,'X');assert.equal(d.directionSelection.mode,'market-edge-override');
- assert.equal(d.directionSelection.category,'balanced-draw');
- assert.equal(view.directionSelectionLabel(d.directionSelection,true),'价值平局');
+ assert.equal(d.tipCode,'1');assert.equal(d.coherentPrimary.anchorMarket,'HAD');assert.equal(d.directionSelection,null);
 });
 
 test('client accepts a rounding-only difference in the selected frozen probability',async()=>{
@@ -380,7 +379,7 @@ test('client accepts a rounding-only difference in the selected frozen probabili
  await createRuntime(p,{validators}).publishingCycle();
  const raw=p.state.view.current[0].decision;
  assert.equal(raw.tipCode,'2');
- assert.notEqual(raw.directionSelection.selected.modelProbability,raw.modelProbability);
+ assert.equal(raw.coherentPrimary.anchorCode,'2');assert.equal(raw.coherentPrimary.anchorProbability,raw.modelProbability);
  const parsed=parseRecommendationCenter({recommendationCenter:p.state.view});
  assert.equal(parsed.current[0].decision.tipCode,'2');
 });
