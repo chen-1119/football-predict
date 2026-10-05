@@ -64,6 +64,8 @@ on:
       - 'scripts/frontendRuntimeBoundary.cjs'
       - 'scripts/verifyFrontendRuntimeBoundary.cjs'
       - 'scripts/verifyFrontendEvidenceSemantics.cjs'
+      - 'scripts/staticVerificationReceipts.cjs'
+      - 'scripts/verifyStaticVerificationReceipts.cjs'
       - 'scripts/verifyReleaseBundleSafety.cjs'
       - 'scripts/verifyPostgresMigrationPlan.cjs'
       - 'server/postgres/migrations/012_accounts_and_follows.sql'
@@ -218,6 +220,8 @@ jobs:
           POSTGRES_GENERATION_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Frontend evidence semantics
         run: node scripts/verifyFrontendEvidenceSemantics.cjs
+      - name: Audited static receipt dependency closure
+        run: node scripts/verifyStaticVerificationReceipts.cjs
       - name: Frontend runtime boundary
         run: node scripts/verifyFrontendRuntimeBoundary.cjs
       - run: npm run build
