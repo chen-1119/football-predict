@@ -2447,8 +2447,8 @@
       }
     ],
     "externalSignals": {
-      "source": "500.com:jczq",
-      "updatedAt": "2026-10-05T03:11:03.195Z",
+      "source": "500.com:jczq+pre-match-signals",
+      "updatedAt": "2026-10-05T03:16:17.250Z",
       "sourceMatchId": "2041805",
       "fixtureId": "1398658",
       "matchNo": "周一001",
@@ -2478,6 +2478,336 @@
           "odds1": 2.77,
           "oddsX": 3.25,
           "odds2": 2.17
+        }
+      },
+      "preMatch": {
+        "version": "sync-pre-match-signals-v53-temporal-evidence",
+        "source": "pre-match-signal-layer",
+        "updatedAt": "2026-10-05T03:11:28.505Z",
+        "sourceMatchId": "2041805",
+        "matchId": "fivehundred_2041805",
+        "matchNo": "周一001",
+        "kickoffTime": "2026-10-06T00:00:00+08:00",
+        "homeTeamName": "塞浦路斯",
+        "awayTeamName": "拉脱维亚",
+        "quality": {
+          "version": "pre-match-quality-v53-temporal-evidence",
+          "score": 25,
+          "sourceQuality": "low",
+          "recommendationUsable": true,
+          "analysisComplete": false,
+          "severeMissingCount": 0,
+          "trustPenalty": 7,
+          "components": {
+            "referee": {
+              "key": "referee",
+              "label": {
+                "zh": "裁判牌数",
+                "en": "Referee cards"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入真实裁判牌数",
+                "en": "No verified referee card profile"
+              },
+              "evidenceType": "official-referee-assignment",
+              "availabilityState": "missing_overdue",
+              "eligibleAtCutoff": false,
+              "cutoffTime": "2026-10-05T14:00:00.000Z",
+              "kickoffTime": "2026-10-05T16:00:00.000Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
+              "expectedPublishedAt": "2026-10-04T16:00:00.000Z"
+            },
+            "teamCards": {
+              "key": "teamCards",
+              "label": {
+                "zh": "球队牌数历史",
+                "en": "Team card history"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未形成可用球队黄红牌样本",
+                "en": "No usable team card sample"
+              }
+            },
+            "lineup": {
+              "key": "lineup",
+              "label": {
+                "zh": "确认首发/预计阵容",
+                "en": "Confirmed/projected lineup"
+              },
+              "status": "not_yet_publishable",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "正式首发尚未到常规发布时间，不计为数据缺口",
+                "en": "Confirmed XI is not normally published yet and is not counted as a gap"
+              },
+              "evidenceType": "confirmed-lineup",
+              "confirmed": false,
+              "availabilityState": "not_yet_publishable",
+              "eligibleAtCutoff": false,
+              "cutoffTime": "2026-10-05T14:00:00.000Z",
+              "kickoffTime": "2026-10-05T16:00:00.000Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
+              "expectedPublishedAt": "2026-10-05T14:45:00.000Z"
+            },
+            "injuries": {
+              "key": "injuries",
+              "label": {
+                "zh": "伤停",
+                "en": "Injuries"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入可核验伤停",
+                "en": "No verifiable injury signal"
+              },
+              "evidenceType": "squad-availability",
+              "availabilityState": "missing_overdue",
+              "eligibleAtCutoff": false,
+              "cutoffTime": "2026-10-05T14:00:00.000Z",
+              "kickoffTime": "2026-10-05T16:00:00.000Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
+              "expectedPublishedAt": "2026-10-05T10:00:00.000Z"
+            },
+            "xg": {
+              "key": "xg",
+              "label": {
+                "zh": "xG/xGA",
+                "en": "xG/xGA"
+              },
+              "status": "not_yet_publishable",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "缺少历史xG或明确标注的赛前估算",
+                "en": "No historical xG or explicitly labelled pre-match estimate"
+              },
+              "evidenceType": "pre-match-xg-estimate",
+              "availabilityState": "not_yet_publishable",
+              "eligibleAtCutoff": false,
+              "cutoffTime": "2026-10-05T14:00:00.000Z",
+              "kickoffTime": "2026-10-05T16:00:00.000Z",
+              "sourceObservedAt": "2026-10-05T14:00:00.000Z",
+              "expectedPublishedAt": "2026-10-05T16:00:00.000Z"
+            },
+            "weather": {
+              "key": "weather",
+              "label": {
+                "zh": "天气/场地",
+                "en": "Weather/pitch"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入天气/场地",
+                "en": "No weather or pitch signal"
+              }
+            },
+            "market": {
+              "key": "market",
+              "label": {
+                "zh": "盘口校验",
+                "en": "Market validation"
+              },
+              "status": "verified",
+              "score": 100,
+              "source": "sporttery",
+              "note": {
+                "zh": "已有胜平负/让球盘口校验源",
+                "en": "Market validation source available"
+              }
+            },
+            "motivation": {
+              "key": "motivation",
+              "label": {
+                "zh": "排名/战意",
+                "en": "Table/motivation"
+              },
+              "status": "estimated",
+              "score": 62,
+              "source": "rank-stage-context",
+              "note": {
+                "zh": "已接入排名或赛程阶段信息",
+                "en": "Rank or stage context loaded"
+              }
+            },
+            "strength": {
+              "key": "strength",
+              "label": {
+                "zh": "Elo球队强度",
+                "en": "Elo team strength"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未形成可审计Elo强度",
+                "en": "No auditable Elo strength"
+              }
+            },
+            "form": {
+              "key": "form",
+              "label": {
+                "zh": "近期状态",
+                "en": "Recent form"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未形成近期状态样本",
+                "en": "No recent-form sample"
+              }
+            }
+          },
+          "missing": [
+            {
+              "key": "referee",
+              "zh": "缺少裁判牌数",
+              "en": "Missing Referee cards",
+              "severity": "low",
+              "weight": 4
+            },
+            {
+              "key": "teamCards",
+              "zh": "缺少球队牌数历史",
+              "en": "Missing Team card history",
+              "severity": "medium",
+              "weight": 4
+            },
+            {
+              "key": "injuries",
+              "zh": "缺少伤停",
+              "en": "Missing Injuries",
+              "severity": "medium",
+              "weight": 10
+            },
+            {
+              "key": "weather",
+              "zh": "缺少天气/场地",
+              "en": "Missing Weather/pitch",
+              "severity": "low",
+              "weight": 2
+            },
+            {
+              "key": "strength",
+              "zh": "缺少Elo球队强度",
+              "en": "Missing Elo team strength",
+              "severity": "medium",
+              "weight": 18
+            },
+            {
+              "key": "form",
+              "zh": "缺少近期状态",
+              "en": "Missing Recent form",
+              "severity": "medium",
+              "weight": 16
+            }
+          ],
+          "lowQuality": [
+            "motivation"
+          ],
+          "notYetPublishable": [
+            {
+              "key": "lineup",
+              "zh": "确认首发/预计阵容尚未到正常发布时间",
+              "en": "Confirmed/projected lineup is not normally published yet",
+              "expectedPublishedAt": "2026-10-05T14:45:00.000Z",
+              "weight": 0
+            },
+            {
+              "key": "xg",
+              "zh": "xG/xGA尚未到正常发布时间",
+              "en": "xG/xGA is not normally published yet",
+              "expectedPublishedAt": "2026-10-05T16:00:00.000Z",
+              "weight": 0
+            }
+          ],
+          "postCutoffOnly": [],
+          "weights": {
+            "referee": 4,
+            "teamCards": 4,
+            "lineup": 0,
+            "injuries": 10,
+            "xg": 12,
+            "weather": 2,
+            "market": 18,
+            "motivation": 8,
+            "strength": 18,
+            "form": 16
+          },
+          "connected": {
+            "referee": false,
+            "teamCards": false,
+            "lineup": false,
+            "injuries": false,
+            "xg": false,
+            "weather": false,
+            "market": true,
+            "motivation": true,
+            "strength": false,
+            "form": false
+          },
+          "advisory": {
+            "webConsensus": {
+              "version": "web-consensus-advisory-v1",
+              "available": false,
+              "eligibleForRiskDisplay": false,
+              "eligibleForNumericModel": false,
+              "eligibleForFormalQuality": false,
+              "weight": 0,
+              "source": "missing",
+              "confidence": 0,
+              "conflictFreeze": false,
+              "blockers": [],
+              "summary": {
+                "zh": "未接入网络观点；不影响正式质量分",
+                "en": "No web consensus; formal quality is unchanged"
+              }
+            }
+          },
+          "summary": {
+            "zh": "赛前数据质量 25/100，缺口偏多；2项尚未到发布时间且不扣分。",
+            "en": "Pre-match data quality 25/100, low coverage; 2 not-yet-publishable items carry no penalty."
+          }
+        },
+        "qualitySummary": {
+          "zh": "赛前数据质量 25/100，缺口偏多；2项尚未到发布时间且不扣分。",
+          "en": "Pre-match data quality 25/100, low coverage; 2 not-yet-publishable items carry no penalty."
+        }
+      },
+      "goalFitEvidence": null,
+      "matchId": "fivehundred_2041805",
+      "apiFootball": {
+        "mappingVerified": false,
+        "enrichmentEligible": false,
+        "verificationStatus": "audit-only",
+        "verificationBlockers": [
+          "provider-fixture-id-missing",
+          "fixture-confidence-below-sync-threshold",
+          "provider-fixture-time-mismatch",
+          "provider-entity-registry-not-exact"
+        ],
+        "lastCheckedAt": "2026-10-05T03:16:27.259Z",
+        "fixtureAccess": {
+          "version": "api-football-fixture-access-diagnostic-v1",
+          "state": "stale-record",
+          "requestedDate": "2026-10-06",
+          "allowedFrom": "2026-06-08",
+          "allowedTo": "2026-06-10",
+          "checkedAt": "2026-10-05T03:16:27.259Z",
+          "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
+          "refreshMinutes": 120,
+          "suspended": true
         }
       }
     },
@@ -2658,21 +2988,21 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsObservedAt": "2026-10-05T03:11:03.195Z",
-    "oddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+    "oddsObservedAt": "2026-10-05T03:16:17.250Z",
+    "oddsUpdatedAt": "2026-10-05T03:16:17.250Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "oddsMarketProvenance": null,
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsObservedAt": "2026-10-05T03:11:03.195Z",
-    "handicapOddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+    "handicapOddsObservedAt": "2026-10-05T03:16:17.250Z",
+    "handicapOddsUpdatedAt": "2026-10-05T03:16:17.250Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapOddsMarketProvenance": null,
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T03:11:15.100Z",
+      "generatedAt": "2026-10-05T03:16:28.794Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -2874,7 +3204,7 @@
       "decisionId": "decision_1v9ebex",
       "decisionRevision": 1,
       "decisionGeneratedAt": "2026-10-05T03:11:20.687Z",
-      "updatedAt": "2026-10-05T03:11:21.044Z",
+      "updatedAt": "2026-10-05T03:16:33.658Z",
       "syncCapturedAt": "2026-10-05T03:11:14.233Z",
       "publicationFinalizedAt": "2026-10-05T03:11:21.044Z",
       "publicationGate": {
@@ -3365,12 +3695,16 @@
       },
       "snapshot": {
         "phase": "baseline",
-        "total": 1,
+        "total": 2,
         "phases": {
-          "baseline": 1
+          "baseline": 2
         },
-        "latestAt": "2026-10-05T03:11:14.233Z",
+        "latestAt": "2026-10-05T03:16:27.908Z",
         "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|1.52/3.55/5.30|-1:2.77/3.25/2.17|--"
+      },
+      "updateReason": {
+        "zh": "官方 SP 或让球盘没有实质变化，原赛前方向继续保留；分析版本可更新，但不重算推荐方向。",
+        "en": "Official SP and handicap signals did not materially change, so the pre-match direction is preserved; analysis versions may update, but the recommendation direction is not recalculated."
       }
     },
     "prospectiveForecastInput": {
@@ -3395,9 +3729,9 @@
         "odds2": 5.3
       },
       "oddsSource": "500.com:HAD",
-      "oddsObservedAt": "2026-10-05T03:11:03.195Z",
-      "oddsUpdatedAt": "2026-10-05T03:11:03.195Z",
-      "sourceCycleId": "sporttery-full-sync:2026-10-05T03:11:14.233Z",
+      "oddsObservedAt": "2026-10-05T03:16:17.250Z",
+      "oddsUpdatedAt": "2026-10-05T03:16:17.250Z",
+      "sourceCycleId": "sporttery-full-sync:2026-10-05T03:16:27.908Z",
       "handicapOdds": {
         "odds1": 2.77,
         "oddsX": 3.25,
@@ -3406,12 +3740,12 @@
       "handicapLine": "-1",
       "handicapOddsSource": "500.com:HHAD",
       "handicapOddsPoolCode": "HHAD",
-      "handicapOddsObservedAt": "2026-10-05T03:11:03.195Z",
-      "handicapOddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+      "handicapOddsObservedAt": "2026-10-05T03:16:17.250Z",
+      "handicapOddsUpdatedAt": "2026-10-05T03:16:17.250Z",
       "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
       "probabilityModel": {
         "version": "unified-poisson-bayes-v76",
-        "generatedAt": "2026-10-05T03:11:20.723Z",
+        "generatedAt": "2026-10-05T03:16:33.403Z",
         "sourceMatchId": "2041805",
         "eventVersion": "2026-10-06T00:00:00+08:00",
         "oneXTwo": {
@@ -5917,7 +6251,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T03:11:03.195Z",
+      "updatedAt": "2026-10-05T03:16:17.250Z",
       "sourceMatchId": "2041806",
       "fixtureId": "1398656",
       "matchNo": "周一002",
@@ -5952,7 +6286,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T03:06:31.808Z",
+        "updatedAt": "2026-10-05T03:11:28.505Z",
         "sourceMatchId": "2041806",
         "matchId": "fivehundred_2041806",
         "matchNo": "周一002",
@@ -5986,7 +6320,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -6022,7 +6356,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -6043,7 +6377,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -6266,14 +6600,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T03:11:13.637Z",
+        "lastCheckedAt": "2026-10-05T03:16:27.259Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T03:11:13.637Z",
+          "checkedAt": "2026-10-05T03:16:27.259Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -6458,21 +6792,21 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsObservedAt": "2026-10-05T03:11:03.195Z",
-    "oddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+    "oddsObservedAt": "2026-10-05T03:16:17.250Z",
+    "oddsUpdatedAt": "2026-10-05T03:16:17.250Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "oddsMarketProvenance": null,
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsObservedAt": "2026-10-05T03:11:03.195Z",
-    "handicapOddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+    "handicapOddsObservedAt": "2026-10-05T03:16:17.250Z",
+    "handicapOddsUpdatedAt": "2026-10-05T03:16:17.250Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapOddsMarketProvenance": null,
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T03:11:15.100Z",
+      "generatedAt": "2026-10-05T03:16:28.794Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -6674,7 +7008,7 @@
       "decisionId": "decision_q4r5qp",
       "decisionRevision": 1,
       "decisionGeneratedAt": "2026-10-05T03:06:24.098Z",
-      "updatedAt": "2026-10-05T03:11:21.044Z",
+      "updatedAt": "2026-10-05T03:16:33.660Z",
       "syncCapturedAt": "2026-10-05T03:06:19.384Z",
       "publicationFinalizedAt": "2026-10-05T03:06:24.419Z",
       "publicationGate": {
@@ -7165,11 +7499,11 @@
       },
       "snapshot": {
         "phase": "baseline",
-        "total": 2,
+        "total": 3,
         "phases": {
-          "baseline": 2
+          "baseline": 3
         },
-        "latestAt": "2026-10-05T03:11:14.233Z",
+        "latestAt": "2026-10-05T03:16:27.908Z",
         "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|1.34/4.50/6.20|-1:2.06/3.65/2.70|--"
       },
       "updateReason": {
@@ -7199,9 +7533,9 @@
         "odds2": 6.2
       },
       "oddsSource": "500.com:HAD",
-      "oddsObservedAt": "2026-10-05T03:11:03.195Z",
-      "oddsUpdatedAt": "2026-10-05T03:11:03.195Z",
-      "sourceCycleId": "sporttery-full-sync:2026-10-05T03:11:14.233Z",
+      "oddsObservedAt": "2026-10-05T03:16:17.250Z",
+      "oddsUpdatedAt": "2026-10-05T03:16:17.250Z",
+      "sourceCycleId": "sporttery-full-sync:2026-10-05T03:16:27.908Z",
       "handicapOdds": {
         "odds1": 2.06,
         "oddsX": 3.65,
@@ -7210,12 +7544,12 @@
       "handicapLine": "-1",
       "handicapOddsSource": "500.com:HHAD",
       "handicapOddsPoolCode": "HHAD",
-      "handicapOddsObservedAt": "2026-10-05T03:11:03.195Z",
-      "handicapOddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+      "handicapOddsObservedAt": "2026-10-05T03:16:17.250Z",
+      "handicapOddsUpdatedAt": "2026-10-05T03:16:17.250Z",
       "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
       "probabilityModel": {
         "version": "unified-poisson-bayes-v76",
-        "generatedAt": "2026-10-05T03:11:20.731Z",
+        "generatedAt": "2026-10-05T03:16:33.411Z",
         "sourceMatchId": "2041806",
         "eventVersion": "2026-10-06T02:45:00+08:00",
         "oneXTwo": {
@@ -9713,7 +10047,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T03:11:11.806Z",
+      "updatedAt": "2026-10-05T03:16:24.083Z",
       "sourceMatchId": "2041807",
       "fixtureId": "1398612",
       "matchNo": "周一003",
@@ -9748,7 +10082,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T03:06:31.808Z",
+        "updatedAt": "2026-10-05T03:11:28.505Z",
         "sourceMatchId": "2041807",
         "matchId": "fivehundred_2041807",
         "matchNo": "周一003",
@@ -9757,12 +10091,12 @@
         "awayTeamName": "瑞典",
         "quality": {
           "version": "pre-match-quality-v53-temporal-evidence",
-          "score": 25,
+          "score": 26,
           "sourceQuality": "low",
           "recommendationUsable": true,
           "analysisComplete": false,
           "severeMissingCount": 0,
-          "trustPenalty": 7,
+          "trustPenalty": 8,
           "components": {
             "referee": {
               "key": "referee",
@@ -9782,7 +10116,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:11.806Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -9818,7 +10152,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:11.806Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -9839,7 +10173,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:11.806Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -9869,12 +10203,12 @@
                 "zh": "天气/场地",
                 "en": "Weather/pitch"
               },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
+              "status": "estimated",
+              "score": 48,
+              "source": "open-meteo",
               "note": {
-                "zh": "未接入天气/场地",
-                "en": "No weather or pitch signal"
+                "zh": "Bucharest 场地估算天气：少云，16C，风速 1.1km/h，降水 0mm，环境低风险。",
+                "en": "Bucharest venue estimated weather: Partly cloudy, 16C, wind 1.1km/h, precipitation 0mm, low risk."
               }
             },
             "market": {
@@ -9957,13 +10291,6 @@
               "weight": 10
             },
             {
-              "key": "weather",
-              "zh": "缺少天气/场地",
-              "en": "Missing Weather/pitch",
-              "severity": "low",
-              "weight": 2
-            },
-            {
               "key": "strength",
               "zh": "缺少Elo球队强度",
               "en": "Missing Elo team strength",
@@ -9979,6 +10306,7 @@
             }
           ],
           "lowQuality": [
+            "weather",
             "motivation"
           ],
           "notYetPublishable": [
@@ -10016,7 +10344,7 @@
             "lineup": false,
             "injuries": false,
             "xg": false,
-            "weather": false,
+            "weather": true,
             "market": true,
             "motivation": true,
             "strength": false,
@@ -10041,13 +10369,13 @@
             }
           },
           "summary": {
-            "zh": "赛前数据质量 25/100，缺口偏多；2项尚未到发布时间且不扣分。",
-            "en": "Pre-match data quality 25/100, low coverage; 2 not-yet-publishable items carry no penalty."
+            "zh": "赛前数据质量 26/100，缺口偏多；2项尚未到发布时间且不扣分。",
+            "en": "Pre-match data quality 26/100, low coverage; 2 not-yet-publishable items carry no penalty."
           }
         },
         "qualitySummary": {
-          "zh": "赛前数据质量 25/100，缺口偏多；2项尚未到发布时间且不扣分。",
-          "en": "Pre-match data quality 25/100, low coverage; 2 not-yet-publishable items carry no penalty."
+          "zh": "赛前数据质量 26/100，缺口偏多；2项尚未到发布时间且不扣分。",
+          "en": "Pre-match data quality 26/100, low coverage; 2 not-yet-publishable items carry no penalty."
         }
       },
       "goalFitEvidence": null,
@@ -10068,7 +10396,7 @@
       "weather": {
         "source": "open-meteo",
         "provider": "open-meteo",
-        "updatedAt": "2026-10-05T03:11:11.806Z",
+        "updatedAt": "2026-10-05T03:16:24.083Z",
         "forecastTime": "2026-10-05T19:00Z",
         "verified": false,
         "confidence": "estimated-location",
@@ -10102,14 +10430,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T03:11:13.637Z",
+        "lastCheckedAt": "2026-10-05T03:16:27.259Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T03:11:13.637Z",
+          "checkedAt": "2026-10-05T03:16:27.259Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -10294,21 +10622,21 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsObservedAt": "2026-10-05T03:11:03.195Z",
-    "oddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+    "oddsObservedAt": "2026-10-05T03:16:17.250Z",
+    "oddsUpdatedAt": "2026-10-05T03:16:17.250Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "oddsMarketProvenance": null,
     "handicapLine": "+1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsObservedAt": "2026-10-05T03:11:03.195Z",
-    "handicapOddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+    "handicapOddsObservedAt": "2026-10-05T03:16:17.250Z",
+    "handicapOddsUpdatedAt": "2026-10-05T03:16:17.250Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapOddsMarketProvenance": null,
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T03:11:15.100Z",
+      "generatedAt": "2026-10-05T03:16:28.794Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -10510,7 +10838,7 @@
       "decisionId": "decision_1b3yf51",
       "decisionRevision": 1,
       "decisionGeneratedAt": "2026-10-05T03:06:24.103Z",
-      "updatedAt": "2026-10-05T03:11:21.046Z",
+      "updatedAt": "2026-10-05T03:16:33.660Z",
       "syncCapturedAt": "2026-10-05T03:06:19.384Z",
       "publicationFinalizedAt": "2026-10-05T03:06:24.419Z",
       "publicationGate": {
@@ -11001,11 +11329,11 @@
       },
       "snapshot": {
         "phase": "baseline",
-        "total": 2,
+        "total": 3,
         "phases": {
-          "baseline": 2
+          "baseline": 3
         },
-        "latestAt": "2026-10-05T03:11:14.233Z",
+        "latestAt": "2026-10-05T03:16:27.908Z",
         "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|3.60/3.70/1.72|+1:1.86/3.65/3.15|--"
       },
       "updateReason": {
@@ -11035,9 +11363,9 @@
         "odds2": 1.72
       },
       "oddsSource": "500.com:HAD",
-      "oddsObservedAt": "2026-10-05T03:11:03.195Z",
-      "oddsUpdatedAt": "2026-10-05T03:11:03.195Z",
-      "sourceCycleId": "sporttery-full-sync:2026-10-05T03:11:14.233Z",
+      "oddsObservedAt": "2026-10-05T03:16:17.250Z",
+      "oddsUpdatedAt": "2026-10-05T03:16:17.250Z",
+      "sourceCycleId": "sporttery-full-sync:2026-10-05T03:16:27.908Z",
       "handicapOdds": {
         "odds1": 1.86,
         "oddsX": 3.65,
@@ -11046,12 +11374,12 @@
       "handicapLine": "+1",
       "handicapOddsSource": "500.com:HHAD",
       "handicapOddsPoolCode": "HHAD",
-      "handicapOddsObservedAt": "2026-10-05T03:11:03.195Z",
-      "handicapOddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+      "handicapOddsObservedAt": "2026-10-05T03:16:17.250Z",
+      "handicapOddsUpdatedAt": "2026-10-05T03:16:17.250Z",
       "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
       "probabilityModel": {
         "version": "unified-poisson-bayes-v76",
-        "generatedAt": "2026-10-05T03:11:20.740Z",
+        "generatedAt": "2026-10-05T03:16:33.419Z",
         "sourceMatchId": "2041807",
         "eventVersion": "2026-10-06T02:45:00+08:00",
         "oneXTwo": {
@@ -11116,15 +11444,15 @@
         },
         "samples": {
           "elo": {
-            "home": null,
-            "away": null
+            "home": 0,
+            "away": 0
           },
           "form": {
-            "home": null,
-            "away": null
+            "home": 0,
+            "away": 0
           }
         },
-        "eloAvailable": false,
+        "eloAvailable": true,
         "formConfidence": 0,
         "worldCupPriorAvailable": false,
         "weights": {
@@ -11152,7 +11480,7 @@
         "scope": "competition-metadata-only; not independently verified event classification",
         "contentHash": "bf0117e55bde3c53c6032f92ccf3bcefab54d969244b8b9059860e8fe79e9766"
       },
-      "generatedAt": "2026-10-05T03:06:24.106Z",
+      "generatedAt": "2026-10-05T03:16:33.383Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序。基础概率结合 Elo、球队强度、Poisson 比分分布和市场赔率，随后进行反馈、校准与统一后验选择。赔率并非固定零权重；各阶段实际系数与缺失回退需分别核对，基础模型输出不等于最终冻结的公开方向。",
         "en": "Schedules use Sporttery business days and official kickoff order. Base probabilities mix Elo, team strength, Poisson scores and market odds before feedback, calibration and unified selection. Market weight is not fixed at zero. Stage coefficients and missing-input fallbacks must be audited separately; base output is not the final frozen public direction."
@@ -11200,6 +11528,20 @@
               "role": "model"
             },
             {
+              "key": "elo",
+              "label": {
+                "zh": "Elo 强弱差",
+                "en": "Elo strength gap"
+              },
+              "weight": 0,
+              "probabilities": {
+                "home": 42.2,
+                "draw": 28.2,
+                "away": 29.6
+              },
+              "role": "model"
+            },
+            {
               "key": "poisson",
               "label": {
                 "zh": "Poisson 比分分布",
@@ -11221,9 +11563,9 @@
               },
               "weight": 0.15,
               "probabilities": {
-                "home": 64.7,
-                "draw": 19.7,
-                "away": 15.6
+                "home": 66.1,
+                "draw": 19.2,
+                "away": 14.8
               },
               "role": "base-model-and-validation"
             },
@@ -11243,19 +11585,19 @@
             }
           ],
           "raw": {
-            "home": 62.3,
-            "draw": 20.8,
-            "away": 16.9
+            "home": 62.5,
+            "draw": 20.7,
+            "away": 16.8
           },
           "final": {
-            "home": 64,
+            "home": 64.2,
             "draw": 20.2,
-            "away": 15.8
+            "away": 15.7
           },
           "expressions": {
-            "home": "0.35*55.6% + 0.5*66.3% + 0.15*64.7% = 62.3%",
-            "draw": "0.35*21.7% + 0.5*20.5% + 0.15*19.7% = 20.8%",
-            "away": "0.35*22.7% + 0.5*13.2% + 0.15*15.6% = 16.9%"
+            "home": "0.35*55.6% + 0.5*66.3% + 0.15*66.1% = 62.5%",
+            "draw": "0.35*21.7% + 0.5*20.5% + 0.15*19.2% = 20.7%",
+            "away": "0.35*22.7% + 0.5*13.2% + 0.15*14.8% = 16.8%"
           },
           "scoreFeedback": {
             "applied": true,
@@ -11266,9 +11608,9 @@
               "score-model-direction-aligned"
             ],
             "before": {
-              "home": 62.3,
-              "draw": 20.8,
-              "away": 16.9
+              "home": 62.5,
+              "draw": 20.7,
+              "away": 16.8
             },
             "scoreImplied": {
               "home": 73.7,
@@ -11276,9 +11618,9 @@
               "away": 9.5
             },
             "after": {
-              "home": 64,
+              "home": 64.2,
               "draw": 20.2,
-              "away": 15.8
+              "away": 15.7
             },
             "leaders": {
               "before": "1",
@@ -11291,14 +11633,14 @@
             "reasons": [],
             "adjustments": [],
             "before": {
-              "home": 62.3,
-              "draw": 20.8,
-              "away": 16.9
+              "home": 62.5,
+              "draw": 20.7,
+              "away": 16.8
             },
             "after": {
-              "home": 64,
+              "home": 64.2,
               "draw": 20.2,
-              "away": 15.8
+              "away": 15.7
             }
           }
         },
@@ -11323,7 +11665,7 @@
           }
         },
         "contextSignals": {
-          "version": "pre-match-context-v1",
+          "version": "pre-match-context-v51-temporal-evidence",
           "rankingPressure": {
             "version": "ranking-pressure-v2",
             "source": "model-estimated",
@@ -11378,13 +11720,13 @@
               "total": 3.7
             },
             "redCardRisk": {
-              "home": 0.027,
-              "away": 0.038,
+              "home": 0.026,
+              "away": 0.039,
               "total": 0.065
             },
             "expectedFouls": {
-              "home": 10.7,
-              "away": 15.3,
+              "home": 10.6,
+              "away": 15.4,
               "total": 26
             },
             "foulPressure": 61,
@@ -11396,15 +11738,15 @@
             ]
           },
           "dataGaps": {
-            "version": "data-gap-profile-v1",
-            "coverageScore": 44,
+            "version": "data-gap-profile-v51-temporal-evidence",
+            "coverageScore": 25,
             "sourceQuality": "low",
-            "severeMissingCount": 2,
-            "trustPenalty": 9,
+            "severeMissingCount": 0,
+            "trustPenalty": 7,
             "connected": {
               "referee": false,
               "teamCards": false,
-              "standings": false,
+              "standings": true,
               "motivationStage": true,
               "lineup": false,
               "injuries": false,
@@ -11426,60 +11768,299 @@
             },
             "missing": [
               {
-                "key": "referee-card-source",
-                "zh": "缺少真实裁判牌数",
-                "en": "Missing referee card source",
-                "severity": "medium",
-                "weight": 9
-              },
-              {
-                "key": "team-card-history",
-                "zh": "缺少球队黄红牌历史",
-                "en": "Missing team card history",
-                "severity": "medium",
-                "weight": 8
-              },
-              {
-                "key": "league-table-rank",
-                "zh": "缺少积分/排名结构",
-                "en": "Missing league table/ranking structure",
-                "severity": "high",
-                "weight": 13
-              },
-              {
-                "key": "injury-lineup",
-                "zh": "缺少伤停首发",
-                "en": "Missing injuries/projected XI",
-                "severity": "high",
-                "weight": 14
-              },
-              {
-                "key": "xg-xga",
-                "zh": "缺少赛前 xG/xGA",
-                "en": "Missing pre-match xG/xGA",
-                "severity": "medium",
-                "weight": 8
-              },
-              {
-                "key": "weather-pitch",
-                "zh": "缺少天气/场地",
-                "en": "Missing weather/pitch signal",
+                "key": "referee",
+                "zh": "缺少裁判牌数",
+                "en": "Missing Referee cards",
                 "severity": "low",
                 "weight": 4
+              },
+              {
+                "key": "teamCards",
+                "zh": "缺少球队牌数历史",
+                "en": "Missing Team card history",
+                "severity": "medium",
+                "weight": 4
+              },
+              {
+                "key": "injuries",
+                "zh": "缺少伤停",
+                "en": "Missing Injuries",
+                "severity": "medium",
+                "weight": 10
+              },
+              {
+                "key": "weather",
+                "zh": "缺少天气/场地",
+                "en": "Missing Weather/pitch",
+                "severity": "low",
+                "weight": 2
+              },
+              {
+                "key": "strength",
+                "zh": "缺少Elo球队强度",
+                "en": "Missing Elo team strength",
+                "severity": "medium",
+                "weight": 18
+              },
+              {
+                "key": "form",
+                "zh": "缺少近期状态",
+                "en": "Missing Recent form",
+                "severity": "medium",
+                "weight": 16
               }
             ],
             "primaryGaps": [
-              "referee-card-source",
-              "team-card-history",
-              "league-table-rank",
-              "injury-lineup"
+              "referee",
+              "teamCards",
+              "injuries",
+              "weather"
             ],
+            "preMatchQuality": {
+              "version": "pre-match-quality-v53-temporal-evidence",
+              "score": 25,
+              "sourceQuality": "low",
+              "lowQuality": [
+                "motivation"
+              ],
+              "missing": [
+                {
+                  "key": "referee",
+                  "zh": "缺少裁判牌数",
+                  "en": "Missing Referee cards",
+                  "severity": "low",
+                  "weight": 4
+                },
+                {
+                  "key": "teamCards",
+                  "zh": "缺少球队牌数历史",
+                  "en": "Missing Team card history",
+                  "severity": "medium",
+                  "weight": 4
+                },
+                {
+                  "key": "injuries",
+                  "zh": "缺少伤停",
+                  "en": "Missing Injuries",
+                  "severity": "medium",
+                  "weight": 10
+                },
+                {
+                  "key": "weather",
+                  "zh": "缺少天气/场地",
+                  "en": "Missing Weather/pitch",
+                  "severity": "low",
+                  "weight": 2
+                },
+                {
+                  "key": "strength",
+                  "zh": "缺少Elo球队强度",
+                  "en": "Missing Elo team strength",
+                  "severity": "medium",
+                  "weight": 18
+                },
+                {
+                  "key": "form",
+                  "zh": "缺少近期状态",
+                  "en": "Missing Recent form",
+                  "severity": "medium",
+                  "weight": 16
+                }
+              ],
+              "notYetPublishable": [
+                {
+                  "key": "lineup",
+                  "zh": "确认首发/预计阵容尚未到正常发布时间",
+                  "en": "Confirmed/projected lineup is not normally published yet",
+                  "expectedPublishedAt": "2026-10-05T17:30:00.000Z",
+                  "weight": 0
+                },
+                {
+                  "key": "xg",
+                  "zh": "xG/xGA尚未到正常发布时间",
+                  "en": "xG/xGA is not normally published yet",
+                  "expectedPublishedAt": "2026-10-05T18:45:00.000Z",
+                  "weight": 0
+                }
+              ],
+              "components": {
+                "referee": {
+                  "key": "referee",
+                  "label": {
+                    "zh": "裁判牌数",
+                    "en": "Referee cards"
+                  },
+                  "status": "missing",
+                  "score": 0,
+                  "source": "missing",
+                  "note": {
+                    "zh": "未接入真实裁判牌数",
+                    "en": "No verified referee card profile"
+                  },
+                  "evidenceType": "official-referee-assignment",
+                  "availabilityState": "missing_overdue",
+                  "eligibleAtCutoff": false,
+                  "cutoffTime": "2026-10-05T14:00:00.000Z",
+                  "kickoffTime": "2026-10-05T18:45:00.000Z",
+                  "sourceObservedAt": "2026-10-05T03:11:03.195Z",
+                  "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
+                },
+                "teamCards": {
+                  "key": "teamCards",
+                  "label": {
+                    "zh": "球队牌数历史",
+                    "en": "Team card history"
+                  },
+                  "status": "missing",
+                  "score": 0,
+                  "source": "missing",
+                  "note": {
+                    "zh": "未形成可用球队黄红牌样本",
+                    "en": "No usable team card sample"
+                  }
+                },
+                "lineup": {
+                  "key": "lineup",
+                  "label": {
+                    "zh": "确认首发/预计阵容",
+                    "en": "Confirmed/projected lineup"
+                  },
+                  "status": "not_yet_publishable",
+                  "score": 0,
+                  "source": "missing",
+                  "note": {
+                    "zh": "正式首发尚未到常规发布时间，不计为数据缺口",
+                    "en": "Confirmed XI is not normally published yet and is not counted as a gap"
+                  },
+                  "evidenceType": "confirmed-lineup",
+                  "confirmed": false,
+                  "availabilityState": "not_yet_publishable",
+                  "eligibleAtCutoff": false,
+                  "cutoffTime": "2026-10-05T14:00:00.000Z",
+                  "kickoffTime": "2026-10-05T18:45:00.000Z",
+                  "sourceObservedAt": "2026-10-05T03:11:03.195Z",
+                  "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
+                },
+                "injuries": {
+                  "key": "injuries",
+                  "label": {
+                    "zh": "伤停",
+                    "en": "Injuries"
+                  },
+                  "status": "missing",
+                  "score": 0,
+                  "source": "missing",
+                  "note": {
+                    "zh": "未接入可核验伤停",
+                    "en": "No verifiable injury signal"
+                  },
+                  "evidenceType": "squad-availability",
+                  "availabilityState": "missing_overdue",
+                  "eligibleAtCutoff": false,
+                  "cutoffTime": "2026-10-05T14:00:00.000Z",
+                  "kickoffTime": "2026-10-05T18:45:00.000Z",
+                  "sourceObservedAt": "2026-10-05T03:11:03.195Z",
+                  "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
+                },
+                "xg": {
+                  "key": "xg",
+                  "label": {
+                    "zh": "xG/xGA",
+                    "en": "xG/xGA"
+                  },
+                  "status": "not_yet_publishable",
+                  "score": 0,
+                  "source": "missing",
+                  "note": {
+                    "zh": "缺少历史xG或明确标注的赛前估算",
+                    "en": "No historical xG or explicitly labelled pre-match estimate"
+                  },
+                  "evidenceType": "pre-match-xg-estimate",
+                  "availabilityState": "not_yet_publishable",
+                  "eligibleAtCutoff": false,
+                  "cutoffTime": "2026-10-05T14:00:00.000Z",
+                  "kickoffTime": "2026-10-05T18:45:00.000Z",
+                  "sourceObservedAt": "2026-10-05T14:00:00.000Z",
+                  "expectedPublishedAt": "2026-10-05T18:45:00.000Z"
+                },
+                "weather": {
+                  "key": "weather",
+                  "label": {
+                    "zh": "天气/场地",
+                    "en": "Weather/pitch"
+                  },
+                  "status": "missing",
+                  "score": 0,
+                  "source": "missing",
+                  "note": {
+                    "zh": "未接入天气/场地",
+                    "en": "No weather or pitch signal"
+                  }
+                },
+                "market": {
+                  "key": "market",
+                  "label": {
+                    "zh": "盘口校验",
+                    "en": "Market validation"
+                  },
+                  "status": "verified",
+                  "score": 100,
+                  "source": "sporttery",
+                  "note": {
+                    "zh": "已有胜平负/让球盘口校验源",
+                    "en": "Market validation source available"
+                  }
+                },
+                "motivation": {
+                  "key": "motivation",
+                  "label": {
+                    "zh": "排名/战意",
+                    "en": "Table/motivation"
+                  },
+                  "status": "estimated",
+                  "score": 62,
+                  "source": "rank-stage-context",
+                  "note": {
+                    "zh": "已接入排名或赛程阶段信息",
+                    "en": "Rank or stage context loaded"
+                  }
+                },
+                "strength": {
+                  "key": "strength",
+                  "label": {
+                    "zh": "Elo球队强度",
+                    "en": "Elo team strength"
+                  },
+                  "status": "missing",
+                  "score": 0,
+                  "source": "missing",
+                  "note": {
+                    "zh": "未形成可审计Elo强度",
+                    "en": "No auditable Elo strength"
+                  }
+                },
+                "form": {
+                  "key": "form",
+                  "label": {
+                    "zh": "近期状态",
+                    "en": "Recent form"
+                  },
+                  "status": "missing",
+                  "score": 0,
+                  "source": "missing",
+                  "note": {
+                    "zh": "未形成近期状态样本",
+                    "en": "No recent-form sample"
+                  }
+                }
+              }
+            },
             "note": "high-variance-data-gap"
           },
           "webConsensus": {
             "available": false
           },
-          "trustPenalty": 9,
+          "trustPenalty": 7,
           "lambdaAdjustment": {
             "applied": true,
             "total": 0.028,
@@ -11570,7 +12151,7 @@
         {
           "version": "model-input-usage-v1",
           "stage": "form-lambda-blend",
-          "recordedAt": "2026-10-05T03:06:24.105Z",
+          "recordedAt": "2026-10-05T03:16:33.382Z",
           "sourceMatchId": "2041808",
           "kickoffTime": "2026-10-06T02:45:00+08:00",
           "lambdaPolicy": "evidence-rate-support-v2",
@@ -11584,26 +12165,30 @@
             "home": 1.9502927866624769,
             "away": 0.7372081733375231
           },
-          "contentHash": "477631aeddd38ca7306bf244fbfe790fd4170f9eb8b95c69e7bf6a1a552d8f0f"
+          "contentHash": "623b06eb25aa0f81eb19fd0a9c6289eca10c15d34a7f8fcc251137d77580114b"
         },
         {
           "version": "model-input-usage-v1",
           "stage": "base-outcome-blend",
-          "recordedAt": "2026-10-05T03:06:24.105Z",
+          "recordedAt": "2026-10-05T03:16:33.382Z",
           "sourceMatchId": "2041808",
           "kickoffTime": "2026-10-06T02:45:00+08:00",
           "inputs": {
             "market": {
-              "home": 0.6473349485160509,
-              "draw": 0.19707752877044216,
-              "away": 0.15558752271350695
+              "home": 0.6607740496009611,
+              "draw": 0.1916530793214909,
+              "away": 0.14757287107754796
             },
             "teamStrength": {
               "home": 0.555788,
               "draw": 0.2172,
               "away": 0.227012
             },
-            "elo": null,
+            "elo": {
+              "home": 0.42200000000000004,
+              "draw": 0.282,
+              "away": 0.29600000000000004
+            },
             "poisson": {
               "home": 0.6626559392499967,
               "draw": 0.20517808759101336,
@@ -11623,15 +12208,15 @@
             },
             "samples": {
               "elo": {
-                "home": null,
-                "away": null
+                "home": 0,
+                "away": 0
               },
               "form": {
-                "home": null,
-                "away": null
+                "home": 0,
+                "away": 0
               }
             },
-            "eloAvailable": false,
+            "eloAvailable": true,
             "formConfidence": 0,
             "worldCupPriorAvailable": false,
             "weights": {
@@ -11650,13 +12235,13 @@
             "worldCupPrior": 0
           },
           "output": {
-            "home": 0.622954011902406,
-            "draw": 0.20817067311107298,
-            "away": 0.16887531498652109
+            "home": 0.6249698770651425,
+            "draw": 0.20735700569373033,
+            "away": 0.16767311724112727
           },
           "marketPool": "HAD",
           "marketSource": "500.com:HAD",
-          "contentHash": "0413627378a03c5b9830a6dc2110ca4c2ac3f595f1812f2e4aac54723b692d59"
+          "contentHash": "fbc9a170675e8b1892ced961ef05bca12a81e8d8542ab65a029a263a3b885dcf"
         }
       ],
       "dynamicCalibration": {
@@ -11713,14 +12298,14 @@
           ],
           "adjustments": [],
           "before": {
-            "home": 62.3,
-            "draw": 20.8,
-            "away": 16.9
+            "home": 62.5,
+            "draw": 20.7,
+            "away": 16.8
           },
           "after": {
-            "home": 64,
+            "home": 64.2,
             "draw": 20.2,
-            "away": 15.8
+            "away": 15.7
           },
           "scoreFeedback": {
             "applied": true,
@@ -11731,9 +12316,9 @@
               "score-model-direction-aligned"
             ],
             "before": {
-              "home": 62.3,
-              "draw": 20.8,
-              "away": 16.9
+              "home": 62.5,
+              "draw": 20.7,
+              "away": 16.8
             },
             "scoreImplied": {
               "home": 73.7,
@@ -11741,9 +12326,9 @@
               "away": 9.5
             },
             "after": {
-              "home": 64,
+              "home": 64.2,
               "draw": 20.2,
-              "away": 15.8
+              "away": 15.7
             },
             "leaders": {
               "before": "1",
@@ -11758,14 +12343,14 @@
             "formalOutputChanged": false,
             "policy": "Keep score-distribution feedback, but skip every stacked outcome cooldown penalty; collect chronological evidence before activation.",
             "probabilities": {
-              "home": 64,
+              "home": 64.2,
               "draw": 20.2,
-              "away": 15.8
+              "away": 15.7
             },
             "activeProbabilities": {
-              "home": 64,
+              "home": 64.2,
               "draw": 20.2,
-              "away": 15.8
+              "away": 15.7
             },
             "activeLeader": "1",
             "shadowLeader": "1",
@@ -11788,7 +12373,7 @@
         }
       },
       "contextSignals": {
-        "version": "pre-match-context-v1",
+        "version": "pre-match-context-v51-temporal-evidence",
         "rankingPressure": {
           "version": "ranking-pressure-v2",
           "source": "model-estimated",
@@ -11843,13 +12428,13 @@
             "total": 3.7
           },
           "redCardRisk": {
-            "home": 0.027,
-            "away": 0.038,
+            "home": 0.026,
+            "away": 0.039,
             "total": 0.065
           },
           "expectedFouls": {
-            "home": 10.7,
-            "away": 15.3,
+            "home": 10.6,
+            "away": 15.4,
             "total": 26
           },
           "foulPressure": 61,
@@ -11861,15 +12446,15 @@
           ]
         },
         "dataGaps": {
-          "version": "data-gap-profile-v1",
-          "coverageScore": 44,
+          "version": "data-gap-profile-v51-temporal-evidence",
+          "coverageScore": 25,
           "sourceQuality": "low",
-          "severeMissingCount": 2,
-          "trustPenalty": 9,
+          "severeMissingCount": 0,
+          "trustPenalty": 7,
           "connected": {
             "referee": false,
             "teamCards": false,
-            "standings": false,
+            "standings": true,
             "motivationStage": true,
             "lineup": false,
             "injuries": false,
@@ -11891,60 +12476,299 @@
           },
           "missing": [
             {
-              "key": "referee-card-source",
-              "zh": "缺少真实裁判牌数",
-              "en": "Missing referee card source",
-              "severity": "medium",
-              "weight": 9
-            },
-            {
-              "key": "team-card-history",
-              "zh": "缺少球队黄红牌历史",
-              "en": "Missing team card history",
-              "severity": "medium",
-              "weight": 8
-            },
-            {
-              "key": "league-table-rank",
-              "zh": "缺少积分/排名结构",
-              "en": "Missing league table/ranking structure",
-              "severity": "high",
-              "weight": 13
-            },
-            {
-              "key": "injury-lineup",
-              "zh": "缺少伤停首发",
-              "en": "Missing injuries/projected XI",
-              "severity": "high",
-              "weight": 14
-            },
-            {
-              "key": "xg-xga",
-              "zh": "缺少赛前 xG/xGA",
-              "en": "Missing pre-match xG/xGA",
-              "severity": "medium",
-              "weight": 8
-            },
-            {
-              "key": "weather-pitch",
-              "zh": "缺少天气/场地",
-              "en": "Missing weather/pitch signal",
+              "key": "referee",
+              "zh": "缺少裁判牌数",
+              "en": "Missing Referee cards",
               "severity": "low",
               "weight": 4
+            },
+            {
+              "key": "teamCards",
+              "zh": "缺少球队牌数历史",
+              "en": "Missing Team card history",
+              "severity": "medium",
+              "weight": 4
+            },
+            {
+              "key": "injuries",
+              "zh": "缺少伤停",
+              "en": "Missing Injuries",
+              "severity": "medium",
+              "weight": 10
+            },
+            {
+              "key": "weather",
+              "zh": "缺少天气/场地",
+              "en": "Missing Weather/pitch",
+              "severity": "low",
+              "weight": 2
+            },
+            {
+              "key": "strength",
+              "zh": "缺少Elo球队强度",
+              "en": "Missing Elo team strength",
+              "severity": "medium",
+              "weight": 18
+            },
+            {
+              "key": "form",
+              "zh": "缺少近期状态",
+              "en": "Missing Recent form",
+              "severity": "medium",
+              "weight": 16
             }
           ],
           "primaryGaps": [
-            "referee-card-source",
-            "team-card-history",
-            "league-table-rank",
-            "injury-lineup"
+            "referee",
+            "teamCards",
+            "injuries",
+            "weather"
           ],
+          "preMatchQuality": {
+            "version": "pre-match-quality-v53-temporal-evidence",
+            "score": 25,
+            "sourceQuality": "low",
+            "lowQuality": [
+              "motivation"
+            ],
+            "missing": [
+              {
+                "key": "referee",
+                "zh": "缺少裁判牌数",
+                "en": "Missing Referee cards",
+                "severity": "low",
+                "weight": 4
+              },
+              {
+                "key": "teamCards",
+                "zh": "缺少球队牌数历史",
+                "en": "Missing Team card history",
+                "severity": "medium",
+                "weight": 4
+              },
+              {
+                "key": "injuries",
+                "zh": "缺少伤停",
+                "en": "Missing Injuries",
+                "severity": "medium",
+                "weight": 10
+              },
+              {
+                "key": "weather",
+                "zh": "缺少天气/场地",
+                "en": "Missing Weather/pitch",
+                "severity": "low",
+                "weight": 2
+              },
+              {
+                "key": "strength",
+                "zh": "缺少Elo球队强度",
+                "en": "Missing Elo team strength",
+                "severity": "medium",
+                "weight": 18
+              },
+              {
+                "key": "form",
+                "zh": "缺少近期状态",
+                "en": "Missing Recent form",
+                "severity": "medium",
+                "weight": 16
+              }
+            ],
+            "notYetPublishable": [
+              {
+                "key": "lineup",
+                "zh": "确认首发/预计阵容尚未到正常发布时间",
+                "en": "Confirmed/projected lineup is not normally published yet",
+                "expectedPublishedAt": "2026-10-05T17:30:00.000Z",
+                "weight": 0
+              },
+              {
+                "key": "xg",
+                "zh": "xG/xGA尚未到正常发布时间",
+                "en": "xG/xGA is not normally published yet",
+                "expectedPublishedAt": "2026-10-05T18:45:00.000Z",
+                "weight": 0
+              }
+            ],
+            "components": {
+              "referee": {
+                "key": "referee",
+                "label": {
+                  "zh": "裁判牌数",
+                  "en": "Referee cards"
+                },
+                "status": "missing",
+                "score": 0,
+                "source": "missing",
+                "note": {
+                  "zh": "未接入真实裁判牌数",
+                  "en": "No verified referee card profile"
+                },
+                "evidenceType": "official-referee-assignment",
+                "availabilityState": "missing_overdue",
+                "eligibleAtCutoff": false,
+                "cutoffTime": "2026-10-05T14:00:00.000Z",
+                "kickoffTime": "2026-10-05T18:45:00.000Z",
+                "sourceObservedAt": "2026-10-05T03:11:03.195Z",
+                "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
+              },
+              "teamCards": {
+                "key": "teamCards",
+                "label": {
+                  "zh": "球队牌数历史",
+                  "en": "Team card history"
+                },
+                "status": "missing",
+                "score": 0,
+                "source": "missing",
+                "note": {
+                  "zh": "未形成可用球队黄红牌样本",
+                  "en": "No usable team card sample"
+                }
+              },
+              "lineup": {
+                "key": "lineup",
+                "label": {
+                  "zh": "确认首发/预计阵容",
+                  "en": "Confirmed/projected lineup"
+                },
+                "status": "not_yet_publishable",
+                "score": 0,
+                "source": "missing",
+                "note": {
+                  "zh": "正式首发尚未到常规发布时间，不计为数据缺口",
+                  "en": "Confirmed XI is not normally published yet and is not counted as a gap"
+                },
+                "evidenceType": "confirmed-lineup",
+                "confirmed": false,
+                "availabilityState": "not_yet_publishable",
+                "eligibleAtCutoff": false,
+                "cutoffTime": "2026-10-05T14:00:00.000Z",
+                "kickoffTime": "2026-10-05T18:45:00.000Z",
+                "sourceObservedAt": "2026-10-05T03:11:03.195Z",
+                "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
+              },
+              "injuries": {
+                "key": "injuries",
+                "label": {
+                  "zh": "伤停",
+                  "en": "Injuries"
+                },
+                "status": "missing",
+                "score": 0,
+                "source": "missing",
+                "note": {
+                  "zh": "未接入可核验伤停",
+                  "en": "No verifiable injury signal"
+                },
+                "evidenceType": "squad-availability",
+                "availabilityState": "missing_overdue",
+                "eligibleAtCutoff": false,
+                "cutoffTime": "2026-10-05T14:00:00.000Z",
+                "kickoffTime": "2026-10-05T18:45:00.000Z",
+                "sourceObservedAt": "2026-10-05T03:11:03.195Z",
+                "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
+              },
+              "xg": {
+                "key": "xg",
+                "label": {
+                  "zh": "xG/xGA",
+                  "en": "xG/xGA"
+                },
+                "status": "not_yet_publishable",
+                "score": 0,
+                "source": "missing",
+                "note": {
+                  "zh": "缺少历史xG或明确标注的赛前估算",
+                  "en": "No historical xG or explicitly labelled pre-match estimate"
+                },
+                "evidenceType": "pre-match-xg-estimate",
+                "availabilityState": "not_yet_publishable",
+                "eligibleAtCutoff": false,
+                "cutoffTime": "2026-10-05T14:00:00.000Z",
+                "kickoffTime": "2026-10-05T18:45:00.000Z",
+                "sourceObservedAt": "2026-10-05T14:00:00.000Z",
+                "expectedPublishedAt": "2026-10-05T18:45:00.000Z"
+              },
+              "weather": {
+                "key": "weather",
+                "label": {
+                  "zh": "天气/场地",
+                  "en": "Weather/pitch"
+                },
+                "status": "missing",
+                "score": 0,
+                "source": "missing",
+                "note": {
+                  "zh": "未接入天气/场地",
+                  "en": "No weather or pitch signal"
+                }
+              },
+              "market": {
+                "key": "market",
+                "label": {
+                  "zh": "盘口校验",
+                  "en": "Market validation"
+                },
+                "status": "verified",
+                "score": 100,
+                "source": "sporttery",
+                "note": {
+                  "zh": "已有胜平负/让球盘口校验源",
+                  "en": "Market validation source available"
+                }
+              },
+              "motivation": {
+                "key": "motivation",
+                "label": {
+                  "zh": "排名/战意",
+                  "en": "Table/motivation"
+                },
+                "status": "estimated",
+                "score": 62,
+                "source": "rank-stage-context",
+                "note": {
+                  "zh": "已接入排名或赛程阶段信息",
+                  "en": "Rank or stage context loaded"
+                }
+              },
+              "strength": {
+                "key": "strength",
+                "label": {
+                  "zh": "Elo球队强度",
+                  "en": "Elo team strength"
+                },
+                "status": "missing",
+                "score": 0,
+                "source": "missing",
+                "note": {
+                  "zh": "未形成可审计Elo强度",
+                  "en": "No auditable Elo strength"
+                }
+              },
+              "form": {
+                "key": "form",
+                "label": {
+                  "zh": "近期状态",
+                  "en": "Recent form"
+                },
+                "status": "missing",
+                "score": 0,
+                "source": "missing",
+                "note": {
+                  "zh": "未形成近期状态样本",
+                  "en": "No recent-form sample"
+                }
+              }
+            }
+          },
           "note": "high-variance-data-gap"
         },
         "webConsensus": {
           "available": false
         },
-        "trustPenalty": 9,
+        "trustPenalty": 7,
         "lambdaAdjustment": {
           "applied": true,
           "total": 0.028,
@@ -11994,7 +12818,11 @@
           "draw": 21.7,
           "away": 22.7
         },
-        "elo": null,
+        "elo": {
+          "home": 42.2,
+          "draw": 28.2,
+          "away": 29.6
+        },
         "poisson": null,
         "scoreImplied": null,
         "worldCupPrior": null,
@@ -12002,8 +12830,102 @@
         "unifiedPosterior": null
       },
       "worldCupPrior": null,
-      "elo": null,
-      "form": null,
+      "elo": {
+        "homeRating": 1500,
+        "awayRating": 1500,
+        "diff": 62,
+        "homeMatches": 0,
+        "awayMatches": 0,
+        "warehouseHistory": null,
+        "historicalSource": null,
+        "lastUpdatedAt": "2026-10-05T03:06:24.106Z"
+      },
+      "form": {
+        "version": "rolling-form-v2-asof",
+        "lookbackMatches": 12,
+        "sampleSize": 0,
+        "home": {
+          "sampleSize": 0,
+          "resultEvidence": {
+            "version": "recent-form-result-evidence-v1",
+            "scope": "selected-input-observation-metadata",
+            "sourceVerified": false,
+            "sampleRows": 0,
+            "homeRows": 0,
+            "awayRows": 0,
+            "observedRows": 0,
+            "missingObservedAtRows": 0,
+            "missingSourceRows": 0,
+            "beforeKickoffRows": 0,
+            "afterDecisionRows": 0,
+            "latestObservedAt": null,
+            "decisionAt": "2026-10-05T03:06:24.106Z",
+            "temporalStatus": "empty",
+            "sourceLabels": [],
+            "selectionHash": "d64aa5896ad84836beecee2d574d302378d8fc04a95d1d0f6ae96a1a1e154f9f"
+          },
+          "wins": 0,
+          "draws": 0,
+          "losses": 0,
+          "pointsPerMatch": null,
+          "goalsForAvg": null,
+          "goalsAgainstAvg": null,
+          "goalDiffAvg": null,
+          "over25Rate": null,
+          "bttsRate": null,
+          "cleanSheetRate": null,
+          "failedScoreRate": null,
+          "lastMatchAt": null,
+          "restDays": null,
+          "matchesLast14": 0,
+          "matchesLast30": 0
+        },
+        "away": {
+          "sampleSize": 0,
+          "resultEvidence": {
+            "version": "recent-form-result-evidence-v1",
+            "scope": "selected-input-observation-metadata",
+            "sourceVerified": false,
+            "sampleRows": 0,
+            "homeRows": 0,
+            "awayRows": 0,
+            "observedRows": 0,
+            "missingObservedAtRows": 0,
+            "missingSourceRows": 0,
+            "beforeKickoffRows": 0,
+            "afterDecisionRows": 0,
+            "latestObservedAt": null,
+            "decisionAt": "2026-10-05T03:06:24.106Z",
+            "temporalStatus": "empty",
+            "sourceLabels": [],
+            "selectionHash": "8c06d78067602cb664bda1fa7b080ec6066f490eebf4b01938ec9863d084c788"
+          },
+          "wins": 0,
+          "draws": 0,
+          "losses": 0,
+          "pointsPerMatch": null,
+          "goalsForAvg": null,
+          "goalsAgainstAvg": null,
+          "goalDiffAvg": null,
+          "over25Rate": null,
+          "bttsRate": null,
+          "cleanSheetRate": null,
+          "failedScoreRate": null,
+          "lastMatchAt": null,
+          "restDays": null,
+          "matchesLast14": 0,
+          "matchesLast30": 0
+        },
+        "h2h": {
+          "sampleSize": 0,
+          "over25Rate": null,
+          "bttsRate": null,
+          "drawRate": null,
+          "lastMeetingAt": null
+        },
+        "warehouseHistory": null,
+        "historicalSource": null
+      },
       "leaguePrior": null,
       "modelHealth": {
         "version": "settled-prediction-health-v4-market-isolated",
@@ -12270,7 +13192,7 @@
           "homeMatches": 0,
           "awayMatches": 0,
           "sampleSize": 0,
-          "provenance": false
+          "provenance": true
         },
         "form": {
           "ready": false,
@@ -12289,7 +13211,7 @@
           "freshnessNote": "240-day history eligibility is not current-season form; aged inputs require shadow validation",
           "homeLastMatchAt": null,
           "awayLastMatchAt": null,
-          "provenance": false
+          "provenance": true
         },
         "history": {
           "ready": false,
@@ -12317,16 +13239,20 @@
       "internalDirectionalAudit": {
         "oneXTwo": {
           "market": {
-            "home": 64.7,
-            "draw": 19.7,
-            "away": 15.6
+            "home": 66.1,
+            "draw": 19.2,
+            "away": 14.8
           },
           "teamStrength": {
             "home": 55.6,
             "draw": 21.7,
             "away": 22.7
           },
-          "elo": null,
+          "elo": {
+            "home": 42.2,
+            "draw": 28.2,
+            "away": 29.6
+          },
           "poisson": {
             "home": 66.3,
             "draw": 20.5,
@@ -12339,22 +13265,22 @@
           },
           "worldCupPrior": null,
           "final": {
-            "home": 64,
+            "home": 64.2,
             "draw": 20.2,
-            "away": 15.8
+            "away": 15.7
           },
           "unifiedPosterior": {
-            "home": 68.1,
-            "draw": 19,
-            "away": 13
+            "home": 68.2,
+            "draw": 18.9,
+            "away": 12.9
           }
         },
         "handicap": {
           "line": "-1",
           "market": {
-            "home": 41.4,
-            "draw": 24.3,
-            "away": 34.3
+            "home": 43,
+            "draw": 23.9,
+            "away": 33.1
           },
           "poisson": {
             "home": 41,
@@ -12374,14 +13300,14 @@
         },
         "unifiedPosterior": {
           "version": "v76-paired-sample-policy-execution-clock-draw-aware-evidence-shrinkage-argmax",
-          "generatedAt": "2026-10-05T03:06:24.108Z",
+          "generatedAt": "2026-10-05T03:16:33.386Z",
           "selectedMarket": "HAD",
           "selectedCode": "1",
           "selectedLabelZh": "主胜 意大利",
           "selectedHandicapLine": "0",
-          "selectedProbability": 68.1,
-          "selectedGap": 49.1,
-          "selectedPosteriorScore": 0.8907,
+          "selectedProbability": 68.2,
+          "selectedGap": 49.3,
+          "selectedPosteriorScore": 0.9023,
           "selectedRecentReviewAdjustment": 0,
           "selectedRecentReviewReasons": [],
           "selectionPolicy": "calibrated-had-market-baseline",
@@ -12390,23 +13316,23 @@
             "version": "multi-factor-dynamic-evidence-v4",
             "eligible": false,
             "grade": "WATCH",
-            "evidenceScore": 45.4,
+            "evidenceScore": 52.7,
             "threshold": 66,
             "market": "HAD",
             "code": "1",
             "handicapLine": "0",
-            "odds": 1.37,
-            "modelProbability": 0.6805479115084208,
-            "marketProbability": 0.6473349485160509,
-            "probabilityEdge": 0.0332,
-            "expectedValue": -0.0676,
-            "modelGap": 0.4908546251264271,
+            "odds": 1.34,
+            "modelProbability": 0.6819826539518579,
+            "marketProbability": 0.6607740496009611,
+            "probabilityEdge": 0.0212,
+            "expectedValue": -0.0861,
+            "modelGap": 0.49279308235877484,
             "minimumModelGap": 0.06,
-            "dataQuality": null,
+            "dataQuality": 0.25,
             "components": {
               "independentModel": 18,
               "modelSeparation": 12,
-              "probabilityEdge": 6.81,
+              "probabilityEdge": 5.51,
               "expectedValue": 0,
               "scoreAndHandicap": 18,
               "marketStructure": 5,
@@ -12414,7 +13340,7 @@
               "dataQuality": 0,
               "upstreamGate": 0
             },
-            "penalty": 14.42,
+            "penalty": 5.86,
             "supportingFactors": [
               "independent-model-probability",
               "model-separation",
@@ -12424,10 +13350,9 @@
               "official-market-alignment"
             ],
             "blockers": [
-              "missing-data-quality",
               "upstream-multi-factor-gate-not-passed",
               "model-risk-not-promotable",
-              "too-many-severe-data-gaps",
+              "insufficient-data-quality",
               "too-many-risk-tags",
               "evidence-score-below-threshold",
               "insufficient-auditable-model-inputs",
@@ -12454,9 +13379,9 @@
               "upstreamRecommended": false,
               "upstreamAligned": true,
               "globalRiskTier": null,
-              "severeMissingCount": 2,
+              "severeMissingCount": 0,
               "riskTagsCount": 6,
-              "trustPenalty": 9,
+              "trustPenalty": 7,
               "riskPenalty": 0,
               "inputSparseMarketFallback": true
             },
@@ -12478,8 +13403,8 @@
               "probabilityMove": null,
               "asianLineMovement": null,
               "companies": 0,
-              "updatedAt": "2026-10-05T03:06:12.006Z",
-              "cutoffAt": "2026-10-05T03:06:24.106Z"
+              "updatedAt": "2026-10-05T03:16:17.250Z",
+              "cutoffAt": "2026-10-05T03:16:33.383Z"
             },
             "upstream": {
               "marketType": "BEST",
@@ -12501,47 +13426,47 @@
               "HAD": {
                 "market": "HAD",
                 "code": "1",
-                "probability": 68.1,
-                "odds": 1.37,
-                "gap": 49.1,
-                "posteriorScore": 0.8907,
+                "probability": 68.2,
+                "odds": 1.34,
+                "gap": 49.3,
+                "posteriorScore": 0.9023,
                 "selectionPolicy": null
               },
               "HHAD": {
                 "market": "HHAD",
                 "code": "1",
                 "probability": 46.6,
-                "odds": 2.14,
+                "odds": 2.06,
                 "gap": 18.1,
-                "posteriorScore": 0.4898,
+                "posteriorScore": 0.5239,
                 "selectionPolicy": null
               }
             },
             "rawSelection": {
               "market": "HAD",
               "code": "1",
-              "probability": 68.1,
-              "odds": 1.37,
-              "gap": 49.1,
-              "posteriorScore": 0.8907,
+              "probability": 68.2,
+              "odds": 1.34,
+              "gap": 49.3,
+              "posteriorScore": 0.9023,
               "selectionPolicy": null
             },
             "currentSelection": {
               "market": "HAD",
               "code": "1",
-              "probability": 68.1,
-              "odds": 1.37,
-              "gap": 49.1,
-              "posteriorScore": 0.8907,
+              "probability": 68.2,
+              "odds": 1.34,
+              "gap": 49.3,
+              "posteriorScore": 0.9023,
               "selectionPolicy": "calibrated-had-market-baseline"
             },
             "shadowSelection": {
               "market": "HAD",
               "code": "1",
-              "probability": 68.1,
-              "odds": 1.37,
-              "gap": 49.1,
-              "posteriorScore": 0.8907,
+              "probability": 68.2,
+              "odds": 1.34,
+              "gap": 49.3,
+              "posteriorScore": 0.9023,
               "selectionPolicy": null
             },
             "wouldChangeSelection": false
@@ -12556,27 +13481,27 @@
             "applied": true,
             "blockers": [],
             "leaderCode": "1",
-            "leaderProbability": 0.647335,
+            "leaderProbability": 0.660774,
             "selectedCode": "1",
-            "selectedSupport": 0.647335,
+            "selectedSupport": 0.660774,
             "directionGap": 0,
             "materialDirectionConflict": false,
             "rawSelection": {
               "market": "HAD",
               "code": "1",
-              "probability": 68.1,
-              "odds": 1.37,
-              "gap": 49.1,
-              "posteriorScore": 0.8907,
+              "probability": 68.2,
+              "odds": 1.34,
+              "gap": 49.3,
+              "posteriorScore": 0.9023,
               "selectionPolicy": null
             },
             "activeSelection": {
               "market": "HAD",
               "code": "1",
-              "probability": 68.1,
-              "odds": 1.37,
-              "gap": 49.1,
-              "posteriorScore": 0.8907,
+              "probability": 68.2,
+              "odds": 1.34,
+              "gap": 49.3,
+              "posteriorScore": 0.9023,
               "selectionPolicy": "calibrated-had-market-baseline"
             }
           },
@@ -12615,8 +13540,8 @@
             "independentAgreement": null,
             "modelComponentCount": 3,
             "withinModelAgreement": 1,
-            "componentDispersion": 0.027775,
-            "independentSideGap": 0.5441,
+            "componentDispersion": 0.02747,
+            "independentSideGap": 0.5452,
             "drawAdjustment": 0,
             "drawSignals": {
               "competitiveBalance": 0,
@@ -12630,7 +13555,7 @@
             "formalPromotionEligible": false,
             "quotaBalancing": false
           },
-          "dataQuality": 0.44,
+          "dataQuality": 0.25,
           "worldCupGroupContext": null,
           "scoreShape": {
             "top1": {
@@ -12674,10 +13599,10 @@
             {
               "market": "HAD",
               "code": "1",
-              "probability": 68.1,
-              "odds": 1.37,
-              "gap": 49.1,
-              "posteriorScore": 0.8907,
+              "probability": 68.2,
+              "odds": 1.34,
+              "gap": 49.3,
+              "posteriorScore": 0.9023,
               "worldCupContextBoost": 0,
               "recentReviewAdjustment": 0,
               "recentReviewReasons": [],
@@ -12688,19 +13613,19 @@
                 "market": "HAD",
                 "code": "1",
                 "handicapLine": "0",
-                "odds": 1.37,
-                "evidenceScore": 45.4,
+                "odds": 1.34,
+                "evidenceScore": 52.7,
                 "threshold": 66,
-                "modelProbability": 0.6805479115084208,
-                "marketProbability": 0.6473349485160509,
-                "probabilityEdge": 0.0332,
-                "expectedValue": -0.0676,
-                "modelGap": 0.4908546251264271,
-                "dataQuality": null,
+                "modelProbability": 0.6819826539518579,
+                "marketProbability": 0.6607740496009611,
+                "probabilityEdge": 0.0212,
+                "expectedValue": -0.0861,
+                "modelGap": 0.49279308235877484,
+                "dataQuality": 0.25,
                 "components": {
                   "independentModel": 18,
                   "modelSeparation": 12,
-                  "probabilityEdge": 6.81,
+                  "probabilityEdge": 5.51,
                   "expectedValue": 0,
                   "scoreAndHandicap": 18,
                   "marketStructure": 5,
@@ -12708,7 +13633,7 @@
                   "dataQuality": 0,
                   "upstreamGate": 0
                 },
-                "penalty": 14.42,
+                "penalty": 5.86,
                 "supportingFactors": [
                   "independent-model-probability",
                   "model-separation",
@@ -12718,10 +13643,9 @@
                   "official-market-alignment"
                 ],
                 "blockers": [
-                  "missing-data-quality",
                   "upstream-multi-factor-gate-not-passed",
                   "model-risk-not-promotable",
-                  "too-many-severe-data-gaps",
+                  "insufficient-data-quality",
                   "too-many-risk-tags",
                   "evidence-score-below-threshold",
                   "insufficient-auditable-model-inputs",
@@ -12740,9 +13664,9 @@
                   "upstreamRecommended": false,
                   "upstreamAligned": true,
                   "globalRiskTier": null,
-                  "severeMissingCount": 2,
+                  "severeMissingCount": 0,
                   "riskTagsCount": 6,
-                  "trustPenalty": 9,
+                  "trustPenalty": 7,
                   "riskPenalty": 0,
                   "inputSparseMarketFallback": true
                 }
@@ -12752,13 +13676,14 @@
               "market": "HHAD",
               "code": "1",
               "probability": 46.6,
-              "odds": 2.14,
+              "odds": 2.06,
               "gap": 18.1,
-              "posteriorScore": 0.4898,
+              "posteriorScore": 0.5239,
               "worldCupContextBoost": 0,
-              "recentReviewAdjustment": -0.012,
+              "recentReviewAdjustment": 0.013,
               "recentReviewReasons": [
-                "prefer-1x2-when-close"
+                "prefer-1x2-when-close",
+                "hhad-score-market-confirmed"
               ],
               "multiFactorEvidence": {
                 "version": "multi-factor-dynamic-evidence-v4",
@@ -12767,27 +13692,27 @@
                 "market": "HHAD",
                 "code": "1",
                 "handicapLine": "-1",
-                "odds": 2.14,
-                "evidenceScore": 42.6,
+                "odds": 2.06,
+                "evidenceScore": 48.1,
                 "threshold": 74,
                 "modelProbability": 0.46576426979640045,
-                "marketProbability": 0.41394862236913826,
-                "probabilityEdge": 0.0518,
-                "expectedValue": -0.0033,
+                "marketProbability": 0.43003105105209294,
+                "probabilityEdge": 0.0357,
+                "expectedValue": -0.0405,
                 "modelGap": 0.1813185332926482,
-                "dataQuality": null,
+                "dataQuality": 0.25,
                 "components": {
                   "independentModel": 7.55,
                   "modelSeparation": 12,
-                  "probabilityEdge": 8.81,
-                  "expectedValue": 2.24,
+                  "probabilityEdge": 7.08,
+                  "expectedValue": 0.45,
                   "scoreAndHandicap": 18,
                   "marketStructure": 5,
                   "marketMovement": 0,
                   "dataQuality": 0,
                   "upstreamGate": 0
                 },
-                "penalty": 10.95,
+                "penalty": 1.96,
                 "supportingFactors": [
                   "model-separation",
                   "model-market-edge",
@@ -12796,10 +13721,9 @@
                   "official-market-alignment"
                 ],
                 "blockers": [
-                  "missing-data-quality",
                   "upstream-multi-factor-gate-not-passed",
                   "model-risk-not-promotable",
-                  "too-many-severe-data-gaps",
+                  "insufficient-data-quality",
                   "high-sp-model-probability-too-low",
                   "high-sp-data-quality-too-low",
                   "hhad-model-probability-too-low",
@@ -12821,10 +13745,10 @@
                   "upstreamRecommended": false,
                   "upstreamAligned": false,
                   "globalRiskTier": null,
-                  "severeMissingCount": 2,
+                  "severeMissingCount": 0,
                   "riskTagsCount": 0,
-                  "trustPenalty": 9,
-                  "riskPenalty": 0.012,
+                  "trustPenalty": 7,
+                  "riskPenalty": 0,
                   "inputSparseMarketFallback": true
                 }
               }
@@ -12833,9 +13757,9 @@
               "market": "HHAD",
               "code": "X",
               "probability": 25,
-              "odds": 3.65,
+              "odds": 3.7,
               "gap": 0,
-              "posteriorScore": 0.1549,
+              "posteriorScore": 0.164,
               "worldCupContextBoost": 0,
               "recentReviewAdjustment": -0.012,
               "recentReviewReasons": [
@@ -12848,19 +13772,19 @@
                 "market": "HHAD",
                 "code": "X",
                 "handicapLine": "-1",
-                "odds": 3.65,
-                "evidenceScore": 7,
+                "odds": 3.7,
+                "evidenceScore": 16,
                 "threshold": 74,
                 "modelProbability": 0.24978999369984725,
-                "marketProbability": 0.24269864434793312,
-                "probabilityEdge": 0.0071,
-                "expectedValue": -0.0883,
+                "marketProbability": 0.23942269328846252,
+                "probabilityEdge": 0.0104,
+                "expectedValue": -0.0758,
                 "modelGap": 0,
-                "dataQuality": null,
+                "dataQuality": 0.25,
                 "components": {
                   "independentModel": 0,
                   "modelSeparation": 0,
-                  "probabilityEdge": 3.99,
+                  "probabilityEdge": 4.35,
                   "expectedValue": 0,
                   "scoreAndHandicap": 14,
                   "marketStructure": 0,
@@ -12868,17 +13792,16 @@
                   "dataQuality": 0,
                   "upstreamGate": 0
                 },
-                "penalty": 10.95,
+                "penalty": 2.39,
                 "supportingFactors": [
                   "score-matrix-alignment"
                 ],
                 "blockers": [
-                  "missing-data-quality",
                   "upstream-multi-factor-gate-not-passed",
                   "model-risk-not-promotable",
                   "model-probability-too-low",
                   "model-separation-too-thin",
-                  "too-many-severe-data-gaps",
+                  "insufficient-data-quality",
                   "historical-high-sp-cooling",
                   "hhad-model-probability-too-low",
                   "hhad-model-separation-too-thin",
@@ -12903,9 +13826,9 @@
                   "upstreamRecommended": false,
                   "upstreamAligned": false,
                   "globalRiskTier": null,
-                  "severeMissingCount": 2,
+                  "severeMissingCount": 0,
                   "riskTagsCount": 0,
-                  "trustPenalty": 9,
+                  "trustPenalty": 7,
                   "riskPenalty": 0.012,
                   "inputSparseMarketFallback": true
                 }
@@ -12914,10 +13837,10 @@
             {
               "market": "HAD",
               "code": "X",
-              "probability": 19,
-              "odds": 4.5,
+              "probability": 18.9,
+              "odds": 4.62,
               "gap": 0,
-              "posteriorScore": 0.1228,
+              "posteriorScore": 0.1314,
               "worldCupContextBoost": 0,
               "recentReviewAdjustment": 0,
               "recentReviewReasons": [],
@@ -12928,19 +13851,19 @@
                 "market": "HAD",
                 "code": "X",
                 "handicapLine": "0",
-                "odds": 4.5,
-                "evidenceScore": 0,
+                "odds": 4.62,
+                "evidenceScore": 7,
                 "threshold": 74,
-                "modelProbability": 0.1896932863819937,
-                "marketProbability": 0.19707752877044216,
-                "probabilityEdge": -0.0074,
-                "expectedValue": -0.1464,
+                "modelProbability": 0.189189571593083,
+                "marketProbability": 0.1916530793214909,
+                "probabilityEdge": -0.0025,
+                "expectedValue": -0.1259,
                 "modelGap": 0,
-                "dataQuality": null,
+                "dataQuality": 0.25,
                 "components": {
                   "independentModel": 0,
                   "modelSeparation": 0,
-                  "probabilityEdge": 2.44,
+                  "probabilityEdge": 2.97,
                   "expectedValue": 0,
                   "scoreAndHandicap": 6,
                   "marketStructure": 0,
@@ -12948,15 +13871,14 @@
                   "dataQuality": 0,
                   "upstreamGate": 0
                 },
-                "penalty": 10.52,
+                "penalty": 1.96,
                 "supportingFactors": [],
                 "blockers": [
-                  "missing-data-quality",
                   "upstream-multi-factor-gate-not-passed",
                   "model-risk-not-promotable",
                   "model-probability-too-low",
                   "model-separation-too-thin",
-                  "too-many-severe-data-gaps",
+                  "insufficient-data-quality",
                   "score-matrix-not-aligned",
                   "historical-high-sp-cooling",
                   "high-sp-draw-probability-too-low",
@@ -12978,9 +13900,9 @@
                   "upstreamRecommended": false,
                   "upstreamAligned": false,
                   "globalRiskTier": null,
-                  "severeMissingCount": 2,
+                  "severeMissingCount": 0,
                   "riskTagsCount": 0,
-                  "trustPenalty": 9,
+                  "trustPenalty": 7,
                   "riskPenalty": 0,
                   "inputSparseMarketFallback": true
                 }
@@ -12989,10 +13911,10 @@
             {
               "market": "HAD",
               "code": "2",
-              "probability": 13,
-              "odds": 5.7,
+              "probability": 12.9,
+              "odds": 6,
               "gap": 0,
-              "posteriorScore": 0.0448,
+              "posteriorScore": 0.053,
               "worldCupContextBoost": 0,
               "recentReviewAdjustment": 0,
               "recentReviewReasons": [],
@@ -13003,19 +13925,19 @@
                 "market": "HAD",
                 "code": "2",
                 "handicapLine": "0",
-                "odds": 5.7,
-                "evidenceScore": 0,
+                "odds": 6,
+                "evidenceScore": 5.3,
                 "threshold": 74,
-                "modelProbability": 0.12975880210958554,
-                "marketProbability": 0.15558752271350695,
-                "probabilityEdge": -0.0258,
-                "expectedValue": -0.2604,
+                "modelProbability": 0.12882777445505916,
+                "marketProbability": 0.14757287107754796,
+                "probabilityEdge": -0.0187,
+                "expectedValue": -0.227,
                 "modelGap": 0,
-                "dataQuality": null,
+                "dataQuality": 0.25,
                 "components": {
                   "independentModel": 0,
                   "modelSeparation": 0,
-                  "probabilityEdge": 0.45,
+                  "probabilityEdge": 1.21,
                   "expectedValue": 0,
                   "scoreAndHandicap": 6,
                   "marketStructure": 0,
@@ -13023,16 +13945,14 @@
                   "dataQuality": 0,
                   "upstreamGate": 0
                 },
-                "penalty": 10.52,
+                "penalty": 1.96,
                 "supportingFactors": [],
                 "blockers": [
-                  "missing-data-quality",
                   "upstream-multi-factor-gate-not-passed",
                   "model-risk-not-promotable",
                   "model-probability-too-low",
                   "model-separation-too-thin",
-                  "market-implied-probability-contradiction",
-                  "too-many-severe-data-gaps",
+                  "insufficient-data-quality",
                   "score-matrix-not-aligned",
                   "historical-high-sp-cooling",
                   "insufficient-independent-support",
@@ -13053,9 +13973,9 @@
                   "upstreamRecommended": false,
                   "upstreamAligned": false,
                   "globalRiskTier": null,
-                  "severeMissingCount": 2,
+                  "severeMissingCount": 0,
                   "riskTagsCount": 0,
-                  "trustPenalty": 9,
+                  "trustPenalty": 7,
                   "riskPenalty": 0,
                   "inputSparseMarketFallback": true
                 }
@@ -13065,9 +13985,9 @@
               "market": "HHAD",
               "code": "2",
               "probability": 28.4,
-              "odds": 2.58,
+              "odds": 2.68,
               "gap": 0,
-              "posteriorScore": 0.0365,
+              "posteriorScore": 0.0456,
               "worldCupContextBoost": 0,
               "recentReviewAdjustment": -0.147,
               "recentReviewReasons": [
@@ -13083,15 +14003,15 @@
                 "market": "HHAD",
                 "code": "2",
                 "handicapLine": "-1",
-                "odds": 2.58,
+                "odds": 2.68,
                 "evidenceScore": 0,
                 "threshold": 74,
                 "modelProbability": 0.28444573650375227,
-                "marketProbability": 0.34335273328292865,
-                "probabilityEdge": -0.0589,
-                "expectedValue": -0.2661,
+                "marketProbability": 0.33054625565944457,
+                "probabilityEdge": -0.0461,
+                "expectedValue": -0.2377,
                 "modelGap": 0,
-                "dataQuality": null,
+                "dataQuality": 0.25,
                 "components": {
                   "independentModel": 0,
                   "modelSeparation": 0,
@@ -13103,24 +14023,19 @@
                   "dataQuality": 0,
                   "upstreamGate": 0
                 },
-                "penalty": 15.81,
+                "penalty": 7.25,
                 "supportingFactors": [],
                 "blockers": [
-                  "missing-data-quality",
                   "upstream-multi-factor-gate-not-passed",
                   "model-risk-not-promotable",
                   "model-probability-too-low",
                   "model-separation-too-thin",
                   "market-implied-probability-contradiction",
-                  "too-many-severe-data-gaps",
+                  "insufficient-data-quality",
                   "score-matrix-not-aligned",
                   "had-hhad-conflict",
                   "candidate-risk-too-high",
-                  "high-sp-model-probability-too-low",
-                  "high-sp-model-separation-too-thin",
-                  "high-sp-market-edge-too-thin",
-                  "high-sp-market-confirmation-missing",
-                  "high-sp-data-quality-too-low",
+                  "historical-high-sp-cooling",
                   "hhad-model-probability-too-low",
                   "hhad-model-separation-too-thin",
                   "hhad-data-quality-too-low",
@@ -13143,9 +14058,9 @@
                   "upstreamRecommended": false,
                   "upstreamAligned": false,
                   "globalRiskTier": null,
-                  "severeMissingCount": 2,
+                  "severeMissingCount": 0,
                   "riskTagsCount": 0,
-                  "trustPenalty": 9,
+                  "trustPenalty": 7,
                   "riskPenalty": 0.147,
                   "inputSparseMarketFallback": true
                 }
@@ -13154,30 +14069,44 @@
           ],
           "confidence": {
             "version": "dynamic-evidence-confidence-v4-auditable-public-facts",
-            "available": false,
-            "unavailableReasons": [
-              "data-quality-missing"
-            ],
-            "score": 0,
-            "band": "unavailable",
+            "available": true,
+            "unavailableReasons": [],
+            "score": 27,
+            "band": "low",
             "priceIndependent": true,
-            "components": {},
-            "penalties": {},
+            "components": {
+              "probabilityStrength": 1,
+              "separationStrength": 1,
+              "evidenceQuality": 0.527,
+              "dataQuality": 0.25,
+              "evidenceCoverage": 0,
+              "agreement": 0.367,
+              "independentAgreement": 0,
+              "freshnessQuality": 1,
+              "historicalReliability": 0
+            },
+            "penalties": {
+              "blockers": 0.12,
+              "trust": 0.07,
+              "materialConflict": 0,
+              "uncertainty": 0.077,
+              "sparseInput": 0.045
+            },
             "publicMetrics": {
-              "modelProbability": 0.6805479115084208,
+              "modelProbability": 0.6819826539518579,
               "evidenceCompleteness": 0,
               "evidenceCompletenessBasis": "input-coverage-ratio",
-              "dataQuality": null,
-              "evidenceScore": 0.45399999999999996,
+              "dataQuality": 0.25,
+              "evidenceScore": 0.527,
               "marketConsistency": "aligned",
               "marketConsistencyBasis": "auditable-market-leader",
               "calibrationSample": 0,
               "freshnessQuality": 1,
-              "freshnessObservedAt": "2026-10-05T03:06:12.006Z",
-              "freshnessSourceUpdatedAt": "2026-10-05T03:06:12.006Z",
-              "freshnessAsOf": "2026-10-05T03:06:12.006Z",
-              "freshnessEvaluatedAt": "2026-10-05T03:06:24.106Z",
-              "freshnessAgeSeconds": 12,
+              "freshnessObservedAt": "2026-10-05T03:16:17.250Z",
+              "freshnessSourceUpdatedAt": "2026-10-05T03:16:17.250Z",
+              "freshnessAsOf": "2026-10-05T03:16:17.250Z",
+              "freshnessEvaluatedAt": "2026-10-05T03:16:33.383Z",
+              "freshnessAgeSeconds": 16,
               "freshnessSource": "500.com:HAD",
               "freshnessBasis": "observed-at"
             }
@@ -13195,71 +14124,71 @@
         "events": [
           {
             "operation": "iso",
-            "millis": 1791169584105
+            "millis": 1791170193382
           },
           {
             "operation": "iso",
-            "millis": 1791169584105
+            "millis": 1791170193382
           },
           {
             "operation": "iso",
-            "millis": 1791169584105
+            "millis": 1791170193382
           },
           {
             "operation": "iso",
-            "millis": 1791169584106
+            "millis": 1791170193383
           },
           {
             "operation": "millis",
-            "millis": 1791169584107
+            "millis": 1791170193384
           },
           {
             "operation": "millis",
-            "millis": 1791169584107
+            "millis": 1791170193385
           },
           {
             "operation": "millis",
-            "millis": 1791169584107
+            "millis": 1791170193385
           },
           {
             "operation": "millis",
-            "millis": 1791169584107
+            "millis": 1791170193385
           },
           {
             "operation": "millis",
-            "millis": 1791169584107
+            "millis": 1791170193385
           },
           {
             "operation": "millis",
-            "millis": 1791169584107
+            "millis": 1791170193385
           },
           {
             "operation": "millis",
-            "millis": 1791169584108
+            "millis": 1791170193385
           },
           {
             "operation": "millis",
-            "millis": 1791169584108
+            "millis": 1791170193386
           },
           {
             "operation": "iso",
-            "millis": 1791169584108
+            "millis": 1791170193386
           }
         ],
         "sourceVerified": false,
         "scope": "local calculation clock reads; not provider observation, publication time or source attestation",
-        "contentHash": "07d4d90db4b7407e6d193fdcfb108f1efc4d32d687b8006426bff21018d542b0"
+        "contentHash": "82d08789fdf17ce6ac95d910893240cc047bc24a6bfcb17ba046287f91994b81"
       }
     },
     "odds": {
-      "odds1": 1.37,
-      "oddsX": 4.5,
-      "odds2": 5.7
+      "odds1": 1.34,
+      "oddsX": 4.62,
+      "odds2": 6
     },
     "handicapOdds": {
-      "odds1": 2.14,
-      "oddsX": 3.65,
-      "odds2": 2.58
+      "odds1": 2.06,
+      "oddsX": 3.7,
+      "odds2": 2.68
     },
     "predictions": [
       {
@@ -13272,7 +14201,7 @@
           "en": "No pick: insufficient audited inputs"
         },
         "odds": 0,
-        "trustScore": 35,
+        "trustScore": 27,
         "recommendationAction": "reference",
         "recommendationTier": "input-insufficient-watch",
         "explanation": {
@@ -13342,7 +14271,7 @@
           "en": "No pick: insufficient audited inputs"
         },
         "odds": 0,
-        "trustScore": 35,
+        "trustScore": 27,
         "recommendationAction": "reference",
         "recommendationTier": "input-insufficient-watch",
         "explanation": {
@@ -13369,30 +14298,44 @@
         "resultStatus": "PENDING",
         "confidence": {
           "version": "dynamic-evidence-confidence-v4-auditable-public-facts",
-          "available": false,
-          "unavailableReasons": [
-            "data-quality-missing"
-          ],
-          "score": 0,
-          "band": "unavailable",
+          "available": true,
+          "unavailableReasons": [],
+          "score": 27,
+          "band": "low",
           "priceIndependent": true,
-          "components": {},
-          "penalties": {},
+          "components": {
+            "probabilityStrength": 1,
+            "separationStrength": 1,
+            "evidenceQuality": 0.527,
+            "dataQuality": 0.25,
+            "evidenceCoverage": 0,
+            "agreement": 0.367,
+            "independentAgreement": 0,
+            "freshnessQuality": 1,
+            "historicalReliability": 0
+          },
+          "penalties": {
+            "blockers": 0.12,
+            "trust": 0.07,
+            "materialConflict": 0,
+            "uncertainty": 0.077,
+            "sparseInput": 0.045
+          },
           "publicMetrics": {
-            "modelProbability": 0.6805479115084208,
+            "modelProbability": 0.6819826539518579,
             "evidenceCompleteness": 0,
             "evidenceCompletenessBasis": "input-coverage-ratio",
-            "dataQuality": null,
-            "evidenceScore": 0.45399999999999996,
+            "dataQuality": 0.25,
+            "evidenceScore": 0.527,
             "marketConsistency": "aligned",
             "marketConsistencyBasis": "auditable-market-leader",
             "calibrationSample": 0,
             "freshnessQuality": 1,
-            "freshnessObservedAt": "2026-10-05T03:06:12.006Z",
-            "freshnessSourceUpdatedAt": "2026-10-05T03:06:12.006Z",
-            "freshnessAsOf": "2026-10-05T03:06:12.006Z",
-            "freshnessEvaluatedAt": "2026-10-05T03:06:24.106Z",
-            "freshnessAgeSeconds": 12,
+            "freshnessObservedAt": "2026-10-05T03:16:17.250Z",
+            "freshnessSourceUpdatedAt": "2026-10-05T03:16:17.250Z",
+            "freshnessAsOf": "2026-10-05T03:16:17.250Z",
+            "freshnessEvaluatedAt": "2026-10-05T03:16:33.383Z",
+            "freshnessAgeSeconds": 16,
             "freshnessSource": "500.com:HAD",
             "freshnessBasis": "observed-at"
           }
@@ -13401,23 +14344,23 @@
           "version": "multi-factor-dynamic-evidence-v4",
           "eligible": false,
           "grade": "WATCH",
-          "evidenceScore": 45.4,
+          "evidenceScore": 52.7,
           "threshold": 66,
           "market": "HAD",
           "code": "1",
           "handicapLine": "0",
-          "odds": 1.37,
-          "modelProbability": 0.6805479115084208,
-          "marketProbability": 0.6473349485160509,
-          "probabilityEdge": 0.0332,
-          "expectedValue": -0.0676,
-          "modelGap": 0.4908546251264271,
+          "odds": 1.34,
+          "modelProbability": 0.6819826539518579,
+          "marketProbability": 0.6607740496009611,
+          "probabilityEdge": 0.0212,
+          "expectedValue": -0.0861,
+          "modelGap": 0.49279308235877484,
           "minimumModelGap": 0.06,
-          "dataQuality": null,
+          "dataQuality": 0.25,
           "components": {
             "independentModel": 18,
             "modelSeparation": 12,
-            "probabilityEdge": 6.81,
+            "probabilityEdge": 5.51,
             "expectedValue": 0,
             "scoreAndHandicap": 18,
             "marketStructure": 5,
@@ -13425,7 +14368,7 @@
             "dataQuality": 0,
             "upstreamGate": 0
           },
-          "penalty": 14.42,
+          "penalty": 5.86,
           "supportingFactors": [
             "independent-model-probability",
             "model-separation",
@@ -13435,10 +14378,9 @@
             "official-market-alignment"
           ],
           "blockers": [
-            "missing-data-quality",
             "upstream-multi-factor-gate-not-passed",
             "model-risk-not-promotable",
-            "too-many-severe-data-gaps",
+            "insufficient-data-quality",
             "too-many-risk-tags",
             "evidence-score-below-threshold",
             "insufficient-auditable-model-inputs",
@@ -13465,9 +14407,9 @@
             "upstreamRecommended": false,
             "upstreamAligned": true,
             "globalRiskTier": null,
-            "severeMissingCount": 2,
+            "severeMissingCount": 0,
             "riskTagsCount": 6,
-            "trustPenalty": 9,
+            "trustPenalty": 7,
             "riskPenalty": 0,
             "inputSparseMarketFallback": true
           },
@@ -13489,8 +14431,8 @@
             "probabilityMove": null,
             "asianLineMovement": null,
             "companies": 0,
-            "updatedAt": "2026-10-05T03:06:12.006Z",
-            "cutoffAt": "2026-10-05T03:06:24.106Z"
+            "updatedAt": "2026-10-05T03:16:17.250Z",
+            "cutoffAt": "2026-10-05T03:16:33.383Z"
           },
           "upstream": {
             "marketType": "BEST",
@@ -13507,15 +14449,15 @@
           "eligible": false,
           "grade": "WITHHOLD",
           "statisticsTrack": "live-model",
-          "evidenceScore": 45.4,
+          "evidenceScore": 52.7,
           "minimumEvidenceScore": 45,
-          "probabilityEdge": 0.0332,
+          "probabilityEdge": 0.0212,
           "minimumProbabilityEdge": 0.015,
-          "expectedValue": -0.0676,
+          "expectedValue": -0.0861,
           "minimumExpectedValue": 0,
-          "dataQuality": null,
+          "dataQuality": 0.25,
           "minimumDataQuality": 0.5,
-          "severeMissingCount": 2,
+          "severeMissingCount": 0,
           "maximumSevereMissingCount": 1,
           "coverageMode": "withhold",
           "dataCoverageWarning": false,
@@ -13527,11 +14469,10 @@
             "evidence-direction-mismatch",
             "official-sp-mismatch",
             "live-expected-value-negative",
-            "live-data-quality-missing",
-            "missing-data-quality",
+            "live-data-coverage-below-executable-threshold",
             "upstream-multi-factor-gate-not-passed",
             "model-risk-not-promotable",
-            "too-many-severe-data-gaps",
+            "insufficient-data-quality",
             "live-publication-evidence-missing",
             "unverified-official-source"
           ],
@@ -13547,7 +14488,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T03:11:03.195Z",
+      "updatedAt": "2026-10-05T03:16:17.250Z",
       "sourceMatchId": "2041808",
       "fixtureId": "1398659",
       "matchNo": "周一004",
@@ -13559,30 +14500,30 @@
       "handicapLine": "-1",
       "externalOdds": {
         "source": "500.com",
-        "odds1": 1.37,
-        "oddsX": 4.5,
-        "odds2": 5.7,
+        "odds1": 1.34,
+        "oddsX": 4.62,
+        "odds2": 6,
         "summary": {
-          "zh": "500彩票网胜平负参考：1.37 / 4.50 / 5.70",
-          "en": "500.com 1X2 reference: 1.37 / 4.50 / 5.70"
+          "zh": "500彩票网胜平负参考：1.34 / 4.62 / 6.00",
+          "en": "500.com 1X2 reference: 1.34 / 4.62 / 6.00"
         }
       },
       "bookmakerOdds": {
         "had": {
-          "odds1": 1.37,
-          "oddsX": 4.5,
-          "odds2": 5.7
+          "odds1": 1.34,
+          "oddsX": 4.62,
+          "odds2": 6
         },
         "hhad": {
-          "odds1": 2.14,
-          "oddsX": 3.65,
-          "odds2": 2.58
+          "odds1": 2.06,
+          "oddsX": 3.7,
+          "odds2": 2.68
         }
       },
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T03:06:31.808Z",
+        "updatedAt": "2026-10-05T03:11:28.505Z",
         "sourceMatchId": "2041808",
         "matchId": "fivehundred_2041808",
         "matchNo": "周一004",
@@ -13616,7 +14557,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -13652,7 +14593,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -13673,7 +14614,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -13896,14 +14837,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T03:11:13.637Z",
+        "lastCheckedAt": "2026-10-05T03:16:27.259Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T03:11:13.637Z",
+          "checkedAt": "2026-10-05T03:16:27.259Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -14088,21 +15029,21 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsObservedAt": "2026-10-05T03:11:03.195Z",
-    "oddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+    "oddsObservedAt": "2026-10-05T03:16:17.250Z",
+    "oddsUpdatedAt": "2026-10-05T03:16:17.250Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "oddsMarketProvenance": null,
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsObservedAt": "2026-10-05T03:11:03.195Z",
-    "handicapOddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+    "handicapOddsObservedAt": "2026-10-05T03:16:17.250Z",
+    "handicapOddsUpdatedAt": "2026-10-05T03:16:17.250Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapOddsMarketProvenance": null,
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T03:11:15.100Z",
+      "generatedAt": "2026-10-05T03:16:28.794Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -14297,25 +15238,25 @@
       "trainingSignature": "none|application:historical-training-application-v3-signed-seed-trusted-event-incremental",
       "worldCupPriorSignature": null,
       "scoreCalibrationSignature": null,
-      "generatedAt": "2026-10-05T03:06:24.106Z",
-      "modelGeneratedAt": "2026-10-05T03:06:24.106Z",
+      "generatedAt": "2026-10-05T03:16:33.383Z",
+      "modelGeneratedAt": "2026-10-05T03:16:33.383Z",
       "unifiedPosteriorGeneratedAt": null,
       "sourceCycleId": "sporttery-full-sync:2026-10-05T03:06:19.384Z",
-      "decisionId": "decision_t4d69d",
-      "decisionRevision": 1,
-      "decisionGeneratedAt": "2026-10-05T03:06:24.106Z",
-      "updatedAt": "2026-10-05T03:11:21.046Z",
-      "syncCapturedAt": "2026-10-05T03:06:19.384Z",
-      "publicationFinalizedAt": "2026-10-05T03:06:24.419Z",
+      "decisionId": "decision_qpwxsp",
+      "decisionRevision": 2,
+      "decisionGeneratedAt": "2026-10-05T03:16:33.383Z",
+      "updatedAt": "2026-10-05T03:16:33.661Z",
+      "syncCapturedAt": "2026-10-05T03:16:27.908Z",
+      "publicationFinalizedAt": "2026-10-05T03:16:33.661Z",
       "publicationGate": {
         "version": "prediction-publication-cutoff-gate-v1",
-        "syncCapturedAt": "2026-10-05T03:06:19.384Z",
-        "finalizedAt": "2026-10-05T03:06:24.419Z",
+        "syncCapturedAt": "2026-10-05T03:16:27.908Z",
+        "finalizedAt": "2026-10-05T03:16:33.661Z",
         "cutoffTime": "2026-10-05 22:00:00",
         "crossedCutoffDuringSync": false,
         "syncStartedAfterCutoff": false,
-        "candidateDecisionGeneratedAt": "2026-10-05T03:06:24.106Z",
-        "trustedExistingPreCutoffDecision": false,
+        "candidateDecisionGeneratedAt": "2026-10-05T03:16:33.383Z",
+        "trustedExistingPreCutoffDecision": true,
         "status": "allowed",
         "reasonCode": "finalized-before-cutoff"
       },
@@ -14522,8 +15463,8 @@
       "calibrationVersion": "rolling-calibration-v1",
       "featureSnapshot": {
         "version": "prediction-feature-snapshot-v4-clock-lineage",
-        "capturedAt": "2026-10-05T03:06:24.106Z",
-        "modelGeneratedAt": "2026-10-05T03:06:24.106Z",
+        "capturedAt": "2026-10-05T03:16:33.383Z",
+        "modelGeneratedAt": "2026-10-05T03:16:33.383Z",
         "sourceCycleId": "sporttery-full-sync:2026-10-05T03:06:19.384Z",
         "modelVersion": "unified-poisson-bayes-v76",
         "calibrationVersion": "rolling-calibration-v1",
@@ -14534,30 +15475,30 @@
         "market": {
           "had": {
             "odds": {
-              "odds1": 1.37,
-              "oddsX": 4.5,
-              "odds2": 5.7
+              "odds1": 1.34,
+              "oddsX": 4.62,
+              "odds2": 6
             },
             "source": "500.com:HAD",
             "sourceMethod": "500-fallback",
-            "observedAt": "2026-10-05T03:06:12.006Z",
+            "observedAt": "2026-10-05T03:16:17.250Z",
             "receivedAt": null,
-            "updatedAt": "2026-10-05T03:06:12.006Z",
+            "updatedAt": "2026-10-05T03:16:17.250Z",
             "provenance": null,
             "provenanceHash": null
           },
           "hhad": {
             "handicapLine": "-1",
             "odds": {
-              "odds1": 2.14,
-              "oddsX": 3.65,
-              "odds2": 2.58
+              "odds1": 2.06,
+              "oddsX": 3.7,
+              "odds2": 2.68
             },
             "source": "500.com:HHAD",
             "sourceMethod": "500-fallback",
-            "observedAt": "2026-10-05T03:06:12.006Z",
+            "observedAt": "2026-10-05T03:16:17.250Z",
             "receivedAt": null,
-            "updatedAt": "2026-10-05T03:06:12.006Z",
+            "updatedAt": "2026-10-05T03:16:17.250Z",
             "provenance": null,
             "provenanceHash": null
           },
@@ -14575,14 +15516,14 @@
                 "stage": "base-outcome-blend",
                 "used": false,
                 "weight": 0,
-                "receiptHash": "0413627378a03c5b9830a6dc2110ca4c2ac3f595f1812f2e4aac54723b692d59"
+                "receiptHash": "fbc9a170675e8b1892ced961ef05bca12a81e8d8542ab65a029a263a3b885dcf"
               },
               {
                 "key": "externalMarket",
                 "stage": "base-outcome-blend",
                 "used": true,
                 "weight": 0.15,
-                "receiptHash": "0413627378a03c5b9830a6dc2110ca4c2ac3f595f1812f2e4aac54723b692d59",
+                "receiptHash": "fbc9a170675e8b1892ced961ef05bca12a81e8d8542ab65a029a263a3b885dcf",
                 "poolCode": "HAD",
                 "source": "500.com:HAD"
               },
@@ -14591,7 +15532,7 @@
                 "stage": "form-lambda-blend",
                 "used": false,
                 "weight": 0,
-                "receiptHash": "477631aeddd38ca7306bf244fbfe790fd4170f9eb8b95c69e7bf6a1a552d8f0f",
+                "receiptHash": "623b06eb25aa0f81eb19fd0a9c6289eca10c15d34a7f8fcc251137d77580114b",
                 "sources": [],
                 "fallbackMetrics": 0
               }
@@ -14600,8 +15541,90 @@
           "oneXTwoFinal": null,
           "market": null,
           "poisson": null,
-          "elo": null,
-          "form": null,
+          "elo": {
+            "homeRating": 1500,
+            "awayRating": 1500,
+            "diff": 62,
+            "homeMatches": 0,
+            "awayMatches": 0,
+            "historicalSource": null
+          },
+          "form": {
+            "home": {
+              "sampleSize": 0,
+              "resultEvidence": {
+                "version": "recent-form-result-evidence-v1",
+                "scope": "selected-input-observation-metadata",
+                "sourceVerified": false,
+                "sampleRows": 0,
+                "homeRows": 0,
+                "awayRows": 0,
+                "observedRows": 0,
+                "missingObservedAtRows": 0,
+                "missingSourceRows": 0,
+                "beforeKickoffRows": 0,
+                "afterDecisionRows": 0,
+                "latestObservedAt": null,
+                "decisionAt": "2026-10-05T03:06:24.106Z",
+                "temporalStatus": "empty",
+                "sourceLabels": [],
+                "selectionHash": "d64aa5896ad84836beecee2d574d302378d8fc04a95d1d0f6ae96a1a1e154f9f"
+              },
+              "wins": 0,
+              "draws": 0,
+              "losses": 0,
+              "pointsPerMatch": null,
+              "goalsForAvg": null,
+              "goalsAgainstAvg": null,
+              "goalDiffAvg": null,
+              "over25Rate": null,
+              "bttsRate": null,
+              "cleanSheetRate": null,
+              "failedScoreRate": null,
+              "lastMatchAt": null,
+              "restDays": null,
+              "matchesLast14": 0,
+              "matchesLast30": 0
+            },
+            "away": {
+              "sampleSize": 0,
+              "resultEvidence": {
+                "version": "recent-form-result-evidence-v1",
+                "scope": "selected-input-observation-metadata",
+                "sourceVerified": false,
+                "sampleRows": 0,
+                "homeRows": 0,
+                "awayRows": 0,
+                "observedRows": 0,
+                "missingObservedAtRows": 0,
+                "missingSourceRows": 0,
+                "beforeKickoffRows": 0,
+                "afterDecisionRows": 0,
+                "latestObservedAt": null,
+                "decisionAt": "2026-10-05T03:06:24.106Z",
+                "temporalStatus": "empty",
+                "sourceLabels": [],
+                "selectionHash": "8c06d78067602cb664bda1fa7b080ec6066f490eebf4b01938ec9863d084c788"
+              },
+              "wins": 0,
+              "draws": 0,
+              "losses": 0,
+              "pointsPerMatch": null,
+              "goalsForAvg": null,
+              "goalsAgainstAvg": null,
+              "goalDiffAvg": null,
+              "over25Rate": null,
+              "bttsRate": null,
+              "cleanSheetRate": null,
+              "failedScoreRate": null,
+              "lastMatchAt": null,
+              "restDays": null,
+              "matchesLast14": 0,
+              "matchesLast30": 0
+            },
+            "diff": null,
+            "historicalSource": null
+          },
           "leaguePrior": null,
           "lambdaBlend": {
             "independentHomeLambda": 1.95,
@@ -14753,9 +15776,13 @@
             "best": null
           }
         },
-        "hash": "f4q1jd"
+        "hash": "1ngxl2f"
       },
-      "featureSnapshotHash": "f4q1jd",
+      "featureSnapshotHash": "1ngxl2f",
+      "updateReason": {
+        "zh": "赛前赔率或让球信号发生实质变化，已生成新的临场预测；开赛后将锁定这版记录。",
+        "en": "Pre-match odds, handicap signals, or a trusted provider observation changed materially, so a new late forecast was generated and will be locked after kickoff."
+      },
       "immutableAnalysisReferenceDecision": {
         "version": "immutable-analysis-reference-decision-v1",
         "sourcePolicyVersion": "external-odds-analysis-reference-v5",
@@ -14795,16 +15822,12 @@
       },
       "snapshot": {
         "phase": "baseline",
-        "total": 2,
+        "total": 3,
         "phases": {
-          "baseline": 2
+          "baseline": 3
         },
-        "latestAt": "2026-10-05T03:11:14.233Z",
-        "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|1.37/4.50/5.70|-1:2.14/3.65/2.58|--"
-      },
-      "updateReason": {
-        "zh": "官方 SP 或让球盘没有实质变化，原赛前方向继续保留；分析版本可更新，但不重算推荐方向。",
-        "en": "Official SP and handicap signals did not materially change, so the pre-match direction is preserved; analysis versions may update, but the recommendation direction is not recalculated."
+        "latestAt": "2026-10-05T03:16:27.908Z",
+        "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|1.34/4.62/6.00|-1:2.06/3.70/2.68|--"
       }
     },
     "prospectiveForecastInput": {
@@ -14824,28 +15847,28 @@
       "awayTeamName": "土耳其",
       "leagueId": "league_141kv73",
       "odds": {
-        "odds1": 1.37,
-        "oddsX": 4.5,
-        "odds2": 5.7
+        "odds1": 1.34,
+        "oddsX": 4.62,
+        "odds2": 6
       },
       "oddsSource": "500.com:HAD",
-      "oddsObservedAt": "2026-10-05T03:11:03.195Z",
-      "oddsUpdatedAt": "2026-10-05T03:11:03.195Z",
-      "sourceCycleId": "sporttery-full-sync:2026-10-05T03:11:14.233Z",
+      "oddsObservedAt": "2026-10-05T03:16:17.250Z",
+      "oddsUpdatedAt": "2026-10-05T03:16:17.250Z",
+      "sourceCycleId": "sporttery-full-sync:2026-10-05T03:16:27.908Z",
       "handicapOdds": {
-        "odds1": 2.14,
-        "oddsX": 3.65,
-        "odds2": 2.58
+        "odds1": 2.06,
+        "oddsX": 3.7,
+        "odds2": 2.68
       },
       "handicapLine": "-1",
       "handicapOddsSource": "500.com:HHAD",
       "handicapOddsPoolCode": "HHAD",
-      "handicapOddsObservedAt": "2026-10-05T03:11:03.195Z",
-      "handicapOddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+      "handicapOddsObservedAt": "2026-10-05T03:16:17.250Z",
+      "handicapOddsUpdatedAt": "2026-10-05T03:16:17.250Z",
       "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
       "probabilityModel": {
         "version": "unified-poisson-bayes-v76",
-        "generatedAt": "2026-10-05T03:11:20.749Z",
+        "generatedAt": "2026-10-05T03:16:33.426Z",
         "sourceMatchId": "2041808",
         "eventVersion": "2026-10-06T02:45:00+08:00",
         "oneXTwo": {
@@ -14877,9 +15900,9 @@
       "externalSignals": {
         "bookmakerOdds": {
           "hhad": {
-            "odds1": 2.14,
-            "oddsX": 3.65,
-            "odds2": 2.58
+            "odds1": 2.06,
+            "oddsX": 3.7,
+            "odds2": 2.68
           }
         }
       }
@@ -17337,7 +18360,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T03:11:03.195Z",
+      "updatedAt": "2026-10-05T03:16:17.250Z",
       "sourceMatchId": "2041809",
       "fixtureId": "1398609",
       "matchNo": "周一005",
@@ -17372,7 +18395,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T03:06:31.808Z",
+        "updatedAt": "2026-10-05T03:11:28.505Z",
         "sourceMatchId": "2041809",
         "matchId": "fivehundred_2041809",
         "matchNo": "周一005",
@@ -17406,7 +18429,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -17442,7 +18465,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -17463,7 +18486,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -17686,14 +18709,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T03:11:13.637Z",
+        "lastCheckedAt": "2026-10-05T03:16:27.259Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T03:11:13.637Z",
+          "checkedAt": "2026-10-05T03:16:27.259Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -17878,21 +18901,21 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsObservedAt": "2026-10-05T03:11:03.195Z",
-    "oddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+    "oddsObservedAt": "2026-10-05T03:16:17.250Z",
+    "oddsUpdatedAt": "2026-10-05T03:16:17.250Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "oddsMarketProvenance": null,
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsObservedAt": "2026-10-05T03:11:03.195Z",
-    "handicapOddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+    "handicapOddsObservedAt": "2026-10-05T03:16:17.250Z",
+    "handicapOddsUpdatedAt": "2026-10-05T03:16:17.250Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapOddsMarketProvenance": null,
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T03:11:15.100Z",
+      "generatedAt": "2026-10-05T03:16:28.794Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -18094,7 +19117,7 @@
       "decisionId": "decision_1sytjp",
       "decisionRevision": 1,
       "decisionGeneratedAt": "2026-10-05T03:06:24.110Z",
-      "updatedAt": "2026-10-05T03:11:21.049Z",
+      "updatedAt": "2026-10-05T03:16:33.662Z",
       "syncCapturedAt": "2026-10-05T03:06:19.384Z",
       "publicationFinalizedAt": "2026-10-05T03:06:24.420Z",
       "publicationGate": {
@@ -18548,11 +19571,11 @@
       "featureSnapshotHash": "1d2pteq",
       "snapshot": {
         "phase": "baseline",
-        "total": 2,
+        "total": 3,
         "phases": {
-          "baseline": 2
+          "baseline": 3
         },
-        "latestAt": "2026-10-05T03:11:14.233Z",
+        "latestAt": "2026-10-05T03:16:27.908Z",
         "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|2.32/2.85/2.90|-1:5.50/3.80/1.46|--"
       },
       "updateReason": {
@@ -18582,9 +19605,9 @@
         "odds2": 2.9
       },
       "oddsSource": "500.com:HAD",
-      "oddsObservedAt": "2026-10-05T03:11:03.195Z",
-      "oddsUpdatedAt": "2026-10-05T03:11:03.195Z",
-      "sourceCycleId": "sporttery-full-sync:2026-10-05T03:11:14.233Z",
+      "oddsObservedAt": "2026-10-05T03:16:17.250Z",
+      "oddsUpdatedAt": "2026-10-05T03:16:17.250Z",
+      "sourceCycleId": "sporttery-full-sync:2026-10-05T03:16:27.908Z",
       "handicapOdds": {
         "odds1": 5.5,
         "oddsX": 3.8,
@@ -18593,12 +19616,12 @@
       "handicapLine": "-1",
       "handicapOddsSource": "500.com:HHAD",
       "handicapOddsPoolCode": "HHAD",
-      "handicapOddsObservedAt": "2026-10-05T03:11:03.195Z",
-      "handicapOddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+      "handicapOddsObservedAt": "2026-10-05T03:16:17.250Z",
+      "handicapOddsUpdatedAt": "2026-10-05T03:16:17.250Z",
       "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
       "probabilityModel": {
         "version": "unified-poisson-bayes-v76",
-        "generatedAt": "2026-10-05T03:11:20.759Z",
+        "generatedAt": "2026-10-05T03:16:33.433Z",
         "sourceMatchId": "2041809",
         "eventVersion": "2026-10-06T02:45:00+08:00",
         "oneXTwo": {
@@ -21103,7 +22126,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T03:11:03.195Z",
+      "updatedAt": "2026-10-05T03:16:17.250Z",
       "sourceMatchId": "2041810",
       "fixtureId": "1398654",
       "matchNo": "周一006",
@@ -21138,7 +22161,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T03:06:31.808Z",
+        "updatedAt": "2026-10-05T03:11:28.505Z",
         "sourceMatchId": "2041810",
         "matchId": "fivehundred_2041810",
         "matchNo": "周一006",
@@ -21172,7 +22195,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -21208,7 +22231,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -21229,7 +22252,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -21452,14 +22475,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T03:11:13.637Z",
+        "lastCheckedAt": "2026-10-05T03:16:27.259Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T03:11:13.637Z",
+          "checkedAt": "2026-10-05T03:16:27.259Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -21643,21 +22666,21 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsObservedAt": "2026-10-05T03:11:03.195Z",
-    "oddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+    "oddsObservedAt": "2026-10-05T03:16:17.250Z",
+    "oddsUpdatedAt": "2026-10-05T03:16:17.250Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "oddsMarketProvenance": null,
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsObservedAt": "2026-10-05T03:11:03.195Z",
-    "handicapOddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+    "handicapOddsObservedAt": "2026-10-05T03:16:17.250Z",
+    "handicapOddsUpdatedAt": "2026-10-05T03:16:17.250Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapOddsMarketProvenance": null,
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T03:11:15.100Z",
+      "generatedAt": "2026-10-05T03:16:28.794Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -21859,7 +22882,7 @@
       "decisionId": "decision_xyn8vm",
       "decisionRevision": 1,
       "decisionGeneratedAt": "2026-10-05T03:06:24.113Z",
-      "updatedAt": "2026-10-05T03:11:21.050Z",
+      "updatedAt": "2026-10-05T03:16:33.662Z",
       "syncCapturedAt": "2026-10-05T03:06:19.384Z",
       "publicationFinalizedAt": "2026-10-05T03:06:24.420Z",
       "publicationGate": {
@@ -22350,11 +23373,11 @@
       },
       "snapshot": {
         "phase": "baseline",
-        "total": 2,
+        "total": 3,
         "phases": {
-          "baseline": 2
+          "baseline": 3
         },
-        "latestAt": "2026-10-05T03:11:14.233Z",
+        "latestAt": "2026-10-05T03:16:27.908Z",
         "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|1.44/4.00/5.40|-1:2.38/3.50/2.36|--"
       },
       "updateReason": {
@@ -22384,9 +23407,9 @@
         "odds2": 5.4
       },
       "oddsSource": "500.com:HAD",
-      "oddsObservedAt": "2026-10-05T03:11:03.195Z",
-      "oddsUpdatedAt": "2026-10-05T03:11:03.195Z",
-      "sourceCycleId": "sporttery-full-sync:2026-10-05T03:11:14.233Z",
+      "oddsObservedAt": "2026-10-05T03:16:17.250Z",
+      "oddsUpdatedAt": "2026-10-05T03:16:17.250Z",
+      "sourceCycleId": "sporttery-full-sync:2026-10-05T03:16:27.908Z",
       "handicapOdds": {
         "odds1": 2.38,
         "oddsX": 3.5,
@@ -22395,12 +23418,12 @@
       "handicapLine": "-1",
       "handicapOddsSource": "500.com:HHAD",
       "handicapOddsPoolCode": "HHAD",
-      "handicapOddsObservedAt": "2026-10-05T03:11:03.195Z",
-      "handicapOddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+      "handicapOddsObservedAt": "2026-10-05T03:16:17.250Z",
+      "handicapOddsUpdatedAt": "2026-10-05T03:16:17.250Z",
       "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
       "probabilityModel": {
         "version": "unified-poisson-bayes-v76",
-        "generatedAt": "2026-10-05T03:11:20.767Z",
+        "generatedAt": "2026-10-05T03:16:33.442Z",
         "sourceMatchId": "2041810",
         "eventVersion": "2026-10-06T02:45:00+08:00",
         "oneXTwo": {
@@ -24907,7 +25930,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T03:11:03.195Z",
+      "updatedAt": "2026-10-05T03:16:17.250Z",
       "sourceMatchId": "2041811",
       "fixtureId": "1398615",
       "matchNo": "周一007",
@@ -24942,7 +25965,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T03:06:31.808Z",
+        "updatedAt": "2026-10-05T03:11:28.505Z",
         "sourceMatchId": "2041811",
         "matchId": "fivehundred_2041811",
         "matchNo": "周一007",
@@ -24976,7 +25999,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -25012,7 +26035,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -25033,7 +26056,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T03:06:12.006Z",
+              "sourceObservedAt": "2026-10-05T03:11:03.195Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -25256,14 +26279,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T03:11:13.637Z",
+        "lastCheckedAt": "2026-10-05T03:16:27.259Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T03:11:13.637Z",
+          "checkedAt": "2026-10-05T03:16:27.259Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -25448,21 +26471,21 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsObservedAt": "2026-10-05T03:11:03.195Z",
-    "oddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+    "oddsObservedAt": "2026-10-05T03:16:17.250Z",
+    "oddsUpdatedAt": "2026-10-05T03:16:17.250Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "oddsMarketProvenance": null,
     "handicapLine": "+1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsObservedAt": "2026-10-05T03:11:03.195Z",
-    "handicapOddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+    "handicapOddsObservedAt": "2026-10-05T03:16:17.250Z",
+    "handicapOddsUpdatedAt": "2026-10-05T03:16:17.250Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapOddsMarketProvenance": null,
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T03:11:15.100Z",
+      "generatedAt": "2026-10-05T03:16:28.794Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -25664,7 +26687,7 @@
       "decisionId": "decision_qosoo7",
       "decisionRevision": 1,
       "decisionGeneratedAt": "2026-10-05T03:06:24.117Z",
-      "updatedAt": "2026-10-05T03:11:21.051Z",
+      "updatedAt": "2026-10-05T03:16:33.663Z",
       "syncCapturedAt": "2026-10-05T03:06:19.384Z",
       "publicationFinalizedAt": "2026-10-05T03:06:24.420Z",
       "publicationGate": {
@@ -26155,11 +27178,11 @@
       },
       "snapshot": {
         "phase": "baseline",
-        "total": 2,
+        "total": 3,
         "phases": {
-          "baseline": 2
+          "baseline": 3
         },
-        "latestAt": "2026-10-05T03:11:14.233Z",
+        "latestAt": "2026-10-05T03:16:27.908Z",
         "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|2.95/3.25/2.08|+1:1.57/3.85/4.30|--"
       },
       "updateReason": {
@@ -26189,9 +27212,9 @@
         "odds2": 2.08
       },
       "oddsSource": "500.com:HAD",
-      "oddsObservedAt": "2026-10-05T03:11:03.195Z",
-      "oddsUpdatedAt": "2026-10-05T03:11:03.195Z",
-      "sourceCycleId": "sporttery-full-sync:2026-10-05T03:11:14.233Z",
+      "oddsObservedAt": "2026-10-05T03:16:17.250Z",
+      "oddsUpdatedAt": "2026-10-05T03:16:17.250Z",
+      "sourceCycleId": "sporttery-full-sync:2026-10-05T03:16:27.908Z",
       "handicapOdds": {
         "odds1": 1.57,
         "oddsX": 3.85,
@@ -26200,12 +27223,12 @@
       "handicapLine": "+1",
       "handicapOddsSource": "500.com:HHAD",
       "handicapOddsPoolCode": "HHAD",
-      "handicapOddsObservedAt": "2026-10-05T03:11:03.195Z",
-      "handicapOddsUpdatedAt": "2026-10-05T03:11:03.195Z",
+      "handicapOddsObservedAt": "2026-10-05T03:16:17.250Z",
+      "handicapOddsUpdatedAt": "2026-10-05T03:16:17.250Z",
       "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
       "probabilityModel": {
         "version": "unified-poisson-bayes-v76",
-        "generatedAt": "2026-10-05T03:11:20.775Z",
+        "generatedAt": "2026-10-05T03:16:33.450Z",
         "sourceMatchId": "2041811",
         "eventVersion": "2026-10-06T02:45:00+08:00",
         "oneXTwo": {
