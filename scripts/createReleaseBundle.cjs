@@ -88,6 +88,16 @@ if (frontendEvidenceSemantics.status !== 0) {
     output: String(frontendEvidenceSemantics.stderr || frontendEvidenceSemantics.stdout || "").slice(-2000),
   })}`);
 }
+// Reject a byte-reader regression before reserving a release sequence. This
+// verifier uses only synthetic streams and loopback HTTP, never provider data.
+const requestJsonUtf8 = spawnSync(process.execPath, ["scripts/verifyRequestJsonUtf8.cjs"], {
+  cwd: rootDir, encoding: "utf8", windowsHide: true, timeout: 30_000, maxBuffer: 2 * 1024 * 1024,
+});
+if (requestJsonUtf8.status !== 0) {
+  throw new Error(`Request JSON UTF-8 preflight failed: ${String(
+    requestJsonUtf8.error?.message || requestJsonUtf8.stderr || requestJsonUtf8.stdout
+  ).slice(-2000)}`);
+}
 // Catch production-only verification dependencies and stale exact contracts
 // locally, before reserving/signing a sequence or starting a remote transaction.
 // The bounded source-boundary fixture owns a 300-second budget. Its outer
@@ -410,6 +420,8 @@ const requiredEntries = [
   "scripts/footballDataDiscipline.cjs",
   "scripts/verifyFootballDataDiscipline.cjs",
   "server/index.cjs",
+  "server/readRequestJson.cjs",
+  "scripts/verifyRequestJsonUtf8.cjs",
   "server/candidateProspectiveTemporalAudit.cjs",
   "scripts/verifyCandidateProspectiveTemporalAudit.cjs",
   "server/recommendationProjectionParity.cjs",
