@@ -1,0 +1,26 @@
+{
+  "version": "quality-history-original-interface-findings-v1",
+  "implementationCommit": "2d20938a13463294977696cc2fcef92bc746c902",
+  "sourceFile": "scripts/historyRegressionReplay.cjs",
+  "realEvidenceChecksPassed": 45,
+  "realPairedRows": 154,
+  "originalTestSnapshot": { "total": 42, "passed": 35, "failed": 7, "log": "interface-tests-original-2d20938.tap" },
+  "findings": [
+    { "id": "future-feature-clocks", "priority": 1, "lines": [145, 147], "expected": "reject",
+      "actual": "candidate input probe remained selectable",
+      "reproduction": "weather availableAt 09:00, decision 10:00, cutoff 11:00, kickoff 12:00; providerObservedAt/observedAt/receivedAt 14:00" },
+    { "id": "camel-case-result-features", "priority": 1, "lines": [141, 141], "expected": "reject",
+      "actual": "resultObservedAt, finalScoreHome, closingOdds, postMatchRating entered the candidate probe",
+      "reproduction": "Use each name in requiredFeatures with scalar value, source/hash and an early availableAt; exact finalScore was rejected" },
+    { "id": "missing-positive-feature-admission", "priority": 2, "lines": [138, 138], "expected": "reject",
+      "actual": "features.candidateEligible absent was allowed", "reproduction": "Delete features.candidateEligible from the valid synthetic control" },
+    { "id": "impossible-calendar-date", "priority": 2, "lines": [35, 39], "expected": "reject",
+      "actual": "Date.parse normalized the invalid day and frozen review completed",
+      "reproduction": "Set an admitted record copy's result.observedAt to 2026-09-31T15:00:00Z" }
+  ],
+  "scope": "Adversarial in-memory inputs and synthetic candidate-interface probes; not evidence the real 154-event metrics were contaminated",
+  "historicalPublished145Reproduced": false,
+  "productionWrites": 0,
+  "productionEligible": false,
+  "deploymentAuthorized": false
+}

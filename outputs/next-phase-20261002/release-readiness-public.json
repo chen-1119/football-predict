@@ -1,0 +1,698 @@
+{
+  "ok": false,
+  "auditOnly": true,
+  "checkedAt": "2026-10-02T15:43:42.810Z",
+  "baseUrl": "https://134.175.132.183",
+  "summary": {
+    "required": 29,
+    "failed": 2,
+    "publicReachable": true,
+    "frontendAssetsOk": true,
+    "sqliteReady": false,
+    "protectedStaticDisabled": true,
+    "healthOk": false,
+    "healthStatus": {
+      "serviceOk": true,
+      "dataFresh": false,
+      "sourceHealthOk": false,
+      "fastResultIntegrityOk": true,
+      "fastResultIntegrity": {
+        "available": true,
+        "valid": true,
+        "missing": false,
+        "legacy": false,
+        "reason": null,
+        "revision": 9143,
+        "transition": false,
+        "transitionSource": null,
+        "sqliteReason": null,
+        "validatedAt": null
+      },
+      "officialSourceSinglePoint": true,
+      "officialSourceRedundancy": {
+        "status": "watch",
+        "mode": "no-verified-independent-path",
+        "officialSourceSinglePoint": true,
+        "serverDirectAvailable": false,
+        "serverDirectProof": "none",
+        "trustedCollectorCount": 0,
+        "requiredTrustedCollectors": 2,
+        "collectorProof": "none",
+        "collectorEvidenceScope": "none",
+        "reason": "verified server direct/proxy unavailable and trusted collectors 0/2",
+        "independenceDomains": [],
+        "collectorEvidenceStore": {
+          "version": "sporttery-recent-collector-evidence-summary-v1",
+          "trustRegistryAvailable": true,
+          "maxAgeMinutes": 20,
+          "recentRows": 0,
+          "trustedCollectorCount": 0,
+          "independenceDomains": [],
+          "keyIds": [],
+          "domains": []
+        }
+      },
+      "primarySourceFresh": false,
+      "sourceDataFresh": false,
+      "fallbackDataFresh": false,
+      "fallbackWithinReliableWindow": true,
+      "fallbackAgeSeconds": 197,
+      "primaryAgeSeconds": 174938,
+      "fallbackMaxAgeSeconds": 3600,
+      "servingMode": "critical",
+      "modelEvaluationFresh": true,
+      "modelEvaluationCoverageOk": true,
+      "modelRiskStable": false,
+      "signedTrainingAssetOk": true,
+      "recommendationReliable": false,
+      "recommendationProjectionParityOk": true,
+      "recommendationCoverageOk": true
+    },
+    "currentReadSource": "postgres"
+  },
+  "checks": [
+    {
+      "name": "site root reachable",
+      "required": true,
+      "status": 200,
+      "bytes": 1129,
+      "cacheControl": "no-store",
+      "error": null,
+      "ok": true
+    },
+    {
+      "name": "frontend asset runtime recovers stale match detail errors",
+      "required": true,
+      "rootStatus": 200,
+      "indexAssetPath": "/assets/index-3p0UqDD9.js",
+      "indexStatus": 200,
+      "indexBytes": 330667,
+      "missingRecoveryNeedles": [],
+      "error": null,
+      "ok": true
+    },
+    {
+      "name": "frontend bundle uses the React production runtime",
+      "required": true,
+      "indexAssetPath": "/assets/index-3p0UqDD9.js",
+      "indexStatus": 200,
+      "indexBytes": 330667,
+      "developmentMarkers": [],
+      "ok": true
+    },
+    {
+      "name": "AI survival frontend chunk uses the protected v5 publication",
+      "required": true,
+      "assets": [
+        {
+          "path": "/assets/AIArena-bHxRCJrZ.js",
+          "status": 200,
+          "bytes": 44102
+        }
+      ],
+      "ok": true
+    },
+    {
+      "name": "cache-control directives are canonical and emitted once",
+      "required": true,
+      "rootCacheControl": "no-store",
+      "indexCacheControl": "public, max-age=31536000, immutable",
+      "ok": true
+    },
+    {
+      "name": "missing static assets are not cached as immutable",
+      "required": true,
+      "status": 404,
+      "cacheControl": null,
+      "error": null,
+      "ok": true
+    },
+    {
+      "name": "source probes are 404 and crawler files are real",
+      "required": true,
+      "dotEnvStatus": 404,
+      "packageStatus": 404,
+      "robotsStatus": 200,
+      "robotsAttempts": 1,
+      "sitemapStatus": 200,
+      "sitemapAttempts": 1,
+      "ok": true
+    },
+    {
+      "name": "match detail chunk probability resilience",
+      "required": true,
+      "assets": [
+        {
+          "path": "/assets/MatchDetail-DAORQnqv.js",
+          "status": 200,
+          "bytes": 235082,
+          "error": null
+        }
+      ],
+      "unsafeReads": [],
+      "ok": true
+    },
+    {
+      "name": "legacy health reachable",
+      "required": true,
+      "status": 200,
+      "ok": true,
+      "service": "football-predict-server",
+      "checkedAt": "2026-10-02T15:43:41.410Z",
+      "error": null
+    },
+    {
+      "name": "v1 health reachable",
+      "required": true,
+      "status": 200,
+      "ok": true,
+      "serviceOk": true,
+      "dataFresh": false,
+      "servingMode": "critical",
+      "recommendationReliable": false,
+      "apiVersion": "v1",
+      "checkedAt": "2026-10-02T15:43:41.465Z",
+      "error": null
+    },
+    {
+      "name": "v1 service ready",
+      "required": true,
+      "serviceOk": true,
+      "dataFresh": false,
+      "servingMode": "critical",
+      "ok": true
+    },
+    {
+      "name": "scheduled matches have an explicit BEST or WATCH disposition and atomically bound HHAD directions",
+      "required": true,
+      "recommendationCoverageOk": true,
+      "recommendationProjectionParityOk": true,
+      "version": "current-recommendation-coverage-v6",
+      "scheduledMatches": 0,
+      "bestDirectionMatches": 0,
+      "referenceDirectionMatches": 0,
+      "formalDirectionMatches": 0,
+      "missingDirectionMatches": 0,
+      "watchMatches": 0,
+      "publicationDispositionMatches": 0,
+      "missingDispositionMatches": 0,
+      "trainingBackedMatches": 0,
+      "trainingInputSufficientMatches": 0,
+      "hhadMarketMatches": 0,
+      "hhadBoundDirectionMatches": 0,
+      "hhadMissingDirectionMatches": 0,
+      "hhadOnlyMarketMatches": 0,
+      "dualMarketEligibleMatches": 0,
+      "dualMarketAtomicMatches": 0,
+      "dualMarketAtomicMissingMatches": 0,
+      "dualMarketBindingBlockerCounts": {},
+      "coverageRatio": 1,
+      "dispositionCoverageRatio": 1,
+      "trainingCoverageRatio": 1,
+      "trainingInputSufficientRatio": 1,
+      "hhadDirectionCoverageRatio": 1,
+      "dualMarketAtomicCoverageRatio": 1,
+      "projectionParity": {
+        "version": "current-list-detail-recommendation-parity-v1",
+        "scope": "same-current-read-model-list-detail-projection",
+        "disclosure": "aggregate-counts-only",
+        "checkedRows": 1,
+        "preMatchRows": 1,
+        "resultPhaseRows": 0,
+        "comparableRows": 1,
+        "listCanonicalMissingRows": 0,
+        "detailCanonicalMissingRows": 0,
+        "canonicalDecisionMismatchRows": 0,
+        "hadHhadProjectionMismatchRows": 0,
+        "listHadSupportingDirectionConflictRows": 0,
+        "detailHadSupportingDirectionConflictRows": 0,
+        "identityMismatchRows": 0,
+        "mismatchRows": 0,
+        "ok": true
+      },
+      "trainingCoverageOk": true,
+      "dualMarketAtomicCoverageOk": true,
+      "coverageOk": true,
+      "ok": true
+    },
+    {
+      "name": "scheduled recommendations use signed historical training asset",
+      "required": true,
+      "signedTrainingAssetOk": true,
+      "trainingAsset": {
+        "entry": ".release-model-assets/historical-training-index.json",
+        "sourceKind": "signed-release-asset",
+        "validationOk": true,
+        "sha256": "b6c58416e9bb0b36273bacb7aa065a2deb4d97a5a614f6ec0e359daeb15f9d17",
+        "bytes": 13985757,
+        "teams": 1586,
+        "finiteEloTeams": 1312,
+        "minElo": 930.67,
+        "maxElo": 2092.51
+      },
+      "scheduledMatches": 0,
+      "trainingBackedMatches": 0,
+      "trainingInputSufficientMatches": 0,
+      "trainingCoverageOk": true,
+      "ok": true
+    },
+    {
+      "name": "v1 health ok when required",
+      "required": true,
+      "requiredByEnv": true,
+      "ok": false
+    },
+    {
+      "name": "fallback reliability runway",
+      "required": true,
+      "ok": true,
+      "servingMode": "critical",
+      "fallbackActive": false,
+      "sourceHealthOk": false,
+      "fallbackDataFresh": false,
+      "fallbackWithinReliableWindow": true,
+      "fallbackReliable": false,
+      "formalRecommendationReliable": false,
+      "fallbackAgeSeconds": 197,
+      "fallbackMaxAgeSeconds": 3600,
+      "fallbackRunwaySeconds": 3403,
+      "minFallbackRunwaySeconds": 600
+    },
+    {
+      "name": "PostgreSQL-only storage and receipt integrity",
+      "required": true,
+      "ok": true,
+      "storage": "postgres",
+      "sqliteRetired": true,
+      "publication": {
+        "mode": "active-generation",
+        "generationId": "g-79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273",
+        "manifestHash": "79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273",
+        "sourceCycleId": "sporttery-full-sync:2026-09-30T15:34:00.845Z",
+        "committedAt": "2026-09-30T15:52:07.943Z"
+      },
+      "blockers": []
+    },
+    {
+      "name": "configured primary read source when required",
+      "required": true,
+      "requiredByEnv": false,
+      "requiredReadSource": "postgres",
+      "sqliteAvailable": false,
+      "sqliteReason": "sqlite-retired-postgres-only",
+      "sqlitePath": null,
+      "postgresAvailable": true,
+      "postgresBaseReady": true,
+      "postgresBlockedReason": null,
+      "readSource": "postgres",
+      "sqliteCounts": {},
+      "attempts": 1,
+      "maxAttempts": 1,
+      "retryDelayMs": 0,
+      "ok": true
+    },
+    {
+      "name": "sync worker health when required",
+      "required": true,
+      "requiredByEnv": true,
+      "running": true,
+      "apiSyncRunning": false,
+      "workerRunning": true,
+      "workerOk": true,
+      "workerState": "running",
+      "workerCheckedAt": "2026-10-02T15:42:31.929Z",
+      "workerAgeSeconds": 70,
+      "nextWakeAt": null,
+      "cadence": {
+        "mode": "base",
+        "reason": "normal",
+        "intervalSeconds": 300,
+        "workflowMinutes": 5,
+        "hotWindowMinutes": 120
+      },
+      "attempts": 1,
+      "maxAttempts": 1,
+      "retryDelayMs": 5000,
+      "ok": true
+    },
+    {
+      "name": "source health public schema",
+      "required": true,
+      "status": 200,
+      "ok": true,
+      "sourceIds": [
+        "sporttery",
+        "five-hundred",
+        "weather",
+        "free-football",
+        "pre-match"
+      ],
+      "exposesAdmin": false,
+      "errors": [
+        "sporttery current sync stale 48.38m",
+        "current matches 0 < 1"
+      ]
+    },
+    {
+      "name": "source health fallback coverage",
+      "required": true,
+      "status": 200,
+      "servingMode": "critical",
+      "usable": false,
+      "primaryStale": true,
+      "currentMatches": 0,
+      "fiveHundredCoveragePercent": 0,
+      "ok": true
+    },
+    {
+      "name": "trusted collector redundancy counts independent runtimes, not keys",
+      "required": true,
+      "version": "trusted-market-collector-evidence-v1",
+      "trustedEndpoints": 0,
+      "trustedKeyCount": 0,
+      "relayTrustedCollectorCount": 0,
+      "relayIndependenceDomainCount": 0,
+      "unassignedKeyCount": 0,
+      "storeVersion": "sporttery-recent-collector-evidence-summary-v1",
+      "storeTrustRegistryAvailable": true,
+      "storeTrustedCollectorCount": 0,
+      "storeIndependenceDomainCount": 0,
+      "combinedIndependenceDomainCount": 0,
+      "redundancyIndependenceDomainCount": 0,
+      "redundancyCollectorCount": 0,
+      "ok": false
+    },
+    {
+      "name": "source health admin no-auth denied",
+      "required": true,
+      "status": 401,
+      "ok": true
+    },
+    {
+      "name": "model evaluation public redacted",
+      "required": true,
+      "status": 200,
+      "publicView": true,
+      "leaksCandidates": false,
+      "leaksStrategyRules": false,
+      "leaksHhadRows": false,
+      "hhadSensitiveKeyLeaks": [],
+      "hhadCompanionRows": 169,
+      "hhadCompanionStatus": "shadow-collecting",
+      "pathLeaks": [],
+      "probabilityRows": null,
+      "marketBaselineRows": null,
+      "ok": true
+    },
+    {
+      "name": "candidate prospective decisions are atomically auditable",
+      "required": true,
+      "status": 200,
+      "candidateRevisionId": "market-current-model-residual-minus-20-temperature-0_9@82ed62ae3c717dfb",
+      "chainValid": true,
+      "decisionRecord": {
+        "version": "candidate-atomic-decision-record-v3",
+        "validationVersion": "candidate-atomic-decision-validation-v2",
+        "dualMarketDecisionRecordVersion": "candidate-dual-market-decision-record-v1",
+        "formalMetricMarket": "HAD",
+        "companionMarket": "HHAD",
+        "decisionDeadlinePolicyVersion": "official-cutoff-first-v1",
+        "requiredFields": [
+          "identity",
+          "official-market-provenance",
+          "odds",
+          "base-model-probabilities",
+          "candidate-probabilities",
+          "devigged-market-probabilities",
+          "feature-snapshot",
+          "strategy-versions",
+          "source-clock",
+          "dual-market-decision-record",
+          "dual-market-decision-hash",
+          "temporal-ordering",
+          "atomic-decision-hash"
+        ],
+        "admittedRows": 255,
+        "atomicRows": 255,
+        "completeRows": 255,
+        "failedRows": 0,
+        "blockerCounts": {},
+        "coverage": 1,
+        "complete": true
+      },
+      "settlementRecord": {
+        "version": "candidate-official-settlement-record-v1",
+        "validationVersion": "candidate-official-settlement-validation-v1",
+        "requiredFields": [
+          "decision-link",
+          "official-result-identity",
+          "score-outcome-consistency",
+          "result-observation-clock",
+          "result-provenance-hash"
+        ],
+        "rows": 253,
+        "completeRows": 253,
+        "failedRows": 0,
+        "blockerCounts": {},
+        "coverage": 1,
+        "complete": true
+      },
+      "exposesFeaturePayload": false,
+      "exposesSourceClock": false,
+      "exposesStrategyVersions": false,
+      "ok": true
+    },
+    {
+      "name": "candidate prospective cutoff heartbeat is live and unblocked",
+      "required": true,
+      "status": 200,
+      "state": "SHADOW",
+      "chainValid": true,
+      "heartbeat": {
+        "version": "prospective-deadline-heartbeat-v2",
+        "evaluatedAt": "2026-10-02T15:43:15.826Z",
+        "captureDurationMs": 14750.03,
+        "heartbeatAgeMs": 26391,
+        "freshnessLimitMs": 180000,
+        "scheduleVersion": "candidate-heartbeat-preemptive-schedule-v1",
+        "scheduleMode": "preemptive-evaluated-at",
+        "preemptiveRefreshAgeMs": 5000,
+        "preemptiveReserveMs": 175000,
+        "attemptTimeoutLimitMs": 80000,
+        "retryDelayMs": 5000,
+        "recoveryCaptureBudgetMs": 80000,
+        "preemptiveSafetyMarginMs": 10000,
+        "projectedWorstCaseCompletionAgeMs": 170000,
+        "preemptiveBudgetFits": true,
+        "nextPreemptiveRefreshAt": "2026-10-02T15:43:20.826Z",
+        "preemptiveRefreshDue": true,
+        "nextAttemptBudgetVersion": "candidate-heartbeat-attempt-budget-v1",
+        "nextAttemptType": "preemptive-primary",
+        "nextAttemptTimeoutMs": 58609,
+        "nextAttemptProjectedCompletionAgeMs": 170000,
+        "nextAttemptBudgetFits": true,
+        "fresh": true,
+        "lastAttemptAt": "2026-10-02T15:43:30.611Z",
+        "lastAttemptReason": "settlement-heartbeat",
+        "lastAttemptStatusAdvanced": true,
+        "lastAttemptKind": "preemptive-primary",
+        "lastAttemptTimeoutMs": 70530,
+        "ok": true,
+        "skipped": false,
+        "reason": "settlement-heartbeat",
+        "intervalSeconds": 5,
+        "dueMatches": 0,
+        "eventsAdded": 0,
+        "deadlineCohortAuditMetadata": true,
+        "dueCaptureEventsAdded": 0,
+        "dueDecisionEventsAdded": 0,
+        "dueExclusionEventsAdded": 0,
+        "dueAtomicDecisionEventsAdded": 0,
+        "dueCaptureComplete": true,
+        "dueAtomicComplete": true
+      },
+      "readiness": {
+        "version": "candidate-prospective-readiness-preview-v2",
+        "fullCoverageMetadata": true,
+        "previewLimit": 16,
+        "evaluatedMatches": 0,
+        "detailedMatches": 0,
+        "rowsTruncated": 0,
+        "upcomingMatches": 0,
+        "readyNow": 0,
+        "atomicReadyNow": 0,
+        "awaitingMarket": 0,
+        "blocked": 0,
+        "excluded": 0,
+        "readinessRatio": 1,
+        "nearestDeadlineAt": null,
+        "nearestFinalizationAt": null,
+        "captureFinalizationPolicyVersion": "deadline-evidence-grace-v1",
+        "captureFinalizationGraceSeconds": 120,
+        "nearestStatus": null,
+        "blockerCounts": {},
+        "awaitingReasonCounts": {},
+        "excludedReasonCounts": {},
+        "marketCoverage": {
+          "version": "candidate-official-market-coverage-preview-v1",
+          "evaluatedMatches": 0,
+          "decisionSnapshotObservedMatches": 0,
+          "officialHadPublishedMatches": 0,
+          "strictMarketEvidenceCompleteMatches": 0,
+          "atomicReadyMatches": 0,
+          "awaitingUnpublishedMatches": 0,
+          "awaitingSnapshotMissingMatches": 0,
+          "publishedChainGapMatches": 0,
+          "terminalExcludedMatches": 0,
+          "awaitingClassifiedMatches": 0,
+          "awaitingClassificationComplete": true,
+          "marketStateCounts": {}
+        },
+        "readyInvariantOk": true,
+        "admission": {
+          "version": "candidate-prospective-admission-summary-v1",
+          "registryAvailable": true,
+          "reconciled": true,
+          "captureGap": false,
+          "admitted": 0,
+          "excluded": 0,
+          "pendingDeadline": 0,
+          "dueUnrecorded": 0,
+          "readyAlreadyAdmitted": 0,
+          "readyPendingDeadline": 0,
+          "readyDueUnrecorded": 0
+        }
+      },
+      "ok": true
+    },
+    {
+      "name": "model evaluation admin no-auth denied",
+      "required": true,
+      "status": 401,
+      "ok": true
+    },
+    {
+      "name": "AI survival public status is generation-backed and privacy-safe",
+      "required": true,
+      "status": 200,
+      "ok": true,
+      "publicationVersion": "ai-big-five-survival-v5",
+      "state": "FORMING",
+      "targetMatches": 10,
+      "availableMatches": 0,
+      "agents": 6,
+      "leagueSlots": [
+        {
+          "code": "premier-league",
+          "count": 0,
+          "target": 2
+        },
+        {
+          "code": "laliga",
+          "count": 0,
+          "target": 2
+        },
+        {
+          "code": "serie-a",
+          "count": 0,
+          "target": 2
+        },
+        {
+          "code": "bundesliga",
+          "count": 0,
+          "target": 2
+        },
+        {
+          "code": "ligue-1",
+          "count": 0,
+          "target": 2
+        }
+      ],
+      "formalStatisticsExcluded": true,
+      "integrity": {
+        "immutable": false,
+        "poolHashPresent": false,
+        "submissionRootHashPresent": false,
+        "stateHashPresent": true
+      },
+      "publicPathLeaks": []
+    },
+    {
+      "name": "protected v1 reads deny anonymous",
+      "required": true,
+      "current": 401,
+      "history": 401,
+      "odds": 401,
+      "aiArena": 401,
+      "ok": true
+    },
+    {
+      "name": "protected static payloads disabled",
+      "required": true,
+      "checked": [
+        {
+          "path": "/matches.json",
+          "status": 410,
+          "bytes": 136
+        },
+        {
+          "path": "/odds-history.json",
+          "status": 410,
+          "bytes": 136
+        },
+        {
+          "path": "/data/matches-current.json",
+          "status": 410,
+          "bytes": 94
+        },
+        {
+          "path": "/data/matches-history.json",
+          "status": 410,
+          "bytes": 93
+        },
+        {
+          "path": "/data/odds-history.json",
+          "status": 410,
+          "bytes": 91
+        },
+        {
+          "path": "/data/model-evaluation.json",
+          "status": 410,
+          "bytes": 85
+        },
+        {
+          "path": "/data/model-calibration.json",
+          "status": 410,
+          "bytes": 85
+        },
+        {
+          "path": "/data/model-strategy.json",
+          "status": 410,
+          "bytes": 85
+        },
+        {
+          "path": "/data/prediction-snapshots.json",
+          "status": 410,
+          "bytes": 85
+        },
+        {
+          "path": "/data/post-match-reviews.json",
+          "status": 410,
+          "bytes": 86
+        },
+        {
+          "path": "/data/external-signals.json",
+          "status": 410,
+          "bytes": 82
+        },
+        {
+          "path": "/data/ai-arena.json",
+          "status": 410,
+          "bytes": 77
+        }
+      ],
+      "leaking": [],
+      "ok": true
+    }
+  ]
+}

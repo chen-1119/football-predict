@@ -48,6 +48,8 @@ function verifyFrontendRuntimeBoundary() {
       assert.equal(observed.workers.length, 1);
       assert.ok(observed.files.some(row => row.path === "server/publicationResolverWorker.cjs"));
       assert.ok(observed.files.some(row => row.path === "scripts/publishOfficialResultsFast.cjs"));
+      assert.ok(observed.files.some(row => row.path === "scripts/officialClosedScheduleEvidence.cjs"));
+      assert.equal(observed.npmEdges.some(row => row.name === "dev"), false);
       for (const file of ["scripts/syncDailyPrematchApi.cjs", "scripts/syncApiFootballData.cjs", "scripts/dailyFeaturedComboLedger.cjs", "scripts/runMarketCollector.cjs", "scripts/runRecommendationSettlement.cjs"])
         assert.ok(observed.files.some(row => row.path === file), `missing runtime closure: ${file}`);
       assert.ok(observed.commands.some(row => row.file === "scripts/syncDailyPrematchApi.cjs" && row.api === "spawnSync"));
@@ -168,7 +170,30 @@ function verifyFrontendRuntimeBoundary() {
       });
     });
     check("reviewed command adapter mutation invalidates its source commitment", () => {
-      changed("scripts/runSyncWorker.cjs", text => text.replace("const child = spawn(command, args, {", "const child = spawn(process.env.OVERRIDE || command, args, {"), rejected);
+      for (const [before, after] of [
+        ["const child = spawn(command, args, {", "const child = spawn(process.env.OVERRIDE || command, args, {"],
+        ["const child = spawn(command, args, {", "const child = spawn(command, args.concat('--inspect'), {"],
+        ["cwd: rootDir,", "cwd: process.env.UNREVIEWED_DIRECTORY || rootDir,"],
+        ["env: { ...process.env, ...extraEnv },", "env: { ...process.env, ...extraEnv, NODE_OPTIONS: '--require /tmp/unreviewed.cjs' },"],
+        ["shell: useShell,", "shell: true,"],
+        ["const stderrLimitBytes = 8192;", "const stderrLimitBytes = 81920;"],
+      ]) changed("scripts/runSyncWorker.cjs", text => text.replace(before, after), unreviewed);
+    });
+    check("reviewed validator capture does not permit different commands, environment or capture behavior", () => {
+      for (const [before, after] of [
+        ['runCommand(npmCommand, ["run", "validate:data"], {}, {', 'runCommand(npmCommand, ["run", "sync:data"], {}, {'],
+        ['runCommand(npmCommand, ["run", "validate:data"], {}, {', 'runCommand(npmCommand, ["run", "validate:data"], { NODE_OPTIONS: "--inspect" }, {'],
+        ["captureStderr: true,", "captureStderr: false,"],
+      ]) changed("scripts/runSyncWorker.cjs", text => text.replace(before, after), unreviewed);
+    });
+    check("stat device field exemption is confined to the exact reviewed reader and array", () => {
+      changed("scripts/officialClosedScheduleEvidence.cjs", text => text.replace("stat[key] !== before[key]", "stat[key] === before[key]"), unreviewed);
+      changed("scripts/officialClosedScheduleEvidence.cjs", text => text.replace("['dev', 'ino', 'size', 'mtimeNs', 'ctimeNs']", "['dev', 'size', 'ino', 'mtimeNs', 'ctimeNs']"), unreviewed);
+      changed("scripts/officialClosedScheduleEvidence.cjs", text => `${text}\nconst unreviewedPlan = ['dev', 'ino', 'size', 'mtimeNs', 'ctimeNs'];\n`, unreviewed);
+      changed("server/index.cjs", text => `${text}\nconst unreviewedPlan = ['dev', 'ino', 'size', 'mtimeNs', 'ctimeNs'];\n`, unreviewed);
+      changed("scripts/officialClosedScheduleEvidence.cjs", text => text.replace("stat[key] !== before[key]", "runCommand('npm', ['run', key])"), unreviewed);
+      changed("scripts/runSyncWorker.cjs", text => `${text}\nrunCommand('npm', ['run', 'dev']);\n`, unreviewed);
+      assert.throws(() => parseNpmCommand("vite"), /unreviewed-npm-command-executable/);
     });
     check("unchanged generic process adapter cannot authorize a new dynamic wrapper caller", () => {
       changed("server/index.cjs", text => `${text}\nrunCommand(process.env.UNKNOWN_EXECUTABLE, process.env.UNKNOWN_ARGUMENTS);\n`, unreviewed);

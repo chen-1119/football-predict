@@ -1,0 +1,58 @@
+TAP version 13
+# Subtest: receipt rejects invalid original calendar 2026-02-30T01:00:00Z
+ok 1 - receipt rejects invalid original calendar 2026-02-30T01:00:00Z
+  ---
+  duration_ms: 1.6253
+  type: 'test'
+  ...
+# Subtest: receipt rejects invalid original calendar 2026-10-03T24:00:00Z
+ok 2 - receipt rejects invalid original calendar 2026-10-03T24:00:00Z
+  ---
+  duration_ms: 0.2854
+  type: 'test'
+  ...
+# Subtest: receipt rejects invalid original calendar 2026-10-03 01:00:00
+ok 3 - receipt rejects invalid original calendar 2026-10-03 01:00:00
+  ---
+  duration_ms: 0.1266
+  type: 'test'
+  ...
+# Subtest: receipt rejects invalid original calendar null
+ok 4 - receipt rejects invalid original calendar null
+  ---
+  duration_ms: 0.1214
+  type: 'test'
+  ...
+# Subtest: self-consistent arithmetic recorded one nanosecond after model generation cannot claim verified use
+ok 5 - self-consistent arithmetic recorded one nanosecond after model generation cannot claim verified use
+  ---
+  duration_ms: 0.5334
+  type: 'test'
+  ...
+# Subtest: kickoff identity differing by one nanosecond is not the same event
+ok 6 - kickoff identity differing by one nanosecond is not the same event
+  ---
+  duration_ms: 0.1687
+  type: 'test'
+  ...
+# Subtest: invalid generatedAt cannot borrow JavaScript date rollover
+ok 7 - invalid generatedAt cannot borrow JavaScript date rollover
+  ---
+  duration_ms: 0.1881
+  type: 'test'
+  ...
+# Subtest: valid timezone-equivalent clocks retain original bytes, hashes and summary
+ok 8 - valid timezone-equivalent clocks retain original bytes, hashes and summary
+  ---
+  duration_ms: 0.8459
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 81.9368

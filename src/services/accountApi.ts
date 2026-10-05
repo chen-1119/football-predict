@@ -37,18 +37,19 @@ export async function accountRequest<T>(path:string,options:{method?:string;body
 }
 
 // Return paths are local routes only. Do not persist passwords, cookies or CSRF tokens.
+const hasControlCharacter = (value: string) => [...value].some(character => character.charCodeAt(0) <= 0x1f);
 export function safeAccountReturnTo(value:unknown,fallback='/best'):string{
-  if(typeof value!=='string'||!value.startsWith('/')||value.startsWith('//')||/[\\\u0000-\u001f]/.test(value))return fallback;
+  if(typeof value!=='string'||!value.startsWith('/')||value.startsWith('//')||value.includes('\\')||hasControlCharacter(value))return fallback;
   try{
     const decoded=decodeURIComponent(value);
-    if(decoded.startsWith('//')||/[\\\u0000-\u001f]/.test(decoded))return fallback;
+    if(decoded.startsWith('//')||decoded.includes('\\')||hasControlCharacter(decoded))return fallback;
     const url=new URL(value,'https://football.invalid');
     if(url.origin!=='https://football.invalid'||/^\/auth(?:\/|$)/.test(url.pathname))return fallback;
     return `${url.pathname}${url.search}${url.hash}`;
   }catch{return fallback;}
 }
 const PENDING_KEY='football.account.pending-follow.v1';
-const validIdentity=(value:unknown):value is string=>typeof value==='string'&&value.length>0&&value.length<=200&&!/[\u0000-\u001f]/.test(value);
+const validIdentity=(value:unknown):value is string=>typeof value==='string'&&value.length>0&&value.length<=200&&!hasControlCharacter(value);
 export function savePendingFollow(input:{matchId:string;decisionId?:string;returnTo:string},storage:Storage=sessionStorage):PendingFollow{
   if(!validIdentity(input.matchId)||(input.decisionId!==undefined&&!validIdentity(input.decisionId)))throw new Error('比赛标识无效，请返回赛程重新选择。');
   const pending:PendingFollow={matchId:input.matchId,...(input.decisionId?{decisionId:input.decisionId}:{}),returnTo:safeAccountReturnTo(input.returnTo),createdAt:Date.now(),intentId:crypto.randomUUID()};

@@ -1,0 +1,2259 @@
+{
+  "version": "independent-historical-component-stratification-v1",
+  "generatedAt": "2026-10-02T16:37:30.590193+00:00",
+  "role": "/root/calibrate_football_market_baseline",
+  "scope": "bounded component diagnosis of inspected historical online publication; not current predictions or full paired evaluation",
+  "sourcePublication": {
+    "committedAt": "2026-09-30T15:52:07.943Z",
+    "generationId": "g-79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273",
+    "manifestHash": "79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273",
+    "sourceCycleId": "sporttery-full-sync:2026-09-30T15:34:00.845Z"
+  },
+  "inputs": [
+    {
+      "name": "frozen-model-disagreement-diagnosis-v1.json",
+      "byteSize": 128990,
+      "sha256": "d561e8d0eb0ac9861291943de9c8a6d9f3b3f2f1d76f67af4d40eec6398aab75"
+    },
+    {
+      "name": "history-form-recovery-receipt-v1.json",
+      "byteSize": 160237,
+      "sha256": "6dc4362fe05403c694c23b5fe9c33611c9a7dea0a85bc9329669ee0ce34d2675"
+    }
+  ],
+  "scriptSha256": "0499bca8026dc144a509e541d2626f471ad2d68b8612c3909eb88788643c63d7",
+  "independentMethod": {
+    "marketProbability": "q_k=(1/SP_k)/sum_j(1/SP_j), compared within absolute probability tolerance 1e-12",
+    "roundedComponents": "Stored precision 0.1 percentage point. Conservative closed half-unit intervals +/-0.05pp; robust leader requires displayed gap >0.1pp using Decimal. Boundary touch stays ambiguous; exact hidden rounding rule is unverified.",
+    "patternPriority": [
+      "Poisson ambiguous",
+      "robust Poisson differs from market",
+      "robust Poisson agrees with market and robust baseFinal differs"
+    ],
+    "notReproduced": "Raw component generation, stage weights, feedback/cooldown, model inputUsage, full 154-pair metrics, provider clocks, original raw-form hashing"
+  },
+  "summary": {
+    "disagreementRowsIndependentlyInspected": 26,
+    "uniqueMatches": 26,
+    "patterns": {
+      "poisson-and-market-align-but-base-final-disagrees": 5,
+      "poisson-component-already-disagrees-with-market": 19,
+      "poisson-direction-unavailable-or-ambiguous": 2
+    },
+    "modelVersions": {
+      "unified-poisson-bayes-v73": 4,
+      "unified-poisson-bayes-v75": 21,
+      "unified-poisson-bayes-v76": 1
+    },
+    "outcomesWithinDisagreementSubset": {
+      "market-only-hit": 11,
+      "model-only-hit": 6,
+      "neither-hit": 9
+    },
+    "outcomesByPattern": {
+      "poisson-and-market-align-but-base-final-disagrees": {
+        "market-only-hit": 3,
+        "neither-hit": 2
+      },
+      "poisson-component-already-disagrees-with-market": {
+        "market-only-hit": 8,
+        "neither-hit": 7,
+        "model-only-hit": 4
+      },
+      "poisson-direction-unavailable-or-ambiguous": {
+        "model-only-hit": 2
+      }
+    },
+    "poissonAmbiguousMatches": [
+      "2041276",
+      "2041565"
+    ],
+    "baseFinalAmbiguousMatches": [
+      "2041589"
+    ],
+    "baseFinalUnambiguousAligned": 25,
+    "baseMarketAligned": 26,
+    "recoveryRecords": 379,
+    "previouslyExportOmitted": 355,
+    "previouslyRetained": 24,
+    "sourceRowsReported": 432,
+    "sourceSnapshotMissingReported": 53,
+    "newTrainingAdmissions": 0,
+    "usageSummaryPreparedRequests": 22,
+    "usageSummaryRequestsExecuted": 0
+  },
+  "aggregateOnlyNotIndependentlyRecomputed": {
+    "fullPairedRowsReported": 154,
+    "modelHitsReported": 78,
+    "marketHitsReported": 83,
+    "reason": "Only the 26 disagreement rows were supplied; complete 154 paired rows and immutable field clocks are unavailable."
+  },
+  "checks": [
+    {
+      "name": "2041175_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041175_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "7.12631673719E-17"
+      }
+    },
+    {
+      "name": "2041175_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-and-market-align-but-base-final-disagrees",
+        "reported": "poisson-and-market-align-but-base-final-disagrees"
+      }
+    },
+    {
+      "name": "2041175_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "away",
+        "market": "home"
+      }
+    },
+    {
+      "name": "2041175_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "home",
+        "displayedLeader": "home",
+        "runnerUp": "draw",
+        "topGapPercentagePoints": "12.8",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041244_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041244_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "4.44097103048E-17"
+      }
+    },
+    {
+      "name": "2041244_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041244_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041244_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "home",
+        "topGapPercentagePoints": "1.5",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041276_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041276_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "2.36408928298E-17"
+      }
+    },
+    {
+      "name": "2041276_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-direction-unavailable-or-ambiguous",
+        "reported": "poisson-direction-unavailable-or-ambiguous"
+      }
+    },
+    {
+      "name": "2041276_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "away",
+        "market": "home"
+      }
+    },
+    {
+      "name": "2041276_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "home",
+        "displayedLeader": "home",
+        "runnerUp": "away",
+        "topGapPercentagePoints": "1.0",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041301_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041301_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "3.63941489965E-17"
+      }
+    },
+    {
+      "name": "2041301_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-and-market-align-but-base-final-disagrees",
+        "reported": "poisson-and-market-align-but-base-final-disagrees"
+      }
+    },
+    {
+      "name": "2041301_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041301_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "home",
+        "topGapPercentagePoints": "11.0",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041406_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041406_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "5.30441874531E-17"
+      }
+    },
+    {
+      "name": "2041406_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-and-market-align-but-base-final-disagrees",
+        "reported": "poisson-and-market-align-but-base-final-disagrees"
+      }
+    },
+    {
+      "name": "2041406_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041406_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "home",
+        "topGapPercentagePoints": "8.7",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041408_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041408_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "9.27103157503E-17"
+      }
+    },
+    {
+      "name": "2041408_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041408_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041408_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "draw",
+        "topGapPercentagePoints": "24.2",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041409_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041409_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "1.79472310814E-17"
+      }
+    },
+    {
+      "name": "2041409_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041409_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "away",
+        "market": "home"
+      }
+    },
+    {
+      "name": "2041409_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "home",
+        "displayedLeader": "home",
+        "runnerUp": "away",
+        "topGapPercentagePoints": "2.5",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041410_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041410_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "5.28065224207E-17"
+      }
+    },
+    {
+      "name": "2041410_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041410_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "away",
+        "market": "home"
+      }
+    },
+    {
+      "name": "2041410_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "home",
+        "displayedLeader": "home",
+        "runnerUp": "away",
+        "topGapPercentagePoints": "16.6",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041415_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041415_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "1.22221304024E-17"
+      }
+    },
+    {
+      "name": "2041415_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041415_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "away",
+        "market": "home"
+      }
+    },
+    {
+      "name": "2041415_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "home",
+        "displayedLeader": "home",
+        "runnerUp": "away",
+        "topGapPercentagePoints": "4.9",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041422_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041422_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "6.70764132405E-17"
+      }
+    },
+    {
+      "name": "2041422_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041422_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041422_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "home",
+        "topGapPercentagePoints": "15.6",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041441_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041441_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "8.73806998939E-17"
+      }
+    },
+    {
+      "name": "2041441_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041441_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041441_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "home",
+        "topGapPercentagePoints": "1.9",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041556_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041556_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "4.05494584319E-17"
+      }
+    },
+    {
+      "name": "2041556_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041556_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041556_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "home",
+        "topGapPercentagePoints": "7.8",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041560_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041560_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "5.55978674789E-17"
+      }
+    },
+    {
+      "name": "2041560_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041560_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "away",
+        "market": "home"
+      }
+    },
+    {
+      "name": "2041560_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "home",
+        "displayedLeader": "home",
+        "runnerUp": "draw",
+        "topGapPercentagePoints": "27.5",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041561_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041561_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "4.04153354633E-17"
+      }
+    },
+    {
+      "name": "2041561_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041561_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "away",
+        "market": "home"
+      }
+    },
+    {
+      "name": "2041561_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "home",
+        "displayedLeader": "home",
+        "runnerUp": "away",
+        "topGapPercentagePoints": "8.7",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041562_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041562_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "5.86671379932E-17"
+      }
+    },
+    {
+      "name": "2041562_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041562_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "away",
+        "market": "home"
+      }
+    },
+    {
+      "name": "2041562_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "home",
+        "displayedLeader": "home",
+        "runnerUp": "away",
+        "topGapPercentagePoints": "0.5",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041565_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041565_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "6.17063999840E-17"
+      }
+    },
+    {
+      "name": "2041565_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-direction-unavailable-or-ambiguous",
+        "reported": "poisson-direction-unavailable-or-ambiguous"
+      }
+    },
+    {
+      "name": "2041565_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041565_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "home",
+        "topGapPercentagePoints": "25.7",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041566_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041566_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "5.07650424429E-17"
+      }
+    },
+    {
+      "name": "2041566_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-and-market-align-but-base-final-disagrees",
+        "reported": "poisson-and-market-align-but-base-final-disagrees"
+      }
+    },
+    {
+      "name": "2041566_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041566_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "home",
+        "topGapPercentagePoints": "1.1",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041572_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041572_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "3.42297223734E-17"
+      }
+    },
+    {
+      "name": "2041572_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041572_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041572_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "draw",
+        "topGapPercentagePoints": "44.0",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041589_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041589_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "5.92799836361E-17"
+      }
+    },
+    {
+      "name": "2041589_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041589_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041589_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "draw",
+        "topGapPercentagePoints": "11.2",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041596_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041596_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "5.78528310408E-17"
+      }
+    },
+    {
+      "name": "2041596_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041596_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041596_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "home",
+        "topGapPercentagePoints": "15.6",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041598_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041598_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "4.71383975025E-17"
+      }
+    },
+    {
+      "name": "2041598_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041598_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041598_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "draw",
+        "topGapPercentagePoints": "3.1",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041652_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041652_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "5.12791406196E-17"
+      }
+    },
+    {
+      "name": "2041652_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041652_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041652_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "home",
+        "topGapPercentagePoints": "5.4",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041653_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041653_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "2.22021364011E-17"
+      }
+    },
+    {
+      "name": "2041653_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041653_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041653_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "home",
+        "topGapPercentagePoints": "4.0",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041708_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041708_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "6.08201245530E-17"
+      }
+    },
+    {
+      "name": "2041708_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041708_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "home",
+        "market": "away"
+      }
+    },
+    {
+      "name": "2041708_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "away",
+        "displayedLeader": "away",
+        "runnerUp": "home",
+        "topGapPercentagePoints": "3.2",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041718_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041718_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "3.19246188672E-17"
+      }
+    },
+    {
+      "name": "2041718_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-and-market-align-but-base-final-disagrees",
+        "reported": "poisson-and-market-align-but-base-final-disagrees"
+      }
+    },
+    {
+      "name": "2041718_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "away",
+        "market": "home"
+      }
+    },
+    {
+      "name": "2041718_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "home",
+        "displayedLeader": "home",
+        "runnerUp": "away",
+        "topGapPercentagePoints": "8.8",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "2041738_record_hash_join",
+      "passed": true,
+      "evidence": "matchId and reported original-object/form hashes match; not a rehash of missing raw form"
+    },
+    {
+      "name": "2041738_market_formula",
+      "passed": true,
+      "evidence": {
+        "maxAbsoluteProbabilityDelta": "8.32933116807E-17"
+      }
+    },
+    {
+      "name": "2041738_pattern",
+      "passed": true,
+      "evidence": {
+        "recomputed": "poisson-component-already-disagrees-with-market",
+        "reported": "poisson-component-already-disagrees-with-market"
+      }
+    },
+    {
+      "name": "2041738_directions",
+      "passed": true,
+      "evidence": {
+        "frozen": "away",
+        "market": "home"
+      }
+    },
+    {
+      "name": "2041738_base_market_alignment",
+      "passed": true,
+      "evidence": {
+        "direction": "home",
+        "displayedLeader": "home",
+        "runnerUp": "away",
+        "topGapPercentagePoints": "8.9",
+        "reason": "robust-under-closed-half-rounding-intervals"
+      }
+    },
+    {
+      "name": "unique_disagreement_matches",
+      "passed": true,
+      "evidence": {
+        "rows": 26
+      }
+    },
+    {
+      "name": "recovery_partition",
+      "passed": true,
+      "evidence": {
+        "export-omitted": 355,
+        "retained": 24
+      }
+    },
+    {
+      "name": "pattern_summary",
+      "passed": true,
+      "evidence": {
+        "poisson-and-market-align-but-base-final-disagrees": 5,
+        "poisson-component-already-disagrees-with-market": 19,
+        "poisson-direction-unavailable-or-ambiguous": 2
+      }
+    },
+    {
+      "name": "version_summary",
+      "passed": true,
+      "evidence": {
+        "unified-poisson-bayes-v73": 4,
+        "unified-poisson-bayes-v75": 21,
+        "unified-poisson-bayes-v76": 1
+      }
+    },
+    {
+      "name": "recoverable_usage_request_count",
+      "passed": true,
+      "evidence": {
+        "requestCount": 22
+      }
+    },
+    {
+      "name": "candidate_admission_unchanged",
+      "passed": true,
+      "evidence": {
+        "newTrainingAdmissions": 0
+      }
+    }
+  ],
+  "checkCounts": {
+    "pass": 136
+  },
+  "rows": [
+    {
+      "matchId": "2041175",
+      "decisionAt": "2026-08-31T13:52:14.001Z",
+      "kickoffAt": "2026-09-01T00:00:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v73",
+      "sourceSnapshotHash": "0f77bcc266c89ea8883ba0aa80605679bf904071ebe1dacfcc08a3f812d4ba5a",
+      "sourceRecordHash": "b64cb838aa0f180b26a95cbd4bb8e3c7a12a941660a5e31c5413e0afda91af2f",
+      "formCanonicalSha256": "1f82f586075b2cafe11106ac19cd1b11e54268e4f4194fe89e7f7897d8531927",
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "home",
+      "componentChecks": {
+        "poisson": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "4.4",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "0.7",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "draw",
+          "topGapPercentagePoints": "12.8",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-and-market-align-but-base-final-disagrees",
+      "outcomeWithinDisagreementSubset": "market-only-hit",
+      "usageSummaryStatus": "not-present-in-frozen-inputs",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041244",
+      "decisionAt": "2026-09-02T09:27:15.555Z",
+      "kickoffAt": "2026-09-02T17:30:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v73",
+      "sourceSnapshotHash": "3db3101fcdd2c7a77973bb78b1ea01aee985ee059ba81b5f9b2e76905c694c78",
+      "sourceRecordHash": "5471c8d109c69cc47342b02ac368f01a7691a536d6c884c080a9b4842ab69d56",
+      "formCanonicalSha256": "a711131bdb772b4d0ebe0bee059179722a08dce848ec34f53f72001dd791e5fb",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "away",
+      "componentChecks": {
+        "poisson": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "1.2",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "0.5",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "1.5",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "market-only-hit",
+      "usageSummaryStatus": "not-present-in-frozen-inputs",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041276",
+      "decisionAt": "2026-09-05T13:23:32.345Z",
+      "kickoffAt": "2026-09-05T21:30:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v73",
+      "sourceSnapshotHash": "7aab16e18848c12da81d8573c09c5d52af63f69faa92c3cf101a6d15c53fcf60",
+      "sourceRecordHash": "e0968dc8d81594dffa61e9329cebd1cc3bcd3831ce80006e4e33106c49774f2e",
+      "formCanonicalSha256": "df8b624b4c897d38df837af84e9db4fa3eba93353b11d3a441c8789522ba8b69",
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "away",
+      "componentChecks": {
+        "poisson": {
+          "direction": null,
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "0.1",
+          "reason": "ambiguous-under-rounding-or-tie"
+        },
+        "baseFinal": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "16.7",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "1.0",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-direction-unavailable-or-ambiguous",
+      "outcomeWithinDisagreementSubset": "model-only-hit",
+      "usageSummaryStatus": "not-present-in-frozen-inputs",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041301",
+      "decisionAt": "2026-09-06T10:59:14.367Z",
+      "kickoffAt": "2026-09-06T19:00:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v73",
+      "sourceSnapshotHash": "1964773e04a6c4475039d379b492c82bb4da03b8b15c5b41c33185e6df55b120",
+      "sourceRecordHash": "14188945f2e33dc758966f906aea36a5b0f849d8229b9df0ed5b0c35351179df",
+      "formCanonicalSha256": "a0322c95bb5eb62ab86d72f4d8261be4c38cc20896e84f472c1bbb6f8c891ca6",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "draw",
+      "componentChecks": {
+        "poisson": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "0.9",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "1.8",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "11.0",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-and-market-align-but-base-final-disagrees",
+      "outcomeWithinDisagreementSubset": "neither-hit",
+      "usageSummaryStatus": "not-present-in-frozen-inputs",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041406",
+      "decisionAt": "2026-09-12T06:18:45.494Z",
+      "kickoffAt": "2026-09-12T15:30:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "540f7c375503d45b0a14059cc9fd55289a3aaf29133f0102de240406cde3a78f",
+      "sourceRecordHash": "25ba45d72e681cbac2b7860bf07032fb244fb84e75953d3f4eef7892c219cfc4",
+      "formCanonicalSha256": "c64e2cbc0b859e233da4c48812356b5f246443018d7140421fce5a2502847f8b",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "away",
+      "componentChecks": {
+        "poisson": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "4.1",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "0.7",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "8.7",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-and-market-align-but-base-final-disagrees",
+      "outcomeWithinDisagreementSubset": "market-only-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041408",
+      "decisionAt": "2026-09-12T06:18:45.520Z",
+      "kickoffAt": "2026-09-12T18:00:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "0af9a0d48744041babc8b94fdc774be0c5ce32219d1df0d9895aca074290e672",
+      "sourceRecordHash": "62d4f6436e617c1a4661b35fd80147376d572ba9d0392b78e8e918b7973d26dd",
+      "formCanonicalSha256": "4856c32434443c61ca59e99892fe8e9e2e4ae7a60419914481246283d5aa7baf",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "away",
+      "componentChecks": {
+        "poisson": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "1.2",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "draw",
+          "topGapPercentagePoints": "7.7",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "draw",
+          "topGapPercentagePoints": "24.2",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "market-only-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041409",
+      "decisionAt": "2026-09-12T06:18:45.532Z",
+      "kickoffAt": "2026-09-12T20:00:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "64fc654c66c85306757fdb5981053c4fb1d9eb16dfbc65bc3046b3d8c827a3b1",
+      "sourceRecordHash": "d43ad07beefa72105e2565bca98b58098f41865d392d4863a0df4e3bc0e07915",
+      "formCanonicalSha256": "35a40387bade55eecbf0e8852a59cff2a1c9754e82ef2a4410a385bb5a95c87c",
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "home",
+      "componentChecks": {
+        "poisson": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "15.3",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "12.5",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "2.5",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "market-only-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041410",
+      "decisionAt": "2026-09-12T06:18:45.542Z",
+      "kickoffAt": "2026-09-12T21:00:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "38ab648cfd50ccd2e58553a41e97f9edd2af74e902a82a347d31b47c6bea6e36",
+      "sourceRecordHash": "5318b55af16147f9ce080e4e701c5bc25887be3d892c561bc2d0c0fc906c3b0b",
+      "formCanonicalSha256": "21ab6754c77ad0e25c61cb4136393e85484c70fef662327afc6ff710e443bca7",
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "draw",
+      "componentChecks": {
+        "poisson": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "19.3",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "7.4",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "16.6",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "neither-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041415",
+      "decisionAt": "2026-09-12T06:18:45.596Z",
+      "kickoffAt": "2026-09-12T21:30:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "49b8a65d063251f1525510b1135b70700a820087547208728cf3f46d1f45cfdf",
+      "sourceRecordHash": "843e15bb7e69039b02a055b6d71d0f55d2a4dfab1296e9e4484c8fd9d7ac8fcb",
+      "formCanonicalSha256": "afe0df99a3e42abc27f7a2bdd362013ecb91d118f6bf575ae01de1d44f37fb8e",
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "home",
+      "componentChecks": {
+        "poisson": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "1.4",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "13.9",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "4.9",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "market-only-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041422",
+      "decisionAt": "2026-09-12T06:18:45.674Z",
+      "kickoffAt": "2026-09-12T23:15:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "834ecce3578e8fe68171f63690e2a897bc06e36254291c07bd96a44770dfc215",
+      "sourceRecordHash": "5d3943163f2926c1e82db39efb7736bff6c74f799e347fc7362a17807ca2faa5",
+      "formCanonicalSha256": "4d6729a13b5a0654bcc361dc58885798681794e1699e78041bd2b3e57ebdc529",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "draw",
+      "componentChecks": {
+        "poisson": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "16.3",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "13.9",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "15.6",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "neither-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041441",
+      "decisionAt": "2026-09-13T12:52:04.042Z",
+      "kickoffAt": "2026-09-13T21:00:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "69b7b5e38e51e2032b9f5c38905e99e44fb7a2eba45f1dfa898213ebb327390e",
+      "sourceRecordHash": "db6a6cc39cd71f88b0ecc72d9782832e977dabfb023cb3732572933b991a0880",
+      "formCanonicalSha256": "9be82ced81ec1917ad9508c310048fdb53693e2e480d415637e93353856cc3a1",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "home",
+      "componentChecks": {
+        "poisson": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "0.9",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "3.6",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "1.9",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "model-only-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041556",
+      "decisionAt": "2026-09-19T09:18:55.274Z",
+      "kickoffAt": "2026-09-19T17:30:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "32049008961f3567f51015f720303f646aca156208c2b6b7340372578f3e8eae",
+      "sourceRecordHash": "a9286d4b45760a2a87c8f7d3236623a38ae4ab856056dc44ba9c9a895fda844f",
+      "formCanonicalSha256": "dd7ddccd825379f567d19677412d0ca454229b564bdcea11867682215e94b93e",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "draw",
+      "componentChecks": {
+        "poisson": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "7.6",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "6.2",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "7.8",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "neither-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041560",
+      "decisionAt": "2026-09-19T11:20:23.801Z",
+      "kickoffAt": "2026-09-19T19:30:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "bff79f5b082e1a293120192c8d2d9906a85da4439b667b30a01bb2a45c5b9e07",
+      "sourceRecordHash": "2cd69a9aec1d2426de1e37f9dc44e881fa013fccaa000b8d675fab90be91886b",
+      "formCanonicalSha256": "63c668eb7af575b7f5ccb786a8a25910e6e0a92ab28ff4176f47aa9b0f388a1c",
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "away",
+      "componentChecks": {
+        "poisson": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "13.0",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "8.3",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "draw",
+          "topGapPercentagePoints": "27.5",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "model-only-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041561",
+      "decisionAt": "2026-09-19T11:20:23.817Z",
+      "kickoffAt": "2026-09-19T19:30:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "8b7d752fb84acd8376aaff637ecfb5a4cead66e822c9cd100e511c6d4a60115c",
+      "sourceRecordHash": "329125f0518dd47d25d30acf474e3b3ad136086efb761f120c522f40a0c990cb",
+      "formCanonicalSha256": "c0d01f7c3a017785b33e8fadace6c9c51d00a5399c34b4955e3f7157562b8a51",
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "home",
+      "componentChecks": {
+        "poisson": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "12.0",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "7.8",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "8.7",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "market-only-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041562",
+      "decisionAt": "2026-09-19T11:59:24.054Z",
+      "kickoffAt": "2026-09-19T20:00:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "29cc7209016a98a33752ff47ad3a833bcaffae44f2d1265d6a2732043930f584",
+      "sourceRecordHash": "9d40083ff4115d9e86b0bd778f89f2852bd27a5dd73447e0513aed47f08e6ed9",
+      "formCanonicalSha256": "c9fb65de677f9955f890bbed9550dfeb291c4a4c1b641af6bece61ce7afa87bf",
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "draw",
+      "componentChecks": {
+        "poisson": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "10.3",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "6.4",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "0.5",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "neither-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041565",
+      "decisionAt": "2026-09-19T12:42:52.505Z",
+      "kickoffAt": "2026-09-19T21:00:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "20f9617c82fd0ba77c536c577288f890912a05a0fea76fb5a0b5086f46e21329",
+      "sourceRecordHash": "20adbaa47f9526722ba321dbadb7a49781cd09af379b6a02581dda60752b96a4",
+      "formCanonicalSha256": "2fb9d5cd02cb64438cbce6d30154d33835724f178e2509f6593f328afd6c0dd9",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "home",
+      "componentChecks": {
+        "poisson": {
+          "direction": null,
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "0.1",
+          "reason": "ambiguous-under-rounding-or-tie"
+        },
+        "baseFinal": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "1",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "25.7",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-direction-unavailable-or-ambiguous",
+      "outcomeWithinDisagreementSubset": "model-only-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041566",
+      "decisionAt": "2026-09-19T13:21:37.339Z",
+      "kickoffAt": "2026-09-19T21:30:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "6dc8c94f37aeeaba136d586a7686c542e0e3a03582d05fa78e2a2b784071476f",
+      "sourceRecordHash": "283870ddeb400028e04d9cbef25b3e370654125ba4ca41fde3f295d47c2ffec6",
+      "formCanonicalSha256": "6afc7bed36b5edd0052371ef8b248e33ea202a6672518c31a64b026668d80a8f",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "draw",
+      "componentChecks": {
+        "poisson": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "3.7",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "0.9",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "1.1",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-and-market-align-but-base-final-disagrees",
+      "outcomeWithinDisagreementSubset": "neither-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041572",
+      "decisionAt": "2026-09-19T13:41:42.656Z",
+      "kickoffAt": "2026-09-19T22:00:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "b7b29fe597ef8a7833e16e7a6ffbbe59fdeb1dfdfd86ec36405b8626b4125886",
+      "sourceRecordHash": "87da19fd7b6433015a70bd76c7e47eb7a2c76789ae830bf76b7f761e61fedf1b",
+      "formCanonicalSha256": "2929afcf5623f5be15961b7df3421e8d00bb48629aba607e7f9f9b08342276f6",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "away",
+      "componentChecks": {
+        "poisson": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "1.2",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "3.4",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "draw",
+          "topGapPercentagePoints": "44.0",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "market-only-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041589",
+      "decisionAt": "2026-09-20T09:43:52.884Z",
+      "kickoffAt": "2026-09-20T18:00:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "35022ee80641f2677652d5e9a91e54f5fdd0cbb30a3078839051ea32bb6f5e48",
+      "sourceRecordHash": "1c639029ff9cda71d6f6846b75a8751d67604aea7659ac98b3c0048cc2b05942",
+      "formCanonicalSha256": "5358980cac19abda0141150c8daaf883e6bfbbdb14ed985aa39b1b8401420381",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "draw",
+      "componentChecks": {
+        "poisson": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "0.3",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": null,
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "0.1",
+          "reason": "ambiguous-under-rounding-or-tie"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "draw",
+          "topGapPercentagePoints": "11.2",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "neither-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041596",
+      "decisionAt": "2026-09-20T12:57:09.850Z",
+      "kickoffAt": "2026-09-20T21:00:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "49431c320f26db6be6d157f59556508195c0e55be2a481c77e53cceb8987693a",
+      "sourceRecordHash": "fa33259e3c8fb732afdac659921678b94ec392aea5c66b4f418b9e4397929328",
+      "formCanonicalSha256": "5399027a3325bc2f87761c5b40d35b4c0f9e61caa75cd6a4a1ba1d60ec80dd7a",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "away",
+      "componentChecks": {
+        "poisson": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "3.7",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "1.7",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "15.6",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "market-only-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041598",
+      "decisionAt": "2026-09-20T12:57:09.813Z",
+      "kickoffAt": "2026-09-20T21:00:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "0d12d90dddddf9bde193651b700ea97ef28b04202d9a5739c8767526649d30b5",
+      "sourceRecordHash": "af21ced594094e2bfa5c96d34a2a60e3c733a4b850d4a2b0ee1f3143eefc25b4",
+      "formCanonicalSha256": "4953cee43326660527f8691282db2259c9422f23b2d52cf9864c7e25d399e5e1",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "home",
+      "componentChecks": {
+        "poisson": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "13.2",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "9.5",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "draw",
+          "topGapPercentagePoints": "3.1",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "model-only-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041652",
+      "decisionAt": "2026-09-24T13:53:20.135Z",
+      "kickoffAt": "2026-09-25T02:45:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "8d00a197343429e734d643d8829330beff56445097e718e55da012656951a440",
+      "sourceRecordHash": "7ee0e91e94bf2f3d1bfaf2349684246d5c3f1b2795073c5c6b383ff9578059cc",
+      "formCanonicalSha256": "6d413bc258b421bed07065e194bf3fc8fa66bc2a7e58e183719bcc4ce831d2f2",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "draw",
+      "componentChecks": {
+        "poisson": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "13.9",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "9.7",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "5.4",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "neither-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041653",
+      "decisionAt": "2026-09-24T13:53:20.146Z",
+      "kickoffAt": "2026-09-25T02:45:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "1f4d72dfa0ef9963e799675bf8ff7cb04f07a5654b8b88e31323de8d19153057",
+      "sourceRecordHash": "58b1039e70c6b4c9bf93b93540883aab970e88581577ed8c1ec320a84eed3212",
+      "formCanonicalSha256": "a6871bbfea7caab781577d3142b8f454e26bf228e2367e9eb4a6bdef2439809d",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "away",
+      "componentChecks": {
+        "poisson": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "3.4",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "5.4",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "4.0",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "market-only-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041708",
+      "decisionAt": "2026-09-26T07:45:24.632Z",
+      "kickoffAt": "2026-09-26T16:00:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "02b0b57d7d952b32b5704185b3efa30706aae114b7096da68261789fc4b8eba2",
+      "sourceRecordHash": "4081b7a6fcf3a0bb585931d8b8cbdaa8476675048e3c884baf4dec030a8d7e97",
+      "formCanonicalSha256": "9fe790ee457bb0afb0e32702d042012f506ee96c4ac7312a5a262ad1562e2cb7",
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "draw",
+      "componentChecks": {
+        "poisson": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "1.2",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "0.3",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "3.2",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "neither-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041718",
+      "decisionAt": "2026-09-26T14:54:49.519Z",
+      "kickoffAt": "2026-09-27T02:00:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "sourceSnapshotHash": "62ed154135ba8b1d34f9b68df3524c12996e97ec4e6784034a8b00c964ba5113",
+      "sourceRecordHash": "431fee77e68fb1c682419a26969a10f1916274b4a68f0972092297e2c594ee7b",
+      "formCanonicalSha256": "f906dd23fddb42daaf188867e1ca95038ecaf5efa8fd99f7ea47423976f74cb4",
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "home",
+      "componentChecks": {
+        "poisson": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "1.3",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "5.4",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "8.8",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-and-market-align-but-base-final-disagrees",
+      "outcomeWithinDisagreementSubset": "market-only-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    },
+    {
+      "matchId": "2041738",
+      "decisionAt": "2026-09-27T14:48:49.734Z",
+      "kickoffAt": "2026-09-28T02:45:00+08:00",
+      "modelVersion": "unified-poisson-bayes-v76",
+      "sourceSnapshotHash": "27d4d12f4d0f854a82588aefcec095d89a5f6a177af676598f25d5f36ba5aaa7",
+      "sourceRecordHash": "fcdfe5c05f8c2be48a77449598d7c75df5aaad74564a3ae45cbc92cfde8cdeaf",
+      "formCanonicalSha256": "cb0ffeda1ec42aff726ab78738f30df9cae21ded57e336746eb1d767f6c8e95c",
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "away",
+      "componentChecks": {
+        "poisson": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "0.2",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseFinal": {
+          "direction": "away",
+          "displayedLeader": "away",
+          "runnerUp": "home",
+          "topGapPercentagePoints": "6.8",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        },
+        "baseMarket": {
+          "direction": "home",
+          "displayedLeader": "home",
+          "runnerUp": "away",
+          "topGapPercentagePoints": "8.9",
+          "reason": "robust-under-closed-half-rounding-intervals"
+        }
+      },
+      "independentPattern": "poisson-component-already-disagrees-with-market",
+      "outcomeWithinDisagreementSubset": "model-only-hit",
+      "usageSummaryStatus": "export-omitted",
+      "sourceHashJoinVerified": true,
+      "exactStageReplayEligible": false,
+      "newTrainingEligible": false
+    }
+  ],
+  "nextFixedControlProtocol": [
+    "Keep the 26 inspected matches as historical diagnosis; do not tune on their outcomes or reuse as future holdout.",
+    "Freeze a new untouched common cohort by match, decision ID/time, pool/line, original probabilities, same-decision market SP, model/policy versions and hashes before outcomes; evaluate HAD and HHAD separately.",
+    "Keep fixed raw market q alongside Poisson, baseFinal and final frozen output without changing weights or thresholds. Retain original unrounded inputs, stage weights, exact pre/post-stage probabilities and original clocks before causal attribution.",
+    "Stratify v73/v75/v76; pooled retrospective counts are not current-model performance. Preserve complete existing admission, sample, time-window, replay and promotion gates.",
+    "22 usageSummary requests stay prepared only. Any later export must preserve the named generation, source-file hash, snapshot hash, committed field hash and <=1024-byte bound. usageSummary alone cannot prove arithmetic replay."
+  ],
+  "limitations": [
+    "19/5/2 localizes observed disagreement; it does not prove Poisson, form, feedback or cooldown caused errors.",
+    "Selected-disagreement outcome counts are diagnostic only, not full-cohort accuracy or uplift.",
+    "379 hash receipts do not supply 379 full form values or original per-field availability/source clocks.",
+    "No fitting, threshold changes, formal probability/score edits, candidate registration, promotion, deployment or football-source network request occurred.",
+    "No earlier a081 result was imported or applied."
+  ],
+  "productionWrites": false,
+  "modelFitted": false,
+  "thresholdsChanged": false,
+  "formalProbabilitiesChanged": false,
+  "formalScoresChanged": false,
+  "candidateRegistered": false,
+  "promoted": false,
+  "deployed": false,
+  "finalIndependentQaBoundary": {
+    "source": "final independent QA handoff for the same two source files",
+    "reportedQaChecksPassed": 55,
+    "reportedQaChecksFailed": 0,
+    "reportedMissingEvidenceCategories": 8,
+    "metadataCompleteTeamSlots": 7,
+    "latestObservedAtBeforeOriginalDecision": true,
+    "reportedEvidenceDecisionAtAfterOriginalDecisionForAllSeven": true,
+    "consequence": "These summary slots do not prove original per-source availability clocks and add zero training admissions.",
+    "usageSummaryRequestDescriptorsVerifiedByQa": 22,
+    "usageSummaryRequestStatus": "prepared-not-executed"
+  }
+}

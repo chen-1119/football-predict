@@ -207,7 +207,7 @@ const extractSection = (text, name, nextName = null) => {
   return String(text || "").slice(bodyStart, end >= 0 ? end : undefined).trim();
 };
 
-const buildRemotePreflightCommand = (expectedRecoveryHelperSha256, rotationContractReady) => [
+const buildRemotePreflightCommand = (expectedRecoveryHelperSha256, rotationContractReady, releaseKind = "full") => [
   "set -euo pipefail",
   `test -x ${shellQuote(remoteEntrypoint)} || { echo "release-entrypoint-missing"; exit 20; }`,
   `test -d ${shellQuote(remoteDir)} && test -w ${shellQuote(remoteDir)} || { echo "release-incoming-not-writable"; exit 21; }`,
@@ -222,7 +222,7 @@ const buildRemotePreflightCommand = (expectedRecoveryHelperSha256, rotationContr
   "case \"$entrypoint_check\" in *\"appPresent=1\"*) ;; *) echo \"app-dir-missing\"; exit 22 ;; esac",
   "test ! -e /var/lib/football-release/reference-repairs/current && test ! -L /var/lib/football-release/reference-repairs/current || { echo 'release-reference-repair-recovery-pending'; exit 28; }",
   "systemctl is-active football-predict >/dev/null || { echo \"service-inactive\"; exit 23; }",
-  `sudo -n /opt/node-v22.22.1/bin/node -e ${shellQuote(buildReadOnlyWorkerProbe())} || { echo "release-worker-preflight-rejected"; exit 27; }`,
+  `sudo -n /opt/node-v22.22.1/bin/node -e ${shellQuote(buildReadOnlyWorkerProbe({ releaseKind }))} || { echo "release-worker-preflight-rejected"; exit 27; }`,
   `if test "$recovery_helper_sha" = ${shellQuote(expectedRecoveryHelperSha256)}; then echo "recoveryHelperRotationRequired=0"; elif test ${shellQuote(rotationContractReady ? "1" : "0")} = "1"; then echo "recoveryHelperRotationRequired=1"; else echo "release-recovery-helper-mismatch"; exit 26; fi`,
   `echo "recoveryHelperRotationContractReady=${rotationContractReady ? "1" : "0"}"`,
   "echo preflight-ok"
@@ -494,7 +494,8 @@ const releaseRunId = actualSha256;
 const expectedRecoveryHelperSha256 = recoveryHelperInspection.sha256;
 const remotePreflightCommand = buildRemotePreflightCommand(
   expectedRecoveryHelperSha256,
-  !frontendOnly && recoveryHelperRotationContract.ok === true
+  !frontendOnly && recoveryHelperRotationContract.ok === true,
+  releaseCandidate.releaseKind
 );
 const remoteBundlePath = remoteJoin(remoteDir, `${actualSha256}.tgz`);
 const remoteShaPath = remoteJoin(remoteDir, `${actualSha256}.sha256`);

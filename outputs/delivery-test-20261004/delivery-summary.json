@@ -1,0 +1,1638 @@
+{
+  "version": "football-delivery-summary-v1",
+  "generatedAt": "2026-10-04T17:25:38.272Z",
+  "codeHead": "a179c672d134f34ec836a8ba5a560578fab24c99",
+  "businessDate": "2026-10-05",
+  "firstKickoffBeijing": "2026-10-06 00:00",
+  "otherKickoffsBeijing": "2026-10-06 02:45",
+  "sourceScope": "Real current production exports and HTTP; synthetic data used only for bounded regression tests",
+  "modelInputObservationAt": "2026-10-04T14:29:13.218Z",
+  "modelInputObservationScope": "31 total / 7 official-SP and missing-field counts are the original immutable production generation observation; current release observations are recorded separately",
+  "tests": {
+    "inputObservationScope": "Original immutable production batch at 2026-10-04 22:29:13 Beijing; not refreshed merely by report generation",
+    "currentFixtures": 31,
+    "withOfficialSp": 7,
+    "targetSalesDayFixtures": 7,
+    "completeHadHhad": 7,
+    "originalFrozenReferenceBindings": 7,
+    "originalHadSignatures": 7,
+    "originalHhadSignatures": 7,
+    "authenticatedHttp": {
+      "ok": true,
+      "rows": 31,
+      "details": 31,
+      "mismatches": 0,
+      "checkedAt": "2026-10-04T17:19:01.413Z",
+      "temporaryQaRevoked": true,
+      "runtimeSha256": "ae70233afd87764f371c1a6110f1f4371cdeaf11cc6308dd8861b55c2f708335"
+    },
+    "chrome": {
+      "desktopListAndPublicDetailVerified": true,
+      "viewport390PublicDetailVerified": true,
+      "fullAuthenticatedAnalysisUiVerified": true,
+      "exactCandidateDefaultDateVerified": true,
+      "candidateObservation": {
+        "version": "delivery-chrome-candidate-observation-v1",
+        "checkedAt": "2026-10-04T17:23:26.656Z",
+        "browser": "Chrome",
+        "runtimeSha256": "ae70233afd87764f371c1a6110f1f4371cdeaf11cc6308dd8861b55c2f708335",
+        "releaseSequence": 790,
+        "publicUrl": "https://134.175.132.183/fixtures",
+        "detailUrl": "https://134.175.132.183/match/sporttery_2041805",
+        "candidateDefaultDateVerified": true,
+        "selectedSalesDate": "2026-10-05",
+        "selectedFixtures": 7,
+        "firstKickoffBeijing": "2026-10-06 00:00",
+        "desktopListAndPublicDetailVerified": true,
+        "viewport390PublicDetailVerified": true,
+        "fullAuthenticatedAnalysisUiVerified": true,
+        "viewport390AuthenticatedDetailVerified": true,
+        "layout": {
+          "viewport": 390,
+          "documentWidth": 382,
+          "bodyWidth": 383,
+          "horizontalOverflow": false,
+          "temporaryViewportReset": true
+        },
+        "fullAnalysis": {
+          "overview": true,
+          "probabilityAndOdds": true,
+          "dataAndAnalysis": true,
+          "injuryUnknownDisplayedAsDash": true,
+          "sameOfficialHadQuoteVisible": true,
+          "hadQuote": [
+            1.52,
+            3.55,
+            5.3
+          ],
+          "modelGoalsExplicitlyEstimated": true,
+          "noPublishedRecommendationVisible": true,
+          "noOldDirectionOrProbabilitySubstituted": true,
+          "knownMissingDataClockLabelStillPresent": true
+        },
+        "access": {
+          "existingLegacyTemporaryFlow": true,
+          "accountCreated": false,
+          "actualTtlSeconds": 300,
+          "serverRevokedAndRechecked": true,
+          "browserReturnedToAnonymousAfterRevocation": true,
+          "anonymousLoginButtonAndPublicPreviewConfirmed": true
+        },
+        "screenshots": {
+          "online-r790-public-list.jpg": {
+            "sha256": "50891896a519e12b7973223fb5c3bd2b6fbc661f8f64fe5e7285adb67485ec3e",
+            "scope": "public UI"
+          },
+          "online-r790-public-mobile.jpg": {
+            "sha256": "ddf549b95251fdb23ad7fe307c176cfa39bf1efb24f849a38c8c7a989bf54512",
+            "scope": "public UI"
+          },
+          "online-r790-protected-overview.jpg": {
+            "sha256": "919e159685856e77aa20b1c2fa1d63a7ef49c1701cb91276d1c2e3d069b54f97",
+            "scope": "local only; excluded from Git"
+          },
+          "online-r790-protected-mobile.jpg": {
+            "sha256": "14774270479d65827f6c2c0439b4076f3c110531cebf40c8a5e81d27d1c15a64",
+            "scope": "local only; excluded from Git"
+          }
+        },
+        "limitations": [
+          "The tested full page has no published recommendation; this verifies its waiting/unknown states and official market display, not a recommendation or accuracy improvement.",
+          "The existing early overdue input clock defect remains visible and is not repaired by this release."
+        ]
+      },
+      "temporaryQaCleanupVerified": true,
+      "browserQaLifecycle": {
+        "label": "delivery-browser-20261005-297268d1-0595-47a3-ad2a-86da6785ea16",
+        "created": true,
+        "createdAt": "2026-10-04T17:19:12.622Z",
+        "expiresAt": "2026-10-04T17:24:12.622Z",
+        "ttlSeconds": 300,
+        "requestedTtlSeconds": 300,
+        "operatorSingleBrowserOnly": true,
+        "serverDeviceLimitEnforced": false,
+        "revoked": true,
+        "cleanupVerified": true,
+        "revokedAt": "2026-10-04T17:20:45.376Z",
+        "revokedCount": 1
+      },
+      "note": "Actual production public preview; protected API and full authenticated browser analysis are separate checks."
+    },
+    "releasePreparation": {
+      "worker": true,
+      "window": true,
+      "archive": true,
+      "scope": "Early read-only checks; these do not authorize cutover"
+    },
+    "formalRecommendations": 0,
+    "requiredReleaseContracts": {
+      "ok": true,
+      "checks": 352,
+      "testedHead": "a179c672d134f34ec836a8ba5a560578fab24c99",
+      "scope": "Required bounded synthetic source/runtime contracts; separate from real production observation"
+    }
+  },
+  "release": {
+    "candidateBundleCreated": true,
+    "bundleAttempt": {
+      "version": "delivery-full-bundle-attempt-v1",
+      "startedAt": "2026-10-04T15:32:26.567Z",
+      "finishedAt": "2026-10-04T15:36:28.738Z",
+      "exitCode": 0,
+      "signal": null,
+      "codeCommit": "a179c672d134f34ec836a8ba5a560578fab24c99",
+      "bundleCreated": true,
+      "remoteDeployInvoked": false
+    },
+    "deployAttempt": {
+      "version": "delivery-full-deploy-attempt-v1",
+      "startedAt": "2026-10-04T15:38:40.800Z",
+      "finishedAt": "2026-10-04T17:17:23.660Z",
+      "exitCode": 0,
+      "signal": null,
+      "codeCommit": "a179c672d134f34ec836a8ba5a560578fab24c99",
+      "releaseSequence": 790,
+      "bundleSha256": "ae70233afd87764f371c1a6110f1f4371cdeaf11cc6308dd8861b55c2f708335",
+      "accepted": true,
+      "scope": "unmodified normal signed full-release controller; final exact live identity independently checked after completion"
+    },
+    "accepted": true,
+    "normalControllerAccepted": true,
+    "exactRuntimeAccepted": true,
+    "publicOriginVerified": true,
+    "authenticatedParityMatchesCandidate": true,
+    "finalObservation": {
+      "version": "delivery-final-online-observation-v2",
+      "checkedAt": "2026-10-04T17:18:40.140Z",
+      "accepted": true,
+      "fullRuntimeAccepted": true,
+      "releaseSequence": 790,
+      "releaseStatus": {
+        "status": "complete",
+        "ok": "1",
+        "startedAt": "2026-10-04T15:39:10Z",
+        "finishedAt": "2026-10-04T17:17:16Z",
+        "exitCode": "0",
+        "bundleSha256": "ae70233afd87764f371c1a6110f1f4371cdeaf11cc6308dd8861b55c2f708335",
+        "releaseKind": "full",
+        "releaseSequence": "790"
+      },
+      "runtimeSha256": "ae70233afd87764f371c1a6110f1f4371cdeaf11cc6308dd8861b55c2f708335",
+      "completeSha256": "ae70233afd87764f371c1a6110f1f4371cdeaf11cc6308dd8861b55c2f708335",
+      "signedDistMatches": true,
+      "dist": {
+        "treeHash": "606b7dcbd19a044776a1098a9ab5e8d5741e6b099dd91400315bb36366a5b686",
+        "indexSha256": "2364aa117bb888927d08163aca2e443c2cc6f13855719f45814b879aef755825",
+        "fileCount": 217,
+        "totalBytes": 14290229
+      },
+      "frontend": {
+        "version": "frontend-release-state-v1",
+        "kind": null,
+        "phase": null,
+        "runtimeSha256": null,
+        "runtimeSequence": null,
+        "frontendSha256": null,
+        "frontendSequence": null,
+        "indexSha256": null,
+        "distTreeHash": null,
+        "acceptanceSha256": null,
+        "available": false,
+        "consistent": false
+      },
+      "generation": {
+        "schemaVersion": 1,
+        "generationId": "g-4281bdccc6e1e36d4c7a597b4e768f33968bee26f7e8e7ed15678c059d2cb3cf",
+        "sourceCycleId": "sporttery-full-sync:2026-10-04T16:31:06.032Z",
+        "manifestHash": "4281bdccc6e1e36d4c7a597b4e768f33968bee26f7e8e7ed15678c059d2cb3cf",
+        "committedAt": "2026-10-04T17:01:45.149Z"
+      },
+      "currentFixtures": 31,
+      "tomorrowSalesFixtures": 7,
+      "installedFileHashes": {
+        "src/pages/PublicBrowse.tsx": "ef5d1e79c17bc11e16d0f3a6032787c59a2ca93cad3cdb3c9c58d7d3adab5ca3",
+        "scripts/staticVerificationReceipts.cjs": "0453a6155960d0eca4d530f6e851b0cef3993f5cbbf5c116df0bd45671aa46ad",
+        "scripts/frontendRuntimeBoundary.cjs": "3667d163efda9b5e288f8cd8ac97a5131a72090692af0855c030aa32ad59fbaf",
+        "scripts/verifyFrontendRuntimeBoundary.cjs": "3a3241ad52b1fb0321fc26cb30a2d0bb3a4a638b622c6c8f1054862bbd97d147",
+        "scripts/runModelBacktest.cjs": "de529f0c644d3368c4fd8357c9f6d5e45b50f0329e12699587eddda57f313dc6",
+        "server/frontendReleaseIdentity.cjs": "188c7d6124e7ae9674be556873fa20543ddd015e7483d1051d579597636e875a",
+        "scripts/releasePrebuiltDist.cjs": "0c281ddf8991515080851dd361a406c48003831302dfdc2f1e9d503202f2ed7b",
+        "scripts/releaseWorkerPreflight.cjs": "b9a18cd1b007590d58dbc48b360eb5dbebc1cfc944e9b0c3e4298d7f26fff117",
+        "server/dataGenerationStore.cjs": "2dd3645e283cd70f812345d7e6d5ca2dd82ab885d0bd6b8091775d3965d3e934",
+        "server/chunkedJsonFile.cjs": "38fa00e57029eae703ac725d8586cd213c63982d95258d0eabbe96da7c3168d9",
+        "server/selectedJsonObjectFile.cjs": "49ac5a44a72ca284543362f0e769c1e92ef05e091381c36aed2f85ae44e8c40a",
+        "scripts/frontendReleaseInputs.cjs": "24ecfd775e64b3e25682fd1f44c81736ca6d028c7885c5b56f2ac6dc623d87c6"
+      },
+      "units": {
+        "football-predict.service": "active",
+        "football-sync-worker.service": "active"
+      },
+      "health": {
+        "serviceOk": true,
+        "sourceHealthOk": true,
+        "dataFresh": true,
+        "recommendationProjectionParityOk": true,
+        "currentRead": {
+          "source": "postgres",
+          "stale": false,
+          "count": 31,
+          "blockedReason": null,
+          "sqliteCount": 31,
+          "generationCount": 31,
+          "dbUpdatedAt": "2026-10-04T17:07:18.674Z",
+          "fileUpdatedAt": "2026-10-04T16:31:02.861Z",
+          "sqliteLagSeconds": 0,
+          "sqliteReadGraceSeconds": 600,
+          "checkedAt": "2026-10-04T17:18:40.033Z"
+        },
+        "recommendationReliable": false,
+        "fastResultIntegrityOk": true,
+        "workerOk": true
+      },
+      "worker": {
+        "version": "release-worker-preflight-v1",
+        "checkedAt": "2026-10-04T17:18:37.874Z",
+        "ok": true,
+        "state": "prepare-may-continue",
+        "mainPid": 3837889,
+        "phase": "official-result",
+        "statusAt": "2026-10-04T17:18:10.845Z",
+        "statusAgeSeconds": 27.029,
+        "errorCode": null,
+        "blockers": [],
+        "warnings": [],
+        "readyToCutover": false,
+        "productionWrites": 0,
+        "scope": "early rejection only; running is not success; fresh official publication and all final gates remain mandatory"
+      },
+      "publicOriginVerified": false,
+      "publicOriginVerification": "Separate public HTTPS/API/browser receipt required; this observation reads loopback health only.",
+      "productionWrites": 0,
+      "frontendBaselineReady": false,
+      "frontendBaselineScope": "Root/projection/receipt/runtime binding and loopback identity; public origin is verified separately.",
+      "warnings": [
+        "Full runtime may be accepted while its optional frontend-only baseline is not ready."
+      ]
+    },
+    "publicOriginObservation": {
+      "version": "public-origin-observation-v2",
+      "origin": "https://134.175.132.183",
+      "startedAt": "2026-10-04T17:19:02.096Z",
+      "checkedAt": "2026-10-04T17:19:05.590Z",
+      "completedAt": "2026-10-04T17:19:05.590Z",
+      "productionWrites": 0,
+      "manifestSignatureVerified": true,
+      "releaseSequence": 790,
+      "bundleSha256": "ae70233afd87764f371c1a6110f1f4371cdeaf11cc6308dd8861b55c2f708335",
+      "acceptedFullRuntime": true,
+      "acceptanceEvidence": {
+        "deploymentFinishedAt": "2026-10-04T17:17:23.660Z",
+        "finalObservedAt": "2026-10-04T17:18:40.140Z",
+        "frontendBaselineReady": false,
+        "scope": "Normal deployment receipt plus final independent runtime observer."
+      },
+      "expected": {
+        "index": {
+          "bytes": 1129,
+          "sha256": "2364aa117bb888927d08163aca2e443c2cc6f13855719f45814b879aef755825"
+        },
+        "distTreeHash": "606b7dcbd19a044776a1098a9ab5e8d5741e6b099dd91400315bb36366a5b686",
+        "jsCssAssetCount": 45
+      },
+      "fixtures": {
+        "path": "/fixtures",
+        "startedAt": "2026-10-04T17:19:02.097Z",
+        "completedAt": "2026-10-04T17:19:02.205Z",
+        "httpStatus": 200,
+        "tlsAuthorized": true,
+        "headers": {
+          "content-type": "text/html",
+          "content-encoding": null,
+          "cache-control": "no-store",
+          "etag": "\"6ac27268-469\"",
+          "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+        },
+        "bytes": 1129,
+        "sha256": "2364aa117bb888927d08163aca2e443c2cc6f13855719f45814b879aef755825"
+      },
+      "referenceChecks": {
+        "ok": true,
+        "paths": [
+          "/assets/index-CseHXoVj.js",
+          "/assets/jsx-runtime-BF6S49EV.js",
+          "/assets/index-CQ3hcTtC.css"
+        ]
+      },
+      "assets": [
+        {
+          "path": "/assets/AccessCodeAdmin-BIIpNHOd.js",
+          "startedAt": "2026-10-04T17:19:02.334Z",
+          "completedAt": "2026-10-04T17:19:02.357Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-284d\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 10317,
+          "sha256": "23c438a4ce584cebf712335baa9ca918996689ec4047685e7fe938a418e35aa4",
+          "expected": {
+            "path": "assets/AccessCodeAdmin-BIIpNHOd.js",
+            "bytes": 10317,
+            "sha256": "23c438a4ce584cebf712335baa9ca918996689ec4047685e7fe938a418e35aa4"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/account-1e2_t3bA.css",
+          "startedAt": "2026-10-04T17:19:02.334Z",
+          "completedAt": "2026-10-04T17:19:02.364Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "text/css",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-2599\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 9625,
+          "sha256": "ca81998a97971da2d198d1695f616e885936b319f17eb6307d7cdf188bcfab56",
+          "expected": {
+            "path": "assets/account-1e2_t3bA.css",
+            "bytes": 9625,
+            "sha256": "ca81998a97971da2d198d1695f616e885936b319f17eb6307d7cdf188bcfab56"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/Account-BXqw64vt.js",
+          "startedAt": "2026-10-04T17:19:02.335Z",
+          "completedAt": "2026-10-04T17:19:02.427Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-1f87\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 8071,
+          "sha256": "3f6ab8db3c9007d11c9ea9b0ff1d5d42f2c4158bb0d1cb32296c0c5e6fb82490",
+          "expected": {
+            "path": "assets/Account-BXqw64vt.js",
+            "bytes": 8071,
+            "sha256": "3f6ab8db3c9007d11c9ea9b0ff1d5d42f2c4158bb0d1cb32296c0c5e6fb82490"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/AccountAdmin-DWUkLqXB.js",
+          "startedAt": "2026-10-04T17:19:02.335Z",
+          "completedAt": "2026-10-04T17:19:02.423Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-1c34\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 7220,
+          "sha256": "1a5d0589d7d860562dd9741d2678a7a3aa80f24d177d121abb721c4f446b06d2",
+          "expected": {
+            "path": "assets/AccountAdmin-DWUkLqXB.js",
+            "bytes": 7220,
+            "sha256": "1a5d0589d7d860562dd9741d2678a7a3aa80f24d177d121abb721c4f446b06d2"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/AIArena-58fsCIT2.js",
+          "startedAt": "2026-10-04T17:19:02.357Z",
+          "completedAt": "2026-10-04T17:19:02.377Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-ac46\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 44102,
+          "sha256": "1928a1e5b16cb7c8e3b085a6cf869c1f86addc128d9c8d4f4a66c5ed3e8091af",
+          "expected": {
+            "path": "assets/AIArena-58fsCIT2.js",
+            "bytes": 44102,
+            "sha256": "1928a1e5b16cb7c8e3b085a6cf869c1f86addc128d9c8d4f4a66c5ed3e8091af"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/AIArena-CjGameP-.css",
+          "startedAt": "2026-10-04T17:19:02.365Z",
+          "completedAt": "2026-10-04T17:19:02.394Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "text/css",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-3fbd\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 16317,
+          "sha256": "5691bf4c5a5b7a0130f28b89829e00928fb3a19aea52bbf9cb4781c07237cedc",
+          "expected": {
+            "path": "assets/AIArena-CjGameP-.css",
+            "bytes": 16317,
+            "sha256": "5691bf4c5a5b7a0130f28b89829e00928fb3a19aea52bbf9cb4781c07237cedc"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/arrow-left-BWppOgoA.js",
+          "startedAt": "2026-10-04T17:19:02.377Z",
+          "completedAt": "2026-10-04T17:19:02.398Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-9a\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 154,
+          "sha256": "662cb8cdac390434d0919e77e58d3a884548e72688f1b6d6402405457cf414cc",
+          "expected": {
+            "path": "assets/arrow-left-BWppOgoA.js",
+            "bytes": 154,
+            "sha256": "662cb8cdac390434d0919e77e58d3a884548e72688f1b6d6402405457cf414cc"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/arrow-right-CkDBGA6W.js",
+          "startedAt": "2026-10-04T17:19:02.394Z",
+          "completedAt": "2026-10-04T17:19:02.424Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-9a\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 154,
+          "sha256": "749962ead89dd2b10168689187ba17277a84144f73a380d30f956d16de10617b",
+          "expected": {
+            "path": "assets/arrow-right-CkDBGA6W.js",
+            "bytes": 154,
+            "sha256": "749962ead89dd2b10168689187ba17277a84144f73a380d30f956d16de10617b"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/Auth-DvFZVOzY.js",
+          "startedAt": "2026-10-04T17:19:02.398Z",
+          "completedAt": "2026-10-04T17:19:02.423Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-2d5e\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 11614,
+          "sha256": "b0e04635ec82c5ec608e6f4dabfcb6e0b45c936abe53cd9f4ecca986e63c34bd",
+          "expected": {
+            "path": "assets/Auth-DvFZVOzY.js",
+            "bytes": 11614,
+            "sha256": "b0e04635ec82c5ec608e6f4dabfcb6e0b45c936abe53cd9f4ecca986e63c34bd"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/BestTips-jEx9MZXb.js",
+          "startedAt": "2026-10-04T17:19:02.423Z",
+          "completedAt": "2026-10-04T17:19:02.451Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-1b7\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 439,
+          "sha256": "52df2b0ec08adaa09dc41ac50c3c9736a0e653a8ddf2ada9eb5aafb73d40d59e",
+          "expected": {
+            "path": "assets/BestTips-jEx9MZXb.js",
+            "bytes": 439,
+            "sha256": "52df2b0ec08adaa09dc41ac50c3c9736a0e653a8ddf2ada9eb5aafb73d40d59e"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/BetSlipGenerator-CVAIeT1x.js",
+          "startedAt": "2026-10-04T17:19:02.424Z",
+          "completedAt": "2026-10-04T17:19:02.443Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-123\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 291,
+          "sha256": "5a8c8a8cdc7dbfcd18acb3851310fa1cc6571a844a330d618d3c43a9b61380dd",
+          "expected": {
+            "path": "assets/BetSlipGenerator-CVAIeT1x.js",
+            "bytes": 291,
+            "sha256": "5a8c8a8cdc7dbfcd18acb3851310fa1cc6571a844a330d618d3c43a9b61380dd"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/BigFiveLeagues-CvGLuLwV.js",
+          "startedAt": "2026-10-04T17:19:02.424Z",
+          "completedAt": "2026-10-04T17:19:02.452Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-5327\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 21287,
+          "sha256": "4409107fa64cfc74ab53a6a133174e4d139a63d6f047eeb75da7932c7c2ffa1d",
+          "expected": {
+            "path": "assets/BigFiveLeagues-CvGLuLwV.js",
+            "bytes": 21287,
+            "sha256": "4409107fa64cfc74ab53a6a133174e4d139a63d6f047eeb75da7932c7c2ffa1d"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/BigFiveLeagues-WgmcWYtS.css",
+          "startedAt": "2026-10-04T17:19:02.428Z",
+          "completedAt": "2026-10-04T17:19:02.458Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "text/css",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-437f\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 17279,
+          "sha256": "f4abdf868562d5af6c579e0bed8bd176c4418987c184bb4ae21420a8390a8a68",
+          "expected": {
+            "path": "assets/BigFiveLeagues-WgmcWYtS.css",
+            "bytes": 17279,
+            "sha256": "f4abdf868562d5af6c579e0bed8bd176c4418987c184bb4ae21420a8390a8a68"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/check-DLYLlw_3.js",
+          "startedAt": "2026-10-04T17:19:02.443Z",
+          "completedAt": "2026-10-04T17:19:02.466Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-71\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 113,
+          "sha256": "f303c085e3ce8ed4e9cd01732e6a87e3158e51f225fc6f8e6b08cf7363ff97a5",
+          "expected": {
+            "path": "assets/check-DLYLlw_3.js",
+            "bytes": 113,
+            "sha256": "f303c085e3ce8ed4e9cd01732e6a87e3158e51f225fc6f8e6b08cf7363ff97a5"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/clock-CWLhc0Xt.js",
+          "startedAt": "2026-10-04T17:19:02.451Z",
+          "completedAt": "2026-10-04T17:19:02.478Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-9e\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 158,
+          "sha256": "fca6757f021db391845f7efb7c74591a7025d037e9d6827d7bdd091bc0b7789f",
+          "expected": {
+            "path": "assets/clock-CWLhc0Xt.js",
+            "bytes": 158,
+            "sha256": "fca6757f021db391845f7efb7c74591a7025d037e9d6827d7bdd091bc0b7789f"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/DateScopeBar-DO78TZMA.js",
+          "startedAt": "2026-10-04T17:19:02.453Z",
+          "completedAt": "2026-10-04T17:19:02.485Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-433\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 1075,
+          "sha256": "537fb61810e5b4931db79d1319e1dd36c51feaac64fbc05d621fa81b0d716d56",
+          "expected": {
+            "path": "assets/DateScopeBar-DO78TZMA.js",
+            "bytes": 1075,
+            "sha256": "537fb61810e5b4931db79d1319e1dd36c51feaac64fbc05d621fa81b0d716d56"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/displayRecommendation-DTIz4PV5.js",
+          "startedAt": "2026-10-04T17:19:02.458Z",
+          "completedAt": "2026-10-04T17:19:02.515Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-9fc1\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 40897,
+          "sha256": "7e72c1944a9bc5d495651aee52eff99340da130888b387427002178b792e814a",
+          "expected": {
+            "path": "assets/displayRecommendation-DTIz4PV5.js",
+            "bytes": 40897,
+            "sha256": "7e72c1944a9bc5d495651aee52eff99340da130888b387427002178b792e814a"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/DualResearchV2-DTsYsmi4.css",
+          "startedAt": "2026-10-04T17:19:02.466Z",
+          "completedAt": "2026-10-04T17:19:02.488Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "text/css",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-70f9\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 28921,
+          "sha256": "e712340bd3e6e30340e654cdc57989bd1ac6252c2dda66e3937731cc5d72b2ba",
+          "expected": {
+            "path": "assets/DualResearchV2-DTsYsmi4.css",
+            "bytes": 28921,
+            "sha256": "e712340bd3e6e30340e654cdc57989bd1ac6252c2dda66e3937731cc5d72b2ba"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/DualResearchV2-yl8_bIi9.js",
+          "startedAt": "2026-10-04T17:19:02.479Z",
+          "completedAt": "2026-10-04T17:19:02.507Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-966\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 2406,
+          "sha256": "fc5a744c49f87594d26a1b82a24f7b5d2d41bfdb7cbc243d5cbebb4ec6f38c4d",
+          "expected": {
+            "path": "assets/DualResearchV2-yl8_bIi9.js",
+            "bytes": 2406,
+            "sha256": "fc5a744c49f87594d26a1b82a24f7b5d2d41bfdb7cbc243d5cbebb4ec6f38c4d"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/entities-DIFKncGc.js",
+          "startedAt": "2026-10-04T17:19:02.485Z",
+          "completedAt": "2026-10-04T17:19:02.514Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-1fe\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 510,
+          "sha256": "8c0e1b2db92d03feaaec8ea9c4278d0681c4937d4c207d4eae65729cfc625dc8",
+          "expected": {
+            "path": "assets/entities-DIFKncGc.js",
+            "bytes": 510,
+            "sha256": "8c0e1b2db92d03feaaec8ea9c4278d0681c4937d4c207d4eae65729cfc625dc8"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/Following-t5nyOu-e.js",
+          "startedAt": "2026-10-04T17:19:02.488Z",
+          "completedAt": "2026-10-04T17:19:02.507Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-23b4\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 9140,
+          "sha256": "fc14c660d4ec3e91c03c47ef80537a3b33fdb5f41bbdebfd9bca87f8be970a05",
+          "expected": {
+            "path": "assets/Following-t5nyOu-e.js",
+            "bytes": 9140,
+            "sha256": "fc14c660d4ec3e91c03c47ef80537a3b33fdb5f41bbdebfd9bca87f8be970a05"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/HitAndWin-DGQCYt2r.js",
+          "startedAt": "2026-10-04T17:19:02.507Z",
+          "completedAt": "2026-10-04T17:19:02.561Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-9adb\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 39643,
+          "sha256": "ce23cb3cd45bc543af3e1dada201380cfcd8cefc75e40951cdeaad908276bc8f",
+          "expected": {
+            "path": "assets/HitAndWin-DGQCYt2r.js",
+            "bytes": 39643,
+            "sha256": "ce23cb3cd45bc543af3e1dada201380cfcd8cefc75e40951cdeaad908276bc8f"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/HitAndWin-OVSQ3_eq.css",
+          "startedAt": "2026-10-04T17:19:02.507Z",
+          "completedAt": "2026-10-04T17:19:02.528Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "text/css",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-2356\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 9046,
+          "sha256": "6fda7d425a2386738e22c5ebcec97a504f3536e052f25ed9284706dba50461fc",
+          "expected": {
+            "path": "assets/HitAndWin-OVSQ3_eq.css",
+            "bytes": 9046,
+            "sha256": "6fda7d425a2386738e22c5ebcec97a504f3536e052f25ed9284706dba50461fc"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/index-CQ3hcTtC.css",
+          "startedAt": "2026-10-04T17:19:02.514Z",
+          "completedAt": "2026-10-04T17:19:02.599Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "text/css",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-484fb\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 296187,
+          "sha256": "85b0c8705b86f9dd77535cbafd90a5674438abf848f27c6458423e02b5a17032",
+          "expected": {
+            "path": "assets/index-CQ3hcTtC.css",
+            "bytes": 296187,
+            "sha256": "85b0c8705b86f9dd77535cbafd90a5674438abf848f27c6458423e02b5a17032"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/index-CseHXoVj.js",
+          "startedAt": "2026-10-04T17:19:02.515Z",
+          "completedAt": "2026-10-04T17:19:02.600Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-50c4b\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 330827,
+          "sha256": "5a9fe3f893763c24098acf0abf869ad519c5eca03c1723149a2a2262678cfcd8",
+          "expected": {
+            "path": "assets/index-CseHXoVj.js",
+            "bytes": 330827,
+            "sha256": "5a9fe3f893763c24098acf0abf869ad519c5eca03c1723149a2a2262678cfcd8"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/jsx-runtime-BF6S49EV.js",
+          "startedAt": "2026-10-04T17:19:02.528Z",
+          "completedAt": "2026-10-04T17:19:02.549Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-20d8\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 8408,
+          "sha256": "6ed7416c915e185e73374bf284befc5f202ef32181e7815e51b6d13555021d33",
+          "expected": {
+            "path": "assets/jsx-runtime-BF6S49EV.js",
+            "bytes": 8408,
+            "sha256": "6ed7416c915e185e73374bf284befc5f202ef32181e7815e51b6d13555021d33"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/key-round-BZJf-yZm.js",
+          "startedAt": "2026-10-04T17:19:02.549Z",
+          "completedAt": "2026-10-04T17:19:02.569Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-158\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 344,
+          "sha256": "ade86993433f69a53250765bcc2f64a7d7c240dfb242903b25997a8a90ebc010",
+          "expected": {
+            "path": "assets/key-round-BZJf-yZm.js",
+            "bytes": 344,
+            "sha256": "ade86993433f69a53250765bcc2f64a7d7c240dfb242903b25997a8a90ebc010"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/loader-circle-DksiQI2g.js",
+          "startedAt": "2026-10-04T17:19:02.561Z",
+          "completedAt": "2026-10-04T17:19:02.589Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-85\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 133,
+          "sha256": "5f783b402ffe7fb28ed0de087a9eb02d1387204c27ff02f23daee51a65c43b7b",
+          "expected": {
+            "path": "assets/loader-circle-DksiQI2g.js",
+            "bytes": 133,
+            "sha256": "5f783b402ffe7fb28ed0de087a9eb02d1387204c27ff02f23daee51a65c43b7b"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/MatchDetail-DQ0qIBt1.js",
+          "startedAt": "2026-10-04T17:19:02.570Z",
+          "completedAt": "2026-10-04T17:19:02.758Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-3b001\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 241665,
+          "sha256": "3282f0c83c21cfb94919b2c1e29182d4f68658efe36256fda82e2dd1c0b49210",
+          "expected": {
+            "path": "assets/MatchDetail-DQ0qIBt1.js",
+            "bytes": 241665,
+            "sha256": "3282f0c83c21cfb94919b2c1e29182d4f68658efe36256fda82e2dd1c0b49210"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/MatchDetail-rANiX3jX.css",
+          "startedAt": "2026-10-04T17:19:02.589Z",
+          "completedAt": "2026-10-04T17:19:02.854Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "text/css",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-a6d9\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 42713,
+          "sha256": "641af31979e47b6c19e25041e5600880a16c63627c252de732998c9c2807f68b",
+          "expected": {
+            "path": "assets/MatchDetail-rANiX3jX.css",
+            "bytes": 42713,
+            "sha256": "641af31979e47b6c19e25041e5600880a16c63627c252de732998c9c2807f68b"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/PredictionsList-D8varfq_.css",
+          "startedAt": "2026-10-04T17:19:02.599Z",
+          "completedAt": "2026-10-04T17:19:02.879Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "text/css",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-af67\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 44903,
+          "sha256": "211adaced73958079dd939678baba4da15f4afe5b668da8fab5c3f038cce2f03",
+          "expected": {
+            "path": "assets/PredictionsList-D8varfq_.css",
+            "bytes": 44903,
+            "sha256": "211adaced73958079dd939678baba4da15f4afe5b668da8fab5c3f038cce2f03"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/PredictionsList-DzolYq7I.js",
+          "startedAt": "2026-10-04T17:19:02.600Z",
+          "completedAt": "2026-10-04T17:19:03.055Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-8c87\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 35975,
+          "sha256": "a6314e6d6de89e56c7bd5d580ec7986bf1da432a63a7847815069077c91658f8",
+          "expected": {
+            "path": "assets/PredictionsList-DzolYq7I.js",
+            "bytes": 35975,
+            "sha256": "a6314e6d6de89e56c7bd5d580ec7986bf1da432a63a7847815069077c91658f8"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/provisionalResultPresentation-DTgq9-fv.css",
+          "startedAt": "2026-10-04T17:19:02.758Z",
+          "completedAt": "2026-10-04T17:19:02.777Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "text/css",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-1cb5\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 7349,
+          "sha256": "397cfdd2cd010b9f68b8024ac18db3543e621b5767f4de045379212eafc0374d",
+          "expected": {
+            "path": "assets/provisionalResultPresentation-DTgq9-fv.css",
+            "bytes": 7349,
+            "sha256": "397cfdd2cd010b9f68b8024ac18db3543e621b5767f4de045379212eafc0374d"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/provisionalResultPresentation-uCmm41Vq.js",
+          "startedAt": "2026-10-04T17:19:02.777Z",
+          "completedAt": "2026-10-04T17:19:02.797Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-13b89\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 80777,
+          "sha256": "80acde84e020b3ea24ed2f2a427d20eb8f8567eb4ad11abe5db237d4afb74482",
+          "expected": {
+            "path": "assets/provisionalResultPresentation-uCmm41Vq.js",
+            "bytes": 80777,
+            "sha256": "80acde84e020b3ea24ed2f2a427d20eb8f8567eb4ad11abe5db237d4afb74482"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/PublicBrowse-DmxEEOD4.js",
+          "startedAt": "2026-10-04T17:19:02.797Z",
+          "completedAt": "2026-10-04T17:19:02.817Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-39d3\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 14803,
+          "sha256": "965fc5a66197a016770a755307b3af02e26d7ed086f077f226ee558d9b76681f",
+          "expected": {
+            "path": "assets/PublicBrowse-DmxEEOD4.js",
+            "bytes": 14803,
+            "sha256": "965fc5a66197a016770a755307b3af02e26d7ed086f077f226ee558d9b76681f"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/PublicBrowse-DRXLGlbL.css",
+          "startedAt": "2026-10-04T17:19:02.817Z",
+          "completedAt": "2026-10-04T17:19:02.840Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "text/css",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-22b2\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 8882,
+          "sha256": "2ea0b5f6b508029163354fe770d74a2a8811b4dfe36418f59d61db26233e6b78",
+          "expected": {
+            "path": "assets/PublicBrowse-DRXLGlbL.css",
+            "bytes": 8882,
+            "sha256": "2ea0b5f6b508029163354fe770d74a2a8811b4dfe36418f59d61db26233e6b78"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/RecommendationCenter-Cerc_t2h.css",
+          "startedAt": "2026-10-04T17:19:02.841Z",
+          "completedAt": "2026-10-04T17:19:02.860Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "text/css",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-6eb\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 1771,
+          "sha256": "d8ec584360eba80ed2e13f0195297100ef4a75fe2a357e574effc2587c7994fe",
+          "expected": {
+            "path": "assets/RecommendationCenter-Cerc_t2h.css",
+            "bytes": 1771,
+            "sha256": "d8ec584360eba80ed2e13f0195297100ef4a75fe2a357e574effc2587c7994fe"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/RecommendationCenter-DLo8hmF8.js",
+          "startedAt": "2026-10-04T17:19:02.854Z",
+          "completedAt": "2026-10-04T17:19:02.908Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-10a8b\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 68235,
+          "sha256": "f04a1c6afc48f02911f2660661e88ac246b270b19eee8e7845a92dcdd85ea9d3",
+          "expected": {
+            "path": "assets/RecommendationCenter-DLo8hmF8.js",
+            "bytes": 68235,
+            "sha256": "f04a1c6afc48f02911f2660661e88ac246b270b19eee8e7845a92dcdd85ea9d3"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/refresh-cw-dCEOG074.js",
+          "startedAt": "2026-10-04T17:19:02.860Z",
+          "completedAt": "2026-10-04T17:19:02.879Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-136\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 310,
+          "sha256": "a9955d16bda3df7b4e790e5570a08771a50eb0c5a11c8575834c4ff5964fb975",
+          "expected": {
+            "path": "assets/refresh-cw-dCEOG074.js",
+            "bytes": 310,
+            "sha256": "a9955d16bda3df7b4e790e5570a08771a50eb0c5a11c8575834c4ff5964fb975"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/search-DRpB8Aw-.js",
+          "startedAt": "2026-10-04T17:19:02.879Z",
+          "completedAt": "2026-10-04T17:19:02.907Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-a3\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 163,
+          "sha256": "48a3905cf4a311443a9e384705679cc3158102471fbeafcea37a2e753d7722ee",
+          "expected": {
+            "path": "assets/search-DRpB8Aw-.js",
+            "bytes": 163,
+            "sha256": "48a3905cf4a311443a9e384705679cc3158102471fbeafcea37a2e753d7722ee"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/SelectionQualityNote-B1PCm2Iw.js",
+          "startedAt": "2026-10-04T17:19:02.879Z",
+          "completedAt": "2026-10-04T17:19:02.899Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-d60a\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 54794,
+          "sha256": "535aa3206b89a48da2a87b4c7959bfa0fa3ce0e341a408bb0a3c05e25acf2217",
+          "expected": {
+            "path": "assets/SelectionQualityNote-B1PCm2Iw.js",
+            "bytes": 54794,
+            "sha256": "535aa3206b89a48da2a87b4c7959bfa0fa3ce0e341a408bb0a3c05e25acf2217"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/shield-check-DINDSnX4.js",
+          "startedAt": "2026-10-04T17:19:02.899Z",
+          "completedAt": "2026-10-04T17:19:02.919Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-135\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 309,
+          "sha256": "ced550c67cae59c4d8bf6817d1ce0f9ee9fd34f27be14e7a777214dd3a68733e",
+          "expected": {
+            "path": "assets/shield-check-DINDSnX4.js",
+            "bytes": 309,
+            "sha256": "ced550c67cae59c4d8bf6817d1ce0f9ee9fd34f27be14e7a777214dd3a68733e"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/TeamBadge-A04uvDAq.js",
+          "startedAt": "2026-10-04T17:19:02.907Z",
+          "completedAt": "2026-10-04T17:19:03.242Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-1b20e\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 111118,
+          "sha256": "e1607ea220d55be41bdbeaec40e0f2b3c8990d8099d244d8f9426c9a15d9a768",
+          "expected": {
+            "path": "assets/TeamBadge-A04uvDAq.js",
+            "bytes": 111118,
+            "sha256": "e1607ea220d55be41bdbeaec40e0f2b3c8990d8099d244d8f9426c9a15d9a768"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/useWallClock-BN8lndu0.js",
+          "startedAt": "2026-10-04T17:19:02.908Z",
+          "completedAt": "2026-10-04T17:19:02.991Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-7ee\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 2030,
+          "sha256": "ace8e1210fce430fcdad46994e936424ec30b9321ff370b588d03e49cbb9b759",
+          "expected": {
+            "path": "assets/useWallClock-BN8lndu0.js",
+            "bytes": 2030,
+            "sha256": "ace8e1210fce430fcdad46994e936424ec30b9321ff370b588d03e49cbb9b759"
+          },
+          "matchesSignedArtifact": true
+        },
+        {
+          "path": "/assets/worldCupData-B6H_oo6B.js",
+          "startedAt": "2026-10-04T17:19:02.919Z",
+          "completedAt": "2026-10-04T17:19:03.132Z",
+          "httpStatus": 200,
+          "tlsAuthorized": true,
+          "headers": {
+            "content-type": "application/javascript",
+            "content-encoding": null,
+            "cache-control": "public, max-age=31536000, immutable",
+            "etag": "\"6ac27268-26e20\"",
+            "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+          },
+          "bytes": 159264,
+          "sha256": "e23ec60951ff48625ce5ba27b7229772d6a73b6949e3a758490b1385534f3b93",
+          "expected": {
+            "path": "assets/worldCupData-B6H_oo6B.js",
+            "bytes": 159264,
+            "sha256": "e23ec60951ff48625ce5ba27b7229772d6a73b6949e3a758490b1385534f3b93"
+          },
+          "matchesSignedArtifact": true
+        }
+      ],
+      "healthBefore": {
+        "path": "/api/v1/health",
+        "startedAt": "2026-10-04T17:19:02.107Z",
+        "completedAt": "2026-10-04T17:19:02.333Z",
+        "httpStatus": 200,
+        "tlsAuthorized": true,
+        "headers": {
+          "content-type": "application/json; charset=utf-8",
+          "content-encoding": null,
+          "cache-control": "no-store",
+          "etag": "\"sha256-i0Jif-Ao8qOICD77z0HhtI0FhKa_OK-rVOuQ-EMxYUY\"",
+          "date": "Sun, 04 Oct 2026 17:19:02 GMT"
+        },
+        "bytes": 56589,
+        "sha256": "8b42627fe028f2a388083efbcf41e1b48d0584a6bf38afab54eb90f843316146",
+        "parsed": true,
+        "checkedAt": "2026-10-04T17:19:02.175Z",
+        "status": {
+          "serviceOk": true,
+          "sourceHealthOk": true,
+          "dataFresh": true,
+          "fastResultIntegrityOk": true,
+          "recommendationProjectionParityOk": true,
+          "recommendationReliable": false
+        },
+        "workerOk": true,
+        "currentRead": {
+          "source": "postgres"
+        },
+        "currentCount": 31,
+        "frontendRelease": {
+          "version": "frontend-release-state-v1",
+          "kind": null,
+          "phase": null,
+          "runtimeSha256": null,
+          "runtimeSequence": null,
+          "frontendSha256": null,
+          "frontendSequence": null,
+          "indexSha256": null,
+          "distTreeHash": null,
+          "acceptanceSha256": null,
+          "available": false,
+          "consistent": false
+        }
+      },
+      "healthAfter": {
+        "path": "/api/v1/health",
+        "startedAt": "2026-10-04T17:19:03.242Z",
+        "completedAt": "2026-10-04T17:19:05.589Z",
+        "httpStatus": 200,
+        "tlsAuthorized": true,
+        "headers": {
+          "content-type": "application/json; charset=utf-8",
+          "content-encoding": null,
+          "cache-control": "no-store",
+          "etag": "\"sha256-MepCXD2X8KDpozaHPiqjQ_CMri3HP-kGSXQ4jVDthdE\"",
+          "date": "Sun, 04 Oct 2026 17:19:05 GMT"
+        },
+        "bytes": 63879,
+        "sha256": "31ea425c3d97f0a0e9a336873e2aa343f08cae2dc73fe9064974388d50ed85d1",
+        "parsed": true,
+        "checkedAt": "2026-10-04T17:19:05.468Z",
+        "status": {
+          "serviceOk": true,
+          "sourceHealthOk": true,
+          "dataFresh": true,
+          "fastResultIntegrityOk": true,
+          "recommendationProjectionParityOk": true,
+          "recommendationReliable": false
+        },
+        "workerOk": true,
+        "currentRead": {
+          "source": "postgres"
+        },
+        "currentCount": 31,
+        "frontendRelease": {
+          "version": "frontend-release-state-v1",
+          "kind": null,
+          "phase": null,
+          "runtimeSha256": null,
+          "runtimeSequence": null,
+          "frontendSha256": null,
+          "frontendSequence": null,
+          "indexSha256": null,
+          "distTreeHash": null,
+          "acceptanceSha256": null,
+          "available": false,
+          "consistent": false
+        }
+      },
+      "frontendIdentity": {
+        "optional": true,
+        "matchesExpected": false,
+        "gap": true,
+        "observed": {
+          "version": "frontend-release-state-v1",
+          "kind": null,
+          "phase": null,
+          "runtimeSha256": null,
+          "runtimeSequence": null,
+          "frontendSha256": null,
+          "frontendSequence": null,
+          "indexSha256": null,
+          "distTreeHash": null,
+          "acceptanceSha256": null,
+          "available": false,
+          "consistent": false
+        },
+        "scope": "Optional frontend-only baseline identity. Exact public index/assets and accepted full runtime are verified independently."
+      },
+      "checks": {
+        "fixturesHttp200": true,
+        "fixturesTlsAuthorized": true,
+        "fixturesHtml": true,
+        "indexMatchesSignedArtifact": true,
+        "referencedAssetsCovered": true,
+        "completeJsCssInventory": true,
+        "everyAssetMatchesSignedArtifact": true,
+        "publicHealthBefore": true,
+        "publicHealthAfter": true
+      },
+      "publicOriginVerified": true,
+      "preacceptanceEvidence": {
+        "file": "public-origin-observation-preacceptance.json",
+        "sha256": "a5d0064b700dc299a53011613fbe457acc5e7f92338139f47c9977beb5ab4a34"
+      },
+      "scope": "Actual public HTTPS/TLS, exact signed index and complete JS/CSS inventory, public health before/after. This does not promote recommendation reliability."
+    },
+    "frontendOnlyBaselineReady": false,
+    "releaseWorkerCycleDegraded": true,
+    "note": "Build, upload, process exit, service HTTP 200 and public preview are distinct from exact signed release acceptance."
+  },
+  "optimization": {
+    "nearestSalesDateDefault": {
+      "commit": "2fe2821868b8fe63f9eb42a07c824202930e32e8",
+      "before": "10/08 selected despite 10/05 fixtures",
+      "after": "Choose current or nearest future sales day; preserve explicit URL date and search",
+      "regressionPassed": 18
+    },
+    "staticReceiptAudit": {
+      "commit": "bbcbe63ea9f9a10f4ebed3fd892af489e8c61068",
+      "note": "Re-audited exact verifier hash with negative receipt invalidation tests; no gate removed"
+    },
+    "verifierIsolation": {
+      "commit": "654282dcfde0711124c79b11f254bca81d9b032d",
+      "comparisonFunctionByteUnchanged": true,
+      "regressionsPassed": 6,
+      "pairedReportBeforeAfterEqual": 29
+    },
+    "runtimeBoundaryAudit": {
+      "commit": "a179c672d134f34ec836a8ba5a560578fab24c99",
+      "note": "Exact reviewed worker-capture hashes and noncommand stat-field context; all command/security restrictions retained"
+    }
+  },
+  "limitations": {
+    "lineupMissing": 7,
+    "injuryMissing": 7,
+    "xgMissing": 7,
+    "weatherMissing": 6,
+    "frontendOnlyBaselineInitialization": "Full r790 accepted; optional frontend-only baseline initialization failed reviewed-baseline-runtime-boundary-failed. Future UI-only deployment requires repair and its own acceptance.",
+    "slowEnrichmentDegraded": true,
+    "missingDataClockLabels": "20/31 total and 7/7 target matches have early overdue/future missing xG clock labels; isolated diagnostic 11/11. This state also affects lineup/injury/referee quality weights. The product defect is not repaired in this release; next version must separate current observation status from decision cutoff with independent weight regressions.",
+    "historicalDiagnostic": {
+      "sampleSize": 154,
+      "modelCorrect": 78,
+      "marketCorrect": 83,
+      "modelDirectionAccuracy": 0.5064935064935064,
+      "marketDirectionAccuracy": 0.538961038961039,
+      "formalRecommendationHitRate": null,
+      "formalRecommendationSample": false,
+      "unseenHoldout": false
+    },
+    "transient503": {
+      "observedAt": "2026-10-04T14:46:23.577Z",
+      "rootCauseEstablished": false,
+      "subsequent31DetailsPassed": true
+    },
+    "oldOptionalModelVerifier": "verifyModelInputUsage still fails obsolete fixed-date and old full-model baseline; it is not the required release verifier contract. Full repository tests are not claimed green.",
+    "recommendationReliability": false,
+    "hitRateImprovementEstablished": false,
+    "officialSaleStatusSemanticsVerified": false
+  },
+  "offline": {
+    "websiteAndCloudJobsContinueWithoutLaptop": true,
+    "officialSportteryFreshnessIndependentOfLaptop": false,
+    "dotCoordinationSchedulesHaveExecuted": true,
+    "dotDirectOfficialCollectorAccepted": false,
+    "sevenDayMigrationAccepted": false,
+    "laptopOffDrillPerformed": false
+  },
+  "nextActions": [
+    "Refresh official SP before kickoff; obtain actual supplementary inputs with source and time evidence",
+    "Freeze each eligible pre-match reference and evaluate against actual results without changing the original decision",
+    "Fix missing-data observation clocks separately and run time-bound and weight regressions",
+    "Repair and independently accept the optional frontend-only baseline before the next UI-only deployment",
+    "Prove authorized cloud collector reachability, run in parallel for seven days, then perform laptop-off acceptance"
+  ],
+  "pullRequest": "https://github.com/chen-1119/football-predict/pull/101",
+  "evidence": {
+    "online-observation.json": {
+      "sha256": "47f77a1fb240a2da2a1df8384c183160962d856a3fa5ea821be9fd6249694c8e",
+      "retention": "local evidence; excluded from Git"
+    },
+    "worker-preflight.json": {
+      "sha256": "3924d593a66d9e6296e7ce0d836d7525f7c568a9dacd972751b551320a482740",
+      "retention": "local evidence; excluded from Git"
+    },
+    "window-preflight.json": {
+      "sha256": "335c33d1cb6de89475b400a16d8873209b911ee007cd06827da5974e6a0ecbfb",
+      "retention": "local evidence; excluded from Git"
+    },
+    "archive-preflight.json": {
+      "sha256": "c360ee8df70f3162f191c6a6bd5fbb107312879d4bbec01f903a5d13de067f54",
+      "retention": "local evidence; excluded from Git"
+    },
+    "frontend-date-fix-verification.json": {
+      "sha256": "83f7cc93b8d145f05395ee3df09e2e835245d420ec09a2ff5e64c1d04b65f5c2",
+      "retention": "local evidence; excluded from Git"
+    },
+    "model-acceptance.json": {
+      "sha256": "6429cdbedecbff002d48cbd16b824820806aa2e8e67176b47aba353e95862757",
+      "retention": "local evidence; excluded from Git"
+    },
+    "model-current-input-audit.json": {
+      "sha256": "625ca1b5db1cb71ce1e0ae9a2c490a4155284bc19e9bbd99f286b719054277b6",
+      "retention": "local evidence; excluded from Git"
+    },
+    "model-frozen-evidence-verification.json": {
+      "sha256": "f198ad37d628fbbd9208618ccf78eae4012ce2adadfb50403ba19e1ada7786c0",
+      "retention": "local evidence; excluded from Git"
+    },
+    "missing-data-clock-review.json": {
+      "sha256": "b1eac7a7f6e1e89368015209486977325390864277d3832493da4808bc76303b",
+      "retention": "local evidence; excluded from Git"
+    },
+    "authenticated-online-parity-initial-attempt.json": {
+      "sha256": "8fe29863afdcb436608bf5a01846091952c4208602b04b817a84b747911810ac",
+      "retention": "local evidence; excluded from Git"
+    },
+    "authenticated-online-parity.json": {
+      "sha256": "ea18af07a665c8705c77031f704b7d097c53f84227085967ec29d3453effb767",
+      "retention": "local evidence; excluded from Git"
+    },
+    "authenticated-online-parity-r785.json": {
+      "sha256": "823e32aba72b6888c4732dd04fa43874af69e335e655c9273a483df1e90c3c2e",
+      "retention": "local evidence; excluded from Git"
+    },
+    "browser-qa-lifecycle.json": {
+      "sha256": "d58e00be9983da5a26e69a70d808c7ccf558f45fb9b9c7c09d3c3cd94d07734f",
+      "retention": "local evidence; excluded from Git"
+    },
+    "cloud-independence-test.json": {
+      "sha256": "f44b0030ca868854a39524cbcf96345bd1a047098785b37a0a48f912d139121f",
+      "retention": "local evidence; excluded from Git"
+    },
+    "runtime-boundary-fix-verification.json": {
+      "sha256": "36d290b3a977eed4bee3e00ffb2b045a37b8aafe5ab6cb9532b8c8ed01c7a513",
+      "retention": "local evidence; excluded from Git"
+    },
+    "runtime-boundary-full-contract-report.json": {
+      "sha256": "16075f17385d996640ff7a387da992a705b79654bbac3b3d2316df350371a875",
+      "retention": "local evidence; excluded from Git"
+    },
+    "backtest-verifier-split-verification.json": {
+      "sha256": "42960e860d9620e2df2c198d2bb3cb9762455daaf06a1fdb9a1db7e01bee8b6c",
+      "retention": "local evidence; excluded from Git"
+    },
+    "live-training-artifact-readiness.json": {
+      "sha256": "b6aeaebcf9f189ff9ce6a7f71165f26860efb36363a5250193462dc7b3f00f6b",
+      "retention": "local evidence; excluded from Git"
+    },
+    "live-training-seed-copy.json": {
+      "sha256": "80cc6ed75a1aedf4efa26971a639d6d1b84075971596619f984a2bea04063dcf",
+      "retention": "local evidence; excluded from Git"
+    },
+    "live-model-evaluation-readiness.json": {
+      "sha256": "b888acc0d81381e40d429e449dafb35515edb19c0d9248e145263c8896244a54",
+      "retention": "local evidence; excluded from Git"
+    },
+    "live-model-evaluation-copy.json": {
+      "sha256": "8c83a874d1f7caacb06f0f306e0b53dbeaf6a749e65b3ef50f26388f19c992c6",
+      "retention": "local evidence; excluded from Git"
+    },
+    "full-bundle-attempt-01.json": {
+      "sha256": "96bc42a439c3470a2ca72367f976dfc8535f2ef87c68bbb8bbc6d4b693124cd4",
+      "retention": "local evidence; excluded from Git"
+    },
+    "full-bundle-attempt-02.json": {
+      "sha256": "87769269488e0b66cf5258410a47b3036800ffb5bfdff72fc582701abdf4fa1e",
+      "retention": "local evidence; excluded from Git"
+    },
+    "full-bundle-attempt-03.json": {
+      "sha256": "91909e17c99aafbd33c9ff61cecb6d68875e95c4e39498b5e809396750fc4a93",
+      "retention": "local evidence; excluded from Git"
+    },
+    "full-bundle-attempt.json": {
+      "sha256": "1e46fe5124a575738761e6c010a7e514665c35036962853ecd7ba81daf74ac2f",
+      "retention": "local evidence; excluded from Git"
+    },
+    "full-deploy-attempt.json": {
+      "sha256": "ca4ba2e8ead9349a0d8364bdf4b6b53296bea394c86592d44c8ea4b215ee7726",
+      "retention": "local evidence; excluded from Git"
+    },
+    "final-online-observation.json": {
+      "sha256": "577817df475233725f304ee76e64c1c9e6ab8c534af1597a97aa707eb7f1cfe1",
+      "retention": "local evidence; excluded from Git"
+    },
+    "public-origin-observation.json": {
+      "sha256": "362c1674d476327bb08c6c6242a8fc93afe3326d6a001ba0cc93f0c06c13eeaa",
+      "retention": "local evidence; excluded from Git"
+    },
+    "chrome-candidate-observation.json": {
+      "sha256": "17602bc3c57d79e9662851d45e4d366ccf32f7faac1c372a1c891b6cf6ce712a",
+      "retention": "local evidence; excluded from Git"
+    },
+    "worker-pg-deadline-observation.json": {
+      "sha256": "5d568a0c65c80050e802fa2e5fe4acf8e9d71a41a4c6014f0713c4b9171e0195",
+      "retention": "local evidence; excluded from Git"
+    }
+  }
+}

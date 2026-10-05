@@ -1,0 +1,149 @@
+{
+  "schemaVersion": "football-release-status-v1",
+  "generatedAt": "2026-10-02T17:20:26.371Z",
+  "implementationCommit": "1d0daef3924f7ef875d6de93b4f54e8463162883",
+  "upstreamMergeCommit": "7ec5c809448a1f8bbae22170ad5c72ef05be8a7d",
+  "git": {
+    "branch": "codex/football-integration-oct02",
+    "pullRequest": "https://github.com/chen-1119/football-predict/pull/101",
+    "draft": true,
+    "codePushVerified": true,
+    "observedRemoteHead": "1d0daef3924f7ef875d6de93b4f54e8463162883",
+    "upstreamHead": "af11a77abaa0f4921a3a8973a356a78aba00575f",
+    "upstreamGeneratedFilesPreserved": [
+      "public/data/external-signals.json",
+      "public/data/matches-current.json",
+      "public/data/matches-history.json",
+      "public/data/model-calibration.json",
+      "public/data/post-match-reviews.json",
+      "public/data/pre-match-signals.json",
+      "public/data/recommendation-bias-audit.json",
+      "public/data/sync-meta.json",
+      "public/data/team-index.json",
+      "public/matches.json"
+    ],
+    "runtimeSourceUnchangedByMerge": true,
+    "mainMerged": false
+  },
+  "production": {
+    "checkedAt": "2026-10-02T17:13:43.348Z",
+    "runtimeSequence": 785,
+    "frontendSequence": 787,
+    "runtimeSha256": "4ffe4a6f7328d68b6084b8ef2d51c399306b18e78d05abea9db4566a555f9042",
+    "frontendSha256": "eef4d05777bbe03818b38780c1c26be474e9a09154e8475de9a0520998139f72",
+    "optimizedCodeDeployed": false,
+    "productionWritesThisTurn": 0,
+    "services": [
+      {
+        "name": "football-predict.service",
+        "active": true,
+        "enabled": true
+      },
+      {
+        "name": "football-sync-worker.service",
+        "active": true,
+        "enabled": true
+      },
+      {
+        "name": "football-market-collector.service",
+        "active": true,
+        "enabled": true
+      },
+      {
+        "name": "football-runtime-monitor.service",
+        "active": false,
+        "enabled": false
+      },
+      {
+        "name": "football-deadline-capture.service",
+        "active": false,
+        "enabled": false
+      },
+      {
+        "name": "football-featured-combo.service",
+        "active": true,
+        "enabled": true
+      },
+      {
+        "name": "postgresql.service",
+        "active": true,
+        "enabled": true
+      },
+      {
+        "name": "nginx.service",
+        "active": true,
+        "enabled": true
+      }
+    ],
+    "readSource": "postgres",
+    "dataFresh": false,
+    "trustedCollectors": 0,
+    "recommendedCollectorRedundancy": 2,
+    "recommendationReliable": false
+  },
+  "deployAttempt": {
+    "command": "node scripts/createReleaseBundle.cjs",
+    "startedAt": "2026-10-02T17:16:14.262Z",
+    "completedAt": "2026-10-02T17:16:15.340Z",
+    "exitCode": 1,
+    "firstFailure": [
+      "worker-official-recovery-unproven"
+    ],
+    "bundleCreated": false,
+    "sequenceChanged": false,
+    "remoteDeployInvoked": false
+  },
+  "laptopOffline": {
+    "websiteAndServerWorkerIndependent": true,
+    "physicalPowerOffTestCompleted": false,
+    "localTasksStillPresent": [
+      "FootballPredictSportteryRelay",
+      "FootballPredictSportteryFastResultLane"
+    ],
+    "collectionFullyMigrated": false,
+    "cloudInspectionExecuted": true,
+    "lastCloudRun": "2026-10-02T16:17:42.580821+00:00",
+    "cloudScheduledFirstRunVerified": false,
+    "schedules": [
+      "08:00 Asia/Shanghai",
+      "16:00 Asia/Shanghai"
+    ],
+    "officialCollectionQualifiedDays": 0,
+    "oldCollectorsStopped": false
+  },
+  "verification": {
+    "testedCodeCommit": "1d0daef3924f7ef875d6de93b4f54e8463162883",
+    "previousTargetedChecksPassed": 228,
+    "previousEvidenceHashesVerified": 48,
+    "previousTypeScriptViteEslintPassed": true,
+    "testsRerunForGeneratedDataMerge": false,
+    "note": "Only ten upstream generated files changed during merge; frozen test/source evidence preserved. Prior targeted checks are not a claim of all-repository success or production acceptance."
+  },
+  "nextRequiredWork": [
+    "Implement and independently review a narrowly scoped signed maintenance transaction for the official stop-sale empty-list incident; existing full/UI-only/legacy repair routes are not applicable.",
+    "Obtain fresh same-cycle official evidence and prove real worker publication, then pass all existing full release gates and perform signed deployment with live acceptance.",
+    "Verify first cloud scheduled execution and seven consecutive accepted collection days before stopping the local collectors."
+  ],
+  "evidence": [
+    {
+      "file": "source-live-status.json",
+      "sha256": "9215989681001e6054208558ce9fe94be5c07f261d5303b9a32b4d065ab4b27b",
+      "retainedLocally": true
+    },
+    {
+      "file": "cloud-offline-status.json",
+      "sha256": "5339787a9d74483189be2e480f52a4832cb4d5ca976ebc7ffc741b152c133fa1",
+      "retainedLocally": true
+    },
+    {
+      "file": "guarded-full-bundle-attempt.json",
+      "sha256": "cd17ff9c8ce923887b9816d32dbba9bdb927b37f1942b5517a6008aade687426",
+      "retainedLocally": true
+    },
+    {
+      "file": "release-path-review.json",
+      "sha256": "d8a612728ae5ad9821fd504dd42b60306269848ddfced5996b83503b28ed9b94",
+      "retainedLocally": true
+    }
+  ]
+}

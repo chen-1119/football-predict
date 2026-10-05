@@ -1,0 +1,259 @@
+{
+  "version": "online-calibration-export-audit-v1",
+  "status": "shadow-diagnostic",
+  "productionWrites": false,
+  "publication": {
+    "mode": "active-generation",
+    "generationId": "g-79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273",
+    "manifestHash": "79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273",
+    "sourceCycleId": "sporttery-full-sync:2026-09-30T15:34:00.845Z",
+    "committedAt": "2026-09-30T15:52:07.943Z"
+  },
+  "receivedAt": "2026-10-02T11:54:45.879Z",
+  "evaluationGeneratedAt": "2026-09-30T15:38:01.326Z",
+  "receiptSha256": "e6d9c19aebdf561c77449a4d50d1d019b40ea0d375bba0373e40de401901d42b",
+  "files": {
+    "model-evaluation.json": {
+      "sha256": "95c55fa72cf8fb529c7f95b6e8f8fd5567a58b01f6a9cef997e148b376efa1e0",
+      "bytes": 1777402
+    },
+    "model-strategy.json": {
+      "sha256": "30acedbadad420f32fe88e4ae86ea861bcf58e7557bfdfde8988a9be03f2ea54",
+      "bytes": 273488
+    },
+    "matches-current.json": {
+      "sha256": "a88e3e1502de0f2b9fe761b7c531cb9753a09fd637a61320221c18a9cb6ec7f7",
+      "bytes": 116467
+    }
+  },
+  "batchWarning": "Published September 30 batch; not current October 2 data or fresh live health proof.",
+  "strictSameDecision": {
+    "rows": 145,
+    "source": "immutable-clock-audited-decision-snapshot-had",
+    "model": {
+      "brier": 0.6064,
+      "logLoss": 1.0129,
+      "accuracy": 0.5586
+    },
+    "market": {
+      "brier": 0.5324,
+      "logLoss": 0.9033,
+      "accuracy": 0.5793
+    },
+    "improvement": {
+      "brier": -0.074,
+      "logLoss": -0.1096,
+      "accuracy": -0.0207
+    },
+    "modelConfidenceBins": [
+      {
+        "bin": "p_40_50",
+        "rows": 51,
+        "meanConfidence": 0.4359,
+        "hitRate": 0.549,
+        "hitRateWilson95": [
+          0.413828,
+          0.677307
+        ],
+        "intervalAssumption": "independent Bernoulli events; rounded published hit rate; match-day dependence not accounted for"
+      },
+      {
+        "bin": "p_lt_40",
+        "rows": 62,
+        "meanConfidence": 0.3766,
+        "hitRate": 0.5,
+        "hitRateWilson95": [
+          0.379227,
+          0.620773
+        ],
+        "intervalAssumption": "independent Bernoulli events; rounded published hit rate; match-day dependence not accounted for"
+      },
+      {
+        "bin": "p_50_60",
+        "rows": 25,
+        "meanConfidence": 0.5421,
+        "hitRate": 0.6,
+        "hitRateWilson95": [
+          0.407395,
+          0.765967
+        ],
+        "intervalAssumption": "independent Bernoulli events; rounded published hit rate; match-day dependence not accounted for"
+      },
+      {
+        "bin": "p_ge_60",
+        "rows": 7,
+        "meanConfidence": 0.625,
+        "hitRate": 1,
+        "hitRateWilson95": [
+          0.64567,
+          1
+        ],
+        "intervalAssumption": "independent Bernoulli events; rounded published hit rate; match-day dependence not accounted for"
+      }
+    ],
+    "evidenceLevel": "published aggregate; equal counts checked, event-set identity not independently recomputed"
+  },
+  "legacyLaggedDiagnostic": {
+    "rows": 258,
+    "source": "sporttery-had-devigged-forecast-time-latest-at-or-before-legacy-diagnostic",
+    "model": {
+      "brier": 0.6008,
+      "logLoss": 1.0053,
+      "accuracy": 0.5504
+    },
+    "market": {
+      "brier": 0.5419,
+      "logLoss": 0.9198,
+      "accuracy": 0.593
+    },
+    "improvement": {
+      "brier": -0.0589,
+      "logLoss": -0.0855,
+      "accuracy": -0.0426
+    },
+    "modelConfidenceBins": [
+      {
+        "bin": "p_40_50",
+        "rows": 94,
+        "meanConfidence": 0.4387,
+        "hitRate": 0.5319,
+        "hitRateWilson95": [
+          0.431768,
+          0.629527
+        ],
+        "intervalAssumption": "independent Bernoulli events; rounded published hit rate; match-day dependence not accounted for"
+      },
+      {
+        "bin": "p_lt_40",
+        "rows": 112,
+        "meanConfidence": 0.3777,
+        "hitRate": 0.4821,
+        "hitRateWilson95": [
+          0.391699,
+          0.573688
+        ],
+        "intervalAssumption": "independent Bernoulli events; rounded published hit rate; match-day dependence not accounted for"
+      },
+      {
+        "bin": "p_50_60",
+        "rows": 44,
+        "meanConfidence": 0.5451,
+        "hitRate": 0.6818,
+        "hitRateWilson95": [
+          0.534412,
+          0.799992
+        ],
+        "intervalAssumption": "independent Bernoulli events; rounded published hit rate; match-day dependence not accounted for"
+      },
+      {
+        "bin": "p_ge_60",
+        "rows": 8,
+        "meanConfidence": 0.6276,
+        "hitRate": 1,
+        "hitRateWilson95": [
+          0.675592,
+          1
+        ],
+        "intervalAssumption": "independent Bernoulli events; rounded published hit rate; match-day dependence not accounted for"
+      }
+    ],
+    "evidenceLevel": "published aggregate; equal counts checked, event-set identity not independently recomputed"
+  },
+  "admission": {
+    "coverage": {
+      "rows": 283,
+      "rowsWithForecastTime": 283,
+      "rowsWithMarketAtForecast": 258,
+      "rowsWithClosingLine": 258,
+      "rowsWithHistoricalFeatureSnapshot": 283,
+      "promotionEligibleRows": 145,
+      "promotionIneligibleRows": 138,
+      "promotionReasonCounts": {
+        "forecast-clock-invalid": 138,
+        "decision-clock-audit-ineligible": 138,
+        "same-decision-market-pair-missing": 138,
+        "historical-feature-snapshot-missing": 138
+      },
+      "historicalResultTimeSources": {
+        "explicit": 161921,
+        "kickoffPlusThreeHours": 0
+      },
+      "sourceCounts": {
+        "preMatchSnapshot": 283
+      },
+      "probabilitySelection": {
+        "version": "pre-match-probability-selection-audit-v1",
+        "consideredRows": 2272,
+        "selectedRows": 283,
+        "matchModelSelected": 0,
+        "snapshotFallbackAttempts": 2272,
+        "snapshotFallbackSelected": 283,
+        "excludedRows": 1989,
+        "reasonCounts": {
+          "match-probabilities-missing": 2272,
+          "match-forecast-clock-invalid": 0,
+          "match-kickoff-clock-invalid": 0,
+          "match-forecast-after-kickoff": 0,
+          "valid-pre-match-snapshot-missing": 1989
+        }
+      }
+    },
+    "timeWindow": {
+      "firstKickoffTime": "2026-09-10T19:00:00.000Z",
+      "lastKickoffTime": "2026-09-30T10:30:00.000Z",
+      "firstForecastTime": "2026-09-10T18:37:30.420Z",
+      "lastForecastTime": "2026-09-30T10:07:03.538Z"
+    },
+    "blockers": [
+      "promotion-cohort-rows:145<500"
+    ],
+    "marketLag": {
+      "version": "market-pairing-lag-audit-v1",
+      "scope": "legacy-diagnostic-only",
+      "rows": 258,
+      "sameDecisionClockAuditedRows": 145,
+      "lagRows": 258,
+      "lagMinutes": {
+        "p50": 53.2,
+        "p90": 475.29,
+        "max": 751.79
+      },
+      "overFiveMinutes": 172,
+      "overSixHours": 30,
+      "bySource": {
+        "official-receipt-trail": 258
+      },
+      "policy": "These rows are descriptive only. A promotion row must take probabilities and HAD odds from one immutable decision snapshot whose full clock audit passes."
+    }
+  },
+  "walkForward": {
+    "status": "collecting",
+    "eligible": false,
+    "protocol": "nested-expanding-window-candidate-selection-v2"
+  },
+  "recommendations": {
+    "settled": 0,
+    "won": 0,
+    "lost": 0,
+    "hitRate": null,
+    "flatStakeRoi": null,
+    "avgOdds": null,
+    "oddsRows": 0,
+    "missingOddsRows": 0
+  },
+  "promotionEligible": false,
+  "limitations": [
+    "Export contains aggregate metrics and evidence hashes, not full settled frozen decision inputs.",
+    "Cannot independently re-score event identities, missing probabilities, or unknown severe-missing counts.",
+    "Cannot reconstruct home/draw/away or league calibration and temporal out-of-sample metrics from hashes.",
+    "No confidence interval for paired score differences without event losses and independent calendar blocks.",
+    "Winning probability is not expected return: expected net return requires frozen selected odds times probability minus one.",
+    "Frozen snapshots remain unchanged; no threshold tuning, promotion or profitability claim."
+  ],
+  "requiredNextInput": [
+    "immutable pre-cutoff decisions with full probabilities and same-decision odds",
+    "known severe-missing counts and feature clocks",
+    "settled results with observation clocks",
+    "league and event identifiers plus preregistered time split and independent calendar blocks"
+  ]
+}

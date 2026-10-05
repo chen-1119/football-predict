@@ -51,6 +51,21 @@ function projectWithoutHandicap(decision, options, unavailable) {
     hadProbabilities:target,hhadProbabilities:null,capturedMass,tailMass:Math.max(0,1-capturedMass)};
 }
 
+// Use the same HAD-reweighted score matrix for an unfrozen model's goal line.
+// The publication path below will project the frozen decision independently;
+// keeping this calculation here prevents the two displays from drifting.
+function projectHadGoalLines(homeLambda, awayLambda, probabilities) {
+  const values = [probabilities?.['1'], probabilities?.X, probabilities?.['2']];
+  const sum = values.reduce((total, value) => total + value, 0);
+  if (values.some(value => !Number.isFinite(value) || value < 0) || !Number.isFinite(sum) || sum <= 0) return null;
+  const target = Object.fromEntries(['1', 'X', '2'].map((code, index) => [code, values[index] / sum]));
+  const projected = projectWithoutHandicap({ scoreModelInput: { home: homeLambda, away: awayLambda }, probabilities: target, tipCode: '1' },
+    { limit: 1 }, () => null);
+  if (!projected || projected.status !== 'available') return null;
+  const under25 = projected.totalGoals.slice(0, 3).reduce((total, row) => total + row.probability, 0);
+  return { over25: 1 - under25, under25, basis: 'had-reweighted-score-matrix-v1' };
+}
+
 /** Read-only projection of a complete frozen publication, never a live model.
  * Every score probability is unconditional. Filtering aligned candidates or
  * displaying only a few scores does not renormalize their probabilities. */
@@ -150,4 +165,4 @@ function buildPublishedScoreDistribution(decision, options = {}) {
     topScores: [], alignedScores: [], totalGoals: [] };
 }
 
-module.exports = { VERSION, buildPublishedScoreDistribution, projectFrozenScoreDistribution };
+module.exports = { VERSION, buildPublishedScoreDistribution, projectFrozenScoreDistribution, projectHadGoalLines };

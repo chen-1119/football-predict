@@ -1,6 +1,6 @@
 'use strict';
 const{test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-const compile=(file,req,globals={})=>{const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve(file),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:req,URL,URLSearchParams,Date,Intl,AbortController,setTimeout,clearTimeout,...globals});return module.exports;};
+const compile=(file,req,globals={})=>{const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve(file),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:require('./fixtures/render-clock-require.cjs')(req,globals),URL,URLSearchParams,Date,Intl,AbortController,setTimeout,clearTimeout,...globals});return module.exports;};
 const words=n=>n==null||typeof n==='boolean'?'':Array.isArray(n)?n.map(words).join(''):typeof n==='object'?words(n.props?.children):String(n);
 const nodes=(n,p)=>n&&typeof n==='object'?(Array.isArray(n)?n.flatMap(v=>nodes(v,p)):[...(p(n)?[n]:[]),...nodes(n.props?.children,p)]):[];
 const fixtures=[{id:'sporttery_a',sourceMatchId:'a',matchNo:'周二001',businessDate:'2026-09-22',homeTeamName:'阿森纳',homeTeamNameEn:'Arsenal',awayTeamName:'切尔西',leagueName:'英超',status:'SCHEDULED',kickoffTime:'2026-09-22T12:00:00Z',odds:{home:1.8,draw:3.2,away:null},oddsSource:'500-sp',sourceUpdatedAt:'2026-09-22T05:55:00Z',quoteStatus:'missing'},{id:'sporttery_b',sourceMatchId:'b',matchNo:'周三002',businessDate:'2026-09-23',homeTeamName:'乌迪内斯',awayTeamName:'博洛尼亚',leagueName:'意甲',status:'SCHEDULED',kickoffTime:'2026-09-23T12:00:00Z',odds:{home:2.1,draw:null,away:3.3},quoteStatus:'missing'},{id:'sporttery_c',sourceMatchId:'c',matchNo:'周三003',businessDate:'2026-09-23',homeTeamName:'马德里竞技',awayTeamName:'塞维利亚',leagueName:'西甲',status:'SCHEDULED',kickoffTime:'2026-09-23T13:00:00Z',odds:{home:1.9,draw:3.2,away:4.1},sourceUpdatedAt:null,quoteStatus:'unverified'}];
@@ -9,14 +9,45 @@ async function harness({data=overview(),failure=false,matchId,route={pathname:'/
  let cursor=0,search=route.search,effectStarted=false;const cells=[],effects=[],fetches=[];
  const accountApi=compile('../src/services/accountApi.ts',id=>id==='./runtimeUrls'?{buildApiUrl:p=>p}:require(id));
  const mod=compile('../src/pages/PublicBrowse.tsx',id=>{
- if(id==='react')return{useState:initial=>{const n=cursor++;if(!(n in cells))cells[n]=typeof initial==='function'?initial():initial;return[cells[n],v=>{cells[n]=typeof v==='function'?v(cells[n]):v;}];},useEffect:fn=>{if(!effectStarted){effects.push(fn);effectStarted=true;}}};
+ if(id==='react')return{useState:initial=>{const n=cursor++;if(!(n in cells))cells[n]=typeof initial==='function'?initial():initial;return[cells[n],v=>{cells[n]=typeof v==='function'?v(cells[n]):v;}];},useEffect:fn=>{if(!effectStarted){effects.push(fn);}}};
  if(id==='react/jsx-runtime')return{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'fragment'};
  if(id==='react-router-dom')return{Link:'a',useLocation:()=>({...route,search}),useParams:()=>({matchId}),useSearchParams:()=>[new URLSearchParams(search),(next)=>{search='?'+next.toString();}]};
- if(id==='lucide-react')return new Proxy({},{get:()=>()=>null});if(id.endsWith('/AccountContext'))return{useAccount:()=>({user,access})};if(id.endsWith('/AppContextCore'))return{useApp:()=>({language:'zh'})};if(id.endsWith('/FollowButton'))return{FollowButton:'follow'};if(id.endsWith('/TeamBadge'))return{TeamBadge:'badge'};if(id.endsWith('/runtimeUrls'))return{buildApiUrl:p=>p};if(id.endsWith('/accountApi'))return accountApi;if(id.endsWith('.css'))return{};throw Error(id);
+ if(id==='lucide-react')return new Proxy({},{get:()=>()=>null});if(id.endsWith('/AccountContextCore'))return{useAccount:()=>({user,access})};if(id.endsWith('/AppContextCore'))return{useApp:()=>({language:'zh'})};if(id.endsWith('/FollowButton'))return{FollowButton:'follow'};if(id.endsWith('/TeamBadge'))return{TeamBadge:'badge'};if(id.endsWith('/runtimeUrls'))return{buildApiUrl:p=>p};if(id.endsWith('/accountApi'))return accountApi;if(id.endsWith('.css'))return{};throw Error(id);
  },{fetch:async(url)=>{fetches.push(url);if(failure)return{ok:false,status:503};return{ok:true,json:async()=>url.includes('/matches/')?{match:data.matches[0]}:data};}});
- const render=()=>{cursor=0;return mod.PublicBrowse();};let tree=render();assert.match(words(tree),/正在读取/);effects.forEach(fn=>fn());await new Promise(r=>setTimeout(r,0));await new Promise(r=>setTimeout(r,0));return{render,fetches,get search(){return search;}};
+ const render=()=>{cursor=0;return mod.PublicBrowse();};let tree=render();effectStarted=true;assert.match(words(tree),/正在读取/);effects.forEach(fn=>fn());await new Promise(r=>setTimeout(r,0));await new Promise(r=>setTimeout(r,0));return{render,fetches,get search(){return search;}};
 }
 const cards=t=>nodes(t,n=>n.type==='article'&&n.props.className==='public-fixture');
+
+test('missing current business day defaults to the earliest upcoming sales day, not the last day or kickoff date',async()=>{
+ const data=overview();data.businessDate='2026-10-04';
+ data.matches=['2026-10-08','2026-10-06','2026-10-05','2026-10-07'].map((businessDate,index)=>({...fixtures[0],id:`future_${index}`,businessDate,kickoffTime:'2026-10-05T16:00:00Z'}));
+ for(const search of ['', '?date=invalid']){
+  const u=await harness({data,route:{pathname:'/fixtures',search,hash:'',state:null}}),t=u.render();
+  assert.equal(nodes(t,n=>n.type==='select')[0].props.value,'2026-10-05');
+  assert.equal(cards(t).length,1);assert.match(words(nodes(t,n=>n.props?.className==='public-results-summary')[0]),/2026-10-05 · 1 场比赛/);
+  assert.match(words(cards(t)[0]),/10\/06 00:00/);assert.equal(u.search,search);
+ }
+});
+test('a missing current sales day skips history to select the next available business day',async()=>{
+ const data=overview();data.businessDate='2026-09-22';data.matches[0].businessDate='2026-09-21';
+ data.matches.push({...fixtures[0],id:'future_later',businessDate:'2026-09-24'});
+ const u=await harness({data}),t=u.render();assert.equal(nodes(t,n=>n.type==='select')[0].props.value,'2026-09-23');
+ assert.equal(cards(t).length,2);assert.doesNotMatch(words(nodes(t,n=>n.props?.className==='public-results-summary')[0]),/历史竞彩日/);
+});
+test('explicit available URL date overrides the automatic day without changing the search query',async()=>{
+ const data=overview();data.businessDate='2026-09-21';
+ const route={pathname:'/fixtures',search:'?date=2026-09-23&q=博洛尼亚',hash:'',state:null};
+ const u=await harness({data,route}),t=u.render();assert.equal(nodes(t,n=>n.type==='select')[0].props.value,'2026-09-23');
+ assert.equal(cards(t).length,1);assert.match(words(cards(t)[0]),/博洛尼亚/);assert.equal(u.search,route.search);
+});
+test('an empty sales-day inventory keeps the picker and result state empty',async()=>{
+ const data=overview();data.matches=[];const u=await harness({data}),t=u.render();
+ assert.equal(nodes(t,n=>n.type==='select')[0].props.value,'');assert.equal(cards(t).length,0);assert.match(words(t),/这个竞彩日暂无比赛/);
+});
+
+test('fixture snapshot summary identifies an older match day without claiming current sales',async()=>{const data=overview();data.businessDate='2026-10-02';const u=await harness({data}),t=u.render();const summary=nodes(t,n=>n.props?.className==='public-results-summary')[0];assert.match(words(summary),/2026-09-23.*2 场比赛.*历史竞彩日 · 不代表今日在售/);assert.match(words(t),/赛程快照 · 北京时间/);assert.equal(nodes(t,n=>n.props?.['aria-label']==='赛程胜平负 SP 对照').length,2);assert.doesNotMatch(words(t),/从今天的比赛开始/);});
+test('failed public response never invents a zero-fixture summary',async()=>{const u=await harness({failure:true});assert.equal(nodes(u.render(),n=>n.props?.className==='public-results-summary').length,0);});
+test('public detail explicitly identifies fields outside the preview',async()=>{const u=await harness({matchId:'sporttery_a',route:{pathname:'/match/sporttery_a',search:'',hash:'',state:null}});assert.match(words(u.render()),/不含完整赛前概率、伤停、阵容或 xG/);assert.equal(nodes(u.render(),n=>n.type==='time'&&n.props.dateTime===fixtures[0].kickoffTime).length,1);});
 test('public fixtures select current business date and keep search/date in URL',async()=>{const u=await harness();let t=u.render();assert.equal(cards(t).length,1);assert.match(words(cards(t)[0]),/阿森纳/);nodes(t,n=>n.type==='select')[0].props.onChange({target:{value:'2026-09-23'}});t=u.render();assert.equal(cards(t).length,2);assert.match(words(cards(t)[0]),/乌迪内斯/);assert.match(u.search,/date=2026-09-23/);nodes(t,n=>n.type==='input')[0].props.onChange({target:{value:'  博洛尼亚  '}});assert.equal(cards(u.render()).length,1);assert.match(u.search,/q=/);});
 test('case-insensitive English search and clear-filter empty action are usable',async()=>{const u=await harness();let t=u.render();nodes(t,n=>n.type==='input')[0].props.onChange({target:{value:' ARSENAL '}});assert.equal(cards(u.render()).length,1);nodes(u.render(),n=>n.type==='input')[0].props.onChange({target:{value:'不存在'}});t=u.render();assert.equal(cards(t).length,0);assert.match(words(t),/没有匹配的比赛/);nodes(t,n=>n.type==='button'&&words(n)==='清除搜索')[0].props.onClick();assert.equal(cards(u.render()).length,1);});
 test('public quote snapshots distinguish missing prices from unverified time without exposing providers or inventing odds',async()=>{const u=await harness(),t=u.render(),c=cards(t)[0];assert.match(words(c),/胜平负 SP 有缺项/);assert.match(words(c),/报价记录 09\/22 13:55/);assert.match(words(c),/1\.80/);assert.match(words(c),/客胜—/);assert.doesNotMatch(words(c),/500-sp|报价来源|官方赔率/);nodes(t,n=>n.type==='select')[0].props.onChange({target:{value:'2026-09-23'}});const dayCards=cards(u.render());const missing=words(dayCards[0]),unverified=words(dayCards[1]);assert.match(missing,/胜平负 SP 有缺项/);assert.match(missing,/平局—/);assert.doesNotMatch(missing,/来源未标注/);assert.match(unverified,/赛程胜平负 SP 已取得，报价时间未核验/);assert.match(unverified,/主胜1\.90平局3\.20客胜4\.10/);assert.doesNotMatch(unverified,/报价记录|胜平负 SP 有缺项/);});

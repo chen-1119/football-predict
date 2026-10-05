@@ -1,0 +1,1232 @@
+{
+  "version": "bounded-source-state-read-v1",
+  "startedAt": "2026-10-02T16:14:20.145459+00:00",
+  "productionWrites": false,
+  "files": [
+    {
+      "path": "/var/lib/football-predict/sync-worker-status.json",
+      "exists": true,
+      "bytes": 16629,
+      "sha256": "2a85b4bef175a54f0216598acc92be58b053078774883ade2dad9b4550996796",
+      "projection": {
+        "state": null,
+        "running": null,
+        "checkedAt": "2026-10-02T16:13:26.870Z",
+        "startedAt": null,
+        "lastSuccessAt": "2026-09-30T15:50:20.314Z",
+        "nextWakeAt": null,
+        "lastCycleDurationMs": 308513,
+        "phase": "official-result",
+        "lastError": {
+          "at": "2026-10-02T16:13:04.307Z",
+          "code": "SYNC_WORKER_COMMAND_FAILED",
+          "message": "npm run validate:data exited with 1",
+          "timeoutMs": null
+        },
+        "lastCycle": {
+          "ok": false,
+          "phase": "official-result-failed",
+          "startedAt": "2026-10-02T16:07:55.794Z",
+          "finishedAt": "2026-10-02T16:13:04.307Z",
+          "error": "npm run validate:data exited with 1",
+          "errorCode": "SYNC_WORKER_COMMAND_FAILED",
+          "durationMs": 308513
+        }
+      }
+    },
+    {
+      "path": "/var/lib/football-predict/sporttery-relay-fast-lane.json",
+      "exists": true,
+      "bytes": 87018,
+      "sha256": "cdba82d3b091f41bcf72099375a10031a096beda47e041dacc083dbf624b2fd7",
+      "projection": {
+        "version": 1,
+        "source": "sporttery-relay-snapshot",
+        "capturedAt": "2026-09-30T10:33:48.935Z",
+        "receivedAt": null,
+        "sourceCycleId": "sporttery-fast-upload-merge:20260930T103348974Z:82b164e4-e7cf-4e9c-9f0f-90fa160ce27c",
+        "sourceCycleKind": "upload-merge",
+        "mergeCreatedAt": "2026-09-30T10:33:48.974Z",
+        "maxAgeMinutes": 20,
+        "summary": {
+          "endpoints": 3,
+          "usableEndpoints": 3,
+          "rows": 12,
+          "errors": 0,
+          "methods": [
+            "calculator",
+            "current",
+            "result"
+          ],
+          "pageDepth": 1,
+          "resultPageDepth": 1,
+          "fastResultLane": true,
+          "resultRows": 10,
+          "sourceCycleId": "sporttery-fast-upload-merge:20260930T103348974Z:82b164e4-e7cf-4e9c-9f0f-90fa160ce27c",
+          "sourceCycleKind": "upload-merge",
+          "constituentCycleIds": [
+            "sporttery-relay:20260930T103348620Z:8882a7a7-9937-408e-8249-68fd94417b4e",
+            "sporttery-relay:20260930T103348845Z:ac7f5bc3-90cf-4193-8a9c-8c4657dd8cc5"
+          ],
+          "mixedCollectorSourceCycles": true
+        },
+        "producer": {
+          "fastResultLane": true,
+          "probeMode": "result-page-1",
+          "companionMode": "current-calculator-on-change",
+          "resultFingerprint": "52d1f74a215f7629202fea092bf1d43c579e626721f38f4a25622b99e413655e"
+        },
+        "endpoints": [
+          {
+            "method": "calculator",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-09-30T10:33:48.897Z",
+            "requestedAt": "2026-09-30T10:33:48.846Z",
+            "receivedAt": "2026-09-30T10:33:48.897Z",
+            "sourceCycleId": "sporttery-relay:20260930T103348845Z:ac7f5bc3-90cf-4193-8a9c-8c4657dd8cc5",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20260930T103348845Z:ac7f5bc3-90cf-4193-8a9c-8c4657dd8cc5",
+              "requestedAt": "2026-09-30T10:33:48.846Z",
+              "receivedAt": "2026-09-30T10:33:48.897Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20260930T103348845Z:ac7f5bc3-90cf-4193-8a9c-8c4657dd8cc5",
+              "providerObservedAt": "2026-09-30T09:50:42.000Z",
+              "requestedAt": "2026-09-30T10:33:48.846Z",
+              "receivedAt": "2026-09-30T10:33:48.897Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "f7db9e24d8f43fac5f9110a991424bc7019f160672039e41c0bb6f6b87508b05",
+            "error": null
+          },
+          {
+            "method": "current",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-09-30T10:33:48.935Z",
+            "requestedAt": "2026-09-30T10:33:48.907Z",
+            "receivedAt": "2026-09-30T10:33:48.935Z",
+            "sourceCycleId": "sporttery-relay:20260930T103348845Z:ac7f5bc3-90cf-4193-8a9c-8c4657dd8cc5",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20260930T103348845Z:ac7f5bc3-90cf-4193-8a9c-8c4657dd8cc5",
+              "requestedAt": "2026-09-30T10:33:48.907Z",
+              "receivedAt": "2026-09-30T10:33:48.935Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20260930T103348845Z:ac7f5bc3-90cf-4193-8a9c-8c4657dd8cc5",
+              "providerObservedAt": "2026-09-30T09:07:47.000Z",
+              "requestedAt": "2026-09-30T10:33:48.907Z",
+              "receivedAt": "2026-09-30T10:33:48.935Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "dc713c5a058195a7885e50b483b3f67c01cb2c4b6306ea7275378dcf0bcfee06",
+            "error": null
+          },
+          {
+            "method": "result",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-09-30T10:33:48.761Z",
+            "requestedAt": "2026-09-30T10:33:48.621Z",
+            "receivedAt": "2026-09-30T10:33:48.761Z",
+            "sourceCycleId": "sporttery-relay:20260930T103348620Z:8882a7a7-9937-408e-8249-68fd94417b4e",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20260930T103348620Z:8882a7a7-9937-408e-8249-68fd94417b4e",
+              "requestedAt": "2026-09-30T10:33:48.621Z",
+              "receivedAt": "2026-09-30T10:33:48.761Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20260930T103348620Z:8882a7a7-9937-408e-8249-68fd94417b4e",
+              "providerObservedAt": "2026-09-30T09:07:48.000Z",
+              "requestedAt": "2026-09-30T10:33:48.621Z",
+              "receivedAt": "2026-09-30T10:33:48.761Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "3ba3fb6c1ace08f9cdcd0f035d9a50637f9a33e9f2f647207fc9e099fe2e53a8",
+            "error": null
+          }
+        ]
+      }
+    },
+    {
+      "path": "/var/lib/football-predict/sporttery-relay-snapshot.json",
+      "exists": true,
+      "bytes": 2660009,
+      "sha256": "c7dfc224ba0d2cef133b8838062cdbb3533a38ba71edfc52a54fa4beb13ef98c",
+      "projection": {
+        "version": 1,
+        "source": "sporttery-relay-snapshot",
+        "capturedAt": "2026-10-02T15:56:02.682Z",
+        "receivedAt": null,
+        "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+        "sourceCycleKind": null,
+        "mergeCreatedAt": null,
+        "maxAgeMinutes": 20,
+        "summary": {
+          "endpoints": 34,
+          "usableEndpoints": 30,
+          "rows": 2289,
+          "errors": 0,
+          "errorClasses": {},
+          "methods": [
+            "concern",
+            "live",
+            "result",
+            "all"
+          ],
+          "skipInitialEndpoints": false,
+          "pageDepth": 120,
+          "resultPageDepth": 120,
+          "resultScope": "latest-official-payout-results",
+          "collector": {
+            "consecutiveCollectFailures": 0,
+            "lastCollectOkAt": "2026-10-02T15:56:33.764Z",
+            "lastCollectFailedAt": null
+          }
+        },
+        "producer": {
+          "fastResultLane": null,
+          "probeMode": null,
+          "companionMode": null,
+          "resultFingerprint": null
+        },
+        "endpoints": [
+          {
+            "method": "calculator",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:02.782Z",
+            "requestedAt": "2026-10-02T15:56:02.683Z",
+            "receivedAt": "2026-10-02T15:56:02.782Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:02.683Z",
+              "receivedAt": "2026-10-02T15:56:02.782Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:02.683Z",
+              "receivedAt": "2026-10-02T15:56:02.782Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "38629eaeff25257d4dce790918929cace16704b6d957c118b977e0bd40ba1a9d",
+            "error": null
+          },
+          {
+            "method": "current",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:02.811Z",
+            "requestedAt": "2026-10-02T15:56:02.794Z",
+            "receivedAt": "2026-10-02T15:56:02.811Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:02.794Z",
+              "receivedAt": "2026-10-02T15:56:02.811Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": "2026-10-02T15:55:10.000Z",
+              "requestedAt": "2026-10-02T15:56:02.794Z",
+              "receivedAt": "2026-10-02T15:56:02.811Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "edad0f7c7475b52d40c9bba76a9cd37d4c2cfc98e81f4c238c635a7b571ea4e3",
+            "error": null
+          },
+          {
+            "method": "concern",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:02.941Z",
+            "requestedAt": "2026-10-02T15:56:02.812Z",
+            "receivedAt": "2026-10-02T15:56:02.941Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:02.812Z",
+              "receivedAt": "2026-10-02T15:56:02.941Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:02.812Z",
+              "receivedAt": "2026-10-02T15:56:02.941Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "6fe5d6fa763f42c337f45795eb5f4c228547ceeab15355070dcc3b9204ef8786",
+            "error": null
+          },
+          {
+            "method": "live",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:03.086Z",
+            "requestedAt": "2026-10-02T15:56:02.941Z",
+            "receivedAt": "2026-10-02T15:56:03.086Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:02.941Z",
+              "receivedAt": "2026-10-02T15:56:03.086Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:02.941Z",
+              "receivedAt": "2026-10-02T15:56:03.086Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "6fe5d6fa763f42c337f45795eb5f4c228547ceeab15355070dcc3b9204ef8786",
+            "error": null
+          },
+          {
+            "method": "result",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:03.103Z",
+            "requestedAt": "2026-10-02T15:56:03.087Z",
+            "receivedAt": "2026-10-02T15:56:03.103Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:03.087Z",
+              "receivedAt": "2026-10-02T15:56:03.103Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": "2026-10-02T02:29:01.000Z",
+              "requestedAt": "2026-10-02T15:56:03.087Z",
+              "receivedAt": "2026-10-02T15:56:03.103Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "a4df9fcd463a03ab7073e876a5712b4fdab98a8041703444a0e4895e7157d60d",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:04.343Z",
+            "requestedAt": "2026-10-02T15:56:03.111Z",
+            "receivedAt": "2026-10-02T15:56:04.343Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:03.111Z",
+              "receivedAt": "2026-10-02T15:56:04.343Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:03.111Z",
+              "receivedAt": "2026-10-02T15:56:04.343Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "b7d94c3bd6d45288905048e0ef5a454ce55425049d6af1516876532507c9f16c",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:05.620Z",
+            "requestedAt": "2026-10-02T15:56:04.345Z",
+            "receivedAt": "2026-10-02T15:56:05.620Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:04.345Z",
+              "receivedAt": "2026-10-02T15:56:05.620Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:04.345Z",
+              "receivedAt": "2026-10-02T15:56:05.620Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "71e83ef59e4c007f65b123f0268434a6f12f2c27ba882eb5960300d4ecea9345",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:06.730Z",
+            "requestedAt": "2026-10-02T15:56:05.621Z",
+            "receivedAt": "2026-10-02T15:56:06.730Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:05.621Z",
+              "receivedAt": "2026-10-02T15:56:06.730Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:05.621Z",
+              "receivedAt": "2026-10-02T15:56:06.730Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "935869e0990c1e0cb244ad3b469eaaad5fcbf4e480cb5ea1810f329ff1653d54",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:07.758Z",
+            "requestedAt": "2026-10-02T15:56:06.732Z",
+            "receivedAt": "2026-10-02T15:56:07.758Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:06.732Z",
+              "receivedAt": "2026-10-02T15:56:07.758Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:06.732Z",
+              "receivedAt": "2026-10-02T15:56:07.758Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "304a75b69c7744876d8f774efaffbaad1ecff198372d19c14041114e3959f298",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:08.820Z",
+            "requestedAt": "2026-10-02T15:56:07.760Z",
+            "receivedAt": "2026-10-02T15:56:08.820Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:07.760Z",
+              "receivedAt": "2026-10-02T15:56:08.820Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:07.760Z",
+              "receivedAt": "2026-10-02T15:56:08.820Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "34f8ba428dcbb29c7dacdca62430e41576a36e9cf30b10a6041868f06636a87f",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:09.810Z",
+            "requestedAt": "2026-10-02T15:56:08.823Z",
+            "receivedAt": "2026-10-02T15:56:09.810Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:08.823Z",
+              "receivedAt": "2026-10-02T15:56:09.810Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:08.823Z",
+              "receivedAt": "2026-10-02T15:56:09.810Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "18b22965907ce4064bee6471ecfd9b975062adfd2d3705709e258a27cc81032a",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:10.861Z",
+            "requestedAt": "2026-10-02T15:56:09.811Z",
+            "receivedAt": "2026-10-02T15:56:10.861Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:09.811Z",
+              "receivedAt": "2026-10-02T15:56:10.861Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:09.811Z",
+              "receivedAt": "2026-10-02T15:56:10.861Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "6208f2af9fe4272811bc9cee318afbfb085a59331f3ba6498f1d095e884edfe8",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:11.865Z",
+            "requestedAt": "2026-10-02T15:56:10.864Z",
+            "receivedAt": "2026-10-02T15:56:11.865Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:10.864Z",
+              "receivedAt": "2026-10-02T15:56:11.865Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:10.864Z",
+              "receivedAt": "2026-10-02T15:56:11.865Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "f216fd36818c3724fa3ab09f0414724f1d5ba866ae12fbdbab8b8c150df8b195",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:12.953Z",
+            "requestedAt": "2026-10-02T15:56:11.867Z",
+            "receivedAt": "2026-10-02T15:56:12.953Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:11.867Z",
+              "receivedAt": "2026-10-02T15:56:12.953Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:11.867Z",
+              "receivedAt": "2026-10-02T15:56:12.953Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "dde825ef0aba94e2215314bfe63674c36f433f37479d1712c0c6dffa99ccacea",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:13.966Z",
+            "requestedAt": "2026-10-02T15:56:12.956Z",
+            "receivedAt": "2026-10-02T15:56:13.966Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:12.956Z",
+              "receivedAt": "2026-10-02T15:56:13.966Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:12.956Z",
+              "receivedAt": "2026-10-02T15:56:13.966Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "591d625e52d0f9c3c930f20e16c6fa2325b42318b15ac2393fc5499885fe4e1c",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:14.970Z",
+            "requestedAt": "2026-10-02T15:56:13.968Z",
+            "receivedAt": "2026-10-02T15:56:14.970Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:13.968Z",
+              "receivedAt": "2026-10-02T15:56:14.970Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:13.968Z",
+              "receivedAt": "2026-10-02T15:56:14.970Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "673f9237ddaa2d1156bc2e26510eba5bfe915900552e89a5462552bcb5444528",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:16.016Z",
+            "requestedAt": "2026-10-02T15:56:14.972Z",
+            "receivedAt": "2026-10-02T15:56:16.016Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:14.972Z",
+              "receivedAt": "2026-10-02T15:56:16.016Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:14.972Z",
+              "receivedAt": "2026-10-02T15:56:16.016Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "7b42147755ca0a87ccfafbb12f14cb3810657ef3652484abbc2f1692cb722ef9",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:17.054Z",
+            "requestedAt": "2026-10-02T15:56:16.025Z",
+            "receivedAt": "2026-10-02T15:56:17.054Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:16.025Z",
+              "receivedAt": "2026-10-02T15:56:17.054Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:16.025Z",
+              "receivedAt": "2026-10-02T15:56:17.054Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "70586fcdea0cdb2a6875ec21e9f857f17af5b85c5097326054a5890833b83e91",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:18.067Z",
+            "requestedAt": "2026-10-02T15:56:17.058Z",
+            "receivedAt": "2026-10-02T15:56:18.067Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:17.058Z",
+              "receivedAt": "2026-10-02T15:56:18.067Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:17.058Z",
+              "receivedAt": "2026-10-02T15:56:18.067Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "e09cdec5683796525f6b2769cd17d2f6a9da246d47c5a0244eeefc3d4a5ea289",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:19.158Z",
+            "requestedAt": "2026-10-02T15:56:18.071Z",
+            "receivedAt": "2026-10-02T15:56:19.158Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:18.071Z",
+              "receivedAt": "2026-10-02T15:56:19.158Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:18.071Z",
+              "receivedAt": "2026-10-02T15:56:19.158Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "98ffa07b187c220ca4c1ad8be1d798d95ccbdcef43ee6143c4b71f1f1b3fd3ab",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:20.238Z",
+            "requestedAt": "2026-10-02T15:56:19.162Z",
+            "receivedAt": "2026-10-02T15:56:20.238Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:19.162Z",
+              "receivedAt": "2026-10-02T15:56:20.238Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:19.162Z",
+              "receivedAt": "2026-10-02T15:56:20.238Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "d2abd390160ce362acb1dae8b2f99a2c1c241fbefc986e8560787799cb667ce0",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:21.173Z",
+            "requestedAt": "2026-10-02T15:56:20.241Z",
+            "receivedAt": "2026-10-02T15:56:21.173Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:20.241Z",
+              "receivedAt": "2026-10-02T15:56:21.173Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:20.241Z",
+              "receivedAt": "2026-10-02T15:56:21.173Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "51b24bb94afa06636cc1ec832b2d44202f6c40c6eb6640b9d942ecc428e3047b",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:22.209Z",
+            "requestedAt": "2026-10-02T15:56:21.177Z",
+            "receivedAt": "2026-10-02T15:56:22.209Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:21.177Z",
+              "receivedAt": "2026-10-02T15:56:22.209Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:21.177Z",
+              "receivedAt": "2026-10-02T15:56:22.209Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "8f9954ddccef5ac1df2b9335c16bb853291f09969c025a8cfe64838423511648",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:23.235Z",
+            "requestedAt": "2026-10-02T15:56:22.211Z",
+            "receivedAt": "2026-10-02T15:56:23.235Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:22.211Z",
+              "receivedAt": "2026-10-02T15:56:23.235Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:22.211Z",
+              "receivedAt": "2026-10-02T15:56:23.235Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "1904dc5848bdf5f513d0c7f6406f0b6e6639e9521a93b0a79a1caa6f16a01081",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:24.215Z",
+            "requestedAt": "2026-10-02T15:56:23.238Z",
+            "receivedAt": "2026-10-02T15:56:24.215Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:23.238Z",
+              "receivedAt": "2026-10-02T15:56:24.215Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:23.238Z",
+              "receivedAt": "2026-10-02T15:56:24.215Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "ed2e447460c84f2a500081a679369c9228229d320d58dd40d5fddff6ffe9fb71",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:25.247Z",
+            "requestedAt": "2026-10-02T15:56:24.218Z",
+            "receivedAt": "2026-10-02T15:56:25.247Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:24.218Z",
+              "receivedAt": "2026-10-02T15:56:25.247Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:24.218Z",
+              "receivedAt": "2026-10-02T15:56:25.247Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "58a9444b61584d04575798638ed2585cbc5426d5c4c96010a2e94b5c1217d2b9",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:26.338Z",
+            "requestedAt": "2026-10-02T15:56:25.249Z",
+            "receivedAt": "2026-10-02T15:56:26.338Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:25.249Z",
+              "receivedAt": "2026-10-02T15:56:26.338Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:25.249Z",
+              "receivedAt": "2026-10-02T15:56:26.338Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "74c03bab4f68db72ded00481d4b45ea0ee2faef85dfe8a41543411be6152cfcf",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:27.431Z",
+            "requestedAt": "2026-10-02T15:56:26.341Z",
+            "receivedAt": "2026-10-02T15:56:27.431Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:26.341Z",
+              "receivedAt": "2026-10-02T15:56:27.431Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:26.341Z",
+              "receivedAt": "2026-10-02T15:56:27.431Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "c8496d839e4c1618a4358717700a63c847b6eca42b298260de34783042eb7850",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:28.479Z",
+            "requestedAt": "2026-10-02T15:56:27.433Z",
+            "receivedAt": "2026-10-02T15:56:28.479Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:27.433Z",
+              "receivedAt": "2026-10-02T15:56:28.479Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:27.433Z",
+              "receivedAt": "2026-10-02T15:56:28.479Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "eb51a67ac967b15e26a164c2a5aa361ab39ce8b8771007b029fc8f5501148e37",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:29.522Z",
+            "requestedAt": "2026-10-02T15:56:28.481Z",
+            "receivedAt": "2026-10-02T15:56:29.522Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:28.481Z",
+              "receivedAt": "2026-10-02T15:56:29.522Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:28.481Z",
+              "receivedAt": "2026-10-02T15:56:29.522Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "2fe8a2c5e46eca655cc729cf7eb7992a5cdeba3790a9db43affc7818015f93d7",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:30.617Z",
+            "requestedAt": "2026-10-02T15:56:29.525Z",
+            "receivedAt": "2026-10-02T15:56:30.617Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:29.525Z",
+              "receivedAt": "2026-10-02T15:56:30.617Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:29.525Z",
+              "receivedAt": "2026-10-02T15:56:30.617Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "b67f5b4939bf4d57b08cd643900e2d07705207e5244a37c1868a92c85d2288f8",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:31.737Z",
+            "requestedAt": "2026-10-02T15:56:30.619Z",
+            "receivedAt": "2026-10-02T15:56:31.737Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:30.619Z",
+              "receivedAt": "2026-10-02T15:56:31.737Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:30.619Z",
+              "receivedAt": "2026-10-02T15:56:31.737Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "d7f17b14a3ec7247a94bd116acb2650b127cec0b287027421f94da03cc4d1f70",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:32.750Z",
+            "requestedAt": "2026-10-02T15:56:31.739Z",
+            "receivedAt": "2026-10-02T15:56:32.750Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:31.739Z",
+              "receivedAt": "2026-10-02T15:56:32.750Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:31.739Z",
+              "receivedAt": "2026-10-02T15:56:32.750Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "48266c07c74103718e0b3b1732ea1cb500296a152e0672ed159f69e962414279",
+            "error": null
+          },
+          {
+            "method": "all",
+            "endpoint": null,
+            "role": null,
+            "ok": true,
+            "status": null,
+            "fetchedAt": "2026-10-02T15:56:33.611Z",
+            "requestedAt": "2026-10-02T15:56:32.754Z",
+            "receivedAt": "2026-10-02T15:56:33.611Z",
+            "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+            "collectorProvenance": {
+              "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "requestedAt": "2026-10-02T15:56:32.754Z",
+              "receivedAt": "2026-10-02T15:56:33.611Z",
+              "providerObservedAt": null
+            },
+            "commitmentTimes": {
+              "collectorCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+              "providerObservedAt": null,
+              "requestedAt": "2026-10-02T15:56:32.754Z",
+              "receivedAt": "2026-10-02T15:56:33.611Z"
+            },
+            "response": null,
+            "payloadCanonicalSha256": "f49e4a84f86bbf1cbf58bfba0bcf40455aba902b9e24381cc48ad05142018ac4",
+            "error": null
+          }
+        ]
+      }
+    },
+    {
+      "path": "/var/lib/football-predict/sporttery-relay-collector-state.json",
+      "exists": false
+    }
+  ],
+  "journal": {
+    "exit": 0,
+    "bytes": 5338,
+    "sha256": "479c069ca1a30733bf4aedc8145daff8b0238ddd84c639d9fcdeb91cc88f7a8c",
+    "lines": [
+      "  \"error\": \"npm run validate:data exited with 1\",",
+      "      \"validate:data\"",
+      "    \"message\": \"npm run validate:data exited with 1\",",
+      "      \"validationReady\": true,",
+      "        \"validationReady\": true,",
+      "        \"validationReady\": true,",
+      "          \"validate:data\"",
+      "        \"mode\": \"result-only-recent-archive\",",
+      "        \"error\": \"npm run sync:cloudflare-sporttery-evidence exited with 1\",",
+      "        \"error\": \"npm run sync:server-direct-sporttery-evidence exited with 1\",",
+      "    \"error\": \"npm run validate:data exited with 1\",",
+      "    \"error\": \"npm run validate:data exited with 1\",",
+      "        \"validate:data:consolidated-slow-publication\",",
+      "        \"validate:data:post-enrichment\",",
+      "        \"validate:data\",",
+      "matches-current.json must contain a non-empty array.",
+      "> football-predict@0.0.0 validate:data",
+      "      \"validationOk\": true,",
+      "  \"error\": \"npm run validate:data exited with 1\",",
+      "      \"validate:data\"",
+      "    \"message\": \"npm run validate:data exited with 1\",",
+      "      \"validationReady\": true,",
+      "        \"validationReady\": true,",
+      "        \"validationReady\": true,",
+      "          \"validate:data\"",
+      "        \"mode\": \"result-only-recent-archive\",",
+      "        \"error\": \"npm run sync:cloudflare-sporttery-evidence exited with 1\",",
+      "        \"error\": \"npm run sync:server-direct-sporttery-evidence exited with 1\",",
+      "    \"error\": \"npm run validate:data exited with 1\",",
+      "    \"error\": \"npm run validate:data exited with 1\",",
+      "        \"validate:data:consolidated-slow-publication\",",
+      "        \"validate:data:post-enrichment\",",
+      "        \"validate:data\",",
+      "matches-current.json must contain a non-empty array.",
+      "> football-predict@0.0.0 validate:data",
+      "      \"validationOk\": true,",
+      "  \"error\": \"npm run validate:data exited with 1\",",
+      "      \"validate:data\"",
+      "    \"message\": \"npm run validate:data exited with 1\",",
+      "      \"validationReady\": true,",
+      "        \"validationReady\": true,",
+      "        \"validationReady\": true,",
+      "          \"validate:data\"",
+      "        \"mode\": \"result-only-recent-archive\",",
+      "        \"error\": \"npm run sync:cloudflare-sporttery-evidence exited with 1\",",
+      "        \"error\": \"npm run sync:server-direct-sporttery-evidence exited with 1\",",
+      "    \"error\": \"npm run validate:data exited with 1\",",
+      "    \"error\": \"npm run validate:data exited with 1\",",
+      "        \"validate:data:consolidated-slow-publication\",",
+      "        \"validate:data:post-enrichment\",",
+      "        \"validate:data\",",
+      "matches-current.json must contain a non-empty array.",
+      "> football-predict@0.0.0 validate:data",
+      "      \"validationOk\": true,",
+      "  \"error\": \"npm run validate:data exited with 1\",",
+      "      \"validate:data\"",
+      "    \"message\": \"npm run validate:data exited with 1\",",
+      "      \"validationReady\": true,",
+      "        \"validationReady\": true,",
+      "        \"validationReady\": true,",
+      "          \"validate:data\"",
+      "        \"mode\": \"result-only-recent-archive\",",
+      "        \"error\": \"npm run sync:cloudflare-sporttery-evidence exited with 1\",",
+      "        \"error\": \"npm run sync:server-direct-sporttery-evidence exited with 1\",",
+      "    \"error\": \"npm run validate:data exited with 1\",",
+      "    \"error\": \"npm run validate:data exited with 1\",",
+      "        \"validate:data:consolidated-slow-publication\",",
+      "        \"validate:data:post-enrichment\",",
+      "        \"validate:data\",",
+      "matches-current.json must contain a non-empty array.",
+      "> football-predict@0.0.0 validate:data",
+      "      \"validationOk\": true,",
+      "  \"error\": \"npm run validate:data exited with 1\",",
+      "      \"validate:data\"",
+      "    \"message\": \"npm run validate:data exited with 1\",",
+      "      \"validationReady\": true,",
+      "        \"validationReady\": true,",
+      "        \"validationReady\": true,",
+      "          \"validate:data\"",
+      "        \"mode\": \"result-only-recent-archive\",",
+      "        \"error\": \"npm run sync:cloudflare-sporttery-evidence exited with 1\",",
+      "        \"error\": \"npm run sync:server-direct-sporttery-evidence exited with 1\",",
+      "    \"error\": \"npm run validate:data exited with 1\",",
+      "    \"error\": \"npm run validate:data exited with 1\",",
+      "        \"validate:data:consolidated-slow-publication\",",
+      "        \"validate:data:post-enrichment\",",
+      "        \"validate:data\",",
+      "matches-current.json must contain a non-empty array.",
+      "> football-predict@0.0.0 validate:data",
+      "      \"validationOk\": true,",
+      "  \"error\": \"npm run validate:data exited with 1\",",
+      "      \"validate:data\"",
+      "    \"message\": \"npm run validate:data exited with 1\",",
+      "      \"validationReady\": true,",
+      "        \"validationReady\": true,",
+      "        \"validationReady\": true,",
+      "          \"validate:data\"",
+      "        \"mode\": \"result-only-recent-archive\",",
+      "        \"error\": \"npm run sync:cloudflare-sporttery-evidence exited with 1\",",
+      "        \"error\": \"npm run sync:server-direct-sporttery-evidence exited with 1\",",
+      "    \"error\": \"npm run validate:data exited with 1\",",
+      "    \"error\": \"npm run validate:data exited with 1\",",
+      "        \"validate:data:consolidated-slow-publication\",",
+      "        \"validate:data:post-enrichment\",",
+      "        \"validate:data\",",
+      "matches-current.json must contain a non-empty array.",
+      "> football-predict@0.0.0 validate:data",
+      "      \"validationOk\": true,",
+      "  \"error\": \"npm run validate:data exited with 1\",",
+      "      \"validate:data\"",
+      "    \"message\": \"npm run validate:data exited with 1\",",
+      "      \"validationReady\": true,",
+      "        \"validationReady\": true,",
+      "        \"validationReady\": true,",
+      "          \"validate:data\"",
+      "        \"mode\": \"result-only-recent-archive\",",
+      "        \"error\": \"npm run sync:cloudflare-sporttery-evidence exited with 1\",",
+      "        \"error\": \"npm run sync:server-direct-sporttery-evidence exited with 1\",",
+      "    \"error\": \"npm run validate:data exited with 1\",",
+      "    \"error\": \"npm run validate:data exited with 1\","
+    ],
+    "truncated": false
+  },
+  "completedAt": "2026-10-02T16:14:20.537097+00:00",
+  "transport": {
+    "host": "134.175.132.183",
+    "fingerprint": "SHA256:t3Y9DoAdbURl0ibCHQEYENSARoqcm3OSK+ERl/Sg8to",
+    "scriptSha256": "b0eb50d548040c4f3310b27fddea63109bd5ddeab2ea6a23c51cb8927d4e6b84",
+    "responseSha256": "d7a23367e2c992fe70a3509058c9437a0ee51e4e55cb714c93d12b93858ada6c",
+    "receivedAt": "2026-10-02T16:14:20.622Z"
+  }
+}

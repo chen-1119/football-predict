@@ -462,14 +462,28 @@ const runCommand = (command, args, extraEnv = {}, options = {}) => {
   const terminateGraceMs = Math.max(1, Number(options.terminateGraceMs || commandTerminateGraceMs));
   const forceSettleMs = Math.max(1, Number(options.forceSettleMs || commandForceSettleMs));
   const useShell = process.platform === "win32" && /\.(?:cmd|bat)$/i.test(String(command));
+  // Capture only the validator's bounded stderr while retaining its normal
+  // journal output. Other command streams and admission checks stay unchanged.
+  const captureStderr = options.captureStderr === true && !options.stdio;
+  const stderrLimitBytes = 8192;
+  let capturedStderr = Buffer.alloc(0);
+  let stderrTruncated = false;
   const child = spawn(command, args, {
     cwd: rootDir,
     env: { ...process.env, ...extraEnv },
     shell: useShell,
     detached: process.platform !== "win32",
     windowsHide: true,
-    stdio: options.stdio || "inherit"
+    stdio: options.stdio || (captureStderr ? ["inherit", "inherit", "pipe"] : "inherit")
   });
+  if (captureStderr) {
+    child.stderr.on("data", (chunk) => {
+      process.stderr.write(chunk);
+      const nextStderr = Buffer.concat([capturedStderr, Buffer.from(chunk)]);
+      if (nextStderr.length > stderrLimitBytes) stderrTruncated = true;
+      capturedStderr = nextStderr.subarray(-stderrLimitBytes);
+    });
+  }
   runtimeShutdownController.register(child);
   let settled = false;
   let timedOut = false;
@@ -496,7 +510,7 @@ const runCommand = (command, args, extraEnv = {}, options = {}) => {
     }, terminateGraceMs);
   }, timeoutMs);
   child.on("error", (error) => finish(reject, timedOut ? timeoutError : error));
-  child.on("exit", (code, signal) => {
+  child.on(captureStderr ? "close" : "exit", (code, signal) => {
     const finishedAt = new Date().toISOString();
     if (timedOut) {
       timeoutError.signal = signal || null;
@@ -514,6 +528,10 @@ const runCommand = (command, args, extraEnv = {}, options = {}) => {
     error.args = args;
     error.exitCode = code;
     error.signal = signal || null;
+    if (captureStderr) {
+      error.stderr = capturedStderr.toString("utf8");
+      error.stderrTruncated = stderrTruncated;
+    }
     finish(reject, error);
   });
   });
@@ -2728,6 +2746,8 @@ const workerHistoryFields = (status = null) => {
     ? status.lastError
     : legacyError;
   return {
+    ...(process.env.SYNC_WORKER_SOURCE_SHADOW === "1" && status?.sourceCollectionShadow
+      ? { sourceCollectionShadow: status.sourceCollectionShadow } : {}),
     lastCycle,
     lastCompleteCycle,
     lastSuccessAt: status?.lastSuccessAt
@@ -2752,6 +2772,36 @@ const workerHistoryFields = (status = null) => {
 };
 
 let workerStatusState = readJson(statusFile, null);
+
+// Optional observation only. Keep module loading and snapshot reads out of the
+// default path; none of these suggested delays controls the worker scheduler.
+const observeWorkerSourceCollectionShadow = ({
+  asOf,
+  previous = null,
+  enabled = process.env.SYNC_WORKER_SOURCE_SHADOW === "1",
+  sourceFiles = null,
+  readFiles = null,
+  readClosure = () => readJson(path.join(storeDir, "sporttery-sales-closure-verified.json"), null),
+} = {}) => {
+  if (!enabled) return null;
+  try {
+    const files = sourceFiles || [relaySnapshotPath,
+      ...(fs.existsSync(`${relaySnapshotPath}.last-failed.json`) ? [`${relaySnapshotPath}.last-failed.json`] : [])];
+    const read = readFiles || require("./sourceCollectorShadowAdapter.cjs").readSourceCollectorShadowFiles;
+    return read(files, { asOf, previous, closure: readClosure(), sourceDataUpdatedAt: null });
+  } catch {
+    // An unavailable observer is not a successful source attempt and must not
+    // erase the previous sequence or allow the same attempt to count twice.
+    return {
+      version: "source-collector-shadow-v1", state: "unknown-evidence", reason: "shadow-adapter-unavailable",
+      blockers: ["shadow-adapter-unavailable"], attemptKey: previous?.attemptKey || null,
+      consecutiveFailures: Number.isSafeInteger(previous?.consecutiveFailures) && previous.consecutiveFailures >= 0
+        ? previous.consecutiveFailures : 0,
+      retryAfterSeconds: null, nextAttemptAt: null, sourceDataUpdatedAt: null,
+      shadowOnly: true, publicationAction: "none", schedulingApplied: false,
+    };
+  }
+};
 
 const describeSlowPhaseNeed = ({
   releasePriority = false,
@@ -3328,7 +3378,8 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       timeoutMs: commandTimeouts.validation,
     });
     const dataValidationStep = await runCommand(npmCommand, ["run", "validate:data"], {}, {
-      timeoutMs: commandTimeouts.validation
+      timeoutMs: commandTimeouts.validation,
+      captureStderr: true,
     });
     await onBeforeHeavyStep("datastore:generation:official");
     const officialGenerationStep = await runOptional(true, "datastore:generation", {
@@ -3534,6 +3585,10 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       run: (extraEnv) => runEnrichment(true, "sync:openfootball-observations", extraEnv),
     });
     const footballDataFixturesStatus = readJson(footballDataFixturesStatusFile, null);
+    const openLigaDbShadowStep = await runEnrichment(
+      process.env.ENABLE_OPENLIGADB_SHADOW_SYNC === "1",
+      "sync:openligadb-shadow",
+    );
     enrichmentSteps.push(await runFootballDataFixtureRetry({
       enabled: process.env.ENABLE_FOOTBALL_DATA_FIXTURES_SYNC !== "0",
       checkedAt: footballDataFixturesStatus?.checkedAt,
@@ -3854,6 +3909,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     });
     const slowSteps = [
       communityReceiptStep,
+      openLigaDbShadowStep,
       ...enrichmentSteps,
       sourceValidationStep,
       postEnrichmentDataValidationStep,
@@ -3906,6 +3962,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       releaseEnrichmentReuse,
       enrichmentSteps,
       communityReceiptStep,
+      openLigaDbShadowStep,
       sourceValidationStep,
       postEnrichmentDataValidationStep,
       postEnrichmentPublicationPlan,
@@ -4195,6 +4252,39 @@ const nextCycleDelayMs = (
   const startedAtMs = Date.parse(cycleStartedAt || "");
   const elapsedMs = Number.isFinite(startedAtMs) ? Math.max(0, now - startedAtMs) : 0;
   return Math.max(minimumLoopIdleMs, Math.max(0, Number(intervalMs || 0) - elapsedMs));
+};
+
+const describeCurrentSourceFailureCooldown = (error, syncMeta) => {
+  const stderrLines = typeof error?.stderr === "string"
+    ? error.stderr.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+    : [];
+  const api = syncMeta?.api;
+  const coverage = api?.fallbackCoverage;
+  // This is scheduling evidence only. A successful empty response, including
+  // a sales pause, cannot authorize fixtures, fresh SP, or a new publication.
+  // A second validator error, missing metadata, or another command must keep
+  // the ordinary failure path; never classify them using an empty list alone.
+  if (error?.code !== "SYNC_WORKER_COMMAND_FAILED"
+      || error.exitCode !== 1
+      || error.signal
+      || error.stderrTruncated !== false
+      || !/(?:^|[\\/])npm(?:\.cmd)?$/.test(String(error.command || ""))
+      || !Array.isArray(error.args)
+      || error.args.length !== 2
+      || error.args[0] !== "run"
+      || error.args[1] !== "validate:data"
+      || stderrLines.length !== 1
+      || stderrLines[0] !== "matches-current.json must contain a non-empty array."
+      || syncMeta?.files?.current !== 0
+      || !Number.isSafeInteger(syncMeta?.files?.history)
+      || syncMeta.files.history <= 0
+      || api?.transport !== "relay-history-only"
+      || api.currentStale !== true
+      || coverage?.currentMatches !== 0
+      || coverage.currentSportteryMatches !== 0
+      || coverage.officialOddsMatches !== 0
+      || coverage.currentLaneFresh !== false) return null;
+  return { reason: "current-source-empty", minimumDelayMs: 300_000, fromCompletion: true };
 };
 
 const main = async () => {
@@ -4565,6 +4655,12 @@ const main = async () => {
       const nextWakeAt = loop
         ? new Date(Date.now() + (relayCatchupRequired ? 0 : loopDelayMs)).toISOString()
         : null;
+      // Reset a failure sequence only when the adapter observes a verified
+      // available/closed source response. Worker success alone is not proof;
+      // skipped cycles retain the existing sequence without another read.
+      const sourceCollectionShadow = completedCycle.ok === true && completedCycle.skipped !== true
+        ? observeWorkerSourceCollectionShadow({ asOf: new Date().toISOString(), previous: workerStatusState?.sourceCollectionShadow })
+        : runningHistory.sourceCollectionShadow;
       writeWorkerStatus({
         ok: true,
         type: "sync-worker-cycle",
@@ -4602,6 +4698,7 @@ const main = async () => {
           : runningHistory.lastSlowPhaseAt,
         lastCycleDurationMs: completedCycle.durationMs,
         lastError: null,
+        ...(sourceCollectionShadow ? { sourceCollectionShadow } : {}),
         nextWakeAt
       });
       console.log(JSON.stringify({ type: "sync-worker-cycle", ...completedCycle }, null, 2));
@@ -4640,14 +4737,22 @@ const main = async () => {
         "post-deadline-near-kickoff",
         "recent-kickoff",
       ].includes(nextCadence.reason);
-      relayWakeEligible = nextCadence.mode === "hot" && !postDeadlineCooldown;
+      const currentSourceCooldown = describeCurrentSourceFailureCooldown(
+        error,
+        readJson(path.join(rootDir, "public", "data", "sync-meta.json"), null),
+      );
+      relayWakeEligible = nextCadence.mode === "hot" && !postDeadlineCooldown && !currentSourceCooldown;
       loopDelayMs = nextCycleDelayMs(
         activeCycleStartedAt,
         nextCadence.intervalMs,
         Date.now(),
-        { fromCompletion: postDeadlineCooldown || nextCadence.mode === "hot" },
+        { fromCompletion: Boolean(currentSourceCooldown) || postDeadlineCooldown || nextCadence.mode === "hot" },
       );
+      if (currentSourceCooldown) loopDelayMs = Math.max(currentSourceCooldown.minimumDelayMs, loopDelayMs);
       const nextWakeAt = loop ? new Date(Date.now() + loopDelayMs).toISOString() : null;
+      const sourceCollectionShadow = observeWorkerSourceCollectionShadow({
+        asOf: failedAt, previous: workerStatusState?.sourceCollectionShadow,
+      });
       const failure = {
         type: "sync-worker-failed",
         ok: false,
@@ -4658,6 +4763,8 @@ const main = async () => {
         pid: process.pid,
         cadence: nextCadence,
         phase: "failed",
+        ...(currentSourceCooldown ? { failureCooldown: { ...currentSourceCooldown, delayMs: loopDelayMs } } : {}),
+        ...(sourceCollectionShadow ? { sourceCollectionShadow } : {}),
         pipeline: describeCycleStages(),
         wake: cycleWake,
         relayWake: {
@@ -4767,6 +4874,7 @@ module.exports = {
   createWorkerShutdownController,
   describeCycleStages,
   describeConsolidatedSlowPublicationNeed,
+  describeCurrentSourceFailureCooldown,
   describeFiveHundredResultFallbackNeed,
   describeCandidateDeadlineStartupAdmission,
   describeModelStrategyReconciliationNeed,
@@ -4781,6 +4889,7 @@ module.exports = {
   modelCandidateRegistryLockTimeoutMs,
   nextCycleDelayMs,
   officialPublishEvidenceAfter,
+  observeWorkerSourceCollectionShadow,
   officialCompensationRequired,
   phaseLockWaitMs,
   releaseCycleDelayMs,

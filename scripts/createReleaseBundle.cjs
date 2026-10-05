@@ -410,6 +410,7 @@ const requiredEntries = [
   "scripts/footballDataDiscipline.cjs",
   "scripts/verifyFootballDataDiscipline.cjs",
   "server/index.cjs",
+  "server/preMatchCurrentCohort.cjs",
   "server/candidateProspectiveTemporalAudit.cjs",
   "scripts/verifyCandidateProspectiveTemporalAudit.cjs",
   "server/recommendationProjectionParity.cjs",

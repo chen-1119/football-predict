@@ -1,0 +1,655 @@
+{
+  "version": "quality-history-independent-evidence-v1",
+  "ok": true,
+  "checks": [
+    {
+      "name": "exported-events-unique",
+      "ok": true
+    },
+    {
+      "name": "saved-admission-exactly-matches-revalidated-pairs",
+      "ok": true
+    },
+    {
+      "name": "saved-original-records-match-independent-admission",
+      "ok": true
+    },
+    {
+      "name": "per-match-evidence-event-set-and-order",
+      "ok": true
+    },
+    {
+      "name": "per-match-evidence-admission-and-reasons",
+      "ok": true
+    },
+    {
+      "name": "complete-exclusion-funnel-reconciles",
+      "ok": true
+    },
+    {
+      "name": "selection-counts-reconcile",
+      "ok": true
+    },
+    {
+      "name": "feature-presence-does-not-grant-replay",
+      "ok": true
+    },
+    {
+      "name": "same-decision-odds-clocks",
+      "ok": true
+    },
+    {
+      "name": "paired-review-identical-events",
+      "ok": true
+    },
+    {
+      "name": "model-market-same-row-probabilities-and-odds",
+      "ok": true
+    },
+    {
+      "name": "publishedModel-metrics-and-reliability-recomputed",
+      "ok": true
+    },
+    {
+      "name": "sameDecisionMarket-metrics-and-reliability-recomputed",
+      "ok": true
+    },
+    {
+      "name": "paired-bootstrap-pairedRows-recomputed",
+      "ok": true
+    },
+    {
+      "name": "paired-bootstrap-matchDayBlocks-recomputed",
+      "ok": true
+    },
+    {
+      "name": "paired-bootstrap-iterations-recomputed",
+      "ok": true
+    },
+    {
+      "name": "paired-bootstrap-seed-recomputed",
+      "ok": true
+    },
+    {
+      "name": "paired-bootstrap-minRows-recomputed",
+      "ok": true
+    },
+    {
+      "name": "paired-bootstrap-minBlocks-recomputed",
+      "ok": true
+    },
+    {
+      "name": "paired-bootstrap-intervalAvailable-recomputed",
+      "ok": true
+    },
+    {
+      "name": "paired-bootstrap-promotionEvidence-recomputed",
+      "ok": true
+    },
+    {
+      "name": "paired-bootstrap-metrics-recomputed",
+      "ok": true
+    },
+    {
+      "name": "paired-counts-and-coverage",
+      "ok": true
+    },
+    {
+      "name": "publishedModel-league-group-counts",
+      "ok": true
+    },
+    {
+      "name": "publishedModel-actualOutcome-group-counts",
+      "ok": true
+    },
+    {
+      "name": "publishedModel-favoriteSpBand-group-counts",
+      "ok": true
+    },
+    {
+      "name": "publishedModel-featureCoverage-group-counts",
+      "ok": true
+    },
+    {
+      "name": "sameDecisionMarket-league-group-counts",
+      "ok": true
+    },
+    {
+      "name": "sameDecisionMarket-actualOutcome-group-counts",
+      "ok": true
+    },
+    {
+      "name": "sameDecisionMarket-favoriteSpBand-group-counts",
+      "ok": true
+    },
+    {
+      "name": "sameDecisionMarket-featureCoverage-group-counts",
+      "ok": true
+    },
+    {
+      "name": "review-replay-identity-separated",
+      "ok": true
+    },
+    {
+      "name": "154-not-claimed-as-published-145",
+      "ok": true
+    },
+    {
+      "name": "known-history-not-prospective-confirmation",
+      "ok": true
+    },
+    {
+      "name": "protocol-not-changed",
+      "ok": true
+    },
+    {
+      "name": "september-early-train-chronology-membership",
+      "ok": true
+    },
+    {
+      "name": "september-early-calibration-chronology-membership",
+      "ok": true
+    },
+    {
+      "name": "september-early-validation-chronology-membership",
+      "ok": true
+    },
+    {
+      "name": "september-early-stage-event-sets-disjoint",
+      "ok": true
+    },
+    {
+      "name": "september-expanded-train-chronology-membership",
+      "ok": true
+    },
+    {
+      "name": "september-expanded-calibration-chronology-membership",
+      "ok": true
+    },
+    {
+      "name": "september-expanded-validation-chronology-membership",
+      "ok": true
+    },
+    {
+      "name": "september-expanded-stage-event-sets-disjoint",
+      "ok": true
+    },
+    {
+      "name": "insufficient-training-cannot-select-candidate",
+      "ok": true
+    },
+    {
+      "name": "final-test-not-used-for-selection",
+      "ok": true
+    }
+  ],
+  "blockers": [],
+  "sourceRows": 432,
+  "frozenProbabilityRows": 180,
+  "pairedRows": 154,
+  "trainingTimeValidRows": [
+    0,
+    2
+  ],
+  "pairedDayBootstrap": {
+    "pairedRows": 154,
+    "matchDayBlocks": 21,
+    "iterations": 1000,
+    "seed": 20261002,
+    "minRows": 30,
+    "minBlocks": 10,
+    "intervalAvailable": true,
+    "promotionEvidence": false,
+    "metrics": {
+      "brier": {
+        "delta": 0.06520985808068626,
+        "interval": [
+          0.029707188256881817,
+          0.11765824544231952
+        ]
+      },
+      "logLoss": {
+        "delta": 0.09716269715571065,
+        "interval": [
+          0.047743526830100774,
+          0.1699749430322223
+        ]
+      },
+      "accuracy": {
+        "delta": -0.032467532467532464,
+        "interval": [
+          -0.08917197452229299,
+          0.02247191011235955
+        ]
+      }
+    },
+    "blocks": [
+      {
+        "date": "2026-09-01",
+        "n": 10,
+        "brier": 1.1664668600189194,
+        "logLoss": 1.6180045141751271,
+        "accuracy": -1
+      },
+      {
+        "date": "2026-09-02",
+        "n": 5,
+        "brier": -0.2841145770939664,
+        "logLoss": -0.41743627314317877,
+        "accuracy": -1
+      },
+      {
+        "date": "2026-09-05",
+        "n": 15,
+        "brier": -0.7169934434352331,
+        "logLoss": -0.9324086786200851,
+        "accuracy": 1
+      },
+      {
+        "date": "2026-09-06",
+        "n": 15,
+        "brier": 1.0782091519822647,
+        "logLoss": 1.6790438999021728,
+        "accuracy": 0
+      },
+      {
+        "date": "2026-09-08",
+        "n": 1,
+        "brier": -0.13859367616426832,
+        "logLoss": -0.18744683530762996,
+        "accuracy": 0
+      },
+      {
+        "date": "2026-09-09",
+        "n": 1,
+        "brier": 0.023904673215576988,
+        "logLoss": 0.04427559144466464,
+        "accuracy": 0
+      },
+      {
+        "date": "2026-09-12",
+        "n": 18,
+        "brier": 0.9365883325648175,
+        "logLoss": 1.383952649348942,
+        "accuracy": -4
+      },
+      {
+        "date": "2026-09-13",
+        "n": 4,
+        "brier": 0.7812436788384709,
+        "logLoss": 1.0618233270065547,
+        "accuracy": 1
+      },
+      {
+        "date": "2026-09-15",
+        "n": 3,
+        "brier": 0.7607921159366435,
+        "logLoss": 1.0848252911950602,
+        "accuracy": 0
+      },
+      {
+        "date": "2026-09-17",
+        "n": 1,
+        "brier": 0.3708449776174115,
+        "logLoss": 0.5051040889276236,
+        "accuracy": 0
+      },
+      {
+        "date": "2026-09-18",
+        "n": 1,
+        "brier": 0.3330841599525853,
+        "logLoss": 0.4536402933670097,
+        "accuracy": 0
+      },
+      {
+        "date": "2026-09-19",
+        "n": 18,
+        "brier": -0.3047229473544753,
+        "logLoss": -0.38697626303876365,
+        "accuracy": 0
+      },
+      {
+        "date": "2026-09-20",
+        "n": 15,
+        "brier": 0.28120953442144947,
+        "logLoss": 0.3911049309294571,
+        "accuracy": 0
+      },
+      {
+        "date": "2026-09-23",
+        "n": 1,
+        "brier": 0.023309489106175252,
+        "logLoss": 0.08840957935459093,
+        "accuracy": 0
+      },
+      {
+        "date": "2026-09-24",
+        "n": 2,
+        "brier": 0.31243343165175697,
+        "logLoss": 0.4254358203185796,
+        "accuracy": 0
+      },
+      {
+        "date": "2026-09-25",
+        "n": 8,
+        "brier": 0.43804636490449206,
+        "logLoss": 0.8260808216958606,
+        "accuracy": -1
+      },
+      {
+        "date": "2026-09-26",
+        "n": 9,
+        "brier": 1.2130515061004083,
+        "logLoss": 1.7250315100750138,
+        "accuracy": 0
+      },
+      {
+        "date": "2026-09-27",
+        "n": 11,
+        "brier": 0.5244352763900431,
+        "logLoss": 0.8658305246473939,
+        "accuracy": -1
+      },
+      {
+        "date": "2026-09-28",
+        "n": 7,
+        "brier": 0.6784831188025083,
+        "logLoss": 0.9260994633251414,
+        "accuracy": 1
+      },
+      {
+        "date": "2026-09-29",
+        "n": 7,
+        "brier": 2.5385759556897654,
+        "logLoss": 3.604384471829548,
+        "accuracy": 0
+      },
+      {
+        "date": "2026-09-30",
+        "n": 2,
+        "brier": 0.026064161280338005,
+        "logLoss": 0.2042766345463577,
+        "accuracy": 0
+      }
+    ]
+  },
+  "metrics": {
+    "publishedModel": {
+      "n": 154,
+      "brier": 0.6247951452865699,
+      "logLoss": 1.0400609233658804,
+      "accuracy": 0.5064935064935064
+    },
+    "sameDecisionMarket": {
+      "n": 154,
+      "brier": 0.5595852872058839,
+      "logLoss": 0.9428982262101702,
+      "accuracy": 0.538961038961039
+    }
+  },
+  "envelope": {
+    "rawResponseSha256": "6ed9802d2a9e43930ed5db44a7f7b809145eed8908d8af47770e77a93dddd507",
+    "rawResponseVerified": true,
+    "captureMatchesRawResponse": true,
+    "crossHostClockOrderingAssumed": false,
+    "pythonCanonicalHashesRecomputed": false,
+    "pythonCanonicalHashPolicy": "row/page/object hashes are retained from the hash-bound raw exporter response; no cross-language JSON re-encoding claim",
+    "expectedPublicationMatched": true,
+    "expectedManifestFileMatched": true
+  },
+  "funnel": {
+    "distinctSettledInWindow": 432,
+    "historyRows": 2272,
+    "limitExcluded": 0,
+    "outsideWindow": 1840,
+    "selected": 432,
+    "frozenProbabilityScorable": 180,
+    "sameDecisionPaired": 154,
+    "replayFeatureEligible": 0,
+    "primaryExclusions": {
+      "paired-accepted": 154,
+      "decision-clock-invalid": 199,
+      "frozen-decision-missing": 53,
+      "same-decision-sp-missing": 26
+    },
+    "overlappingExclusionReasons": {
+      "decision-clock-invalid": 199,
+      "clock-or-provider-attestation-rejected": 252,
+      "sp-extraction-or-event-mismatch": 268,
+      "frozen-decision-missing": 53,
+      "frozen-probabilities-invalid": 53,
+      "same-decision-sp-missing": 85
+    },
+    "featureMissing": {
+      "form": 408,
+      "lineup": 432,
+      "injuries": 432,
+      "weather": 432,
+      "xg": 432,
+      "scheduleDensity": 432,
+      "elo": 53,
+      "poisson": 53,
+      "leaguePrior": 53
+    },
+    "featureUnavailability": {
+      "export-omitted": 355,
+      "source-snapshot-field-missing": 2372
+    }
+  },
+  "retrospective": true,
+  "published145Reproduced": false,
+  "prospectiveConfirmation": false,
+  "productionWrites": 0,
+  "productionEligible": false,
+  "deploymentAuthorized": false,
+  "limitations": [
+    "No new production connection. This rechecks the supplied production export, captured registry and receipt; provider payloads are not re-fetched.",
+    "Full source-file hashes were measured by the pinned remote exporter; the complete 127 MB/766 MB source files are not available locally to independently re-stream.",
+    "Original frozen probability scoring is not the original formal recommendation hit rate or the old strict 145-event cohort."
+  ],
+  "verifiedAt": "2026-10-02T14:31:26.882Z",
+  "proof": {
+    "historyCommit": "2d20938a13463294977696cc2fcef92bc746c902",
+    "evidenceWorktreeHead": "2d20938a13463294977696cc2fcef92bc746c902",
+    "implementationHead": "2d20938a13463294977696cc2fcef92bc746c902",
+    "implementationRoot": "C:\\Users\\86188\\Documents\\football\\.codex\\worktrees\\05-history-regression",
+    "implementationFiles": [
+      {
+        "file": "historyRegressionAdmission.cjs",
+        "sha256": "f2d3dd30c0e33cd713e61068d7d6644e516c66062adfec46e8815d1b1c66c870"
+      },
+      {
+        "file": "historyRegressionReplay.cjs",
+        "sha256": "e76a00590c68723d83d8089273e3774f9f4c1d3a1670d25388dc832e72d19860"
+      }
+    ],
+    "fileProofs": [
+      {
+        "path": "outputs/history-regression-20261002/online-sample-v3.json",
+        "bytes": 13970968,
+        "sha256": "151a20c0678b89ec41d0555f06149be75182beba0dbc17cd4a1b5a76435470e1",
+        "storage": "worktree-file",
+        "currentFileSha256": "151a20c0678b89ec41d0555f06149be75182beba0dbc17cd4a1b5a76435470e1",
+        "ok": true
+      },
+      {
+        "path": "outputs/history-regression-20261002/online-sample-v3.json.remote-response.json",
+        "bytes": 9383766,
+        "sha256": "6ed9802d2a9e43930ed5db44a7f7b809145eed8908d8af47770e77a93dddd507",
+        "storage": "worktree-file",
+        "currentFileSha256": "6ed9802d2a9e43930ed5db44a7f7b809145eed8908d8af47770e77a93dddd507",
+        "ok": true
+      },
+      {
+        "path": "outputs/history-regression-20261002/admission-v3.json",
+        "bytes": 4781725,
+        "sha256": "f6438a625a8bd48505a6e12f08c0e6fac6dd4a4363bace896c49cd498448e287",
+        "storage": "worktree-file",
+        "currentFileSha256": "f6438a625a8bd48505a6e12f08c0e6fac6dd4a4363bace896c49cd498448e287",
+        "ok": true
+      },
+      {
+        "path": "outputs/history-regression-20261002/report/attributions.json",
+        "bytes": 258073,
+        "sha256": "08d5a4db8a03ddb46fb0e5c00866c81f7513450283a02197d55ab1d4c286fb29",
+        "storage": "worktree-file",
+        "currentFileSha256": "08d5a4db8a03ddb46fb0e5c00866c81f7513450283a02197d55ab1d4c286fb29",
+        "ok": true
+      },
+      {
+        "path": "outputs/history-regression-20261002/report/per-match-evidence.jsonl",
+        "bytes": 1773821,
+        "sha256": "cebb126e0344787c0cfe4be1773a98d473394b1c6d57cfc32c5704c9abc125b9",
+        "storage": "worktree-file",
+        "currentFileSha256": "cebb126e0344787c0cfe4be1773a98d473394b1c6d57cfc32c5704c9abc125b9",
+        "ok": true
+      },
+      {
+        "path": "outputs/history-regression-20261002/report/reliability.png",
+        "bytes": 153046,
+        "sha256": "fcd71da04ba4a3aabe90c649e03b95ca0db1832027583d241718b1268c402906",
+        "storage": "worktree-file",
+        "currentFileSha256": "fcd71da04ba4a3aabe90c649e03b95ca0db1832027583d241718b1268c402906",
+        "ok": true
+      },
+      {
+        "path": "outputs/history-regression-20261002/report/replay.json",
+        "bytes": 2139824,
+        "sha256": "b1e44f7f8c91e8bf7006e16f770a27b486a9c286166ece25197434260e0e5d43",
+        "storage": "worktree-file",
+        "currentFileSha256": "b1e44f7f8c91e8bf7006e16f770a27b486a9c286166ece25197434260e0e5d43",
+        "ok": true
+      },
+      {
+        "path": "outputs/history-regression-20261002/report/report-manifest.json",
+        "bytes": 835,
+        "sha256": "b3d317575b23b76bfb873c7f0849510fcfdfe18a6defa2b4f69167da5d766800",
+        "storage": "worktree-file",
+        "currentFileSha256": "b3d317575b23b76bfb873c7f0849510fcfdfe18a6defa2b4f69167da5d766800",
+        "ok": true
+      },
+      {
+        "path": "outputs/history-regression-20261002/report/review.json",
+        "bytes": 829240,
+        "sha256": "f7eb506dfb29e4d06235b77a22036c528d27366d7b32196e3da6cb922f041257",
+        "storage": "worktree-file",
+        "currentFileSha256": "f7eb506dfb29e4d06235b77a22036c528d27366d7b32196e3da6cb922f041257",
+        "ok": true
+      },
+      {
+        "path": "outputs/history-regression-20261002/report/summary.json",
+        "bytes": 48029,
+        "sha256": "2d5412b2836fc699c469fa42eccca2d8ec69672cc4e7a3eea7c0326ddd4c6262",
+        "storage": "worktree-file",
+        "currentFileSha256": "2d5412b2836fc699c469fa42eccca2d8ec69672cc4e7a3eea7c0326ddd4c6262",
+        "ok": true
+      },
+      {
+        "path": "docs/history-regression.md",
+        "bytes": 7115,
+        "sha256": "4c2d0e7caf113b93c75bd0222d8e638dfdde46bd7991824e7c0688293e106982",
+        "storage": "worktree-file",
+        "currentFileSha256": "4c2d0e7caf113b93c75bd0222d8e638dfdde46bd7991824e7c0688293e106982",
+        "ok": true
+      },
+      {
+        "path": "docs/history-regression-results-20261002.md",
+        "bytes": 6879,
+        "sha256": "5031dbe29c8d87b1a2554a72712c2979f6b88dadf3a406cd2347f219f044ebed",
+        "storage": "worktree-file",
+        "currentFileSha256": "5031dbe29c8d87b1a2554a72712c2979f6b88dadf3a406cd2347f219f044ebed",
+        "ok": true
+      },
+      {
+        "path": "docs/history-regression-protocol.json",
+        "bytes": 1128,
+        "sha256": "4e6df3c59e1913f24cf0598f7a9ac58b5a77e3878c63b375a8390f56791f5604",
+        "storage": "worktree-file",
+        "currentFileSha256": "4e6df3c59e1913f24cf0598f7a9ac58b5a77e3878c63b375a8390f56791f5604",
+        "ok": true
+      },
+      {
+        "path": "scripts/captureHistoryRegression.cjs",
+        "bytes": 5708,
+        "sha256": "87a9743826595f869ad7ff538459dba50c512d425e7454e83258e3afcf410c6f",
+        "storage": "worktree-file",
+        "currentFileSha256": "87a9743826595f869ad7ff538459dba50c512d425e7454e83258e3afcf410c6f",
+        "ok": true
+      },
+      {
+        "path": "scripts/historyRegressionRemote.py",
+        "bytes": 21862,
+        "sha256": "6a814406b52e70f532e3edc346d906512b6e49d33a667305792a3a1be9488a7b",
+        "storage": "worktree-file",
+        "currentFileSha256": "6a814406b52e70f532e3edc346d906512b6e49d33a667305792a3a1be9488a7b",
+        "ok": true
+      },
+      {
+        "path": "scripts/historyRegressionAdmission.cjs",
+        "bytes": 22151,
+        "sha256": "f2d3dd30c0e33cd713e61068d7d6644e516c66062adfec46e8815d1b1c66c870",
+        "storage": "worktree-file",
+        "currentFileSha256": "f2d3dd30c0e33cd713e61068d7d6644e516c66062adfec46e8815d1b1c66c870",
+        "ok": true
+      },
+      {
+        "path": "scripts/historyRegressionReplay.cjs",
+        "bytes": 34424,
+        "sha256": "e76a00590c68723d83d8089273e3774f9f4c1d3a1670d25388dc832e72d19860",
+        "storage": "worktree-file",
+        "currentFileSha256": "e76a00590c68723d83d8089273e3774f9f4c1d3a1670d25388dc832e72d19860",
+        "ok": true
+      },
+      {
+        "path": "scripts/reportHistoryRegression.cjs",
+        "bytes": 8361,
+        "sha256": "915be5610a1d37c62d54ae8464e90c1772fd3964b0d7c6a87cb100cfa90aa7bc",
+        "storage": "worktree-file",
+        "currentFileSha256": "915be5610a1d37c62d54ae8464e90c1772fd3964b0d7c6a87cb100cfa90aa7bc",
+        "ok": true
+      },
+      {
+        "path": "scripts/plotHistoryRegression.py",
+        "bytes": 1947,
+        "sha256": "51802901b9f1e93a2264ee073edec81d75efdcbbc2b4e7731b6d550494bc95ad",
+        "storage": "worktree-file",
+        "currentFileSha256": "51802901b9f1e93a2264ee073edec81d75efdcbbc2b4e7731b6d550494bc95ad",
+        "ok": true
+      },
+      {
+        "path": "scripts/verifyHistoryRegressionDelivery.cjs",
+        "bytes": 5616,
+        "sha256": "278b19538740ac22ca3da401cb92eb6d7165e92f155d11503ec6105ae4a11453",
+        "storage": "worktree-file",
+        "currentFileSha256": "278b19538740ac22ca3da401cb92eb6d7165e92f155d11503ec6105ae4a11453",
+        "ok": true
+      },
+      {
+        "path": "tests/history-regression-admission.test.cjs",
+        "bytes": 17003,
+        "sha256": "b8682c01f7308eefc897fef536abf94814110e916623239a4508495f38b16298",
+        "storage": "worktree-file",
+        "currentFileSha256": "b8682c01f7308eefc897fef536abf94814110e916623239a4508495f38b16298",
+        "ok": true
+      },
+      {
+        "path": "tests/history-regression-replay.test.cjs",
+        "bytes": 19962,
+        "sha256": "c4319d38f80efceacdd6267ace9778ed2f21d2dc34da0f6e9a5cc3e2251790d5",
+        "storage": "worktree-file",
+        "currentFileSha256": "c4319d38f80efceacdd6267ace9778ed2f21d2dc34da0f6e9a5cc3e2251790d5",
+        "ok": true
+      },
+      {
+        "path": "tests/history-regression-remote.test.py",
+        "bytes": 11143,
+        "sha256": "760ec37149172168b8d0479feb321de42b6b1103610fc1dda22081b918ed19e0",
+        "storage": "worktree-file",
+        "currentFileSha256": "760ec37149172168b8d0479feb321de42b6b1103610fc1dda22081b918ed19e0",
+        "ok": true
+      }
+    ],
+    "receiptSha256": "564a957cc8a73a11ba046e10e87fe859b1d3501dff4f3ca1944e9ea728945191",
+    "priorReceiptSha256": "e6d9c19aebdf561c77449a4d50d1d019b40ea0d375bba0373e40de401901d42b"
+  }
+}

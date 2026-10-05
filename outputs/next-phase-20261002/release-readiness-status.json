@@ -1,0 +1,140 @@
+{
+  "ok": false,
+  "checkedAt": "2026-10-02T15:43:25.259Z",
+  "host": "134.175.132.183",
+  "user": "ubuntu",
+  "publicBaseUrl": "https://134.175.132.183",
+  "sshHostKeyPin": null,
+  "sshHostKeyPinError": "RELEASE_DEPLOY_HOST_KEY_SHA256 must be an explicit OpenSSH SHA-256 fingerprint",
+  "canAttemptDeploy": false,
+  "liveComplete": false,
+  "blockers": [
+    "local release bundle is not valid",
+    "ssh host-key pin invalid: RELEASE_DEPLOY_HOST_KEY_SHA256 must be an explicit OpenSSH SHA-256 fingerprint",
+    "remote release completion marker is missing or does not match the bundle marker"
+  ],
+  "bundle": {
+    "ok": false,
+    "exists": false,
+    "reason": "bundle not found",
+    "bundlePath": null
+  },
+  "sshBanner": {
+    "host": "134.175.132.183",
+    "port": 22,
+    "timeoutMs": 8000,
+    "elapsedMs": 65,
+    "connected": true,
+    "bannerReceived": true,
+    "banner": "SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.16\r\n",
+    "ok": true,
+    "reason": "ssh-banner-received"
+  },
+  "ssh": {
+    "ok": false,
+    "keyExists": false,
+    "keyPath": "C:\\Users\\86188\\Documents\\football\\.codex\\worktrees\\00-integration\\.codex-tmp\\football.pem",
+    "hostKeyPin": null,
+    "reason": "ssh host-key pin invalid: RELEASE_DEPLOY_HOST_KEY_SHA256 must be an explicit OpenSSH SHA-256 fingerprint"
+  },
+  "remoteRelease": {
+    "ok": false,
+    "skipped": true,
+    "reason": "ssh is not reachable",
+    "matchesLocalCandidate": false
+  },
+  "remotePreflight": {
+    "ok": false,
+    "skipped": true,
+    "reason": "ssh is not reachable"
+  },
+  "remoteRecoveryHelper": {
+    "ok": false,
+    "skipped": true,
+    "expectedSha256": null,
+    "reason": "ssh is not reachable"
+  },
+  "remoteCandidateContinuity": {
+    "ok": false,
+    "skipped": true,
+    "reason": "ssh is not reachable"
+  },
+  "public": {
+    "health": {
+      "status": 200,
+      "ok": false,
+      "apiVersion": "v1",
+      "serviceOk": true,
+      "dataFresh": false,
+      "recommendationReliable": false,
+      "checkedAt": "2026-10-02T15:43:24.951Z",
+      "frontendRelease": {
+        "version": "frontend-release-state-v1",
+        "kind": "frontend-only",
+        "phase": "accepted",
+        "runtimeSha256": "4ffe4a6f7328d68b6084b8ef2d51c399306b18e78d05abea9db4566a555f9042",
+        "runtimeSequence": 785,
+        "frontendSha256": "eef4d05777bbe03818b38780c1c26be474e9a09154e8475de9a0520998139f72",
+        "frontendSequence": 787,
+        "indexSha256": "ad35133366c97a22ca8ffbbefcaccf077c48f23789376c6438442922bbbe2ca5",
+        "distTreeHash": "f9966252e50c54bfba2bbd291347576a69429dcf6f571375d7a2aa5fba9261a2",
+        "acceptanceSha256": "a7cc5188038e808bd09126d8d58a00ccc6b01c45bb71687aa3b70cd439bb14ad",
+        "available": true,
+        "consistent": true
+      },
+      "error": null
+    },
+    "sqlite": {
+      "ready": false,
+      "available": false,
+      "reason": "sqlite-retired-postgres-only",
+      "path": null,
+      "counts": {},
+      "readSource": "postgres"
+    },
+    "postgres": {
+      "ready": true,
+      "available": true,
+      "baseReady": true,
+      "baseBlockedReason": null,
+      "counts": {
+        "currentMatches": 1,
+        "historyMatches": 2272,
+        "legacyMatchSnapshots": 0,
+        "oddsSnapshots": 8733,
+        "predictionSnapshots": 50000,
+        "sourceSnapshots": 5921,
+        "privateModelArtifacts": 1
+      },
+      "readSource": "postgres"
+    },
+    "sourceHealth": {
+      "status": 200,
+      "ok": false,
+      "errors": [
+        "sporttery current sync stale 48.38m",
+        "current matches 0 < 1"
+      ],
+      "sourceIds": [
+        "sporttery",
+        "five-hundred",
+        "weather",
+        "free-football",
+        "pre-match"
+      ]
+    },
+    "anonymousDenied": true,
+    "protectedStatuses": [
+      401,
+      401,
+      401
+    ],
+    "protectedStaticDisabled": true,
+    "protectedStaticStatuses": [
+      410,
+      410,
+      410,
+      410
+    ]
+  }
+}

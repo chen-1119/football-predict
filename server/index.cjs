@@ -74,6 +74,7 @@ const {
   candidateHeartbeatPreemptiveSchedule,
 } = require("./candidateHeartbeatSchedule.cjs");
 const { assessOfficialSourceRedundancy } = require("./sourceRedundancy.cjs");
+const { summarizeCurrentPreMatchCohort } = require("./preMatchCurrentCohort.cjs");
 const {
   summarizeTrustedMarketCollectorEvidence,
 } = require("./relayCollectorEvidence.cjs");
@@ -6729,6 +6730,11 @@ const buildSourceHealth = async (generation) => {
   const externalAge = minutesSince(external?.updatedAt);
   const preMatchAge = minutesSince(preMatch?.updatedAt);
   const currentCount = Array.isArray(current) ? current.length : 0;
+  const preMatchCohort = summarizeCurrentPreMatchCohort(
+    current,
+    preMatchMatches,
+    preMatchSummary.coverageByComponent,
+  );
   const currentWithExternal = Array.isArray(current)
     ? current.filter((match) => matchHasExternalSignal(match, externalMatches)).length
     : 0;
@@ -6747,12 +6753,7 @@ const buildSourceHealth = async (generation) => {
         || externalSignalForHealthMatch(match, externalMatches)?.weather
       )).length
     : 0;
-  const currentWithPreMatch = Array.isArray(current)
-    ? current.filter((match) => Boolean(
-        match?.externalSignals?.preMatch
-        || externalSignalForHealthMatch(match, externalMatches)?.preMatch
-      )).length
-    : 0;
+  const currentWithPreMatch = preMatchCohort.alignedRows;
   const sportteryCurrent = Array.isArray(current)
     ? current.filter((match) => String(match?.source || "").toLowerCase() === "sporttery" || String(match?.id || "").startsWith("sporttery_")).length
     : 0;
@@ -6903,14 +6904,12 @@ const buildSourceHealth = async (generation) => {
     + (freeFootballFreshness.stale ? 0 : 25)
     + (ratio(freeFootballReady, Math.max(currentCount, 1)) * 50)
   ) : 0;
-  const preMatchUsableRows = Number.isFinite(Number(preMatchSummary.recommendationUsable))
-    ? Number(preMatchSummary.recommendationUsable)
-    : Number(preMatchSummary.high || 0) + Number(preMatchSummary.medium || 0);
+  const preMatchUsableRows = preMatchCohort.recommendationUsable;
   const preMatchScore = enablePreMatchSignalsSync ? Math.round(
-    ((preMatchCount >= minPreMatchRows) ? 25 : 0)
+    ((preMatchCohort.alignedRows >= minPreMatchRows) ? 25 : 0)
     + (preMatchFreshness.stale ? 0 : 25)
     + (ratio(currentWithPreMatch, Math.max(currentCount, 1)) * 25)
-    + (ratio(preMatchUsableRows, Math.max(preMatchCount, 1)) * 25)
+    + (ratio(preMatchUsableRows, Math.max(currentCount, 1)) * 25)
   ) : 0;
   const fiveHundredUsable = enable500Sync
     && !fiveHundredFreshness.stale
@@ -7213,14 +7212,21 @@ const buildSourceHealth = async (generation) => {
       ...preMatchFreshness,
       metrics: {
         rows: preMatchCount,
-        high: preMatchSummary.high || 0,
-        medium: preMatchSummary.medium || 0,
-        low: preMatchSummary.low || 0,
+        high: preMatchCohort.high,
+        medium: preMatchCohort.medium,
+        low: preMatchCohort.low,
         usableRows: preMatchUsableRows,
         currentMatchesWithPreMatch: currentWithPreMatch,
         currentCoverage: Number(ratio(currentWithPreMatch, Math.max(currentCount, 1)).toFixed(4)),
-        coverageByComponent: preMatchSummary.coverageByComponent || {},
-        gapPriorities: Array.isArray(preMatchSummary.gapPriorities) ? preMatchSummary.gapPriorities.slice(0, 10) : [],
+        coverageScope: "current-read-matches",
+        cohort: {
+          matchCount: preMatchCohort.matchCount,
+          snapshotRows: preMatchCohort.snapshotRows,
+          alignedRows: preMatchCohort.alignedRows,
+          missingRows: preMatchCohort.missingRows,
+        },
+        coverageByComponent: preMatchCohort.coverageByComponent,
+        gapPriorities: preMatchCohort.gapPriorities.slice(0, 10),
         warningCount: Array.isArray(preMatchSummary.warnings) ? preMatchSummary.warnings.length : 0
       }
     }
@@ -7312,13 +7318,20 @@ const buildSourceHealth = async (generation) => {
       updatedAt: preMatch?.updatedAt || null,
       ageMinutes: Number.isFinite(preMatchAge) ? Number(preMatchAge.toFixed(2)) : null,
       matchKeys: preMatchCount,
-      high: preMatchSummary.high || 0,
-      medium: preMatchSummary.medium || 0,
-      low: preMatchSummary.low || 0,
-      recommendationUsable: preMatchSummary.recommendationUsable || 0,
-      analysisComplete: preMatchSummary.analysisComplete || 0,
-      coverageByComponent: preMatchSummary.coverageByComponent || {},
-      gapPriorities: Array.isArray(preMatchSummary.gapPriorities) ? preMatchSummary.gapPriorities.slice(0, 10) : [],
+      high: preMatchCohort.high,
+      medium: preMatchCohort.medium,
+      low: preMatchCohort.low,
+      recommendationUsable: preMatchCohort.recommendationUsable,
+      analysisComplete: preMatchCohort.analysisComplete,
+      coverageScope: "current-read-matches",
+      cohort: {
+        matchCount: preMatchCohort.matchCount,
+        snapshotRows: preMatchCohort.snapshotRows,
+        alignedRows: preMatchCohort.alignedRows,
+        missingRows: preMatchCohort.missingRows,
+      },
+      coverageByComponent: preMatchCohort.coverageByComponent,
+      gapPriorities: preMatchCohort.gapPriorities.slice(0, 10),
       warningCount: Array.isArray(preMatchSummary.warnings) ? preMatchSummary.warnings.length : 0,
     },
     currentMatches: {
@@ -7720,6 +7733,8 @@ const publicSourceHealth = (health) => ({
     matchKeys: health?.preMatchSignals?.matchKeys || 0,
     recommendationUsable: health?.preMatchSignals?.recommendationUsable || 0,
     analysisComplete: health?.preMatchSignals?.analysisComplete || 0,
+    coverageScope: health?.preMatchSignals?.coverageScope || "snapshot",
+    cohort: health?.preMatchSignals?.cohort || null,
     high: health?.preMatchSignals?.high || 0,
     medium: health?.preMatchSignals?.medium || 0,
     low: health?.preMatchSignals?.low || 0,

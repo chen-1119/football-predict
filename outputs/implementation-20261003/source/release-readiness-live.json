@@ -1,0 +1,4684 @@
+{
+  "version": "release-readiness-public-snapshot-v1",
+  "capturedAt": "2026-10-02T16:13:13.510Z",
+  "readOnly": true,
+  "tlsVerified": true,
+  "authenticated": false,
+  "observations": [
+    {
+      "endpoint": "/api/v1/health",
+      "startedAt": "2026-10-02T16:13:11.229Z",
+      "completedAt": "2026-10-02T16:13:13.509Z",
+      "status": 200,
+      "sha256": "20e11306484722e540986a765f87e5caf64b4b407c0a86d8511cc0a05bd377f8",
+      "bytes": 53660,
+      "body": {
+        "ok": false,
+        "apiVersion": "v1",
+        "service": "football-predict-server",
+        "checkedAt": "2026-10-02T16:13:13.358Z",
+        "status": {
+          "serviceOk": true,
+          "dataFresh": false,
+          "sourceHealthOk": false,
+          "fastResultIntegrityOk": true,
+          "fastResultIntegrity": {
+            "available": true,
+            "valid": true,
+            "missing": false,
+            "legacy": false,
+            "reason": null,
+            "revision": 9143,
+            "transition": false,
+            "transitionSource": null,
+            "sqliteReason": null,
+            "validatedAt": null
+          },
+          "officialSourceSinglePoint": true,
+          "officialSourceRedundancy": {
+            "status": "watch",
+            "mode": "no-verified-independent-path",
+            "officialSourceSinglePoint": true,
+            "serverDirectAvailable": false,
+            "serverDirectProof": "none",
+            "trustedCollectorCount": 0,
+            "requiredTrustedCollectors": 2,
+            "collectorProof": "none",
+            "collectorEvidenceScope": "none",
+            "reason": "verified server direct/proxy unavailable and trusted collectors 0/2",
+            "independenceDomains": [],
+            "collectorEvidenceStore": {
+              "version": "sporttery-recent-collector-evidence-summary-v1",
+              "trustRegistryAvailable": true,
+              "maxAgeMinutes": 20,
+              "recentRows": 0,
+              "trustedCollectorCount": 0,
+              "independenceDomains": [],
+              "keyIds": [],
+              "domains": []
+            }
+          },
+          "primarySourceFresh": false,
+          "sourceDataFresh": false,
+          "fallbackDataFresh": false,
+          "fallbackWithinReliableWindow": true,
+          "fallbackAgeSeconds": 116,
+          "primaryAgeSeconds": 176710,
+          "fallbackMaxAgeSeconds": 3600,
+          "servingMode": "critical",
+          "modelEvaluationFresh": true,
+          "modelEvaluationCoverageOk": true,
+          "modelRiskStable": false,
+          "signedTrainingAssetOk": true,
+          "recommendationReliable": false,
+          "recommendationProjectionParityOk": true,
+          "recommendationCoverageOk": true
+        },
+        "sync": {
+          "running": true,
+          "apiSyncRunning": false,
+          "workerRunning": true,
+          "workerOk": true,
+          "workerState": "running",
+          "workerCheckedAt": "2026-10-02T16:13:04.308Z",
+          "workerAgeSeconds": 9,
+          "workerLastSuccessAt": "2026-09-30T15:50:20.314Z",
+          "workerLastCycleDurationMs": 308513,
+          "workerLastError": {
+            "at": "2026-10-02T16:13:04.307Z",
+            "message": "npm run validate:data exited with 1",
+            "code": "SYNC_WORKER_COMMAND_FAILED",
+            "timeoutMs": null
+          },
+          "fastResultWatcher": {
+            "enabled": true,
+            "pollMs": 1000,
+            "timeoutMs": 8000,
+            "terminationGraceMs": 1000,
+            "fingerprintPolicy": "relay-result-semantic-fingerprint-v1",
+            "resultSemanticFingerprintActive": false,
+            "completedResultSemanticFingerprint": false,
+            "running": false,
+            "pending": true,
+            "lastCheckedAt": "2026-10-02T16:13:13.312Z",
+            "lastAttemptAt": "2026-10-02T15:37:17.698Z",
+            "lastSuccessAt": null,
+            "lastPublishedAt": null,
+            "lastLatencyMs": 308,
+            "lastPublishedRows": 0,
+            "inputEvidence": {
+              "lastAuditedAt": "2026-09-30T10:53:49.384Z",
+              "publicationEligibleAtLastAudit": false,
+              "blocker": "relay-fast-envelope-clock-invalid",
+              "resultProbeReceivedAt": "2026-09-30T10:33:48.761Z",
+              "resultProbeAgeSeconds": 193165,
+              "resultProbeFreshness": "stale",
+              "freshnessMaxAgeSeconds": 1200
+            },
+            "lastError": {
+              "at": "2026-10-02T15:37:18.002Z",
+              "code": "PUBLISHER_RETRYABLE_SKIP",
+              "message": "fast result publisher deferred: trusted-fast-result-endpoints-unavailable"
+            },
+            "checks": 273308,
+            "runs": 5224,
+            "coalesced": 11,
+            "deferred": 117441,
+            "lastDeferredAt": "2026-10-02T16:13:13.318Z",
+            "lastDeferredReason": "sync lock held"
+          },
+          "nextWakeAt": null,
+          "cadence": {
+            "mode": "base",
+            "reason": "normal",
+            "intervalSeconds": 300,
+            "workflowMinutes": 5,
+            "hotWindowMinutes": 120
+          },
+          "lastCycle": {
+            "ok": false,
+            "degraded": null,
+            "skipped": null,
+            "reason": null,
+            "startedAt": "2026-10-02T16:07:55.794Z",
+            "finishedAt": "2026-10-02T16:13:04.307Z",
+            "durationMs": 308513,
+            "errorCode": "SYNC_WORKER_COMMAND_FAILED",
+            "timeoutMs": null
+          },
+          "cron": "off",
+          "lastSync": {
+            "type": "sync_failed",
+            "source": "external-sync-worker",
+            "ok": false,
+            "degraded": false,
+            "startedAt": "2026-10-02T16:07:55.794Z",
+            "finishedAt": "2026-10-02T16:13:04.307Z",
+            "durationMs": 308513,
+            "cycleState": "running",
+            "phase": "official-result-failed"
+          },
+          "lastDataPersist": null,
+          "lastDataCompact": null
+        },
+        "data": {
+          "source": "sporttery",
+          "updatedAt": "2026-09-30T15:08:02.777Z",
+          "ageSeconds": 176710,
+          "currentAgeSeconds": 173747,
+          "currentCount": 1,
+          "historyCount": 2272,
+          "currentRead": {
+            "source": "postgres",
+            "stale": false,
+            "count": 1,
+            "blockedReason": null,
+            "sqliteCount": 1,
+            "generationCount": 1,
+            "dbUpdatedAt": "2026-09-30T15:57:25.930Z",
+            "fileUpdatedAt": "2026-09-30T15:08:02.777Z",
+            "sqliteLagSeconds": 0,
+            "sqliteReadGraceSeconds": 600,
+            "checkedAt": "2026-10-02T16:13:13.358Z"
+          },
+          "recommendations": {
+            "version": "current-recommendation-coverage-v6",
+            "scheduledMatches": 0,
+            "bestDirectionMatches": 0,
+            "referenceDirectionMatches": 0,
+            "formalDirectionMatches": 0,
+            "missingDirectionMatches": 0,
+            "watchMatches": 0,
+            "publicationDispositionMatches": 0,
+            "missingDispositionMatches": 0,
+            "trainingBackedMatches": 0,
+            "trainingInputSufficientMatches": 0,
+            "hhadMarketMatches": 0,
+            "hhadBoundDirectionMatches": 0,
+            "hhadMissingDirectionMatches": 0,
+            "hhadOnlyMarketMatches": 0,
+            "dualMarketEligibleMatches": 0,
+            "dualMarketAtomicMatches": 0,
+            "dualMarketAtomicMissingMatches": 0,
+            "dualMarketBindingBlockerCounts": {},
+            "coverageRatio": 1,
+            "dispositionCoverageRatio": 1,
+            "trainingCoverageRatio": 1,
+            "trainingInputSufficientRatio": 1,
+            "hhadDirectionCoverageRatio": 1,
+            "dualMarketAtomicCoverageRatio": 1,
+            "projectionParity": {
+              "version": "current-list-detail-recommendation-parity-v1",
+              "scope": "same-current-read-model-list-detail-projection",
+              "disclosure": "aggregate-counts-only",
+              "checkedRows": 1,
+              "preMatchRows": 1,
+              "resultPhaseRows": 0,
+              "comparableRows": 1,
+              "listCanonicalMissingRows": 0,
+              "detailCanonicalMissingRows": 0,
+              "canonicalDecisionMismatchRows": 0,
+              "hadHhadProjectionMismatchRows": 0,
+              "listHadSupportingDirectionConflictRows": 0,
+              "detailHadSupportingDirectionConflictRows": 0,
+              "identityMismatchRows": 0,
+              "mismatchRows": 0,
+              "ok": true
+            },
+            "trainingCoverageOk": true,
+            "dualMarketAtomicCoverageOk": true,
+            "coverageOk": true
+          },
+          "staleAfterSeconds": 600
+        },
+        "storage": {
+          "sqlite": {
+            "available": false,
+            "retired": true,
+            "reason": "sqlite-retired-postgres-only",
+            "readSource": "postgres",
+            "counts": {},
+            "publication": null
+          },
+          "postgres": {
+            "available": true,
+            "latencyMs": 67,
+            "database": "football",
+            "serverVersion": "16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)",
+            "inRecovery": false,
+            "checkedAt": "2026-10-02T16:13:11.296Z",
+            "exportedAt": "2026-09-30T15:57:22.924Z",
+            "syncMetaUpdatedAt": "2026-09-30T15:08:02.777Z",
+            "publication": {
+              "mode": "active-generation",
+              "generationId": "g-79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273",
+              "manifestHash": "79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273",
+              "sourceCycleId": "sporttery-full-sync:2026-09-30T15:34:00.845Z",
+              "committedAt": "2026-09-30T15:52:07.943Z"
+            },
+            "baseReady": true,
+            "baseBlockedReason": null,
+            "counts": {
+              "currentMatches": 1,
+              "historyMatches": 2272,
+              "legacyMatchSnapshots": 0,
+              "oddsSnapshots": 8733,
+              "predictionSnapshots": 50000,
+              "sourceSnapshots": 5921,
+              "privateModelArtifacts": 1
+            },
+            "latestRun": {
+              "runId": "pg-1790784153270-dc3fe5f58351",
+              "mode": "incremental",
+              "sourceFingerprint": "196d4f3d77ffc8507bfa4842fcf76f3cb09974300b48127559211150e1907d42",
+              "rowCounts": {
+                "aiArena": {
+                  "decisions": 0,
+                  "competitors": 6,
+                  "ledgerEntries": 6,
+                  "deactivatedCompetitors": 0
+                },
+                "semantic": {
+                  "postMatchReviews": 2272,
+                  "resultObservations": 2273,
+                  "frozenRecommendations": 913,
+                  "prunedStaleResultOnlyReviews": 0,
+                  "prunedStaleResultObservations": 0,
+                  "rebasedStaleResultOnlyReviews": 0,
+                  "correctedFrozenRecommendations": 0
+                },
+                "odds_snapshots": 1773,
+                "projectionMeta": 723,
+                "match_snapshots": 2273,
+                "source_snapshots": 3921,
+                "prediction_snapshots": 0
+              },
+              "tableHashes": {
+                "odds_snapshots": "ceac58ec07cbffc288444b8d192c6386e71a799579f4f7911d55c08db897c111",
+                "match_snapshots": "924339379c543da5515e1a00c9c8bf5826aa7dcacf78587b4d3f801a1cf97146",
+                "source_snapshots": "5e164021717e4f6ac73766226e0d896f4003acbb0b3684f3c54ee3ef06ac3ac7",
+                "prediction_snapshots": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              "startedAt": "2026-09-30T15:57:25.899Z",
+              "committedAt": "2026-09-30T15:57:25.930Z",
+              "durationMs": 307371
+            },
+            "effectiveUpdatedAt": "2026-09-30T15:57:25.930Z",
+            "readSource": "primary",
+            "stale": false,
+            "lagSeconds": 0,
+            "withinReadGrace": true,
+            "maxStaleSeconds": 30,
+            "readGraceSeconds": 600
+          },
+          "primary": "postgres",
+          "predictionExecutionCapture": {
+            "status": "watch",
+            "reason": "no-captured-records",
+            "persisted": false,
+            "captured": 0,
+            "attempted": 0,
+            "sourceVerified": false,
+            "productionEligible": false
+          },
+          "fastResultIntegrity": {
+            "available": true,
+            "valid": true,
+            "missing": false,
+            "legacy": false,
+            "reason": null,
+            "revision": 9143,
+            "transition": false,
+            "transitionSource": null,
+            "sqliteReason": null,
+            "validatedAt": null
+          }
+        },
+        "model": {
+          "calibrationVersion": "rolling-calibration-v1",
+          "trainingSignature": "historical-training-v1|xgabora/Club-Football-Match-Data-2000-2025 + martj42/international_results + Football-Data.co.uk incremental results + OpenFootball CC0 fill-only|292936|2026-08-20",
+          "trainingAsset": {
+            "entry": ".release-model-assets/historical-training-index.json",
+            "sourceKind": "signed-release-asset",
+            "validationOk": true,
+            "sha256": "b6c58416e9bb0b36273bacb7aa065a2deb4d97a5a614f6ec0e359daeb15f9d17",
+            "bytes": 13985757,
+            "teams": 1586,
+            "finiteEloTeams": 1312,
+            "minElo": 930.67,
+            "maxElo": 2092.51
+          },
+          "strategyVersion": "self-optimization-v9-formal-ledger",
+          "recommendationSample": 258,
+          "calibrationRecommendationSample": 0,
+          "strategyRecommendationSample": 258,
+          "promotionGateStatus": "shadow",
+          "promotionEligibleScope": "none",
+          "promotionModelSignalReady": false,
+          "onlineEffect": "shadow",
+          "marketBaselineRows": 258,
+          "rollingPassRate": 0.6667,
+          "evaluation": {
+            "ok": true,
+            "generatedAt": "2026-09-30T15:38:01.326Z",
+            "version": "rolling-backtest-v19",
+            "source": "settled-pre-match-predictions",
+            "coverageOk": true,
+            "minCoverageRatio": 0.95,
+            "odds": {
+              "modelRows": 8733,
+              "warehouseRows": 8733,
+              "postgresRows": 8733,
+              "minRows": 8296,
+              "coverageRatio": 1,
+              "ok": true
+            },
+            "predictionSnapshots": {
+              "modelRows": 50000,
+              "warehouseRows": 50000,
+              "postgresRows": 50000,
+              "minRows": 47500,
+              "coverageRatio": 1,
+              "ok": true
+            },
+            "inputAuditOk": true,
+            "riskTier": "degraded",
+            "probabilityRows": 283,
+            "marketBaselineRows": 258
+          },
+          "reliabilitySource": null
+        },
+        "sources": {
+          "ok": false,
+          "checkedAt": "2026-10-02T16:13:13.358Z",
+          "cached": false,
+          "officialSourceSinglePoint": true,
+          "officialSourceRedundancy": {
+            "status": "watch",
+            "mode": "no-verified-independent-path",
+            "officialSourceSinglePoint": true,
+            "serverDirectAvailable": false,
+            "serverDirectProof": "none",
+            "trustedCollectorCount": 0,
+            "requiredTrustedCollectors": 2,
+            "collectorProof": "none",
+            "collectorEvidenceScope": "none",
+            "reason": "verified server direct/proxy unavailable and trusted collectors 0/2",
+            "independenceDomains": [],
+            "collectorEvidenceStore": {
+              "version": "sporttery-recent-collector-evidence-summary-v1",
+              "trustRegistryAvailable": true,
+              "maxAgeMinutes": 20,
+              "recentRows": 0,
+              "trustedCollectorCount": 0,
+              "independenceDomains": [],
+              "keyIds": [],
+              "domains": []
+            }
+          },
+          "mode": {
+            "enable500Sync": true,
+            "enable500DetailsSync": false,
+            "enableWeatherSync": true,
+            "enablePreMatchSignalsSync": true,
+            "enableApiFootballSync": false,
+            "apiFootballSyncMode": "shadow-enrichment",
+            "apiFootballShadowOnly": true,
+            "enableFreeFootballSync": true,
+            "requireExternalSignals": true,
+            "skipSportteryFetch": false,
+            "skipSportteryDirectFetch": true
+          },
+          "sources": [
+            {
+              "id": "sporttery",
+              "label": "China Sporttery",
+              "role": "primary-fixture-odds",
+              "enabled": true,
+              "required": true,
+              "status": "missing",
+              "score": 0,
+              "updatedAt": "2026-10-02T15:56:02.682Z",
+              "ageMinutes": 17.18,
+              "maxAgeMinutes": 20,
+              "stale": true,
+              "metrics": {
+                "currentMatches": 0,
+                "sportteryMatches": 0,
+                "officialOddsMatches": 0,
+                "officialOddsCoverage": 0,
+                "currentStale": true,
+                "resultStale": false,
+                "historyStale": false,
+                "partialStale": true,
+                "transport": "relay-history-only",
+                "relaySnapshot": {
+                  "fileName": "sporttery-relay-snapshot.json",
+                  "lane": "full",
+                  "capturedAt": "2026-10-02T15:56:02.682Z",
+                  "ageMinutes": 17.18,
+                  "maxAgeMinutes": 20,
+                  "stale": false,
+                  "validationOk": true,
+                  "rows": 2289,
+                  "usableEndpoints": 34,
+                  "methods": [
+                    "all",
+                    "calculator",
+                    "concern",
+                    "current",
+                    "live",
+                    "result"
+                  ],
+                  "currentLane": {
+                    "capturedAt": null,
+                    "latestCapturedAt": null,
+                    "ageMinutes": null,
+                    "maxAgeMinutes": 20,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": true,
+                    "rows": 0,
+                    "usableEndpoints": 0,
+                    "methods": []
+                  },
+                  "resultLane": {
+                    "capturedAt": "2026-10-02T15:56:03.103Z",
+                    "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+                    "ageMinutes": 17.17,
+                    "maxAgeMinutes": 20,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": false,
+                    "rows": 10,
+                    "usableEndpoints": 1,
+                    "methods": [
+                      "result"
+                    ]
+                  },
+                  "fullLane": {
+                    "capturedAt": "2026-10-02T15:56:03.103Z",
+                    "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                    "ageMinutes": 17.17,
+                    "maxAgeMinutes": 180,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": false,
+                    "rows": 2289,
+                    "usableEndpoints": 30,
+                    "methods": [
+                      "all",
+                      "result"
+                    ]
+                  },
+                  "historyLane": {
+                    "capturedAt": "2026-10-02T15:56:03.103Z",
+                    "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                    "ageMinutes": 17.17,
+                    "maxAgeMinutes": 180,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": false,
+                    "rows": 2289,
+                    "usableEndpoints": 30,
+                    "methods": [
+                      "all",
+                      "result"
+                    ]
+                  },
+                  "warnings": [],
+                  "collectorState": {
+                    "version": 2,
+                    "updatedAt": "2026-10-02T16:13:03.567Z",
+                    "receivedAt": "2026-10-02T16:13:03.547Z",
+                    "circuitState": "closed",
+                    "consecutiveFullFailures": 0,
+                    "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                    "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                    "lastFullFailedAt": null,
+                    "nextFullProbeAt": null,
+                    "legacyInflatedFailureCount": 550,
+                    "consecutiveCollectFailures": 0,
+                    "lastCollectOkAt": "2026-10-02T15:56:33.764Z",
+                    "lastCollectFailedAt": null,
+                    "lastUploadOkAt": "2026-10-02T16:13:03.567Z",
+                    "lastUploadSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                    "lastUploadSnapshotRows": 2289,
+                    "lastUploadSnapshotUsableEndpoints": 30,
+                    "lastUploadSnapshotTrusted": true,
+                    "lastUploadTrustLevel": "trusted",
+                    "effectiveTrustLevel": "trusted-fallback",
+                    "lastTrustedUploadAt": "2026-10-02T16:13:03.567Z",
+                    "lastPartialLiveUploadAt": "2026-09-30T10:33:02.586Z",
+                    "lastTrustedFallbackAt": "2026-10-02T16:13:03.567Z",
+                    "fallbackSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                    "fallbackSnapshotRows": 2289,
+                    "fallbackSnapshotUsableEndpoints": 30,
+                    "lastRemotePrimaryAt": "2026-08-20T14:00:07.364Z",
+                    "lastRemoteServingMode": "primary",
+                    "fullCircuit": {
+                      "version": 2,
+                      "circuitState": "closed",
+                      "consecutiveFullFailures": 0,
+                      "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                      "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                      "lastFullFailedAt": null,
+                      "nextFullProbeAt": null,
+                      "backoffMinutes": 0,
+                      "legacyInflatedFailureCount": 550
+                    },
+                    "currentLaneState": {
+                      "version": 1,
+                      "consecutiveFailures": 3220,
+                      "lastAttemptAt": "2026-10-02T16:13:03.102Z",
+                      "lastOkAt": "2026-09-30T10:33:02.395Z",
+                      "lastFailedAt": "2026-10-02T16:13:03.102Z",
+                      "rows": 0,
+                      "usableEndpoints": 0
+                    },
+                    "lastFailure": null
+                  },
+                  "collectorAttestation": {
+                    "version": "trusted-market-collector-evidence-v1",
+                    "scope": "current-market-lane",
+                    "trustRegistryAvailable": true,
+                    "eligibleEndpoints": 0,
+                    "trustedEndpoints": 0,
+                    "trustedKeyCount": 0,
+                    "trustedCollectorCount": 0,
+                    "keyIds": [],
+                    "independenceDomains": [],
+                    "unassignedKeyIds": [],
+                    "blockerCounts": {}
+                  },
+                  "currentSource": "full-snapshot",
+                  "resultSource": "full-snapshot",
+                  "fullHistorySource": "full-snapshot",
+                  "storagePolicy": "dual-file-no-flattening",
+                  "fullSnapshot": {
+                    "fileName": "sporttery-relay-snapshot.json",
+                    "lane": "full",
+                    "capturedAt": "2026-10-02T15:56:02.682Z",
+                    "ageMinutes": 17.18,
+                    "maxAgeMinutes": 20,
+                    "stale": false,
+                    "validationOk": true,
+                    "rows": 2289,
+                    "usableEndpoints": 34,
+                    "methods": [
+                      "calculator",
+                      "current",
+                      "concern",
+                      "live",
+                      "result",
+                      "all"
+                    ],
+                    "currentLane": {
+                      "capturedAt": null,
+                      "latestCapturedAt": null,
+                      "ageMinutes": null,
+                      "maxAgeMinutes": 20,
+                      "maxFutureSkewMinutes": 5,
+                      "futureClock": false,
+                      "stale": true,
+                      "rows": 0,
+                      "usableEndpoints": 0,
+                      "methods": []
+                    },
+                    "resultLane": {
+                      "capturedAt": "2026-10-02T15:56:03.103Z",
+                      "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+                      "ageMinutes": 17.17,
+                      "maxAgeMinutes": 20,
+                      "maxFutureSkewMinutes": 5,
+                      "futureClock": false,
+                      "stale": false,
+                      "rows": 10,
+                      "usableEndpoints": 1,
+                      "methods": [
+                        "result"
+                      ]
+                    },
+                    "fullLane": {
+                      "capturedAt": "2026-10-02T15:56:03.103Z",
+                      "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                      "ageMinutes": 17.17,
+                      "maxAgeMinutes": 180,
+                      "maxFutureSkewMinutes": 5,
+                      "futureClock": false,
+                      "stale": false,
+                      "rows": 2289,
+                      "usableEndpoints": 30,
+                      "methods": [
+                        "all",
+                        "result"
+                      ]
+                    },
+                    "historyLane": {
+                      "capturedAt": "2026-10-02T15:56:03.103Z",
+                      "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                      "ageMinutes": 17.17,
+                      "maxAgeMinutes": 180,
+                      "maxFutureSkewMinutes": 5,
+                      "futureClock": false,
+                      "stale": false,
+                      "rows": 2289,
+                      "usableEndpoints": 30,
+                      "methods": [
+                        "all",
+                        "result"
+                      ]
+                    },
+                    "warnings": [],
+                    "collectorState": {
+                      "version": 2,
+                      "updatedAt": "2026-10-02T16:13:03.114Z",
+                      "receivedAt": null,
+                      "circuitState": "closed",
+                      "consecutiveFullFailures": 0,
+                      "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                      "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                      "lastFullFailedAt": null,
+                      "nextFullProbeAt": null,
+                      "legacyInflatedFailureCount": 550,
+                      "consecutiveCollectFailures": 0,
+                      "lastCollectOkAt": "2026-10-02T15:56:33.764Z",
+                      "lastCollectFailedAt": null,
+                      "lastUploadOkAt": "2026-10-02T16:13:03.114Z",
+                      "lastUploadSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                      "lastUploadSnapshotRows": 2289,
+                      "lastUploadSnapshotUsableEndpoints": 30,
+                      "lastUploadSnapshotTrusted": true,
+                      "lastUploadTrustLevel": "trusted",
+                      "effectiveTrustLevel": "trusted-fallback",
+                      "lastTrustedUploadAt": "2026-10-02T16:13:03.114Z",
+                      "lastPartialLiveUploadAt": "2026-09-30T10:33:02.586Z",
+                      "lastTrustedFallbackAt": "2026-10-02T16:13:03.114Z",
+                      "fallbackSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                      "fallbackSnapshotRows": 2289,
+                      "fallbackSnapshotUsableEndpoints": 30,
+                      "lastRemotePrimaryAt": "2026-08-20T14:00:07.364Z",
+                      "lastRemoteServingMode": "primary",
+                      "fullCircuit": {
+                        "version": 2,
+                        "circuitState": "closed",
+                        "consecutiveFullFailures": 0,
+                        "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                        "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                        "lastFullFailedAt": null,
+                        "nextFullProbeAt": null,
+                        "backoffMinutes": 0,
+                        "legacyInflatedFailureCount": 550
+                      },
+                      "currentLaneState": {
+                        "version": 1,
+                        "consecutiveFailures": 3220,
+                        "lastAttemptAt": "2026-10-02T16:13:03.102Z",
+                        "lastOkAt": "2026-09-30T10:33:02.395Z",
+                        "lastFailedAt": "2026-10-02T16:13:03.102Z",
+                        "rows": 0,
+                        "usableEndpoints": 0
+                      },
+                      "lastFailure": null
+                    },
+                    "collectorAttestation": {
+                      "version": "trusted-market-collector-evidence-v1",
+                      "scope": "current-market-lane",
+                      "trustRegistryAvailable": true,
+                      "eligibleEndpoints": 0,
+                      "trustedEndpoints": 0,
+                      "trustedKeyCount": 0,
+                      "trustedCollectorCount": 0,
+                      "keyIds": [],
+                      "independenceDomains": [],
+                      "unassignedKeyIds": [],
+                      "blockerCounts": {}
+                    }
+                  },
+                  "fastLaneSnapshot": {
+                    "fileName": "sporttery-relay-fast-lane.json",
+                    "lane": "fast",
+                    "capturedAt": "2026-09-30T10:33:48.935Z",
+                    "ageMinutes": 3219.41,
+                    "maxAgeMinutes": 20,
+                    "stale": true,
+                    "validationOk": false,
+                    "rows": 12,
+                    "usableEndpoints": 3,
+                    "methods": [
+                      "calculator",
+                      "current",
+                      "result"
+                    ],
+                    "currentLane": {
+                      "capturedAt": "2026-09-30T10:33:48.897Z",
+                      "latestCapturedAt": "2026-09-30T10:33:48.935Z",
+                      "ageMinutes": 3219.41,
+                      "maxAgeMinutes": 20,
+                      "maxFutureSkewMinutes": 5,
+                      "futureClock": false,
+                      "stale": true,
+                      "rows": 2,
+                      "usableEndpoints": 2,
+                      "methods": [
+                        "calculator",
+                        "current"
+                      ]
+                    },
+                    "resultLane": {
+                      "capturedAt": "2026-09-30T10:33:48.761Z",
+                      "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                      "ageMinutes": 3219.41,
+                      "maxAgeMinutes": 20,
+                      "maxFutureSkewMinutes": 5,
+                      "futureClock": false,
+                      "stale": true,
+                      "rows": 10,
+                      "usableEndpoints": 1,
+                      "methods": [
+                        "result"
+                      ]
+                    },
+                    "fullLane": {
+                      "capturedAt": "2026-09-30T10:33:48.761Z",
+                      "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                      "ageMinutes": 3219.41,
+                      "maxAgeMinutes": 180,
+                      "maxFutureSkewMinutes": 5,
+                      "futureClock": false,
+                      "stale": true,
+                      "rows": 10,
+                      "usableEndpoints": 1,
+                      "methods": [
+                        "result"
+                      ]
+                    },
+                    "historyLane": {
+                      "capturedAt": "2026-09-30T10:33:48.761Z",
+                      "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                      "ageMinutes": 3219.41,
+                      "maxAgeMinutes": 180,
+                      "maxFutureSkewMinutes": 5,
+                      "futureClock": false,
+                      "stale": true,
+                      "rows": 10,
+                      "usableEndpoints": 1,
+                      "methods": [
+                        "result"
+                      ]
+                    },
+                    "warnings": [],
+                    "collectorState": null,
+                    "collectorAttestation": {
+                      "version": "trusted-market-collector-evidence-v1",
+                      "scope": "current-market-lane",
+                      "trustRegistryAvailable": true,
+                      "eligibleEndpoints": 2,
+                      "trustedEndpoints": 2,
+                      "trustedKeyCount": 1,
+                      "trustedCollectorCount": 1,
+                      "keyIds": [
+                        "football-mainland-collector-20260728"
+                      ],
+                      "independenceDomains": [
+                        "mainland-collector-runtime-1"
+                      ],
+                      "unassignedKeyIds": [],
+                      "blockerCounts": {}
+                    }
+                  }
+                },
+                "relayFullSnapshot": {
+                  "fileName": "sporttery-relay-snapshot.json",
+                  "lane": "full",
+                  "capturedAt": "2026-10-02T15:56:02.682Z",
+                  "ageMinutes": 17.18,
+                  "maxAgeMinutes": 20,
+                  "stale": false,
+                  "validationOk": true,
+                  "rows": 2289,
+                  "usableEndpoints": 34,
+                  "methods": [
+                    "calculator",
+                    "current",
+                    "concern",
+                    "live",
+                    "result",
+                    "all"
+                  ],
+                  "currentLane": {
+                    "capturedAt": null,
+                    "latestCapturedAt": null,
+                    "ageMinutes": null,
+                    "maxAgeMinutes": 20,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": true,
+                    "rows": 0,
+                    "usableEndpoints": 0,
+                    "methods": []
+                  },
+                  "resultLane": {
+                    "capturedAt": "2026-10-02T15:56:03.103Z",
+                    "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+                    "ageMinutes": 17.17,
+                    "maxAgeMinutes": 20,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": false,
+                    "rows": 10,
+                    "usableEndpoints": 1,
+                    "methods": [
+                      "result"
+                    ]
+                  },
+                  "fullLane": {
+                    "capturedAt": "2026-10-02T15:56:03.103Z",
+                    "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                    "ageMinutes": 17.17,
+                    "maxAgeMinutes": 180,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": false,
+                    "rows": 2289,
+                    "usableEndpoints": 30,
+                    "methods": [
+                      "all",
+                      "result"
+                    ]
+                  },
+                  "historyLane": {
+                    "capturedAt": "2026-10-02T15:56:03.103Z",
+                    "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                    "ageMinutes": 17.17,
+                    "maxAgeMinutes": 180,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": false,
+                    "rows": 2289,
+                    "usableEndpoints": 30,
+                    "methods": [
+                      "all",
+                      "result"
+                    ]
+                  },
+                  "warnings": [],
+                  "collectorState": {
+                    "version": 2,
+                    "updatedAt": "2026-10-02T16:13:03.114Z",
+                    "receivedAt": null,
+                    "circuitState": "closed",
+                    "consecutiveFullFailures": 0,
+                    "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                    "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                    "lastFullFailedAt": null,
+                    "nextFullProbeAt": null,
+                    "legacyInflatedFailureCount": 550,
+                    "consecutiveCollectFailures": 0,
+                    "lastCollectOkAt": "2026-10-02T15:56:33.764Z",
+                    "lastCollectFailedAt": null,
+                    "lastUploadOkAt": "2026-10-02T16:13:03.114Z",
+                    "lastUploadSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                    "lastUploadSnapshotRows": 2289,
+                    "lastUploadSnapshotUsableEndpoints": 30,
+                    "lastUploadSnapshotTrusted": true,
+                    "lastUploadTrustLevel": "trusted",
+                    "effectiveTrustLevel": "trusted-fallback",
+                    "lastTrustedUploadAt": "2026-10-02T16:13:03.114Z",
+                    "lastPartialLiveUploadAt": "2026-09-30T10:33:02.586Z",
+                    "lastTrustedFallbackAt": "2026-10-02T16:13:03.114Z",
+                    "fallbackSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                    "fallbackSnapshotRows": 2289,
+                    "fallbackSnapshotUsableEndpoints": 30,
+                    "lastRemotePrimaryAt": "2026-08-20T14:00:07.364Z",
+                    "lastRemoteServingMode": "primary",
+                    "fullCircuit": {
+                      "version": 2,
+                      "circuitState": "closed",
+                      "consecutiveFullFailures": 0,
+                      "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                      "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                      "lastFullFailedAt": null,
+                      "nextFullProbeAt": null,
+                      "backoffMinutes": 0,
+                      "legacyInflatedFailureCount": 550
+                    },
+                    "currentLaneState": {
+                      "version": 1,
+                      "consecutiveFailures": 3220,
+                      "lastAttemptAt": "2026-10-02T16:13:03.102Z",
+                      "lastOkAt": "2026-09-30T10:33:02.395Z",
+                      "lastFailedAt": "2026-10-02T16:13:03.102Z",
+                      "rows": 0,
+                      "usableEndpoints": 0
+                    },
+                    "lastFailure": null
+                  },
+                  "collectorAttestation": {
+                    "version": "trusted-market-collector-evidence-v1",
+                    "scope": "current-market-lane",
+                    "trustRegistryAvailable": true,
+                    "eligibleEndpoints": 0,
+                    "trustedEndpoints": 0,
+                    "trustedKeyCount": 0,
+                    "trustedCollectorCount": 0,
+                    "keyIds": [],
+                    "independenceDomains": [],
+                    "unassignedKeyIds": [],
+                    "blockerCounts": {}
+                  }
+                },
+                "relayFastLaneSnapshot": {
+                  "fileName": "sporttery-relay-fast-lane.json",
+                  "lane": "fast",
+                  "capturedAt": "2026-09-30T10:33:48.935Z",
+                  "ageMinutes": 3219.41,
+                  "maxAgeMinutes": 20,
+                  "stale": true,
+                  "validationOk": false,
+                  "rows": 12,
+                  "usableEndpoints": 3,
+                  "methods": [
+                    "calculator",
+                    "current",
+                    "result"
+                  ],
+                  "currentLane": {
+                    "capturedAt": "2026-09-30T10:33:48.897Z",
+                    "latestCapturedAt": "2026-09-30T10:33:48.935Z",
+                    "ageMinutes": 3219.41,
+                    "maxAgeMinutes": 20,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": true,
+                    "rows": 2,
+                    "usableEndpoints": 2,
+                    "methods": [
+                      "calculator",
+                      "current"
+                    ]
+                  },
+                  "resultLane": {
+                    "capturedAt": "2026-09-30T10:33:48.761Z",
+                    "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                    "ageMinutes": 3219.41,
+                    "maxAgeMinutes": 20,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": true,
+                    "rows": 10,
+                    "usableEndpoints": 1,
+                    "methods": [
+                      "result"
+                    ]
+                  },
+                  "fullLane": {
+                    "capturedAt": "2026-09-30T10:33:48.761Z",
+                    "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                    "ageMinutes": 3219.41,
+                    "maxAgeMinutes": 180,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": true,
+                    "rows": 10,
+                    "usableEndpoints": 1,
+                    "methods": [
+                      "result"
+                    ]
+                  },
+                  "historyLane": {
+                    "capturedAt": "2026-09-30T10:33:48.761Z",
+                    "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                    "ageMinutes": 3219.41,
+                    "maxAgeMinutes": 180,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": true,
+                    "rows": 10,
+                    "usableEndpoints": 1,
+                    "methods": [
+                      "result"
+                    ]
+                  },
+                  "warnings": [],
+                  "collectorState": null,
+                  "collectorAttestation": {
+                    "version": "trusted-market-collector-evidence-v1",
+                    "scope": "current-market-lane",
+                    "trustRegistryAvailable": true,
+                    "eligibleEndpoints": 2,
+                    "trustedEndpoints": 2,
+                    "trustedKeyCount": 1,
+                    "trustedCollectorCount": 1,
+                    "keyIds": [
+                      "football-mainland-collector-20260728"
+                    ],
+                    "independenceDomains": [
+                      "mainland-collector-runtime-1"
+                    ],
+                    "unassignedKeyIds": [],
+                    "blockerCounts": {}
+                  }
+                },
+                "relayCurrentSource": "full-snapshot",
+                "relayResultSource": "full-snapshot",
+                "relayCurrentFresh": false,
+                "relayCurrentRows": 0,
+                "relayCurrentFreshnessTime": null,
+                "resultLane": {
+                  "capturedAt": "2026-10-02T15:56:03.103Z",
+                  "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+                  "ageMinutes": 17.17,
+                  "maxAgeMinutes": 20,
+                  "maxFutureSkewMinutes": 5,
+                  "futureClock": false,
+                  "stale": false,
+                  "rows": 10,
+                  "usableEndpoints": 1,
+                  "methods": [
+                    "result"
+                  ]
+                },
+                "relayResultFresh": true,
+                "relayResultRows": 10,
+                "relayResultFreshnessTime": "2026-10-02T15:56:03.103Z",
+                "relayHistoryFresh": true,
+                "relayHistoryFreshnessTime": "2026-10-02T15:56:03.103Z",
+                "syncMetaCurrentStale": true,
+                "syncMetaCurrentFreshnessTime": "2026-10-02T15:56:02.682Z",
+                "egress": {
+                  "exists": true,
+                  "ok": true,
+                  "status": "disabled",
+                  "checkedAt": "2026-10-02T16:13:13.327Z",
+                  "transport": "direct-disabled",
+                  "proxyConfigured": false,
+                  "summary": {
+                    "skipped": true,
+                    "wafBlocked": false,
+                    "previousStatus": "disabled",
+                    "previousCheckedAt": "2026-08-18T13:01:40.239Z"
+                  },
+                  "guidance": [
+                    "Sporttery direct fetch is disabled on this overseas server; relay snapshots and supplemental sources are used instead."
+                  ]
+                },
+                "officialSourceRedundancy": {
+                  "status": "watch",
+                  "mode": "no-verified-independent-path",
+                  "officialSourceSinglePoint": true,
+                  "serverDirectAvailable": false,
+                  "serverDirectProof": "none",
+                  "trustedCollectorCount": 0,
+                  "requiredTrustedCollectors": 2,
+                  "collectorProof": "none",
+                  "collectorEvidenceScope": "none",
+                  "reason": "verified server direct/proxy unavailable and trusted collectors 0/2",
+                  "independenceDomains": [],
+                  "collectorEvidenceStore": {
+                    "version": "sporttery-recent-collector-evidence-summary-v1",
+                    "trustRegistryAvailable": true,
+                    "maxAgeMinutes": 20,
+                    "recentRows": 0,
+                    "trustedCollectorCount": 0,
+                    "independenceDomains": [],
+                    "keyIds": [],
+                    "domains": []
+                  }
+                },
+                "currentFreshnessTime": "2026-10-02T15:56:02.682Z",
+                "resultFreshnessTime": "2026-10-02T15:56:03.103Z",
+                "historyFreshnessTime": "2026-10-02T15:56:03.103Z",
+                "fallbackReason": "fresh Sporttery odds unavailable; keeping existing 2297 matches"
+              }
+            },
+            {
+              "id": "five-hundred",
+              "label": "500.com",
+              "role": "supplemental-market-signal",
+              "enabled": true,
+              "required": true,
+              "status": "stale",
+              "score": 60,
+              "updatedAt": "2026-09-30T15:32:42.474Z",
+              "ageMinutes": 2920.51,
+              "maxAgeMinutes": 20,
+              "stale": true,
+              "metrics": {
+                "rows": 204,
+                "mapped": 1002,
+                "detailsRows": 0,
+                "detailsUpdatedThisRun": 0,
+                "detailsStoredTotal": 0,
+                "currentEligibleRows": 0,
+                "detailsCachedMerged": 0,
+                "currentMatchesWithDetails": 0,
+                "currentCoverage": 0,
+                "errors": 0
+              }
+            },
+            {
+              "id": "weather",
+              "label": "Open-Meteo weather",
+              "role": "environment-risk-signal",
+              "enabled": true,
+              "required": false,
+              "status": "unavailable",
+              "score": 0,
+              "updatedAt": "2026-09-30T15:33:47.330Z",
+              "ageMinutes": 2919.43,
+              "maxAgeMinutes": 180,
+              "stale": true,
+              "metrics": {
+                "rows": 0,
+                "mapped": 0,
+                "currentMatchesWithWeather": 0,
+                "currentCoverage": 0,
+                "errors": 0
+              }
+            },
+            {
+              "id": "free-football",
+              "label": "Free public football layer",
+              "role": "zero-key-recommendation-input-fallback",
+              "enabled": true,
+              "required": false,
+              "status": "unavailable",
+              "score": 25,
+              "updatedAt": "2026-10-02T16:11:02.744Z",
+              "ageMinutes": 2.18,
+              "maxAgeMinutes": 20,
+              "stale": false,
+              "metrics": {
+                "rows": 0,
+                "recommendationReady": 0,
+                "recommendationCoverage": 0,
+                "analysisComplete": 0,
+                "grades": {
+                  "A": 0,
+                  "B": 0,
+                  "C": 0,
+                  "D": 0
+                },
+                "keyRequired": false,
+                "apiFootballRequired": false
+              }
+            },
+            {
+              "id": "pre-match",
+              "label": "Pre-match signals",
+              "role": "injury-lineup-referee-risk-signal",
+              "enabled": true,
+              "required": false,
+              "status": "weak",
+              "score": 25,
+              "updatedAt": "2026-10-02T16:11:17.012Z",
+              "ageMinutes": 1.94,
+              "maxAgeMinutes": 20,
+              "stale": false,
+              "metrics": {
+                "rows": 0,
+                "high": 0,
+                "medium": 0,
+                "low": 0,
+                "usableRows": 0,
+                "currentMatchesWithPreMatch": 0,
+                "currentCoverage": 0,
+                "coverageScope": "current-read-matches",
+                "cohort": {
+                  "matchCount": 0,
+                  "snapshotRows": 0,
+                  "alignedRows": 0,
+                  "missingRows": 0
+                },
+                "coverageByComponent": {
+                  "referee": {
+                    "rows": 0,
+                    "verified": 0,
+                    "partial": 0,
+                    "estimated": 0,
+                    "missing": 0,
+                    "not_yet_publishable": 0,
+                    "published_after_cutoff": 0,
+                    "stale_or_unverified": 0,
+                    "connected": 0,
+                    "coverage": 0,
+                    "nextSource": null
+                  },
+                  "teamCards": {
+                    "rows": 0,
+                    "verified": 0,
+                    "partial": 0,
+                    "estimated": 0,
+                    "missing": 0,
+                    "not_yet_publishable": 0,
+                    "published_after_cutoff": 0,
+                    "stale_or_unverified": 0,
+                    "connected": 0,
+                    "coverage": 0,
+                    "nextSource": null
+                  },
+                  "lineup": {
+                    "rows": 0,
+                    "verified": 0,
+                    "partial": 0,
+                    "estimated": 0,
+                    "missing": 0,
+                    "not_yet_publishable": 0,
+                    "published_after_cutoff": 0,
+                    "stale_or_unverified": 0,
+                    "connected": 0,
+                    "coverage": 0,
+                    "nextSource": null
+                  },
+                  "injuries": {
+                    "rows": 0,
+                    "verified": 0,
+                    "partial": 0,
+                    "estimated": 0,
+                    "missing": 0,
+                    "not_yet_publishable": 0,
+                    "published_after_cutoff": 0,
+                    "stale_or_unverified": 0,
+                    "connected": 0,
+                    "coverage": 0,
+                    "nextSource": null
+                  },
+                  "xg": {
+                    "rows": 0,
+                    "verified": 0,
+                    "partial": 0,
+                    "estimated": 0,
+                    "missing": 0,
+                    "not_yet_publishable": 0,
+                    "published_after_cutoff": 0,
+                    "stale_or_unverified": 0,
+                    "connected": 0,
+                    "coverage": 0,
+                    "nextSource": null
+                  },
+                  "weather": {
+                    "rows": 0,
+                    "verified": 0,
+                    "partial": 0,
+                    "estimated": 0,
+                    "missing": 0,
+                    "not_yet_publishable": 0,
+                    "published_after_cutoff": 0,
+                    "stale_or_unverified": 0,
+                    "connected": 0,
+                    "coverage": 0,
+                    "nextSource": null
+                  },
+                  "market": {
+                    "rows": 0,
+                    "verified": 0,
+                    "partial": 0,
+                    "estimated": 0,
+                    "missing": 0,
+                    "not_yet_publishable": 0,
+                    "published_after_cutoff": 0,
+                    "stale_or_unverified": 0,
+                    "connected": 0,
+                    "coverage": 0,
+                    "nextSource": null
+                  },
+                  "motivation": {
+                    "rows": 0,
+                    "verified": 0,
+                    "partial": 0,
+                    "estimated": 0,
+                    "missing": 0,
+                    "not_yet_publishable": 0,
+                    "published_after_cutoff": 0,
+                    "stale_or_unverified": 0,
+                    "connected": 0,
+                    "coverage": 0,
+                    "nextSource": null
+                  },
+                  "strength": {
+                    "rows": 0,
+                    "verified": 0,
+                    "partial": 0,
+                    "estimated": 0,
+                    "missing": 0,
+                    "not_yet_publishable": 0,
+                    "published_after_cutoff": 0,
+                    "stale_or_unverified": 0,
+                    "connected": 0,
+                    "coverage": 0,
+                    "nextSource": null
+                  },
+                  "form": {
+                    "rows": 0,
+                    "verified": 0,
+                    "partial": 0,
+                    "estimated": 0,
+                    "missing": 0,
+                    "not_yet_publishable": 0,
+                    "published_after_cutoff": 0,
+                    "stale_or_unverified": 0,
+                    "connected": 0,
+                    "coverage": 0,
+                    "nextSource": null
+                  }
+                },
+                "gapPriorities": [],
+                "warningCount": 0
+              }
+            }
+          ],
+          "sourceScores": {
+            "sporttery": {
+              "status": "missing",
+              "score": 0,
+              "stale": true,
+              "updatedAt": "2026-10-02T15:56:02.682Z",
+              "ageMinutes": 17.18
+            },
+            "five-hundred": {
+              "status": "stale",
+              "score": 60,
+              "stale": true,
+              "updatedAt": "2026-09-30T15:32:42.474Z",
+              "ageMinutes": 2920.51
+            },
+            "weather": {
+              "status": "unavailable",
+              "score": 0,
+              "stale": true,
+              "updatedAt": "2026-09-30T15:33:47.330Z",
+              "ageMinutes": 2919.43
+            },
+            "free-football": {
+              "status": "unavailable",
+              "score": 25,
+              "stale": false,
+              "updatedAt": "2026-10-02T16:11:02.744Z",
+              "ageMinutes": 2.18
+            },
+            "pre-match": {
+              "status": "weak",
+              "score": 25,
+              "stale": false,
+              "updatedAt": "2026-10-02T16:11:17.012Z",
+              "ageMinutes": 1.94
+            }
+          },
+          "sportteryEgress": {
+            "exists": true,
+            "ok": true,
+            "status": "disabled",
+            "checkedAt": "2026-10-02T16:13:13.327Z",
+            "transport": "direct-disabled",
+            "proxyConfigured": false,
+            "summary": {
+              "skipped": true,
+              "wafBlocked": false,
+              "previousStatus": "disabled",
+              "previousCheckedAt": "2026-08-18T13:01:40.239Z"
+            },
+            "guidance": [
+              "Sporttery direct fetch is disabled on this overseas server; relay snapshots and supplemental sources are used instead."
+            ]
+          },
+          "sportteryRelaySnapshot": {
+            "fileName": "sporttery-relay-snapshot.json",
+            "lane": "full",
+            "capturedAt": "2026-10-02T15:56:02.682Z",
+            "ageMinutes": 17.18,
+            "maxAgeMinutes": 20,
+            "stale": false,
+            "validationOk": true,
+            "rows": 2289,
+            "usableEndpoints": 34,
+            "methods": [
+              "all",
+              "calculator",
+              "concern",
+              "current",
+              "live",
+              "result"
+            ],
+            "currentLane": {
+              "capturedAt": null,
+              "latestCapturedAt": null,
+              "ageMinutes": null,
+              "maxAgeMinutes": 20,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 0,
+              "usableEndpoints": 0,
+              "methods": []
+            },
+            "resultLane": {
+              "capturedAt": "2026-10-02T15:56:03.103Z",
+              "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+              "ageMinutes": 17.17,
+              "maxAgeMinutes": 20,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": false,
+              "rows": 10,
+              "usableEndpoints": 1,
+              "methods": [
+                "result"
+              ]
+            },
+            "fullLane": {
+              "capturedAt": "2026-10-02T15:56:03.103Z",
+              "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+              "ageMinutes": 17.17,
+              "maxAgeMinutes": 180,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": false,
+              "rows": 2289,
+              "usableEndpoints": 30,
+              "methods": [
+                "all",
+                "result"
+              ]
+            },
+            "historyLane": {
+              "capturedAt": "2026-10-02T15:56:03.103Z",
+              "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+              "ageMinutes": 17.17,
+              "maxAgeMinutes": 180,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": false,
+              "rows": 2289,
+              "usableEndpoints": 30,
+              "methods": [
+                "all",
+                "result"
+              ]
+            },
+            "warnings": [],
+            "collectorState": {
+              "version": 2,
+              "updatedAt": "2026-10-02T16:13:03.567Z",
+              "receivedAt": "2026-10-02T16:13:03.547Z",
+              "circuitState": "closed",
+              "consecutiveFullFailures": 0,
+              "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+              "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+              "lastFullFailedAt": null,
+              "nextFullProbeAt": null,
+              "legacyInflatedFailureCount": 550,
+              "consecutiveCollectFailures": 0,
+              "lastCollectOkAt": "2026-10-02T15:56:33.764Z",
+              "lastCollectFailedAt": null,
+              "lastUploadOkAt": "2026-10-02T16:13:03.567Z",
+              "lastUploadSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+              "lastUploadSnapshotRows": 2289,
+              "lastUploadSnapshotUsableEndpoints": 30,
+              "lastUploadSnapshotTrusted": true,
+              "lastUploadTrustLevel": "trusted",
+              "effectiveTrustLevel": "trusted-fallback",
+              "lastTrustedUploadAt": "2026-10-02T16:13:03.567Z",
+              "lastPartialLiveUploadAt": "2026-09-30T10:33:02.586Z",
+              "lastTrustedFallbackAt": "2026-10-02T16:13:03.567Z",
+              "fallbackSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+              "fallbackSnapshotRows": 2289,
+              "fallbackSnapshotUsableEndpoints": 30,
+              "lastRemotePrimaryAt": "2026-08-20T14:00:07.364Z",
+              "lastRemoteServingMode": "primary",
+              "fullCircuit": {
+                "version": 2,
+                "circuitState": "closed",
+                "consecutiveFullFailures": 0,
+                "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                "lastFullFailedAt": null,
+                "nextFullProbeAt": null,
+                "backoffMinutes": 0,
+                "legacyInflatedFailureCount": 550
+              },
+              "currentLaneState": {
+                "version": 1,
+                "consecutiveFailures": 3220,
+                "lastAttemptAt": "2026-10-02T16:13:03.102Z",
+                "lastOkAt": "2026-09-30T10:33:02.395Z",
+                "lastFailedAt": "2026-10-02T16:13:03.102Z",
+                "rows": 0,
+                "usableEndpoints": 0
+              },
+              "lastFailure": null
+            },
+            "collectorAttestation": {
+              "version": "trusted-market-collector-evidence-v1",
+              "scope": "current-market-lane",
+              "trustRegistryAvailable": true,
+              "eligibleEndpoints": 0,
+              "trustedEndpoints": 0,
+              "trustedKeyCount": 0,
+              "trustedCollectorCount": 0,
+              "keyIds": [],
+              "independenceDomains": [],
+              "unassignedKeyIds": [],
+              "blockerCounts": {}
+            },
+            "currentSource": "full-snapshot",
+            "resultSource": "full-snapshot",
+            "fullHistorySource": "full-snapshot",
+            "storagePolicy": "dual-file-no-flattening",
+            "fullSnapshot": {
+              "fileName": "sporttery-relay-snapshot.json",
+              "lane": "full",
+              "capturedAt": "2026-10-02T15:56:02.682Z",
+              "ageMinutes": 17.18,
+              "maxAgeMinutes": 20,
+              "stale": false,
+              "validationOk": true,
+              "rows": 2289,
+              "usableEndpoints": 34,
+              "methods": [
+                "calculator",
+                "current",
+                "concern",
+                "live",
+                "result",
+                "all"
+              ],
+              "currentLane": {
+                "capturedAt": null,
+                "latestCapturedAt": null,
+                "ageMinutes": null,
+                "maxAgeMinutes": 20,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": true,
+                "rows": 0,
+                "usableEndpoints": 0,
+                "methods": []
+              },
+              "resultLane": {
+                "capturedAt": "2026-10-02T15:56:03.103Z",
+                "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+                "ageMinutes": 17.17,
+                "maxAgeMinutes": 20,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": false,
+                "rows": 10,
+                "usableEndpoints": 1,
+                "methods": [
+                  "result"
+                ]
+              },
+              "fullLane": {
+                "capturedAt": "2026-10-02T15:56:03.103Z",
+                "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                "ageMinutes": 17.17,
+                "maxAgeMinutes": 180,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": false,
+                "rows": 2289,
+                "usableEndpoints": 30,
+                "methods": [
+                  "all",
+                  "result"
+                ]
+              },
+              "historyLane": {
+                "capturedAt": "2026-10-02T15:56:03.103Z",
+                "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                "ageMinutes": 17.17,
+                "maxAgeMinutes": 180,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": false,
+                "rows": 2289,
+                "usableEndpoints": 30,
+                "methods": [
+                  "all",
+                  "result"
+                ]
+              },
+              "warnings": [],
+              "collectorState": {
+                "version": 2,
+                "updatedAt": "2026-10-02T16:13:03.114Z",
+                "receivedAt": null,
+                "circuitState": "closed",
+                "consecutiveFullFailures": 0,
+                "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                "lastFullFailedAt": null,
+                "nextFullProbeAt": null,
+                "legacyInflatedFailureCount": 550,
+                "consecutiveCollectFailures": 0,
+                "lastCollectOkAt": "2026-10-02T15:56:33.764Z",
+                "lastCollectFailedAt": null,
+                "lastUploadOkAt": "2026-10-02T16:13:03.114Z",
+                "lastUploadSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                "lastUploadSnapshotRows": 2289,
+                "lastUploadSnapshotUsableEndpoints": 30,
+                "lastUploadSnapshotTrusted": true,
+                "lastUploadTrustLevel": "trusted",
+                "effectiveTrustLevel": "trusted-fallback",
+                "lastTrustedUploadAt": "2026-10-02T16:13:03.114Z",
+                "lastPartialLiveUploadAt": "2026-09-30T10:33:02.586Z",
+                "lastTrustedFallbackAt": "2026-10-02T16:13:03.114Z",
+                "fallbackSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                "fallbackSnapshotRows": 2289,
+                "fallbackSnapshotUsableEndpoints": 30,
+                "lastRemotePrimaryAt": "2026-08-20T14:00:07.364Z",
+                "lastRemoteServingMode": "primary",
+                "fullCircuit": {
+                  "version": 2,
+                  "circuitState": "closed",
+                  "consecutiveFullFailures": 0,
+                  "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                  "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                  "lastFullFailedAt": null,
+                  "nextFullProbeAt": null,
+                  "backoffMinutes": 0,
+                  "legacyInflatedFailureCount": 550
+                },
+                "currentLaneState": {
+                  "version": 1,
+                  "consecutiveFailures": 3220,
+                  "lastAttemptAt": "2026-10-02T16:13:03.102Z",
+                  "lastOkAt": "2026-09-30T10:33:02.395Z",
+                  "lastFailedAt": "2026-10-02T16:13:03.102Z",
+                  "rows": 0,
+                  "usableEndpoints": 0
+                },
+                "lastFailure": null
+              },
+              "collectorAttestation": {
+                "version": "trusted-market-collector-evidence-v1",
+                "scope": "current-market-lane",
+                "trustRegistryAvailable": true,
+                "eligibleEndpoints": 0,
+                "trustedEndpoints": 0,
+                "trustedKeyCount": 0,
+                "trustedCollectorCount": 0,
+                "keyIds": [],
+                "independenceDomains": [],
+                "unassignedKeyIds": [],
+                "blockerCounts": {}
+              }
+            },
+            "fastLaneSnapshot": {
+              "fileName": "sporttery-relay-fast-lane.json",
+              "lane": "fast",
+              "capturedAt": "2026-09-30T10:33:48.935Z",
+              "ageMinutes": 3219.41,
+              "maxAgeMinutes": 20,
+              "stale": true,
+              "validationOk": false,
+              "rows": 12,
+              "usableEndpoints": 3,
+              "methods": [
+                "calculator",
+                "current",
+                "result"
+              ],
+              "currentLane": {
+                "capturedAt": "2026-09-30T10:33:48.897Z",
+                "latestCapturedAt": "2026-09-30T10:33:48.935Z",
+                "ageMinutes": 3219.41,
+                "maxAgeMinutes": 20,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": true,
+                "rows": 2,
+                "usableEndpoints": 2,
+                "methods": [
+                  "calculator",
+                  "current"
+                ]
+              },
+              "resultLane": {
+                "capturedAt": "2026-09-30T10:33:48.761Z",
+                "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                "ageMinutes": 3219.41,
+                "maxAgeMinutes": 20,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": true,
+                "rows": 10,
+                "usableEndpoints": 1,
+                "methods": [
+                  "result"
+                ]
+              },
+              "fullLane": {
+                "capturedAt": "2026-09-30T10:33:48.761Z",
+                "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                "ageMinutes": 3219.41,
+                "maxAgeMinutes": 180,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": true,
+                "rows": 10,
+                "usableEndpoints": 1,
+                "methods": [
+                  "result"
+                ]
+              },
+              "historyLane": {
+                "capturedAt": "2026-09-30T10:33:48.761Z",
+                "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                "ageMinutes": 3219.41,
+                "maxAgeMinutes": 180,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": true,
+                "rows": 10,
+                "usableEndpoints": 1,
+                "methods": [
+                  "result"
+                ]
+              },
+              "warnings": [],
+              "collectorState": null,
+              "collectorAttestation": {
+                "version": "trusted-market-collector-evidence-v1",
+                "scope": "current-market-lane",
+                "trustRegistryAvailable": true,
+                "eligibleEndpoints": 2,
+                "trustedEndpoints": 2,
+                "trustedKeyCount": 1,
+                "trustedCollectorCount": 1,
+                "keyIds": [
+                  "football-mainland-collector-20260728"
+                ],
+                "independenceDomains": [
+                  "mainland-collector-runtime-1"
+                ],
+                "unassignedKeyIds": [],
+                "blockerCounts": {}
+              }
+            }
+          },
+          "sportteryRelayFullSnapshot": {
+            "fileName": "sporttery-relay-snapshot.json",
+            "lane": "full",
+            "capturedAt": "2026-10-02T15:56:02.682Z",
+            "ageMinutes": 17.18,
+            "maxAgeMinutes": 20,
+            "stale": false,
+            "validationOk": true,
+            "rows": 2289,
+            "usableEndpoints": 34,
+            "methods": [
+              "calculator",
+              "current",
+              "concern",
+              "live",
+              "result",
+              "all"
+            ],
+            "currentLane": {
+              "capturedAt": null,
+              "latestCapturedAt": null,
+              "ageMinutes": null,
+              "maxAgeMinutes": 20,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 0,
+              "usableEndpoints": 0,
+              "methods": []
+            },
+            "resultLane": {
+              "capturedAt": "2026-10-02T15:56:03.103Z",
+              "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+              "ageMinutes": 17.17,
+              "maxAgeMinutes": 20,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": false,
+              "rows": 10,
+              "usableEndpoints": 1,
+              "methods": [
+                "result"
+              ]
+            },
+            "fullLane": {
+              "capturedAt": "2026-10-02T15:56:03.103Z",
+              "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+              "ageMinutes": 17.17,
+              "maxAgeMinutes": 180,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": false,
+              "rows": 2289,
+              "usableEndpoints": 30,
+              "methods": [
+                "all",
+                "result"
+              ]
+            },
+            "historyLane": {
+              "capturedAt": "2026-10-02T15:56:03.103Z",
+              "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+              "ageMinutes": 17.17,
+              "maxAgeMinutes": 180,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": false,
+              "rows": 2289,
+              "usableEndpoints": 30,
+              "methods": [
+                "all",
+                "result"
+              ]
+            },
+            "warnings": [],
+            "collectorState": {
+              "version": 2,
+              "updatedAt": "2026-10-02T16:13:03.114Z",
+              "receivedAt": null,
+              "circuitState": "closed",
+              "consecutiveFullFailures": 0,
+              "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+              "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+              "lastFullFailedAt": null,
+              "nextFullProbeAt": null,
+              "legacyInflatedFailureCount": 550,
+              "consecutiveCollectFailures": 0,
+              "lastCollectOkAt": "2026-10-02T15:56:33.764Z",
+              "lastCollectFailedAt": null,
+              "lastUploadOkAt": "2026-10-02T16:13:03.114Z",
+              "lastUploadSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+              "lastUploadSnapshotRows": 2289,
+              "lastUploadSnapshotUsableEndpoints": 30,
+              "lastUploadSnapshotTrusted": true,
+              "lastUploadTrustLevel": "trusted",
+              "effectiveTrustLevel": "trusted-fallback",
+              "lastTrustedUploadAt": "2026-10-02T16:13:03.114Z",
+              "lastPartialLiveUploadAt": "2026-09-30T10:33:02.586Z",
+              "lastTrustedFallbackAt": "2026-10-02T16:13:03.114Z",
+              "fallbackSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+              "fallbackSnapshotRows": 2289,
+              "fallbackSnapshotUsableEndpoints": 30,
+              "lastRemotePrimaryAt": "2026-08-20T14:00:07.364Z",
+              "lastRemoteServingMode": "primary",
+              "fullCircuit": {
+                "version": 2,
+                "circuitState": "closed",
+                "consecutiveFullFailures": 0,
+                "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                "lastFullFailedAt": null,
+                "nextFullProbeAt": null,
+                "backoffMinutes": 0,
+                "legacyInflatedFailureCount": 550
+              },
+              "currentLaneState": {
+                "version": 1,
+                "consecutiveFailures": 3220,
+                "lastAttemptAt": "2026-10-02T16:13:03.102Z",
+                "lastOkAt": "2026-09-30T10:33:02.395Z",
+                "lastFailedAt": "2026-10-02T16:13:03.102Z",
+                "rows": 0,
+                "usableEndpoints": 0
+              },
+              "lastFailure": null
+            },
+            "collectorAttestation": {
+              "version": "trusted-market-collector-evidence-v1",
+              "scope": "current-market-lane",
+              "trustRegistryAvailable": true,
+              "eligibleEndpoints": 0,
+              "trustedEndpoints": 0,
+              "trustedKeyCount": 0,
+              "trustedCollectorCount": 0,
+              "keyIds": [],
+              "independenceDomains": [],
+              "unassignedKeyIds": [],
+              "blockerCounts": {}
+            }
+          },
+          "sportteryRelayFastLaneSnapshot": {
+            "fileName": "sporttery-relay-fast-lane.json",
+            "lane": "fast",
+            "capturedAt": "2026-09-30T10:33:48.935Z",
+            "ageMinutes": 3219.41,
+            "maxAgeMinutes": 20,
+            "stale": true,
+            "validationOk": false,
+            "rows": 12,
+            "usableEndpoints": 3,
+            "methods": [
+              "calculator",
+              "current",
+              "result"
+            ],
+            "currentLane": {
+              "capturedAt": "2026-09-30T10:33:48.897Z",
+              "latestCapturedAt": "2026-09-30T10:33:48.935Z",
+              "ageMinutes": 3219.41,
+              "maxAgeMinutes": 20,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 2,
+              "usableEndpoints": 2,
+              "methods": [
+                "calculator",
+                "current"
+              ]
+            },
+            "resultLane": {
+              "capturedAt": "2026-09-30T10:33:48.761Z",
+              "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+              "ageMinutes": 3219.41,
+              "maxAgeMinutes": 20,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 10,
+              "usableEndpoints": 1,
+              "methods": [
+                "result"
+              ]
+            },
+            "fullLane": {
+              "capturedAt": "2026-09-30T10:33:48.761Z",
+              "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+              "ageMinutes": 3219.41,
+              "maxAgeMinutes": 180,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 10,
+              "usableEndpoints": 1,
+              "methods": [
+                "result"
+              ]
+            },
+            "historyLane": {
+              "capturedAt": "2026-09-30T10:33:48.761Z",
+              "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+              "ageMinutes": 3219.41,
+              "maxAgeMinutes": 180,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 10,
+              "usableEndpoints": 1,
+              "methods": [
+                "result"
+              ]
+            },
+            "warnings": [],
+            "collectorState": null,
+            "collectorAttestation": {
+              "version": "trusted-market-collector-evidence-v1",
+              "scope": "current-market-lane",
+              "trustRegistryAvailable": true,
+              "eligibleEndpoints": 2,
+              "trustedEndpoints": 2,
+              "trustedKeyCount": 1,
+              "trustedCollectorCount": 1,
+              "keyIds": [
+                "football-mainland-collector-20260728"
+              ],
+              "independenceDomains": [
+                "mainland-collector-runtime-1"
+              ],
+              "unassignedKeyIds": [],
+              "blockerCounts": {}
+            }
+          },
+          "externalSignals": {
+            "exists": true,
+            "updatedAt": "2026-10-02T16:11:17.012Z",
+            "ageMinutes": 1.94,
+            "matchKeys": 8301,
+            "fiveHundredRows": 204,
+            "fiveHundredMapped": 1002,
+            "fiveHundredDetailsRows": 0,
+            "fiveHundredDetailsUpdatedThisRun": 0,
+            "fiveHundredDetailsStoredTotal": 0,
+            "fiveHundredCurrentEligibleRows": 0,
+            "fiveHundredCurrentMatchesWithDetails": 0,
+            "fiveHundredDetailsCachedMerged": 0,
+            "apiFootballConfigured": true,
+            "apiFootballEnabled": false,
+            "apiFootballStatus": "disabled",
+            "apiFootballSyncMode": "shadow-enrichment",
+            "apiFootballShadowOnly": true,
+            "apiFootballFeatures": {
+              "injuries": true,
+              "lineups": true,
+              "liveScore": false,
+              "odds": false
+            },
+            "apiFootballAuthority": {
+              "officialFixtureIdentity": false,
+              "officialOdds": false,
+              "officialResult": false,
+              "settlement": false,
+              "formalRecommendation": false
+            },
+            "replacementSource": "free-public-football",
+            "freeFootballUpdatedAt": "2026-10-02T16:11:02.744Z",
+            "freeFootballRows": 0,
+            "freeFootballRecommendationReady": 0,
+            "freeFootballRecommendationCoverage": 0,
+            "apiFootballMappedSignals": 0,
+            "apiFootballUpdatedAt": "2026-09-28T08:21:08.078Z"
+          },
+          "preMatchSignals": {
+            "exists": true,
+            "updatedAt": "2026-10-02T16:11:17.012Z",
+            "ageMinutes": 1.94,
+            "matchKeys": 0,
+            "recommendationUsable": 0,
+            "analysisComplete": 0,
+            "coverageScope": "current-read-matches",
+            "cohort": {
+              "matchCount": 0,
+              "snapshotRows": 0,
+              "alignedRows": 0,
+              "missingRows": 0
+            },
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "coverageByComponent": {
+              "referee": {
+                "rows": 0,
+                "verified": 0,
+                "partial": 0,
+                "estimated": 0,
+                "missing": 0,
+                "not_yet_publishable": 0,
+                "published_after_cutoff": 0,
+                "stale_or_unverified": 0,
+                "connected": 0,
+                "coverage": 0,
+                "nextSource": null
+              },
+              "teamCards": {
+                "rows": 0,
+                "verified": 0,
+                "partial": 0,
+                "estimated": 0,
+                "missing": 0,
+                "not_yet_publishable": 0,
+                "published_after_cutoff": 0,
+                "stale_or_unverified": 0,
+                "connected": 0,
+                "coverage": 0,
+                "nextSource": null
+              },
+              "lineup": {
+                "rows": 0,
+                "verified": 0,
+                "partial": 0,
+                "estimated": 0,
+                "missing": 0,
+                "not_yet_publishable": 0,
+                "published_after_cutoff": 0,
+                "stale_or_unverified": 0,
+                "connected": 0,
+                "coverage": 0,
+                "nextSource": null
+              },
+              "injuries": {
+                "rows": 0,
+                "verified": 0,
+                "partial": 0,
+                "estimated": 0,
+                "missing": 0,
+                "not_yet_publishable": 0,
+                "published_after_cutoff": 0,
+                "stale_or_unverified": 0,
+                "connected": 0,
+                "coverage": 0,
+                "nextSource": null
+              },
+              "xg": {
+                "rows": 0,
+                "verified": 0,
+                "partial": 0,
+                "estimated": 0,
+                "missing": 0,
+                "not_yet_publishable": 0,
+                "published_after_cutoff": 0,
+                "stale_or_unverified": 0,
+                "connected": 0,
+                "coverage": 0,
+                "nextSource": null
+              },
+              "weather": {
+                "rows": 0,
+                "verified": 0,
+                "partial": 0,
+                "estimated": 0,
+                "missing": 0,
+                "not_yet_publishable": 0,
+                "published_after_cutoff": 0,
+                "stale_or_unverified": 0,
+                "connected": 0,
+                "coverage": 0,
+                "nextSource": null
+              },
+              "market": {
+                "rows": 0,
+                "verified": 0,
+                "partial": 0,
+                "estimated": 0,
+                "missing": 0,
+                "not_yet_publishable": 0,
+                "published_after_cutoff": 0,
+                "stale_or_unverified": 0,
+                "connected": 0,
+                "coverage": 0,
+                "nextSource": null
+              },
+              "motivation": {
+                "rows": 0,
+                "verified": 0,
+                "partial": 0,
+                "estimated": 0,
+                "missing": 0,
+                "not_yet_publishable": 0,
+                "published_after_cutoff": 0,
+                "stale_or_unverified": 0,
+                "connected": 0,
+                "coverage": 0,
+                "nextSource": null
+              },
+              "strength": {
+                "rows": 0,
+                "verified": 0,
+                "partial": 0,
+                "estimated": 0,
+                "missing": 0,
+                "not_yet_publishable": 0,
+                "published_after_cutoff": 0,
+                "stale_or_unverified": 0,
+                "connected": 0,
+                "coverage": 0,
+                "nextSource": null
+              },
+              "form": {
+                "rows": 0,
+                "verified": 0,
+                "partial": 0,
+                "estimated": 0,
+                "missing": 0,
+                "not_yet_publishable": 0,
+                "published_after_cutoff": 0,
+                "stale_or_unverified": 0,
+                "connected": 0,
+                "coverage": 0,
+                "nextSource": null
+              }
+            },
+            "gapPriorities": [],
+            "warningCount": 0
+          },
+          "currentMatches": {
+            "count": 0,
+            "withExternalSignals": 0,
+            "externalCoverage": 0,
+            "withSportteryOdds": 0,
+            "withReferenceOdds": 0,
+            "withFiveHundredDetails": 0,
+            "withWeather": 0,
+            "withPreMatchSignals": 0
+          },
+          "fallbackCoverage": {
+            "servingMode": "critical",
+            "usable": false,
+            "primaryStale": true,
+            "currentMatches": 0,
+            "coveredByFiveHundredDetails": 0,
+            "fiveHundredCoverage": 0,
+            "fiveHundredCoveragePercent": 0,
+            "referenceOddsMatches": 0,
+            "referenceOddsCoverage": 0,
+            "referenceOddsCoveragePercent": 0,
+            "freshExternalSignals": false,
+            "updatedAt": "2026-09-30T15:32:42.474Z",
+            "detailsUpdatedAt": null,
+            "fallbackReason": "fresh Sporttery odds unavailable; keeping existing 2297 matches",
+            "currentLaneFresh": false,
+            "relayCurrentFresh": false,
+            "relayCurrentRows": 0,
+            "relayCurrentFreshnessTime": null,
+            "resultLane": {
+              "capturedAt": "2026-10-02T15:56:03.103Z",
+              "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+              "ageMinutes": 17.17,
+              "maxAgeMinutes": 20,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": false,
+              "rows": 10,
+              "usableEndpoints": 1,
+              "methods": [
+                "result"
+              ]
+            },
+            "relayResultFresh": true,
+            "relayResultRows": 10,
+            "relayResultFreshnessTime": "2026-10-02T15:56:03.103Z",
+            "relayHistoryFresh": true,
+            "relayHistoryFreshnessTime": "2026-10-02T15:56:03.103Z",
+            "relayCurrentSource": "full-snapshot",
+            "relayResultSource": "full-snapshot",
+            "relayFullSnapshot": {
+              "fileName": "sporttery-relay-snapshot.json",
+              "lane": "full",
+              "capturedAt": "2026-10-02T15:56:02.682Z",
+              "ageMinutes": 17.18,
+              "maxAgeMinutes": 20,
+              "stale": false,
+              "validationOk": true,
+              "rows": 2289,
+              "usableEndpoints": 34,
+              "methods": [
+                "calculator",
+                "current",
+                "concern",
+                "live",
+                "result",
+                "all"
+              ],
+              "currentLane": {
+                "capturedAt": null,
+                "latestCapturedAt": null,
+                "ageMinutes": null,
+                "maxAgeMinutes": 20,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": true,
+                "rows": 0,
+                "usableEndpoints": 0,
+                "methods": []
+              },
+              "resultLane": {
+                "capturedAt": "2026-10-02T15:56:03.103Z",
+                "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+                "ageMinutes": 17.17,
+                "maxAgeMinutes": 20,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": false,
+                "rows": 10,
+                "usableEndpoints": 1,
+                "methods": [
+                  "result"
+                ]
+              },
+              "fullLane": {
+                "capturedAt": "2026-10-02T15:56:03.103Z",
+                "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                "ageMinutes": 17.17,
+                "maxAgeMinutes": 180,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": false,
+                "rows": 2289,
+                "usableEndpoints": 30,
+                "methods": [
+                  "all",
+                  "result"
+                ]
+              },
+              "historyLane": {
+                "capturedAt": "2026-10-02T15:56:03.103Z",
+                "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                "ageMinutes": 17.17,
+                "maxAgeMinutes": 180,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": false,
+                "rows": 2289,
+                "usableEndpoints": 30,
+                "methods": [
+                  "all",
+                  "result"
+                ]
+              },
+              "warnings": [],
+              "collectorState": {
+                "version": 2,
+                "updatedAt": "2026-10-02T16:13:03.114Z",
+                "receivedAt": null,
+                "circuitState": "closed",
+                "consecutiveFullFailures": 0,
+                "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                "lastFullFailedAt": null,
+                "nextFullProbeAt": null,
+                "legacyInflatedFailureCount": 550,
+                "consecutiveCollectFailures": 0,
+                "lastCollectOkAt": "2026-10-02T15:56:33.764Z",
+                "lastCollectFailedAt": null,
+                "lastUploadOkAt": "2026-10-02T16:13:03.114Z",
+                "lastUploadSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                "lastUploadSnapshotRows": 2289,
+                "lastUploadSnapshotUsableEndpoints": 30,
+                "lastUploadSnapshotTrusted": true,
+                "lastUploadTrustLevel": "trusted",
+                "effectiveTrustLevel": "trusted-fallback",
+                "lastTrustedUploadAt": "2026-10-02T16:13:03.114Z",
+                "lastPartialLiveUploadAt": "2026-09-30T10:33:02.586Z",
+                "lastTrustedFallbackAt": "2026-10-02T16:13:03.114Z",
+                "fallbackSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                "fallbackSnapshotRows": 2289,
+                "fallbackSnapshotUsableEndpoints": 30,
+                "lastRemotePrimaryAt": "2026-08-20T14:00:07.364Z",
+                "lastRemoteServingMode": "primary",
+                "fullCircuit": {
+                  "version": 2,
+                  "circuitState": "closed",
+                  "consecutiveFullFailures": 0,
+                  "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                  "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                  "lastFullFailedAt": null,
+                  "nextFullProbeAt": null,
+                  "backoffMinutes": 0,
+                  "legacyInflatedFailureCount": 550
+                },
+                "currentLaneState": {
+                  "version": 1,
+                  "consecutiveFailures": 3220,
+                  "lastAttemptAt": "2026-10-02T16:13:03.102Z",
+                  "lastOkAt": "2026-09-30T10:33:02.395Z",
+                  "lastFailedAt": "2026-10-02T16:13:03.102Z",
+                  "rows": 0,
+                  "usableEndpoints": 0
+                },
+                "lastFailure": null
+              },
+              "collectorAttestation": {
+                "version": "trusted-market-collector-evidence-v1",
+                "scope": "current-market-lane",
+                "trustRegistryAvailable": true,
+                "eligibleEndpoints": 0,
+                "trustedEndpoints": 0,
+                "trustedKeyCount": 0,
+                "trustedCollectorCount": 0,
+                "keyIds": [],
+                "independenceDomains": [],
+                "unassignedKeyIds": [],
+                "blockerCounts": {}
+              }
+            },
+            "relayFastLaneSnapshot": {
+              "fileName": "sporttery-relay-fast-lane.json",
+              "lane": "fast",
+              "capturedAt": "2026-09-30T10:33:48.935Z",
+              "ageMinutes": 3219.41,
+              "maxAgeMinutes": 20,
+              "stale": true,
+              "validationOk": false,
+              "rows": 12,
+              "usableEndpoints": 3,
+              "methods": [
+                "calculator",
+                "current",
+                "result"
+              ],
+              "currentLane": {
+                "capturedAt": "2026-09-30T10:33:48.897Z",
+                "latestCapturedAt": "2026-09-30T10:33:48.935Z",
+                "ageMinutes": 3219.41,
+                "maxAgeMinutes": 20,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": true,
+                "rows": 2,
+                "usableEndpoints": 2,
+                "methods": [
+                  "calculator",
+                  "current"
+                ]
+              },
+              "resultLane": {
+                "capturedAt": "2026-09-30T10:33:48.761Z",
+                "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                "ageMinutes": 3219.41,
+                "maxAgeMinutes": 20,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": true,
+                "rows": 10,
+                "usableEndpoints": 1,
+                "methods": [
+                  "result"
+                ]
+              },
+              "fullLane": {
+                "capturedAt": "2026-09-30T10:33:48.761Z",
+                "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                "ageMinutes": 3219.41,
+                "maxAgeMinutes": 180,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": true,
+                "rows": 10,
+                "usableEndpoints": 1,
+                "methods": [
+                  "result"
+                ]
+              },
+              "historyLane": {
+                "capturedAt": "2026-09-30T10:33:48.761Z",
+                "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                "ageMinutes": 3219.41,
+                "maxAgeMinutes": 180,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": true,
+                "rows": 10,
+                "usableEndpoints": 1,
+                "methods": [
+                  "result"
+                ]
+              },
+              "warnings": [],
+              "collectorState": null,
+              "collectorAttestation": {
+                "version": "trusted-market-collector-evidence-v1",
+                "scope": "current-market-lane",
+                "trustRegistryAvailable": true,
+                "eligibleEndpoints": 2,
+                "trustedEndpoints": 2,
+                "trustedKeyCount": 1,
+                "trustedCollectorCount": 1,
+                "keyIds": [
+                  "football-mainland-collector-20260728"
+                ],
+                "independenceDomains": [
+                  "mainland-collector-runtime-1"
+                ],
+                "unassignedKeyIds": [],
+                "blockerCounts": {}
+              }
+            },
+            "syncMetaCurrentStale": true
+          },
+          "warnings": [
+            "official Sporttery source redundancy watch: verified server direct/proxy unavailable and trusted collectors 0/2",
+            "sporttery relay fast lane file exists but failed strict provenance or clock validation",
+            "sporttery relay is using the last trusted fallback snapshot; partial live snapshots are not overwriting the source",
+            "pre-match rows 0 < 1"
+          ],
+          "errors": [
+            "sporttery current sync stale 17.18m",
+            "current matches 0 < 1"
+          ]
+        },
+        "frontendRelease": {
+          "version": "frontend-release-state-v1",
+          "kind": "frontend-only",
+          "phase": "accepted",
+          "runtimeSha256": "4ffe4a6f7328d68b6084b8ef2d51c399306b18e78d05abea9db4566a555f9042",
+          "runtimeSequence": 785,
+          "frontendSha256": "eef4d05777bbe03818b38780c1c26be474e9a09154e8475de9a0520998139f72",
+          "frontendSequence": 787,
+          "indexSha256": "ad35133366c97a22ca8ffbbefcaccf077c48f23789376c6438442922bbbe2ca5",
+          "distTreeHash": "f9966252e50c54bfba2bbd291347576a69429dcf6f571375d7a2aa5fba9261a2",
+          "acceptanceSha256": "a7cc5188038e808bd09126d8d58a00ccc6b01c45bb71687aa3b70cd439bb14ad",
+          "available": true,
+          "consistent": true
+        }
+      }
+    },
+    {
+      "endpoint": "/api/v1/source-health",
+      "startedAt": "2026-10-02T16:13:11.235Z",
+      "completedAt": "2026-10-02T16:13:13.481Z",
+      "status": 200,
+      "sha256": "1a2cf68ad356dfa16e0c69c0c3592c5791b67833099512e90f70ff05eca09d3e",
+      "bytes": 43852,
+      "body": {
+        "ok": false,
+        "checkedAt": "2026-10-02T16:13:13.358Z",
+        "cached": false,
+        "officialSourceSinglePoint": true,
+        "officialSourceRedundancy": {
+          "status": "watch",
+          "mode": "no-verified-independent-path",
+          "officialSourceSinglePoint": true,
+          "serverDirectAvailable": false,
+          "serverDirectProof": "none",
+          "trustedCollectorCount": 0,
+          "requiredTrustedCollectors": 2,
+          "collectorProof": "none",
+          "collectorEvidenceScope": "none",
+          "reason": "verified server direct/proxy unavailable and trusted collectors 0/2",
+          "independenceDomains": [],
+          "collectorEvidenceStore": {
+            "version": "sporttery-recent-collector-evidence-summary-v1",
+            "trustRegistryAvailable": true,
+            "maxAgeMinutes": 20,
+            "recentRows": 0,
+            "trustedCollectorCount": 0,
+            "independenceDomains": [],
+            "keyIds": [],
+            "domains": []
+          }
+        },
+        "mode": {
+          "enable500Sync": true,
+          "enable500DetailsSync": false,
+          "enableWeatherSync": true,
+          "enablePreMatchSignalsSync": true,
+          "enableApiFootballSync": false,
+          "apiFootballSyncMode": "shadow-enrichment",
+          "apiFootballShadowOnly": true,
+          "enableFreeFootballSync": true,
+          "requireExternalSignals": true,
+          "skipSportteryFetch": false,
+          "skipSportteryDirectFetch": true
+        },
+        "sources": [
+          {
+            "id": "sporttery",
+            "label": "China Sporttery",
+            "role": "primary-fixture-odds",
+            "enabled": true,
+            "required": true,
+            "status": "missing",
+            "score": 0,
+            "updatedAt": "2026-10-02T15:56:02.682Z",
+            "ageMinutes": 17.18,
+            "maxAgeMinutes": 20,
+            "stale": true,
+            "metrics": {
+              "currentMatches": 0,
+              "sportteryMatches": 0,
+              "officialOddsMatches": 0,
+              "officialOddsCoverage": 0,
+              "currentStale": true,
+              "resultStale": false,
+              "historyStale": false,
+              "partialStale": true,
+              "transport": "relay-history-only",
+              "relaySnapshot": {
+                "fileName": "sporttery-relay-snapshot.json",
+                "lane": "full",
+                "capturedAt": "2026-10-02T15:56:02.682Z",
+                "ageMinutes": 17.18,
+                "maxAgeMinutes": 20,
+                "stale": false,
+                "validationOk": true,
+                "rows": 2289,
+                "usableEndpoints": 34,
+                "methods": [
+                  "all",
+                  "calculator",
+                  "concern",
+                  "current",
+                  "live",
+                  "result"
+                ],
+                "currentLane": {
+                  "capturedAt": null,
+                  "latestCapturedAt": null,
+                  "ageMinutes": null,
+                  "maxAgeMinutes": 20,
+                  "maxFutureSkewMinutes": 5,
+                  "futureClock": false,
+                  "stale": true,
+                  "rows": 0,
+                  "usableEndpoints": 0,
+                  "methods": []
+                },
+                "resultLane": {
+                  "capturedAt": "2026-10-02T15:56:03.103Z",
+                  "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+                  "ageMinutes": 17.17,
+                  "maxAgeMinutes": 20,
+                  "maxFutureSkewMinutes": 5,
+                  "futureClock": false,
+                  "stale": false,
+                  "rows": 10,
+                  "usableEndpoints": 1,
+                  "methods": [
+                    "result"
+                  ]
+                },
+                "fullLane": {
+                  "capturedAt": "2026-10-02T15:56:03.103Z",
+                  "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                  "ageMinutes": 17.17,
+                  "maxAgeMinutes": 180,
+                  "maxFutureSkewMinutes": 5,
+                  "futureClock": false,
+                  "stale": false,
+                  "rows": 2289,
+                  "usableEndpoints": 30,
+                  "methods": [
+                    "all",
+                    "result"
+                  ]
+                },
+                "historyLane": {
+                  "capturedAt": "2026-10-02T15:56:03.103Z",
+                  "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                  "ageMinutes": 17.17,
+                  "maxAgeMinutes": 180,
+                  "maxFutureSkewMinutes": 5,
+                  "futureClock": false,
+                  "stale": false,
+                  "rows": 2289,
+                  "usableEndpoints": 30,
+                  "methods": [
+                    "all",
+                    "result"
+                  ]
+                },
+                "warnings": [],
+                "collectorState": {
+                  "version": 2,
+                  "updatedAt": "2026-10-02T16:13:03.567Z",
+                  "receivedAt": "2026-10-02T16:13:03.547Z",
+                  "circuitState": "closed",
+                  "consecutiveFullFailures": 0,
+                  "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                  "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                  "lastFullFailedAt": null,
+                  "nextFullProbeAt": null,
+                  "legacyInflatedFailureCount": 550,
+                  "consecutiveCollectFailures": 0,
+                  "lastCollectOkAt": "2026-10-02T15:56:33.764Z",
+                  "lastCollectFailedAt": null,
+                  "lastUploadOkAt": "2026-10-02T16:13:03.567Z",
+                  "lastUploadSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                  "lastUploadSnapshotRows": 2289,
+                  "lastUploadSnapshotUsableEndpoints": 30,
+                  "lastUploadSnapshotTrusted": true,
+                  "lastUploadTrustLevel": "trusted",
+                  "effectiveTrustLevel": "trusted-fallback",
+                  "lastTrustedUploadAt": "2026-10-02T16:13:03.567Z",
+                  "lastPartialLiveUploadAt": "2026-09-30T10:33:02.586Z",
+                  "lastTrustedFallbackAt": "2026-10-02T16:13:03.567Z",
+                  "fallbackSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                  "fallbackSnapshotRows": 2289,
+                  "fallbackSnapshotUsableEndpoints": 30,
+                  "lastRemotePrimaryAt": "2026-08-20T14:00:07.364Z",
+                  "lastRemoteServingMode": "primary",
+                  "fullCircuit": {
+                    "version": 2,
+                    "circuitState": "closed",
+                    "consecutiveFullFailures": 0,
+                    "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                    "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                    "lastFullFailedAt": null,
+                    "nextFullProbeAt": null,
+                    "backoffMinutes": 0,
+                    "legacyInflatedFailureCount": 550
+                  },
+                  "currentLaneState": {
+                    "version": 1,
+                    "consecutiveFailures": 3220,
+                    "lastAttemptAt": "2026-10-02T16:13:03.102Z",
+                    "lastOkAt": "2026-09-30T10:33:02.395Z",
+                    "lastFailedAt": "2026-10-02T16:13:03.102Z",
+                    "rows": 0,
+                    "usableEndpoints": 0
+                  },
+                  "lastFailure": null
+                },
+                "collectorAttestation": {
+                  "version": "trusted-market-collector-evidence-v1",
+                  "scope": "current-market-lane",
+                  "trustRegistryAvailable": true,
+                  "eligibleEndpoints": 0,
+                  "trustedEndpoints": 0,
+                  "trustedKeyCount": 0,
+                  "trustedCollectorCount": 0,
+                  "keyIds": [],
+                  "independenceDomains": [],
+                  "unassignedKeyIds": [],
+                  "blockerCounts": {}
+                },
+                "currentSource": "full-snapshot",
+                "resultSource": "full-snapshot",
+                "fullHistorySource": "full-snapshot",
+                "storagePolicy": "dual-file-no-flattening",
+                "fullSnapshot": {
+                  "fileName": "sporttery-relay-snapshot.json",
+                  "lane": "full",
+                  "capturedAt": "2026-10-02T15:56:02.682Z",
+                  "ageMinutes": 17.18,
+                  "maxAgeMinutes": 20,
+                  "stale": false,
+                  "validationOk": true,
+                  "rows": 2289,
+                  "usableEndpoints": 34,
+                  "methods": [
+                    "calculator",
+                    "current",
+                    "concern",
+                    "live",
+                    "result",
+                    "all"
+                  ],
+                  "currentLane": {
+                    "capturedAt": null,
+                    "latestCapturedAt": null,
+                    "ageMinutes": null,
+                    "maxAgeMinutes": 20,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": true,
+                    "rows": 0,
+                    "usableEndpoints": 0,
+                    "methods": []
+                  },
+                  "resultLane": {
+                    "capturedAt": "2026-10-02T15:56:03.103Z",
+                    "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+                    "ageMinutes": 17.17,
+                    "maxAgeMinutes": 20,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": false,
+                    "rows": 10,
+                    "usableEndpoints": 1,
+                    "methods": [
+                      "result"
+                    ]
+                  },
+                  "fullLane": {
+                    "capturedAt": "2026-10-02T15:56:03.103Z",
+                    "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                    "ageMinutes": 17.17,
+                    "maxAgeMinutes": 180,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": false,
+                    "rows": 2289,
+                    "usableEndpoints": 30,
+                    "methods": [
+                      "all",
+                      "result"
+                    ]
+                  },
+                  "historyLane": {
+                    "capturedAt": "2026-10-02T15:56:03.103Z",
+                    "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                    "ageMinutes": 17.17,
+                    "maxAgeMinutes": 180,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": false,
+                    "rows": 2289,
+                    "usableEndpoints": 30,
+                    "methods": [
+                      "all",
+                      "result"
+                    ]
+                  },
+                  "warnings": [],
+                  "collectorState": {
+                    "version": 2,
+                    "updatedAt": "2026-10-02T16:13:03.114Z",
+                    "receivedAt": null,
+                    "circuitState": "closed",
+                    "consecutiveFullFailures": 0,
+                    "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                    "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                    "lastFullFailedAt": null,
+                    "nextFullProbeAt": null,
+                    "legacyInflatedFailureCount": 550,
+                    "consecutiveCollectFailures": 0,
+                    "lastCollectOkAt": "2026-10-02T15:56:33.764Z",
+                    "lastCollectFailedAt": null,
+                    "lastUploadOkAt": "2026-10-02T16:13:03.114Z",
+                    "lastUploadSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                    "lastUploadSnapshotRows": 2289,
+                    "lastUploadSnapshotUsableEndpoints": 30,
+                    "lastUploadSnapshotTrusted": true,
+                    "lastUploadTrustLevel": "trusted",
+                    "effectiveTrustLevel": "trusted-fallback",
+                    "lastTrustedUploadAt": "2026-10-02T16:13:03.114Z",
+                    "lastPartialLiveUploadAt": "2026-09-30T10:33:02.586Z",
+                    "lastTrustedFallbackAt": "2026-10-02T16:13:03.114Z",
+                    "fallbackSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                    "fallbackSnapshotRows": 2289,
+                    "fallbackSnapshotUsableEndpoints": 30,
+                    "lastRemotePrimaryAt": "2026-08-20T14:00:07.364Z",
+                    "lastRemoteServingMode": "primary",
+                    "fullCircuit": {
+                      "version": 2,
+                      "circuitState": "closed",
+                      "consecutiveFullFailures": 0,
+                      "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                      "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                      "lastFullFailedAt": null,
+                      "nextFullProbeAt": null,
+                      "backoffMinutes": 0,
+                      "legacyInflatedFailureCount": 550
+                    },
+                    "currentLaneState": {
+                      "version": 1,
+                      "consecutiveFailures": 3220,
+                      "lastAttemptAt": "2026-10-02T16:13:03.102Z",
+                      "lastOkAt": "2026-09-30T10:33:02.395Z",
+                      "lastFailedAt": "2026-10-02T16:13:03.102Z",
+                      "rows": 0,
+                      "usableEndpoints": 0
+                    },
+                    "lastFailure": null
+                  },
+                  "collectorAttestation": {
+                    "version": "trusted-market-collector-evidence-v1",
+                    "scope": "current-market-lane",
+                    "trustRegistryAvailable": true,
+                    "eligibleEndpoints": 0,
+                    "trustedEndpoints": 0,
+                    "trustedKeyCount": 0,
+                    "trustedCollectorCount": 0,
+                    "keyIds": [],
+                    "independenceDomains": [],
+                    "unassignedKeyIds": [],
+                    "blockerCounts": {}
+                  }
+                },
+                "fastLaneSnapshot": {
+                  "fileName": "sporttery-relay-fast-lane.json",
+                  "lane": "fast",
+                  "capturedAt": "2026-09-30T10:33:48.935Z",
+                  "ageMinutes": 3219.41,
+                  "maxAgeMinutes": 20,
+                  "stale": true,
+                  "validationOk": false,
+                  "rows": 12,
+                  "usableEndpoints": 3,
+                  "methods": [
+                    "calculator",
+                    "current",
+                    "result"
+                  ],
+                  "currentLane": {
+                    "capturedAt": "2026-09-30T10:33:48.897Z",
+                    "latestCapturedAt": "2026-09-30T10:33:48.935Z",
+                    "ageMinutes": 3219.41,
+                    "maxAgeMinutes": 20,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": true,
+                    "rows": 2,
+                    "usableEndpoints": 2,
+                    "methods": [
+                      "calculator",
+                      "current"
+                    ]
+                  },
+                  "resultLane": {
+                    "capturedAt": "2026-09-30T10:33:48.761Z",
+                    "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                    "ageMinutes": 3219.41,
+                    "maxAgeMinutes": 20,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": true,
+                    "rows": 10,
+                    "usableEndpoints": 1,
+                    "methods": [
+                      "result"
+                    ]
+                  },
+                  "fullLane": {
+                    "capturedAt": "2026-09-30T10:33:48.761Z",
+                    "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                    "ageMinutes": 3219.41,
+                    "maxAgeMinutes": 180,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": true,
+                    "rows": 10,
+                    "usableEndpoints": 1,
+                    "methods": [
+                      "result"
+                    ]
+                  },
+                  "historyLane": {
+                    "capturedAt": "2026-09-30T10:33:48.761Z",
+                    "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                    "ageMinutes": 3219.41,
+                    "maxAgeMinutes": 180,
+                    "maxFutureSkewMinutes": 5,
+                    "futureClock": false,
+                    "stale": true,
+                    "rows": 10,
+                    "usableEndpoints": 1,
+                    "methods": [
+                      "result"
+                    ]
+                  },
+                  "warnings": [],
+                  "collectorState": null,
+                  "collectorAttestation": {
+                    "version": "trusted-market-collector-evidence-v1",
+                    "scope": "current-market-lane",
+                    "trustRegistryAvailable": true,
+                    "eligibleEndpoints": 2,
+                    "trustedEndpoints": 2,
+                    "trustedKeyCount": 1,
+                    "trustedCollectorCount": 1,
+                    "keyIds": [
+                      "football-mainland-collector-20260728"
+                    ],
+                    "independenceDomains": [
+                      "mainland-collector-runtime-1"
+                    ],
+                    "unassignedKeyIds": [],
+                    "blockerCounts": {}
+                  }
+                }
+              },
+              "relayFullSnapshot": {
+                "fileName": "sporttery-relay-snapshot.json",
+                "lane": "full",
+                "capturedAt": "2026-10-02T15:56:02.682Z",
+                "ageMinutes": 17.18,
+                "maxAgeMinutes": 20,
+                "stale": false,
+                "validationOk": true,
+                "rows": 2289,
+                "usableEndpoints": 34,
+                "methods": [
+                  "calculator",
+                  "current",
+                  "concern",
+                  "live",
+                  "result",
+                  "all"
+                ],
+                "currentLane": {
+                  "capturedAt": null,
+                  "latestCapturedAt": null,
+                  "ageMinutes": null,
+                  "maxAgeMinutes": 20,
+                  "maxFutureSkewMinutes": 5,
+                  "futureClock": false,
+                  "stale": true,
+                  "rows": 0,
+                  "usableEndpoints": 0,
+                  "methods": []
+                },
+                "resultLane": {
+                  "capturedAt": "2026-10-02T15:56:03.103Z",
+                  "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+                  "ageMinutes": 17.17,
+                  "maxAgeMinutes": 20,
+                  "maxFutureSkewMinutes": 5,
+                  "futureClock": false,
+                  "stale": false,
+                  "rows": 10,
+                  "usableEndpoints": 1,
+                  "methods": [
+                    "result"
+                  ]
+                },
+                "fullLane": {
+                  "capturedAt": "2026-10-02T15:56:03.103Z",
+                  "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                  "ageMinutes": 17.17,
+                  "maxAgeMinutes": 180,
+                  "maxFutureSkewMinutes": 5,
+                  "futureClock": false,
+                  "stale": false,
+                  "rows": 2289,
+                  "usableEndpoints": 30,
+                  "methods": [
+                    "all",
+                    "result"
+                  ]
+                },
+                "historyLane": {
+                  "capturedAt": "2026-10-02T15:56:03.103Z",
+                  "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+                  "ageMinutes": 17.17,
+                  "maxAgeMinutes": 180,
+                  "maxFutureSkewMinutes": 5,
+                  "futureClock": false,
+                  "stale": false,
+                  "rows": 2289,
+                  "usableEndpoints": 30,
+                  "methods": [
+                    "all",
+                    "result"
+                  ]
+                },
+                "warnings": [],
+                "collectorState": {
+                  "version": 2,
+                  "updatedAt": "2026-10-02T16:13:03.114Z",
+                  "receivedAt": null,
+                  "circuitState": "closed",
+                  "consecutiveFullFailures": 0,
+                  "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                  "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                  "lastFullFailedAt": null,
+                  "nextFullProbeAt": null,
+                  "legacyInflatedFailureCount": 550,
+                  "consecutiveCollectFailures": 0,
+                  "lastCollectOkAt": "2026-10-02T15:56:33.764Z",
+                  "lastCollectFailedAt": null,
+                  "lastUploadOkAt": "2026-10-02T16:13:03.114Z",
+                  "lastUploadSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                  "lastUploadSnapshotRows": 2289,
+                  "lastUploadSnapshotUsableEndpoints": 30,
+                  "lastUploadSnapshotTrusted": true,
+                  "lastUploadTrustLevel": "trusted",
+                  "effectiveTrustLevel": "trusted-fallback",
+                  "lastTrustedUploadAt": "2026-10-02T16:13:03.114Z",
+                  "lastPartialLiveUploadAt": "2026-09-30T10:33:02.586Z",
+                  "lastTrustedFallbackAt": "2026-10-02T16:13:03.114Z",
+                  "fallbackSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+                  "fallbackSnapshotRows": 2289,
+                  "fallbackSnapshotUsableEndpoints": 30,
+                  "lastRemotePrimaryAt": "2026-08-20T14:00:07.364Z",
+                  "lastRemoteServingMode": "primary",
+                  "fullCircuit": {
+                    "version": 2,
+                    "circuitState": "closed",
+                    "consecutiveFullFailures": 0,
+                    "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                    "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                    "lastFullFailedAt": null,
+                    "nextFullProbeAt": null,
+                    "backoffMinutes": 0,
+                    "legacyInflatedFailureCount": 550
+                  },
+                  "currentLaneState": {
+                    "version": 1,
+                    "consecutiveFailures": 3220,
+                    "lastAttemptAt": "2026-10-02T16:13:03.102Z",
+                    "lastOkAt": "2026-09-30T10:33:02.395Z",
+                    "lastFailedAt": "2026-10-02T16:13:03.102Z",
+                    "rows": 0,
+                    "usableEndpoints": 0
+                  },
+                  "lastFailure": null
+                },
+                "collectorAttestation": {
+                  "version": "trusted-market-collector-evidence-v1",
+                  "scope": "current-market-lane",
+                  "trustRegistryAvailable": true,
+                  "eligibleEndpoints": 0,
+                  "trustedEndpoints": 0,
+                  "trustedKeyCount": 0,
+                  "trustedCollectorCount": 0,
+                  "keyIds": [],
+                  "independenceDomains": [],
+                  "unassignedKeyIds": [],
+                  "blockerCounts": {}
+                }
+              },
+              "relayFastLaneSnapshot": {
+                "fileName": "sporttery-relay-fast-lane.json",
+                "lane": "fast",
+                "capturedAt": "2026-09-30T10:33:48.935Z",
+                "ageMinutes": 3219.41,
+                "maxAgeMinutes": 20,
+                "stale": true,
+                "validationOk": false,
+                "rows": 12,
+                "usableEndpoints": 3,
+                "methods": [
+                  "calculator",
+                  "current",
+                  "result"
+                ],
+                "currentLane": {
+                  "capturedAt": "2026-09-30T10:33:48.897Z",
+                  "latestCapturedAt": "2026-09-30T10:33:48.935Z",
+                  "ageMinutes": 3219.41,
+                  "maxAgeMinutes": 20,
+                  "maxFutureSkewMinutes": 5,
+                  "futureClock": false,
+                  "stale": true,
+                  "rows": 2,
+                  "usableEndpoints": 2,
+                  "methods": [
+                    "calculator",
+                    "current"
+                  ]
+                },
+                "resultLane": {
+                  "capturedAt": "2026-09-30T10:33:48.761Z",
+                  "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                  "ageMinutes": 3219.41,
+                  "maxAgeMinutes": 20,
+                  "maxFutureSkewMinutes": 5,
+                  "futureClock": false,
+                  "stale": true,
+                  "rows": 10,
+                  "usableEndpoints": 1,
+                  "methods": [
+                    "result"
+                  ]
+                },
+                "fullLane": {
+                  "capturedAt": "2026-09-30T10:33:48.761Z",
+                  "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                  "ageMinutes": 3219.41,
+                  "maxAgeMinutes": 180,
+                  "maxFutureSkewMinutes": 5,
+                  "futureClock": false,
+                  "stale": true,
+                  "rows": 10,
+                  "usableEndpoints": 1,
+                  "methods": [
+                    "result"
+                  ]
+                },
+                "historyLane": {
+                  "capturedAt": "2026-09-30T10:33:48.761Z",
+                  "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+                  "ageMinutes": 3219.41,
+                  "maxAgeMinutes": 180,
+                  "maxFutureSkewMinutes": 5,
+                  "futureClock": false,
+                  "stale": true,
+                  "rows": 10,
+                  "usableEndpoints": 1,
+                  "methods": [
+                    "result"
+                  ]
+                },
+                "warnings": [],
+                "collectorState": null,
+                "collectorAttestation": {
+                  "version": "trusted-market-collector-evidence-v1",
+                  "scope": "current-market-lane",
+                  "trustRegistryAvailable": true,
+                  "eligibleEndpoints": 2,
+                  "trustedEndpoints": 2,
+                  "trustedKeyCount": 1,
+                  "trustedCollectorCount": 1,
+                  "keyIds": [
+                    "football-mainland-collector-20260728"
+                  ],
+                  "independenceDomains": [
+                    "mainland-collector-runtime-1"
+                  ],
+                  "unassignedKeyIds": [],
+                  "blockerCounts": {}
+                }
+              },
+              "relayCurrentSource": "full-snapshot",
+              "relayResultSource": "full-snapshot",
+              "relayCurrentFresh": false,
+              "relayCurrentRows": 0,
+              "relayCurrentFreshnessTime": null,
+              "resultLane": {
+                "capturedAt": "2026-10-02T15:56:03.103Z",
+                "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+                "ageMinutes": 17.17,
+                "maxAgeMinutes": 20,
+                "maxFutureSkewMinutes": 5,
+                "futureClock": false,
+                "stale": false,
+                "rows": 10,
+                "usableEndpoints": 1,
+                "methods": [
+                  "result"
+                ]
+              },
+              "relayResultFresh": true,
+              "relayResultRows": 10,
+              "relayResultFreshnessTime": "2026-10-02T15:56:03.103Z",
+              "relayHistoryFresh": true,
+              "relayHistoryFreshnessTime": "2026-10-02T15:56:03.103Z",
+              "syncMetaCurrentStale": true,
+              "syncMetaCurrentFreshnessTime": "2026-10-02T15:56:02.682Z",
+              "egress": {
+                "exists": true,
+                "ok": true,
+                "status": "disabled",
+                "checkedAt": "2026-10-02T16:13:13.327Z",
+                "transport": "direct-disabled",
+                "proxyConfigured": false,
+                "summary": {
+                  "skipped": true,
+                  "wafBlocked": false,
+                  "previousStatus": "disabled",
+                  "previousCheckedAt": "2026-08-18T13:01:40.239Z"
+                },
+                "guidance": [
+                  "Sporttery direct fetch is disabled on this overseas server; relay snapshots and supplemental sources are used instead."
+                ]
+              },
+              "officialSourceRedundancy": {
+                "status": "watch",
+                "mode": "no-verified-independent-path",
+                "officialSourceSinglePoint": true,
+                "serverDirectAvailable": false,
+                "serverDirectProof": "none",
+                "trustedCollectorCount": 0,
+                "requiredTrustedCollectors": 2,
+                "collectorProof": "none",
+                "collectorEvidenceScope": "none",
+                "reason": "verified server direct/proxy unavailable and trusted collectors 0/2",
+                "independenceDomains": [],
+                "collectorEvidenceStore": {
+                  "version": "sporttery-recent-collector-evidence-summary-v1",
+                  "trustRegistryAvailable": true,
+                  "maxAgeMinutes": 20,
+                  "recentRows": 0,
+                  "trustedCollectorCount": 0,
+                  "independenceDomains": [],
+                  "keyIds": [],
+                  "domains": []
+                }
+              },
+              "currentFreshnessTime": "2026-10-02T15:56:02.682Z",
+              "resultFreshnessTime": "2026-10-02T15:56:03.103Z",
+              "historyFreshnessTime": "2026-10-02T15:56:03.103Z",
+              "fallbackReason": "fresh Sporttery odds unavailable; keeping existing 2297 matches"
+            }
+          },
+          {
+            "id": "five-hundred",
+            "label": "500.com",
+            "role": "supplemental-market-signal",
+            "enabled": true,
+            "required": true,
+            "status": "stale",
+            "score": 60,
+            "updatedAt": "2026-09-30T15:32:42.474Z",
+            "ageMinutes": 2920.51,
+            "maxAgeMinutes": 20,
+            "stale": true,
+            "metrics": {
+              "rows": 204,
+              "mapped": 1002,
+              "detailsRows": 0,
+              "detailsUpdatedThisRun": 0,
+              "detailsStoredTotal": 0,
+              "currentEligibleRows": 0,
+              "detailsCachedMerged": 0,
+              "currentMatchesWithDetails": 0,
+              "currentCoverage": 0,
+              "errors": 0
+            }
+          },
+          {
+            "id": "weather",
+            "label": "Open-Meteo weather",
+            "role": "environment-risk-signal",
+            "enabled": true,
+            "required": false,
+            "status": "unavailable",
+            "score": 0,
+            "updatedAt": "2026-09-30T15:33:47.330Z",
+            "ageMinutes": 2919.43,
+            "maxAgeMinutes": 180,
+            "stale": true,
+            "metrics": {
+              "rows": 0,
+              "mapped": 0,
+              "currentMatchesWithWeather": 0,
+              "currentCoverage": 0,
+              "errors": 0
+            }
+          },
+          {
+            "id": "free-football",
+            "label": "Free public football layer",
+            "role": "zero-key-recommendation-input-fallback",
+            "enabled": true,
+            "required": false,
+            "status": "unavailable",
+            "score": 25,
+            "updatedAt": "2026-10-02T16:11:02.744Z",
+            "ageMinutes": 2.18,
+            "maxAgeMinutes": 20,
+            "stale": false,
+            "metrics": {
+              "rows": 0,
+              "recommendationReady": 0,
+              "recommendationCoverage": 0,
+              "analysisComplete": 0,
+              "grades": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "D": 0
+              },
+              "keyRequired": false,
+              "apiFootballRequired": false
+            }
+          },
+          {
+            "id": "pre-match",
+            "label": "Pre-match signals",
+            "role": "injury-lineup-referee-risk-signal",
+            "enabled": true,
+            "required": false,
+            "status": "weak",
+            "score": 25,
+            "updatedAt": "2026-10-02T16:11:17.012Z",
+            "ageMinutes": 1.94,
+            "maxAgeMinutes": 20,
+            "stale": false,
+            "metrics": {
+              "rows": 0,
+              "high": 0,
+              "medium": 0,
+              "low": 0,
+              "usableRows": 0,
+              "currentMatchesWithPreMatch": 0,
+              "currentCoverage": 0,
+              "coverageScope": "current-read-matches",
+              "cohort": {
+                "matchCount": 0,
+                "snapshotRows": 0,
+                "alignedRows": 0,
+                "missingRows": 0
+              },
+              "coverageByComponent": {
+                "referee": {
+                  "rows": 0,
+                  "verified": 0,
+                  "partial": 0,
+                  "estimated": 0,
+                  "missing": 0,
+                  "not_yet_publishable": 0,
+                  "published_after_cutoff": 0,
+                  "stale_or_unverified": 0,
+                  "connected": 0,
+                  "coverage": 0,
+                  "nextSource": null
+                },
+                "teamCards": {
+                  "rows": 0,
+                  "verified": 0,
+                  "partial": 0,
+                  "estimated": 0,
+                  "missing": 0,
+                  "not_yet_publishable": 0,
+                  "published_after_cutoff": 0,
+                  "stale_or_unverified": 0,
+                  "connected": 0,
+                  "coverage": 0,
+                  "nextSource": null
+                },
+                "lineup": {
+                  "rows": 0,
+                  "verified": 0,
+                  "partial": 0,
+                  "estimated": 0,
+                  "missing": 0,
+                  "not_yet_publishable": 0,
+                  "published_after_cutoff": 0,
+                  "stale_or_unverified": 0,
+                  "connected": 0,
+                  "coverage": 0,
+                  "nextSource": null
+                },
+                "injuries": {
+                  "rows": 0,
+                  "verified": 0,
+                  "partial": 0,
+                  "estimated": 0,
+                  "missing": 0,
+                  "not_yet_publishable": 0,
+                  "published_after_cutoff": 0,
+                  "stale_or_unverified": 0,
+                  "connected": 0,
+                  "coverage": 0,
+                  "nextSource": null
+                },
+                "xg": {
+                  "rows": 0,
+                  "verified": 0,
+                  "partial": 0,
+                  "estimated": 0,
+                  "missing": 0,
+                  "not_yet_publishable": 0,
+                  "published_after_cutoff": 0,
+                  "stale_or_unverified": 0,
+                  "connected": 0,
+                  "coverage": 0,
+                  "nextSource": null
+                },
+                "weather": {
+                  "rows": 0,
+                  "verified": 0,
+                  "partial": 0,
+                  "estimated": 0,
+                  "missing": 0,
+                  "not_yet_publishable": 0,
+                  "published_after_cutoff": 0,
+                  "stale_or_unverified": 0,
+                  "connected": 0,
+                  "coverage": 0,
+                  "nextSource": null
+                },
+                "market": {
+                  "rows": 0,
+                  "verified": 0,
+                  "partial": 0,
+                  "estimated": 0,
+                  "missing": 0,
+                  "not_yet_publishable": 0,
+                  "published_after_cutoff": 0,
+                  "stale_or_unverified": 0,
+                  "connected": 0,
+                  "coverage": 0,
+                  "nextSource": null
+                },
+                "motivation": {
+                  "rows": 0,
+                  "verified": 0,
+                  "partial": 0,
+                  "estimated": 0,
+                  "missing": 0,
+                  "not_yet_publishable": 0,
+                  "published_after_cutoff": 0,
+                  "stale_or_unverified": 0,
+                  "connected": 0,
+                  "coverage": 0,
+                  "nextSource": null
+                },
+                "strength": {
+                  "rows": 0,
+                  "verified": 0,
+                  "partial": 0,
+                  "estimated": 0,
+                  "missing": 0,
+                  "not_yet_publishable": 0,
+                  "published_after_cutoff": 0,
+                  "stale_or_unverified": 0,
+                  "connected": 0,
+                  "coverage": 0,
+                  "nextSource": null
+                },
+                "form": {
+                  "rows": 0,
+                  "verified": 0,
+                  "partial": 0,
+                  "estimated": 0,
+                  "missing": 0,
+                  "not_yet_publishable": 0,
+                  "published_after_cutoff": 0,
+                  "stale_or_unverified": 0,
+                  "connected": 0,
+                  "coverage": 0,
+                  "nextSource": null
+                }
+              },
+              "gapPriorities": [],
+              "warningCount": 0
+            }
+          }
+        ],
+        "sourceScores": {
+          "sporttery": {
+            "status": "missing",
+            "score": 0,
+            "stale": true,
+            "updatedAt": "2026-10-02T15:56:02.682Z",
+            "ageMinutes": 17.18
+          },
+          "five-hundred": {
+            "status": "stale",
+            "score": 60,
+            "stale": true,
+            "updatedAt": "2026-09-30T15:32:42.474Z",
+            "ageMinutes": 2920.51
+          },
+          "weather": {
+            "status": "unavailable",
+            "score": 0,
+            "stale": true,
+            "updatedAt": "2026-09-30T15:33:47.330Z",
+            "ageMinutes": 2919.43
+          },
+          "free-football": {
+            "status": "unavailable",
+            "score": 25,
+            "stale": false,
+            "updatedAt": "2026-10-02T16:11:02.744Z",
+            "ageMinutes": 2.18
+          },
+          "pre-match": {
+            "status": "weak",
+            "score": 25,
+            "stale": false,
+            "updatedAt": "2026-10-02T16:11:17.012Z",
+            "ageMinutes": 1.94
+          }
+        },
+        "sportteryEgress": {
+          "exists": true,
+          "ok": true,
+          "status": "disabled",
+          "checkedAt": "2026-10-02T16:13:13.327Z",
+          "transport": "direct-disabled",
+          "proxyConfigured": false,
+          "summary": {
+            "skipped": true,
+            "wafBlocked": false,
+            "previousStatus": "disabled",
+            "previousCheckedAt": "2026-08-18T13:01:40.239Z"
+          },
+          "guidance": [
+            "Sporttery direct fetch is disabled on this overseas server; relay snapshots and supplemental sources are used instead."
+          ]
+        },
+        "sportteryRelaySnapshot": {
+          "fileName": "sporttery-relay-snapshot.json",
+          "lane": "full",
+          "capturedAt": "2026-10-02T15:56:02.682Z",
+          "ageMinutes": 17.18,
+          "maxAgeMinutes": 20,
+          "stale": false,
+          "validationOk": true,
+          "rows": 2289,
+          "usableEndpoints": 34,
+          "methods": [
+            "all",
+            "calculator",
+            "concern",
+            "current",
+            "live",
+            "result"
+          ],
+          "currentLane": {
+            "capturedAt": null,
+            "latestCapturedAt": null,
+            "ageMinutes": null,
+            "maxAgeMinutes": 20,
+            "maxFutureSkewMinutes": 5,
+            "futureClock": false,
+            "stale": true,
+            "rows": 0,
+            "usableEndpoints": 0,
+            "methods": []
+          },
+          "resultLane": {
+            "capturedAt": "2026-10-02T15:56:03.103Z",
+            "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+            "ageMinutes": 17.17,
+            "maxAgeMinutes": 20,
+            "maxFutureSkewMinutes": 5,
+            "futureClock": false,
+            "stale": false,
+            "rows": 10,
+            "usableEndpoints": 1,
+            "methods": [
+              "result"
+            ]
+          },
+          "fullLane": {
+            "capturedAt": "2026-10-02T15:56:03.103Z",
+            "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+            "ageMinutes": 17.17,
+            "maxAgeMinutes": 180,
+            "maxFutureSkewMinutes": 5,
+            "futureClock": false,
+            "stale": false,
+            "rows": 2289,
+            "usableEndpoints": 30,
+            "methods": [
+              "all",
+              "result"
+            ]
+          },
+          "historyLane": {
+            "capturedAt": "2026-10-02T15:56:03.103Z",
+            "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+            "ageMinutes": 17.17,
+            "maxAgeMinutes": 180,
+            "maxFutureSkewMinutes": 5,
+            "futureClock": false,
+            "stale": false,
+            "rows": 2289,
+            "usableEndpoints": 30,
+            "methods": [
+              "all",
+              "result"
+            ]
+          },
+          "warnings": [],
+          "collectorState": {
+            "version": 2,
+            "updatedAt": "2026-10-02T16:13:03.567Z",
+            "receivedAt": "2026-10-02T16:13:03.547Z",
+            "circuitState": "closed",
+            "consecutiveFullFailures": 0,
+            "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+            "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+            "lastFullFailedAt": null,
+            "nextFullProbeAt": null,
+            "legacyInflatedFailureCount": 550,
+            "consecutiveCollectFailures": 0,
+            "lastCollectOkAt": "2026-10-02T15:56:33.764Z",
+            "lastCollectFailedAt": null,
+            "lastUploadOkAt": "2026-10-02T16:13:03.567Z",
+            "lastUploadSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+            "lastUploadSnapshotRows": 2289,
+            "lastUploadSnapshotUsableEndpoints": 30,
+            "lastUploadSnapshotTrusted": true,
+            "lastUploadTrustLevel": "trusted",
+            "effectiveTrustLevel": "trusted-fallback",
+            "lastTrustedUploadAt": "2026-10-02T16:13:03.567Z",
+            "lastPartialLiveUploadAt": "2026-09-30T10:33:02.586Z",
+            "lastTrustedFallbackAt": "2026-10-02T16:13:03.567Z",
+            "fallbackSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+            "fallbackSnapshotRows": 2289,
+            "fallbackSnapshotUsableEndpoints": 30,
+            "lastRemotePrimaryAt": "2026-08-20T14:00:07.364Z",
+            "lastRemoteServingMode": "primary",
+            "fullCircuit": {
+              "version": 2,
+              "circuitState": "closed",
+              "consecutiveFullFailures": 0,
+              "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+              "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+              "lastFullFailedAt": null,
+              "nextFullProbeAt": null,
+              "backoffMinutes": 0,
+              "legacyInflatedFailureCount": 550
+            },
+            "currentLaneState": {
+              "version": 1,
+              "consecutiveFailures": 3220,
+              "lastAttemptAt": "2026-10-02T16:13:03.102Z",
+              "lastOkAt": "2026-09-30T10:33:02.395Z",
+              "lastFailedAt": "2026-10-02T16:13:03.102Z",
+              "rows": 0,
+              "usableEndpoints": 0
+            },
+            "lastFailure": null
+          },
+          "collectorAttestation": {
+            "version": "trusted-market-collector-evidence-v1",
+            "scope": "current-market-lane",
+            "trustRegistryAvailable": true,
+            "eligibleEndpoints": 0,
+            "trustedEndpoints": 0,
+            "trustedKeyCount": 0,
+            "trustedCollectorCount": 0,
+            "keyIds": [],
+            "independenceDomains": [],
+            "unassignedKeyIds": [],
+            "blockerCounts": {}
+          },
+          "currentSource": "full-snapshot",
+          "resultSource": "full-snapshot",
+          "fullHistorySource": "full-snapshot",
+          "storagePolicy": "dual-file-no-flattening",
+          "fullSnapshot": {
+            "fileName": "sporttery-relay-snapshot.json",
+            "lane": "full",
+            "capturedAt": "2026-10-02T15:56:02.682Z",
+            "ageMinutes": 17.18,
+            "maxAgeMinutes": 20,
+            "stale": false,
+            "validationOk": true,
+            "rows": 2289,
+            "usableEndpoints": 34,
+            "methods": [
+              "calculator",
+              "current",
+              "concern",
+              "live",
+              "result",
+              "all"
+            ],
+            "currentLane": {
+              "capturedAt": null,
+              "latestCapturedAt": null,
+              "ageMinutes": null,
+              "maxAgeMinutes": 20,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 0,
+              "usableEndpoints": 0,
+              "methods": []
+            },
+            "resultLane": {
+              "capturedAt": "2026-10-02T15:56:03.103Z",
+              "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+              "ageMinutes": 17.17,
+              "maxAgeMinutes": 20,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": false,
+              "rows": 10,
+              "usableEndpoints": 1,
+              "methods": [
+                "result"
+              ]
+            },
+            "fullLane": {
+              "capturedAt": "2026-10-02T15:56:03.103Z",
+              "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+              "ageMinutes": 17.17,
+              "maxAgeMinutes": 180,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": false,
+              "rows": 2289,
+              "usableEndpoints": 30,
+              "methods": [
+                "all",
+                "result"
+              ]
+            },
+            "historyLane": {
+              "capturedAt": "2026-10-02T15:56:03.103Z",
+              "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+              "ageMinutes": 17.17,
+              "maxAgeMinutes": 180,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": false,
+              "rows": 2289,
+              "usableEndpoints": 30,
+              "methods": [
+                "all",
+                "result"
+              ]
+            },
+            "warnings": [],
+            "collectorState": {
+              "version": 2,
+              "updatedAt": "2026-10-02T16:13:03.114Z",
+              "receivedAt": null,
+              "circuitState": "closed",
+              "consecutiveFullFailures": 0,
+              "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+              "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+              "lastFullFailedAt": null,
+              "nextFullProbeAt": null,
+              "legacyInflatedFailureCount": 550,
+              "consecutiveCollectFailures": 0,
+              "lastCollectOkAt": "2026-10-02T15:56:33.764Z",
+              "lastCollectFailedAt": null,
+              "lastUploadOkAt": "2026-10-02T16:13:03.114Z",
+              "lastUploadSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+              "lastUploadSnapshotRows": 2289,
+              "lastUploadSnapshotUsableEndpoints": 30,
+              "lastUploadSnapshotTrusted": true,
+              "lastUploadTrustLevel": "trusted",
+              "effectiveTrustLevel": "trusted-fallback",
+              "lastTrustedUploadAt": "2026-10-02T16:13:03.114Z",
+              "lastPartialLiveUploadAt": "2026-09-30T10:33:02.586Z",
+              "lastTrustedFallbackAt": "2026-10-02T16:13:03.114Z",
+              "fallbackSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+              "fallbackSnapshotRows": 2289,
+              "fallbackSnapshotUsableEndpoints": 30,
+              "lastRemotePrimaryAt": "2026-08-20T14:00:07.364Z",
+              "lastRemoteServingMode": "primary",
+              "fullCircuit": {
+                "version": 2,
+                "circuitState": "closed",
+                "consecutiveFullFailures": 0,
+                "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                "lastFullFailedAt": null,
+                "nextFullProbeAt": null,
+                "backoffMinutes": 0,
+                "legacyInflatedFailureCount": 550
+              },
+              "currentLaneState": {
+                "version": 1,
+                "consecutiveFailures": 3220,
+                "lastAttemptAt": "2026-10-02T16:13:03.102Z",
+                "lastOkAt": "2026-09-30T10:33:02.395Z",
+                "lastFailedAt": "2026-10-02T16:13:03.102Z",
+                "rows": 0,
+                "usableEndpoints": 0
+              },
+              "lastFailure": null
+            },
+            "collectorAttestation": {
+              "version": "trusted-market-collector-evidence-v1",
+              "scope": "current-market-lane",
+              "trustRegistryAvailable": true,
+              "eligibleEndpoints": 0,
+              "trustedEndpoints": 0,
+              "trustedKeyCount": 0,
+              "trustedCollectorCount": 0,
+              "keyIds": [],
+              "independenceDomains": [],
+              "unassignedKeyIds": [],
+              "blockerCounts": {}
+            }
+          },
+          "fastLaneSnapshot": {
+            "fileName": "sporttery-relay-fast-lane.json",
+            "lane": "fast",
+            "capturedAt": "2026-09-30T10:33:48.935Z",
+            "ageMinutes": 3219.41,
+            "maxAgeMinutes": 20,
+            "stale": true,
+            "validationOk": false,
+            "rows": 12,
+            "usableEndpoints": 3,
+            "methods": [
+              "calculator",
+              "current",
+              "result"
+            ],
+            "currentLane": {
+              "capturedAt": "2026-09-30T10:33:48.897Z",
+              "latestCapturedAt": "2026-09-30T10:33:48.935Z",
+              "ageMinutes": 3219.41,
+              "maxAgeMinutes": 20,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 2,
+              "usableEndpoints": 2,
+              "methods": [
+                "calculator",
+                "current"
+              ]
+            },
+            "resultLane": {
+              "capturedAt": "2026-09-30T10:33:48.761Z",
+              "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+              "ageMinutes": 3219.41,
+              "maxAgeMinutes": 20,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 10,
+              "usableEndpoints": 1,
+              "methods": [
+                "result"
+              ]
+            },
+            "fullLane": {
+              "capturedAt": "2026-09-30T10:33:48.761Z",
+              "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+              "ageMinutes": 3219.41,
+              "maxAgeMinutes": 180,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 10,
+              "usableEndpoints": 1,
+              "methods": [
+                "result"
+              ]
+            },
+            "historyLane": {
+              "capturedAt": "2026-09-30T10:33:48.761Z",
+              "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+              "ageMinutes": 3219.41,
+              "maxAgeMinutes": 180,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 10,
+              "usableEndpoints": 1,
+              "methods": [
+                "result"
+              ]
+            },
+            "warnings": [],
+            "collectorState": null,
+            "collectorAttestation": {
+              "version": "trusted-market-collector-evidence-v1",
+              "scope": "current-market-lane",
+              "trustRegistryAvailable": true,
+              "eligibleEndpoints": 2,
+              "trustedEndpoints": 2,
+              "trustedKeyCount": 1,
+              "trustedCollectorCount": 1,
+              "keyIds": [
+                "football-mainland-collector-20260728"
+              ],
+              "independenceDomains": [
+                "mainland-collector-runtime-1"
+              ],
+              "unassignedKeyIds": [],
+              "blockerCounts": {}
+            }
+          }
+        },
+        "sportteryRelayFullSnapshot": {
+          "fileName": "sporttery-relay-snapshot.json",
+          "lane": "full",
+          "capturedAt": "2026-10-02T15:56:02.682Z",
+          "ageMinutes": 17.18,
+          "maxAgeMinutes": 20,
+          "stale": false,
+          "validationOk": true,
+          "rows": 2289,
+          "usableEndpoints": 34,
+          "methods": [
+            "calculator",
+            "current",
+            "concern",
+            "live",
+            "result",
+            "all"
+          ],
+          "currentLane": {
+            "capturedAt": null,
+            "latestCapturedAt": null,
+            "ageMinutes": null,
+            "maxAgeMinutes": 20,
+            "maxFutureSkewMinutes": 5,
+            "futureClock": false,
+            "stale": true,
+            "rows": 0,
+            "usableEndpoints": 0,
+            "methods": []
+          },
+          "resultLane": {
+            "capturedAt": "2026-10-02T15:56:03.103Z",
+            "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+            "ageMinutes": 17.17,
+            "maxAgeMinutes": 20,
+            "maxFutureSkewMinutes": 5,
+            "futureClock": false,
+            "stale": false,
+            "rows": 10,
+            "usableEndpoints": 1,
+            "methods": [
+              "result"
+            ]
+          },
+          "fullLane": {
+            "capturedAt": "2026-10-02T15:56:03.103Z",
+            "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+            "ageMinutes": 17.17,
+            "maxAgeMinutes": 180,
+            "maxFutureSkewMinutes": 5,
+            "futureClock": false,
+            "stale": false,
+            "rows": 2289,
+            "usableEndpoints": 30,
+            "methods": [
+              "all",
+              "result"
+            ]
+          },
+          "historyLane": {
+            "capturedAt": "2026-10-02T15:56:03.103Z",
+            "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+            "ageMinutes": 17.17,
+            "maxAgeMinutes": 180,
+            "maxFutureSkewMinutes": 5,
+            "futureClock": false,
+            "stale": false,
+            "rows": 2289,
+            "usableEndpoints": 30,
+            "methods": [
+              "all",
+              "result"
+            ]
+          },
+          "warnings": [],
+          "collectorState": {
+            "version": 2,
+            "updatedAt": "2026-10-02T16:13:03.114Z",
+            "receivedAt": null,
+            "circuitState": "closed",
+            "consecutiveFullFailures": 0,
+            "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+            "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+            "lastFullFailedAt": null,
+            "nextFullProbeAt": null,
+            "legacyInflatedFailureCount": 550,
+            "consecutiveCollectFailures": 0,
+            "lastCollectOkAt": "2026-10-02T15:56:33.764Z",
+            "lastCollectFailedAt": null,
+            "lastUploadOkAt": "2026-10-02T16:13:03.114Z",
+            "lastUploadSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+            "lastUploadSnapshotRows": 2289,
+            "lastUploadSnapshotUsableEndpoints": 30,
+            "lastUploadSnapshotTrusted": true,
+            "lastUploadTrustLevel": "trusted",
+            "effectiveTrustLevel": "trusted-fallback",
+            "lastTrustedUploadAt": "2026-10-02T16:13:03.114Z",
+            "lastPartialLiveUploadAt": "2026-09-30T10:33:02.586Z",
+            "lastTrustedFallbackAt": "2026-10-02T16:13:03.114Z",
+            "fallbackSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+            "fallbackSnapshotRows": 2289,
+            "fallbackSnapshotUsableEndpoints": 30,
+            "lastRemotePrimaryAt": "2026-08-20T14:00:07.364Z",
+            "lastRemoteServingMode": "primary",
+            "fullCircuit": {
+              "version": 2,
+              "circuitState": "closed",
+              "consecutiveFullFailures": 0,
+              "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+              "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+              "lastFullFailedAt": null,
+              "nextFullProbeAt": null,
+              "backoffMinutes": 0,
+              "legacyInflatedFailureCount": 550
+            },
+            "currentLaneState": {
+              "version": 1,
+              "consecutiveFailures": 3220,
+              "lastAttemptAt": "2026-10-02T16:13:03.102Z",
+              "lastOkAt": "2026-09-30T10:33:02.395Z",
+              "lastFailedAt": "2026-10-02T16:13:03.102Z",
+              "rows": 0,
+              "usableEndpoints": 0
+            },
+            "lastFailure": null
+          },
+          "collectorAttestation": {
+            "version": "trusted-market-collector-evidence-v1",
+            "scope": "current-market-lane",
+            "trustRegistryAvailable": true,
+            "eligibleEndpoints": 0,
+            "trustedEndpoints": 0,
+            "trustedKeyCount": 0,
+            "trustedCollectorCount": 0,
+            "keyIds": [],
+            "independenceDomains": [],
+            "unassignedKeyIds": [],
+            "blockerCounts": {}
+          }
+        },
+        "sportteryRelayFastLaneSnapshot": {
+          "fileName": "sporttery-relay-fast-lane.json",
+          "lane": "fast",
+          "capturedAt": "2026-09-30T10:33:48.935Z",
+          "ageMinutes": 3219.41,
+          "maxAgeMinutes": 20,
+          "stale": true,
+          "validationOk": false,
+          "rows": 12,
+          "usableEndpoints": 3,
+          "methods": [
+            "calculator",
+            "current",
+            "result"
+          ],
+          "currentLane": {
+            "capturedAt": "2026-09-30T10:33:48.897Z",
+            "latestCapturedAt": "2026-09-30T10:33:48.935Z",
+            "ageMinutes": 3219.41,
+            "maxAgeMinutes": 20,
+            "maxFutureSkewMinutes": 5,
+            "futureClock": false,
+            "stale": true,
+            "rows": 2,
+            "usableEndpoints": 2,
+            "methods": [
+              "calculator",
+              "current"
+            ]
+          },
+          "resultLane": {
+            "capturedAt": "2026-09-30T10:33:48.761Z",
+            "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+            "ageMinutes": 3219.41,
+            "maxAgeMinutes": 20,
+            "maxFutureSkewMinutes": 5,
+            "futureClock": false,
+            "stale": true,
+            "rows": 10,
+            "usableEndpoints": 1,
+            "methods": [
+              "result"
+            ]
+          },
+          "fullLane": {
+            "capturedAt": "2026-09-30T10:33:48.761Z",
+            "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+            "ageMinutes": 3219.41,
+            "maxAgeMinutes": 180,
+            "maxFutureSkewMinutes": 5,
+            "futureClock": false,
+            "stale": true,
+            "rows": 10,
+            "usableEndpoints": 1,
+            "methods": [
+              "result"
+            ]
+          },
+          "historyLane": {
+            "capturedAt": "2026-09-30T10:33:48.761Z",
+            "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+            "ageMinutes": 3219.41,
+            "maxAgeMinutes": 180,
+            "maxFutureSkewMinutes": 5,
+            "futureClock": false,
+            "stale": true,
+            "rows": 10,
+            "usableEndpoints": 1,
+            "methods": [
+              "result"
+            ]
+          },
+          "warnings": [],
+          "collectorState": null,
+          "collectorAttestation": {
+            "version": "trusted-market-collector-evidence-v1",
+            "scope": "current-market-lane",
+            "trustRegistryAvailable": true,
+            "eligibleEndpoints": 2,
+            "trustedEndpoints": 2,
+            "trustedKeyCount": 1,
+            "trustedCollectorCount": 1,
+            "keyIds": [
+              "football-mainland-collector-20260728"
+            ],
+            "independenceDomains": [
+              "mainland-collector-runtime-1"
+            ],
+            "unassignedKeyIds": [],
+            "blockerCounts": {}
+          }
+        },
+        "externalSignals": {
+          "exists": true,
+          "updatedAt": "2026-10-02T16:11:17.012Z",
+          "ageMinutes": 1.94,
+          "matchKeys": 8301,
+          "fiveHundredRows": 204,
+          "fiveHundredMapped": 1002,
+          "fiveHundredDetailsRows": 0,
+          "fiveHundredDetailsUpdatedThisRun": 0,
+          "fiveHundredDetailsStoredTotal": 0,
+          "fiveHundredCurrentEligibleRows": 0,
+          "fiveHundredCurrentMatchesWithDetails": 0,
+          "fiveHundredDetailsCachedMerged": 0,
+          "apiFootballConfigured": true,
+          "apiFootballEnabled": false,
+          "apiFootballStatus": "disabled",
+          "apiFootballSyncMode": "shadow-enrichment",
+          "apiFootballShadowOnly": true,
+          "apiFootballFeatures": {
+            "injuries": true,
+            "lineups": true,
+            "liveScore": false,
+            "odds": false
+          },
+          "apiFootballAuthority": {
+            "officialFixtureIdentity": false,
+            "officialOdds": false,
+            "officialResult": false,
+            "settlement": false,
+            "formalRecommendation": false
+          },
+          "replacementSource": "free-public-football",
+          "freeFootballUpdatedAt": "2026-10-02T16:11:02.744Z",
+          "freeFootballRows": 0,
+          "freeFootballRecommendationReady": 0,
+          "freeFootballRecommendationCoverage": 0,
+          "apiFootballMappedSignals": 0,
+          "apiFootballUpdatedAt": "2026-09-28T08:21:08.078Z"
+        },
+        "preMatchSignals": {
+          "exists": true,
+          "updatedAt": "2026-10-02T16:11:17.012Z",
+          "ageMinutes": 1.94,
+          "matchKeys": 0,
+          "recommendationUsable": 0,
+          "analysisComplete": 0,
+          "coverageScope": "current-read-matches",
+          "cohort": {
+            "matchCount": 0,
+            "snapshotRows": 0,
+            "alignedRows": 0,
+            "missingRows": 0
+          },
+          "high": 0,
+          "medium": 0,
+          "low": 0,
+          "coverageByComponent": {
+            "referee": {
+              "rows": 0,
+              "verified": 0,
+              "partial": 0,
+              "estimated": 0,
+              "missing": 0,
+              "not_yet_publishable": 0,
+              "published_after_cutoff": 0,
+              "stale_or_unverified": 0,
+              "connected": 0,
+              "coverage": 0,
+              "nextSource": null
+            },
+            "teamCards": {
+              "rows": 0,
+              "verified": 0,
+              "partial": 0,
+              "estimated": 0,
+              "missing": 0,
+              "not_yet_publishable": 0,
+              "published_after_cutoff": 0,
+              "stale_or_unverified": 0,
+              "connected": 0,
+              "coverage": 0,
+              "nextSource": null
+            },
+            "lineup": {
+              "rows": 0,
+              "verified": 0,
+              "partial": 0,
+              "estimated": 0,
+              "missing": 0,
+              "not_yet_publishable": 0,
+              "published_after_cutoff": 0,
+              "stale_or_unverified": 0,
+              "connected": 0,
+              "coverage": 0,
+              "nextSource": null
+            },
+            "injuries": {
+              "rows": 0,
+              "verified": 0,
+              "partial": 0,
+              "estimated": 0,
+              "missing": 0,
+              "not_yet_publishable": 0,
+              "published_after_cutoff": 0,
+              "stale_or_unverified": 0,
+              "connected": 0,
+              "coverage": 0,
+              "nextSource": null
+            },
+            "xg": {
+              "rows": 0,
+              "verified": 0,
+              "partial": 0,
+              "estimated": 0,
+              "missing": 0,
+              "not_yet_publishable": 0,
+              "published_after_cutoff": 0,
+              "stale_or_unverified": 0,
+              "connected": 0,
+              "coverage": 0,
+              "nextSource": null
+            },
+            "weather": {
+              "rows": 0,
+              "verified": 0,
+              "partial": 0,
+              "estimated": 0,
+              "missing": 0,
+              "not_yet_publishable": 0,
+              "published_after_cutoff": 0,
+              "stale_or_unverified": 0,
+              "connected": 0,
+              "coverage": 0,
+              "nextSource": null
+            },
+            "market": {
+              "rows": 0,
+              "verified": 0,
+              "partial": 0,
+              "estimated": 0,
+              "missing": 0,
+              "not_yet_publishable": 0,
+              "published_after_cutoff": 0,
+              "stale_or_unverified": 0,
+              "connected": 0,
+              "coverage": 0,
+              "nextSource": null
+            },
+            "motivation": {
+              "rows": 0,
+              "verified": 0,
+              "partial": 0,
+              "estimated": 0,
+              "missing": 0,
+              "not_yet_publishable": 0,
+              "published_after_cutoff": 0,
+              "stale_or_unverified": 0,
+              "connected": 0,
+              "coverage": 0,
+              "nextSource": null
+            },
+            "strength": {
+              "rows": 0,
+              "verified": 0,
+              "partial": 0,
+              "estimated": 0,
+              "missing": 0,
+              "not_yet_publishable": 0,
+              "published_after_cutoff": 0,
+              "stale_or_unverified": 0,
+              "connected": 0,
+              "coverage": 0,
+              "nextSource": null
+            },
+            "form": {
+              "rows": 0,
+              "verified": 0,
+              "partial": 0,
+              "estimated": 0,
+              "missing": 0,
+              "not_yet_publishable": 0,
+              "published_after_cutoff": 0,
+              "stale_or_unverified": 0,
+              "connected": 0,
+              "coverage": 0,
+              "nextSource": null
+            }
+          },
+          "gapPriorities": [],
+          "warningCount": 0
+        },
+        "currentMatches": {
+          "count": 0,
+          "withExternalSignals": 0,
+          "externalCoverage": 0,
+          "withSportteryOdds": 0,
+          "withReferenceOdds": 0,
+          "withFiveHundredDetails": 0,
+          "withWeather": 0,
+          "withPreMatchSignals": 0
+        },
+        "fallbackCoverage": {
+          "servingMode": "critical",
+          "usable": false,
+          "primaryStale": true,
+          "currentMatches": 0,
+          "coveredByFiveHundredDetails": 0,
+          "fiveHundredCoverage": 0,
+          "fiveHundredCoveragePercent": 0,
+          "referenceOddsMatches": 0,
+          "referenceOddsCoverage": 0,
+          "referenceOddsCoveragePercent": 0,
+          "freshExternalSignals": false,
+          "updatedAt": "2026-09-30T15:32:42.474Z",
+          "detailsUpdatedAt": null,
+          "fallbackReason": "fresh Sporttery odds unavailable; keeping existing 2297 matches",
+          "currentLaneFresh": false,
+          "relayCurrentFresh": false,
+          "relayCurrentRows": 0,
+          "relayCurrentFreshnessTime": null,
+          "resultLane": {
+            "capturedAt": "2026-10-02T15:56:03.103Z",
+            "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+            "ageMinutes": 17.17,
+            "maxAgeMinutes": 20,
+            "maxFutureSkewMinutes": 5,
+            "futureClock": false,
+            "stale": false,
+            "rows": 10,
+            "usableEndpoints": 1,
+            "methods": [
+              "result"
+            ]
+          },
+          "relayResultFresh": true,
+          "relayResultRows": 10,
+          "relayResultFreshnessTime": "2026-10-02T15:56:03.103Z",
+          "relayHistoryFresh": true,
+          "relayHistoryFreshnessTime": "2026-10-02T15:56:03.103Z",
+          "relayCurrentSource": "full-snapshot",
+          "relayResultSource": "full-snapshot",
+          "relayFullSnapshot": {
+            "fileName": "sporttery-relay-snapshot.json",
+            "lane": "full",
+            "capturedAt": "2026-10-02T15:56:02.682Z",
+            "ageMinutes": 17.18,
+            "maxAgeMinutes": 20,
+            "stale": false,
+            "validationOk": true,
+            "rows": 2289,
+            "usableEndpoints": 34,
+            "methods": [
+              "calculator",
+              "current",
+              "concern",
+              "live",
+              "result",
+              "all"
+            ],
+            "currentLane": {
+              "capturedAt": null,
+              "latestCapturedAt": null,
+              "ageMinutes": null,
+              "maxAgeMinutes": 20,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 0,
+              "usableEndpoints": 0,
+              "methods": []
+            },
+            "resultLane": {
+              "capturedAt": "2026-10-02T15:56:03.103Z",
+              "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+              "ageMinutes": 17.17,
+              "maxAgeMinutes": 20,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": false,
+              "rows": 10,
+              "usableEndpoints": 1,
+              "methods": [
+                "result"
+              ]
+            },
+            "fullLane": {
+              "capturedAt": "2026-10-02T15:56:03.103Z",
+              "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+              "ageMinutes": 17.17,
+              "maxAgeMinutes": 180,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": false,
+              "rows": 2289,
+              "usableEndpoints": 30,
+              "methods": [
+                "all",
+                "result"
+              ]
+            },
+            "historyLane": {
+              "capturedAt": "2026-10-02T15:56:03.103Z",
+              "latestCapturedAt": "2026-10-02T15:56:33.611Z",
+              "ageMinutes": 17.17,
+              "maxAgeMinutes": 180,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": false,
+              "rows": 2289,
+              "usableEndpoints": 30,
+              "methods": [
+                "all",
+                "result"
+              ]
+            },
+            "warnings": [],
+            "collectorState": {
+              "version": 2,
+              "updatedAt": "2026-10-02T16:13:03.114Z",
+              "receivedAt": null,
+              "circuitState": "closed",
+              "consecutiveFullFailures": 0,
+              "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+              "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+              "lastFullFailedAt": null,
+              "nextFullProbeAt": null,
+              "legacyInflatedFailureCount": 550,
+              "consecutiveCollectFailures": 0,
+              "lastCollectOkAt": "2026-10-02T15:56:33.764Z",
+              "lastCollectFailedAt": null,
+              "lastUploadOkAt": "2026-10-02T16:13:03.114Z",
+              "lastUploadSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+              "lastUploadSnapshotRows": 2289,
+              "lastUploadSnapshotUsableEndpoints": 30,
+              "lastUploadSnapshotTrusted": true,
+              "lastUploadTrustLevel": "trusted",
+              "effectiveTrustLevel": "trusted-fallback",
+              "lastTrustedUploadAt": "2026-10-02T16:13:03.114Z",
+              "lastPartialLiveUploadAt": "2026-09-30T10:33:02.586Z",
+              "lastTrustedFallbackAt": "2026-10-02T16:13:03.114Z",
+              "fallbackSnapshotCapturedAt": "2026-10-02T15:56:02.682Z",
+              "fallbackSnapshotRows": 2289,
+              "fallbackSnapshotUsableEndpoints": 30,
+              "lastRemotePrimaryAt": "2026-08-20T14:00:07.364Z",
+              "lastRemoteServingMode": "primary",
+              "fullCircuit": {
+                "version": 2,
+                "circuitState": "closed",
+                "consecutiveFullFailures": 0,
+                "lastFullAttemptAt": "2026-10-02T15:56:33.764Z",
+                "lastFullOkAt": "2026-10-02T15:56:33.764Z",
+                "lastFullFailedAt": null,
+                "nextFullProbeAt": null,
+                "backoffMinutes": 0,
+                "legacyInflatedFailureCount": 550
+              },
+              "currentLaneState": {
+                "version": 1,
+                "consecutiveFailures": 3220,
+                "lastAttemptAt": "2026-10-02T16:13:03.102Z",
+                "lastOkAt": "2026-09-30T10:33:02.395Z",
+                "lastFailedAt": "2026-10-02T16:13:03.102Z",
+                "rows": 0,
+                "usableEndpoints": 0
+              },
+              "lastFailure": null
+            },
+            "collectorAttestation": {
+              "version": "trusted-market-collector-evidence-v1",
+              "scope": "current-market-lane",
+              "trustRegistryAvailable": true,
+              "eligibleEndpoints": 0,
+              "trustedEndpoints": 0,
+              "trustedKeyCount": 0,
+              "trustedCollectorCount": 0,
+              "keyIds": [],
+              "independenceDomains": [],
+              "unassignedKeyIds": [],
+              "blockerCounts": {}
+            }
+          },
+          "relayFastLaneSnapshot": {
+            "fileName": "sporttery-relay-fast-lane.json",
+            "lane": "fast",
+            "capturedAt": "2026-09-30T10:33:48.935Z",
+            "ageMinutes": 3219.41,
+            "maxAgeMinutes": 20,
+            "stale": true,
+            "validationOk": false,
+            "rows": 12,
+            "usableEndpoints": 3,
+            "methods": [
+              "calculator",
+              "current",
+              "result"
+            ],
+            "currentLane": {
+              "capturedAt": "2026-09-30T10:33:48.897Z",
+              "latestCapturedAt": "2026-09-30T10:33:48.935Z",
+              "ageMinutes": 3219.41,
+              "maxAgeMinutes": 20,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 2,
+              "usableEndpoints": 2,
+              "methods": [
+                "calculator",
+                "current"
+              ]
+            },
+            "resultLane": {
+              "capturedAt": "2026-09-30T10:33:48.761Z",
+              "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+              "ageMinutes": 3219.41,
+              "maxAgeMinutes": 20,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 10,
+              "usableEndpoints": 1,
+              "methods": [
+                "result"
+              ]
+            },
+            "fullLane": {
+              "capturedAt": "2026-09-30T10:33:48.761Z",
+              "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+              "ageMinutes": 3219.41,
+              "maxAgeMinutes": 180,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 10,
+              "usableEndpoints": 1,
+              "methods": [
+                "result"
+              ]
+            },
+            "historyLane": {
+              "capturedAt": "2026-09-30T10:33:48.761Z",
+              "latestCapturedAt": "2026-09-30T10:33:48.761Z",
+              "ageMinutes": 3219.41,
+              "maxAgeMinutes": 180,
+              "maxFutureSkewMinutes": 5,
+              "futureClock": false,
+              "stale": true,
+              "rows": 10,
+              "usableEndpoints": 1,
+              "methods": [
+                "result"
+              ]
+            },
+            "warnings": [],
+            "collectorState": null,
+            "collectorAttestation": {
+              "version": "trusted-market-collector-evidence-v1",
+              "scope": "current-market-lane",
+              "trustRegistryAvailable": true,
+              "eligibleEndpoints": 2,
+              "trustedEndpoints": 2,
+              "trustedKeyCount": 1,
+              "trustedCollectorCount": 1,
+              "keyIds": [
+                "football-mainland-collector-20260728"
+              ],
+              "independenceDomains": [
+                "mainland-collector-runtime-1"
+              ],
+              "unassignedKeyIds": [],
+              "blockerCounts": {}
+            }
+          },
+          "syncMetaCurrentStale": true
+        },
+        "warnings": [
+          "official Sporttery source redundancy watch: verified server direct/proxy unavailable and trusted collectors 0/2",
+          "sporttery relay fast lane file exists but failed strict provenance or clock validation",
+          "sporttery relay is using the last trusted fallback snapshot; partial live snapshots are not overwriting the source",
+          "pre-match rows 0 < 1"
+        ],
+        "errors": [
+          "sporttery current sync stale 17.18m",
+          "current matches 0 < 1"
+        ],
+        "fastResultIntegrity": {
+          "available": true,
+          "valid": true,
+          "missing": false,
+          "legacy": false,
+          "reason": null,
+          "revision": 9143,
+          "transition": false,
+          "transitionSource": null,
+          "sqliteReason": null,
+          "validatedAt": null
+        }
+      }
+    }
+  ]
+}

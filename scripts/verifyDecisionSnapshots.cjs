@@ -24,6 +24,8 @@ const {
   dualMarketDecisionBindingForMatch,
   dualMarketDecisionBindingForMatchOrExisting,
   predictionSnapshotRow,
+  predictionSet,
+  finalizePublishedPredictionDecisions,
   shouldCaptureLockedShadowRevision,
   validArchivedPreMatchPrediction,
 } = require("./syncData.cjs");
@@ -218,7 +220,27 @@ assert.equal(selfTestSnapshot.sourceTimestamps.hadObservedAt, mockMatch.oddsObse
 assert.equal(selfTestSnapshot.sourceTimestamps.hadReceivedAt, mockMatch.oddsReceivedAt);
 assert.equal(selfTestSnapshot.sourceTimestamps.hhadObservedAt, mockMatch.handicapOddsObservedAt);
 assert.equal(selfTestSnapshot.sourceTimestamps.hhadReceivedAt, mockMatch.handicapOddsReceivedAt);
-assert.equal(selfTestSnapshot.exposure.localEvidenceEligible, true);
+assert.equal(selfTestSnapshot.exposure.localEvidenceEligible, false,
+  "a 3.25 SP / 45% HHAD fixture must retain the current historical cooling gates");
+assert.ok(selfTestSnapshot.exposure.modelBlockers.includes("historical-high-sp-cooling"));
+assert.ok(selfTestSnapshot.exposure.modelBlockers.includes("hhad-model-probability-too-low"));
+// Also keep a positive local-evidence case: a governance-only blocker must not
+// erase otherwise valid evidence, nor make a reference prediction public.
+const locallyEligibleMatch = clone(mockMatch);
+locallyEligibleMatch.probabilityModel.unifiedPosterior.selectedMarket = "HAD";
+locallyEligibleMatch.probabilityModel.unifiedPosterior.selectedCode = "1";
+locallyEligibleMatch.probabilityModel.unifiedPosterior.selectedHandicapLine = "0";
+locallyEligibleMatch.probabilityModel.unifiedPosterior.candidates[0].multiFactorEvidence = clone(
+  mockMatch.probabilityModel.unifiedPosterior.candidates[3].multiFactorEvidence,
+);
+locallyEligibleMatch.predictions[0] = {
+  ...locallyEligibleMatch.predictions[0], oddsPoolCode: "HAD", handicapLine: "0", tipCode: "1",
+};
+const locallyEligibleSnapshot = buildCandidateDecisionSnapshot(locallyEligibleMatch, "2026-07-12T10:00:00.000Z");
+assert.equal(locallyEligibleSnapshot.exposure.localEvidenceEligible, true);
+assert.equal(locallyEligibleSnapshot.exposure.publicEligible, false);
+assert.deepEqual(locallyEligibleSnapshot.exposure.modelBlockers, []);
+assert.ok(locallyEligibleSnapshot.exposure.governanceBlockers.includes("model-risk-not-promotable"));
 assert.equal(selfTestSnapshot.lambdas.independentHome, 1.7);
 assert.equal(selfTestSnapshot.probabilities.HHAD.line, -1);
 assert.ok(selfTestSnapshot.exposure.shadowTracks?.HHAD_COMPANION);
@@ -1019,6 +1041,35 @@ delete policyUpgradeCandidate.predictionMeta.dualMarketDecision;
 policyUpgradeCandidate.predictions = policyUpgradeCandidate.predictions.map((prediction) => (
   prediction.marketType === "BEST" ? { ...prediction, tipCode: "2" } : prediction
 ));
+const cachedPolicyUpgrade = applyPredictionPersistence(
+  policyUpgradeCandidate, policyUpgradeExisting, "2026-07-12T10:06:00.000Z",
+  { finalizedAt: "2026-07-12T10:06:30.000Z" },
+);
+assert.equal(cachedPolicyUpgrade.predictions.find((row) => row.marketType === "BEST")?.tipCode, "1",
+  "changing a policy label cannot upgrade a cached computation");
+// Compute a fresh synthetic model inside the fixture's controlled clock. This
+// tests the new calculation requirement without changing production clocks.
+const realDateNow = Date.now;
+let freshlyComputedModel;
+try {
+  Date.now = () => Date.parse("2026-07-12T10:06:01.000Z");
+  const freshInput = { ...policyUpgradeCandidate, predictionMeta: undefined, status: "SCHEDULED",
+    homeTeam: "Synthetic Home", awayTeam: "Synthetic Away", leagueName: "Synthetic League",
+    oddsSource: "sporttery:HAD", oddsUpdatedAt: "2026-07-12T10:06:00.000Z",
+    formSnapshot: { sampleSize: 24,
+      home: { sampleSize: 12, goalsForAvg: 1.92, goalsAgainstAvg: 1.08 },
+      away: { sampleSize: 12, goalsForAvg: 2.25, goalsAgainstAvg: 1.17 } },
+  };
+  const calculated = { ...freshInput, ...predictionSet(freshInput) };
+  freshlyComputedModel = finalizePublishedPredictionDecisions(
+    [calculated], new Map(), "2026-07-12T10:06:00.000Z",
+    { finalizedAt: "2026-07-12T10:06:02.000Z" },
+  )[0].probabilityModel;
+} finally {
+  Date.now = realDateNow;
+}
+assert.ok(freshlyComputedModel.executionClock.events.length > 0);
+policyUpgradeCandidate.probabilityModel = clone(freshlyComputedModel);
 const refreshedForPolicyUpgrade = applyPredictionPersistence(
   policyUpgradeCandidate,
   policyUpgradeExisting,
@@ -1074,6 +1125,7 @@ assert.equal(
 assert.equal(preservedPolicyAfterCutoff.predictionMeta?.modelUpgradeRefresh, undefined);
 
 const signedTrainingUpgradeCandidate = clone(laterMarketObservationMatch);
+signedTrainingUpgradeCandidate.probabilityModel = clone(freshlyComputedModel);
 delete signedTrainingUpgradeCandidate.predictionMeta.dualMarketDecision;
 signedTrainingUpgradeCandidate.predictions = signedTrainingUpgradeCandidate.predictions.map((prediction) => (
   prediction.marketType === "BEST" ? { ...prediction, tipCode: "2" } : prediction

@@ -17,7 +17,7 @@ import {
   User as UserIcon
 } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
-import { useAccount } from '../context/AccountContext';
+import { useAccount } from '../context/AccountContextCore';
 
 interface NavbarProps {
   currentTab: string;
@@ -52,6 +52,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
   const logout = () => { void (async () => { try { if (account.user) await account.logout(); legacyLogout(); setCurrentTab('best'); } catch { setLogoutError(language === 'zh' ? '退出未完成，请重试。' : 'Sign out failed. Please retry.'); } })(); };
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [isStatusOpen, setIsStatusOpen] = useState(false);
+  const [menuTab, setMenuTab] = useState(currentTab);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const moreRootRef = useRef<HTMLDivElement>(null);
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
@@ -231,7 +232,11 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     return () => { document.removeEventListener('pointerdown', onPointerDown); document.removeEventListener('keydown', onKeyDown); };
   }, [closeStatus, isStatusOpen]);
 
-  useEffect(() => { setIsMoreOpen(false); setIsStatusOpen(false); }, [currentTab]);
+  if (menuTab !== currentTab) {
+    setMenuTab(currentTab);
+    setIsMoreOpen(false);
+    setIsStatusOpen(false);
+  }
 
   const openMore = (last = false) => {
     setIsStatusOpen(false); setIsMoreOpen(true);

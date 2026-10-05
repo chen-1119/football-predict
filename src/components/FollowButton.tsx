@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Heart, Loader2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useAccount } from '../context/AccountContext';
+import { useAccount } from '../context/AccountContextCore';
 import { useApp } from '../context/AppContextCore';
 import { savePendingFollow, safeAccountReturnTo } from '../services/accountApi';
 import '../styles/account.css';

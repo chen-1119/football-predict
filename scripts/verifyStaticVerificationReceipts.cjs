@@ -175,8 +175,21 @@ async function verifyStaticVerificationReceipts() {
       assert.equal(receipts.collectInputs(fixture, scanned), null);
       copy(statusHelper);
     });
+    check("new frontend verifier imports require reaudit rather than automatic enrollment", () => {
+      fs.appendFileSync(path.join(fixture, scanned[0]), "\nrequire('node:child_process');\n");
+      assert.equal(receipts.collectInputs(fixture, scanned), null);
+      copy(scanned[0]);
+      assert.deepEqual(receipts.collectInputs(fixture, scanned), tree);
+    });
     fs.mkdirSync(path.join(fixture, "src/outputs")); fs.writeFileSync(path.join(fixture, "src/outputs/new.ts"), "new source");
-    check("nested outputs source membership is covered", () => assert.notEqual(receipts.hashValue(receipts.collectInputs(fixture, scanned)), receipts.hashValue(tree)));
+    check("nested outputs source membership invalidates previously authenticated frontend success", () => {
+      const changed = receipts.collectInputs(fixture, scanned); assert.ok(changed);
+      assert.notEqual(receipts.hashValue(changed), receipts.hashValue(tree));
+      const frontendIdentity = { ...identity, inputs: tree };
+      const sealed = receipts.sealReceipt({ identity: frontendIdentity, result, key, now, elapsedMs: 25 });
+      assert.ok(receipts.openReceipt(sealed, { identity: frontendIdentity, key, now }));
+      assert.equal(receipts.openReceipt(sealed, { identity: { ...identity, inputs: changed }, key, now }), null);
+    });
     fs.appendFileSync(path.join(fixture, command[0]), "\n// add unknown input reading\n");
     check("new verifier code requires dependency reaudit, never auto-enrolls", () => assert.equal(receipts.collectInputs(fixture, command), null));
     copy(command[0]); fs.renameSync(sourcePath, sourcePath + ".retained");

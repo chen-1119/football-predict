@@ -1,0 +1,129 @@
+{
+  "version": "football-integration-final-verification-v1",
+  "verifiedAt": "2026-10-02T14:44:55.756Z",
+  "implementationHead": "a229d3b7b653f624e0859582b845d3f715c9faa6",
+  "runtimeVersion": "v22.22.1",
+  "sourceFiles": [
+    {
+      "file": "scripts/verifySourceCloudDiagnostics.cjs",
+      "sha256": "a8f0452720deeba8b689da900270ebe258cfd7dad09685e5ca5041bb55fdf7f0"
+    },
+    {
+      "file": "scripts/verifySourceCollectorShadowAdapter.cjs",
+      "sha256": "e4a083bfa6b2537f8904d3c5c3b20f91a47ce8a6e8b4df06f34581da7f4c2046"
+    },
+    {
+      "file": "scripts/verifyReleaseQualityEvidence.cjs",
+      "sha256": "9b201e943fd3d920171b733c1524474d384b257108c3e0480ffd70fbceda25b3"
+    },
+    {
+      "file": "tests/public-browse-flow.test.cjs",
+      "sha256": "cf819dd45e82728c483c364206b3f9fcdcb2c214d8a2afb9664b8786da29cecf"
+    },
+    {
+      "file": "tests/published-evidence-snapshot.test.cjs",
+      "sha256": "a69f8d3442cfb2cc965553a8392d5472627284e2a8d5e4d3f8878f6c3a2f513c"
+    },
+    {
+      "file": "tests/history-regression-admission.test.cjs",
+      "sha256": "b8682c01f7308eefc897fef536abf94814110e916623239a4508495f38b16298"
+    },
+    {
+      "file": "tests/history-regression-replay.test.cjs",
+      "sha256": "c64cf96378697cec37a73181b4fa4cd1ed019fc6c31ef7ce9085829f7552395c"
+    },
+    {
+      "file": "tests/history-regression-feature-admission.test.cjs",
+      "sha256": "d81d2313fbd8ed0a50b2988342aac1895f2355ae08858f9a93d41fcf3e279ca0"
+    },
+    {
+      "file": "tests/source-shadow-worker-transition.test.cjs",
+      "sha256": "f5b7055425bdf7bc89219f28004d61716787cde52461dfff4a52a1a2f94ef056"
+    },
+    {
+      "file": "tests/quality-history-interface.test.cjs",
+      "sha256": "8d9f37094fb797353a845c191df03413f18361d52fbc7c050fecf9b64f5001fa"
+    },
+    {
+      "file": "scripts/historyRegressionReplay.cjs",
+      "sha256": "1cda15da320381a59662ef60192a486202dfa39e565ca187552eee9d5f58329a"
+    },
+    {
+      "file": "scripts/runSyncWorker.cjs",
+      "sha256": "d11150b63bb9de720f27521b122fc524a56949db828e6b55266385246bda4047"
+    },
+    {
+      "file": "scripts/sourceCollectorShadowAdapter.cjs",
+      "sha256": "8b2389c9cf461795887cb0e5a1639cfb5290c4e610f886793130d402929666b0"
+    },
+    {
+      "file": "scripts/qualityHistoryRegressionEvidence.cjs",
+      "sha256": "72a4c01f20f51735ba1021663b9c0d7764dae87893df1610cbb2f147e884f8cc"
+    }
+  ],
+  "unchanged": true,
+  "checks": [
+    {
+      "name": "targeted",
+      "startedAt": "2026-10-02T14:44:17.952Z",
+      "completedAt": "2026-10-02T14:44:42.174Z",
+      "exitCode": 0,
+      "error": null,
+      "log": "final-targeted.log",
+      "logSha256": "be6e3c1250d8c06c0a399d7f583119300efebdea92f77b017b09b4180d0c8f6f",
+      "tests": 270,
+      "passed": 270,
+      "failed": 0
+    },
+    {
+      "name": "frontend-worker",
+      "startedAt": "2026-10-02T14:44:42.175Z",
+      "completedAt": "2026-10-02T14:44:43.122Z",
+      "exitCode": 0,
+      "error": null,
+      "log": "final-frontend-worker.log",
+      "logSha256": "2722114a7b9a650d3b30762d684106cb450199f1d9a2e777a0a10f4cea163bf8"
+    },
+    {
+      "name": "full-worker",
+      "startedAt": "2026-10-02T14:44:43.122Z",
+      "completedAt": "2026-10-02T14:44:43.190Z",
+      "exitCode": 0,
+      "error": null,
+      "log": "final-full-worker.log",
+      "logSha256": "1e4c00ca5731ff633a9b84e29c526205f1bc65214f9d37a5d52fa829eb82b484"
+    },
+    {
+      "name": "model-refreeze",
+      "startedAt": "2026-10-02T14:44:43.190Z",
+      "completedAt": "2026-10-02T14:44:43.296Z",
+      "exitCode": 0,
+      "error": null,
+      "log": "final-model-refreeze.log",
+      "logSha256": "612cf2503512f7d227dac2c8f7d5c3824c3afd840f34c9731c7e22f6fa540f73"
+    },
+    {
+      "name": "candidate-protocol",
+      "startedAt": "2026-10-02T14:44:43.296Z",
+      "completedAt": "2026-10-02T14:44:43.348Z",
+      "exitCode": 0,
+      "error": null,
+      "log": "final-candidate-protocol.log",
+      "logSha256": "05682339321c00774822d573cba796fbf192b053d62dd892c7e59f0733b6ed10"
+    },
+    {
+      "name": "historical-independent",
+      "startedAt": "2026-10-02T14:44:43.349Z",
+      "completedAt": "2026-10-02T14:44:55.718Z",
+      "exitCode": 0,
+      "error": null,
+      "log": "final-historical-independent.log",
+      "logSha256": "03b9a08810adee9da89a05031ec68b99cbff5cd5fbd79b77601d65c5b788474d"
+    }
+  ],
+  "ok": true,
+  "productionWrites": 0,
+  "deployed": false,
+  "newModelTrained": false,
+  "modelImprovementProven": false
+}

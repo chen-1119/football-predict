@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { useAccount } from '../context/AccountContext';
+import { useAccount } from '../context/AccountContextCore';
 import { accountRequest, type AccountUser } from '../services/accountApi';
 import '../styles/account.css';
 
@@ -32,7 +32,7 @@ export function AccountAdmin() {
     } catch (cause) { if (!signal?.aborted) setError(errorMessage(cause)); }
     finally { if (!signal?.aborted) setLoading(false); }
   }, [allowed]);
-  useEffect(() => { const controller = new AbortController(); void load(controller.signal); return () => controller.abort(); }, [load, account.user?.id]);
+  useEffect(() => { const controller = new AbortController(); const timer = window.setTimeout(() => { void load(controller.signal); }, 0); return () => { window.clearTimeout(timer); controller.abort(); }; }, [load, account.user?.id]);
   const candidates = account.user?.role === 'operator' ? rows.filter(user => user.role === 'user') : rows;
   const selected = candidates.find(user => user.id === selectedId);
   const effectiveOperation = account.user?.role === 'operator' ? 'grant' : operation;

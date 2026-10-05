@@ -1,0 +1,72 @@
+{
+  "version": "bounded-form-supplement-proposal-v1",
+  "status": "requires-reviewed-exporter-change-before-remote-execution",
+  "productionWrites": false,
+  "remoteReexportExecuted": false,
+  "originalExporterModified": false,
+  "newlyRecoveredRows": 0,
+  "evidence": "release-readiness-form-export-audit.json",
+  "finding": {
+    "cohortRows": 432,
+    "formRetained": 24,
+    "formExportOmitted": 355,
+    "snapshotUnavailable": 53,
+    "omittedFormBytesMin": 1027,
+    "omittedFormBytesMax": 2150,
+    "omittedFormBytesTotal": 638330,
+    "omittedFormOver8192": 0,
+    "existingRetainedHashMatches": 0,
+    "meaning": "355份form在源快照中非空，导出器将其省略；不得称为源端缺失。潜在补齐不等于可用于训练、无需证明时点或已有命中率提升。"
+  },
+  "existingInterface": {
+    "entry": "scripts/captureHistoryRegression.cjs:20-36,63-66",
+    "arguments": ["exact scripts/historyRegressionRemote.py path", "new output file"],
+    "fixedGeneration": "g-79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273",
+    "fixedWindow": ["2026-09-01T00:00:00+08:00", "2026-10-01T00:00:00+08:00"],
+    "modelInputTotalCap": 8192,
+    "conditionalFieldTrimCap": 1024,
+    "pageSize": 50,
+    "pageSizeMeaning": "最终输出的页分组与canonicalHash，整个投影完成后才计算；无远程offset/page/filter参数。",
+    "whyUnchangedRetryDoesNotRecover": "每条快照在project_model_inputs/project_snapshot内先裁剪，之后才分页。即使仅降低总比赛数，原每行裁剪仍可触发。该helper未提供环境变量覆盖，因此不能用命令行切片解决。",
+    "sourceLines": ["scripts/historyRegressionRemote.py:9-13", "scripts/historyRegressionRemote.py:47-65", "scripts/historyRegressionRemote.py:68-80", "scripts/historyRegressionRemote.py:280-281"]
+  },
+  "proposedMinimalChange": {
+    "approach": "审查新的只读form补充投影helper及专用捕获入口；保留原v3和原helper不变。新增代码未在本调查中实现或执行。",
+    "remoteAuthority": "复用已固定主机公钥的SSH及既有只读immutable-file范围；不得在当前capture入口偷换源文件、注入globals/monkey patch、运行任意替代程序或扩大sudo权限。",
+    "fixedInputs": [
+      "同一generation、manifest hash和sourceCycleId",
+      "原v3的432个事件集合、原始snapshot inputFileRowIndex和originalObjectCanonicalSha256",
+      "原v3的modelInputs.sourceCanonicalSha256以及form.canonicalSha256",
+      "prediction-snapshots.json原始SHA 57d8c8e2d9dd1a0c2315f3e8701da94a5ac188366166f7505de84b8045bb9f55",
+      "原始manifest/registry读取前后身份验证以及无符号链接要求"
+    ],
+    "projection": [
+      "matchId、snapshot原始行号及对象hash",
+      "原始decisionId、featureSnapshotHash、sourceCycleId和cutoff标识（仅绑定，不重算/修写）",
+      "form完整原值、canonicalBytes与canonicalSha256",
+      "缺失/源null/超限状态、helper源码SHA、SSH响应原始字节SHA"
+    ],
+    "bounds": {
+      "oneStreamPass": true,
+      "maximumRows": 432,
+      "maximumFormBytesPerRow": 8192,
+      "maximumSupplementBytes": 4194304,
+      "noArbitraryPaths": true,
+      "noDatabase": true,
+      "noAppImports": true,
+      "noUploads": true,
+      "noRemotePersistentFiles": true,
+      "explanation": "本批355份省略form合计约0.61MiB，单独投影无需放大原整包10MiB上限。原文件约766MB，建议一次流式核验后输出固定页，避免9次全文件重读。"
+    },
+    "acceptance": [
+      "独立审查与合成边界测试后才执行新helper；捕获入口明确白名单其路径并记录代码SHA",
+      "同一不可变文件原始字节SHA与manifest身份一致，读取前后不变；generation变化则停止，不能静默转用新代",
+      "每份form canonicalHash与旧v3遗漏承诺逐一相等，snapshot原对象hash与源文件行号也一致",
+      "已保留24份form交叉校验逐值相等，53份无快照保持缺失，355份成功数按实际回执报告",
+      "仅生成独立supplement，不覆盖旧v3、旧admission、旧151/154评分或正式冻结预测",
+      "补齐后重新检查字段来源、provider/received/available时钟和cutoff；不以feature capturedAt冒充字段可用时间",
+      "没有合格时点就仍然只作诊断，不开放候选训练/模型晋升"
+    ]
+  },
+  "nextDecision": "需要根任务先审查新增受限导出helper与捕获入口变更的具体实现范围；本调查没有技术依据在原接口下直接重导出缺失form，因此停止远程调用并提交此方案。"
+}

@@ -37,10 +37,15 @@ const EXTERNAL_UNITS = deepFreeze({
 // arbitrary command. Their enclosing function source must remain exact, and
 // baseline/candidate package and entire reachable-source bytes must also match.
 const COMMAND_FUNCTIONS = deepFreeze({
-  "scripts/syncDailyPrematchApi.cjs": ["91da78aabb2c925254c42abec031be710d4f9a5316a2ba059533b60189b3bedf"],
+  // Reviewed credential-fingerprint backoff recovery; child command and its
+  // fixed environment/arguments remain independently pinned below.
+  "scripts/syncDailyPrematchApi.cjs": ["14f9823eb5fc60c308afb761ed3546398132a5c7cb6b64903aca47acfb6fc4c9"],
   "server/index.cjs": ["209dac00faf2eb81c7c6348cacd5c273dd31dfc8ef913d9f77e0cf2fd4a621b6"],
   "server/relayFastResultWatcher.cjs": ["dbea20508195f9cafdb058ff0e4242448cac19a914c163ef961cfa5d16243567"],
-  "scripts/runSyncWorker.cjs": ["7ae9788ce2e4cbc8d321f4750c49de0bb653f132e19497bff992f7e08cb3ac37", "013f6d2f9ffd51b26366edb7f4f942ec80614e91101618a627277ba5d6cf2dbc"],
+  "scripts/runSyncWorker.cjs": ["7ae9788ce2e4cbc8d321f4750c49de0bb653f132e19497bff992f7e08cb3ac37", "013f6d2f9ffd51b26366edb7f4f942ec80614e91101618a627277ba5d6cf2dbc",
+    // Reviewed bounded validator stderr/close capture. Executable, arguments,
+    // cwd, environment, shell restrictions and termination timers are unchanged.
+    "dde7d8448ac9eba3ce83e75daceb93376bdcfeaa9b849e1c2e5c1c86cf9b2681"],
   "scripts/checkServerRuntime.cjs": ["d5d3198187da326fa45865895f9a10a4d8b51c47f0a5fe9848acd680f9f250ca"],
   "scripts/sportteryFastResultLane.cjs": ["af21f9e738ed81dd6e15396e57280d8b7f368c4409d1cc425d11c45d923b3b5c", "dc80987cc44ec3e0e8a97b8e5ec7bd5e428db8ead154cf4ed41e42b08e1fb1d4", "d5f09848d188090f8ca7888d4b42c99a5a7306f7100886c7b552657322944efa", "5b67586e107f6cfb30a77e18107ea027ef81f4d1b1439d06f6f209d82bab1dd1", "477857d6490abf91a0a5c78bcfe164d025540bebfc4275bf5d1404d586a6ec6d"],
   "scripts/sync500Details.cjs": ["5d0eb2c718dbfe5c53151d940cb7b842298920885bd2161165bbfb1d2822ea3a"],
@@ -62,8 +67,14 @@ const PROCESS_PARAMETER_ALIAS = Object.freeze({ file: "server/relayFastResultWat
   target: "scripts/publishOfficialResultsFast.cjs" });
 const DAILY_PREMATCH_CHILD = Object.freeze({ file: "scripts/syncDailyPrematchApi.cjs", api: "spawnSync",
   target: "scripts/syncApiFootballData.cjs",
-  functionSha256: "91da78aabb2c925254c42abec031be710d4f9a5316a2ba059533b60189b3bedf",
+  functionSha256: "14f9823eb5fc60c308afb761ed3546398132a5c7cb6b64903aca47acfb6fc4c9",
   callSha256: "b2ebc786811b687528499c0b1127882080858bed62dc18fc4368f84f377f9ba3" });
+// Here 'dev' is the Node stat device field, not the package's vite command.
+// Pin the complete read-only reader and array context; an edited function or
+// another occurrence still enters the conservative npm-command checks.
+const STAT_FIELD_LITERAL = Object.freeze({ file: "scripts/officialClosedScheduleEvidence.cjs", value: "dev",
+  expression: "['dev', 'ino', 'size', 'mtimeNs', 'ctimeNs']",
+  functionSha256: "b52978697762bedfda73d950c525331f2ab30e6e625110e222033f109855d55e" });
 const COMMAND_CALLER_FUNCTIONS = deepFreeze({
   "server/index.cjs": ["6444af2f96dc8c27a42b17fde3c1e8ecbbf78b431400db68705d79f435b81962",
     "69491dfa47b5ae271413cb7d26821c5fa672a9837bfcb524aff20280c24aaf57", "62533b17bd403660a466affcb7977306b864671de811e20282de706837079743"],
@@ -74,7 +85,9 @@ const COMMAND_CALLER_FUNCTIONS = deepFreeze({
     "dc5ba7f3cc3b8e8e65d6dc9450fce24c99b9575fdca632d9c8f3c114d749dfd2", "e35c0a392d9a0ab5ca3abdd8375d0578c8b06bd508da82871c3f23e7d81751e3",
     // Reviewed native coverage await and postgres:sync routing. Commands stay
     // literal; the full reachable code and package graph are still compared.
-    "994b5f575e5f8141fc06500fee5a2e036db26d6f3b4248673f462cdd97f701eb", "50b4a036b586195589da6e7b56c11c6a1daa40cc8d183f8af039bc8415e42ff5"],
+    "994b5f575e5f8141fc06500fee5a2e036db26d6f3b4248673f462cdd97f701eb", "67a23f267b1ae9309b0e7c9a77809d9bde13213ce280f3f1ef07ebae199e5801",
+    // Same official-cycle commands; only validate:data requests stderr capture.
+    "e2215fcb09134e49ae3a29855531785d7ce6bb6772b3774a08454441cd64f350"],
 });
 const UNIT_SOURCE_HASHES = Object.freeze({
   "football-daily-prematch.service": "9e6af93d56635ed0940590b4a027e02ab5310080e53b2873775b520f46796d8a",
@@ -93,7 +106,8 @@ const UNIT_SOURCE_HASHES = Object.freeze({
 const POLICY_HASH = digest({ version: VERSION, parser: PARSER, entrypoints: ENTRYPOINTS, externalUnits: EXTERNAL_UNITS,
   unitSourceHashes: UNIT_SOURCE_HASHES,
   commandFunctions: COMMAND_FUNCTIONS, commandCallers: COMMAND_CALLER_FUNCTIONS, commandParameterAlias: PROCESS_PARAMETER_ALIAS,
-  dynamicImport: SPORTTERY_IMPORT, worker: PUBLICATION_WORKER, dailyPrematchChild: DAILY_PREMATCH_CHILD, uiPaths: FRONTEND_PATHS,
+  dynamicImport: SPORTTERY_IMPORT, worker: PUBLICATION_WORKER, dailyPrematchChild: DAILY_PREMATCH_CHILD,
+  statFieldLiteral: STAT_FIELD_LITERAL, uiPaths: FRONTEND_PATHS,
   commandGrammar: "node-reviewed-flags-local-script-arguments-and-and-v1" });
 const processApis = new Set(["spawn", "spawnSync", "exec", "execSync", "execFile", "execFileSync", "fork"]);
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -383,7 +397,12 @@ function inspectFrontendRuntimeBoundary(input) {
         }
         // Reviewed worker plans/wrappers pass these literal npm keys indirectly.
         // This deliberately over-approximates labels, rather than missing a job.
-        if (ts.isStringLiteralLike(node) && Object.hasOwn(pkg.scripts, node.text)) addNpm(file, node.text);
+        if (ts.isStringLiteralLike(node) && Object.hasOwn(pkg.scripts, node.text)) {
+          const auditedStatField = file === STAT_FIELD_LITERAL.file && node.text === STAT_FIELD_LITERAL.value
+            && ts.isArrayLiteralExpression(node.parent) && node.parent.getText(sf) === STAT_FIELD_LITERAL.expression
+            && enclosingFunctionHash(node, sf) === STAT_FIELD_LITERAL.functionSha256;
+          if (!auditedStatField) addNpm(file, node.text);
+        }
         ts.forEachChild(node, visit);
       };
       visit(sf);

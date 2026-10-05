@@ -992,7 +992,7 @@ const readPlanSqliteStatus = async () => {
     "EnvironmentFile=/etc/football-predict/env",
     "SYNC_WORKER_LOOP=1",
     "runSyncWorker.cjs --loop",
-    "ENABLE_SQLITE_EXPORT=1"
+    "ENABLE_SQLITE_EXPORT=0"
     ]) && !workerService.includes("Environment=DATASTORE_READ_SOURCE=") && hasAll(syncWorker, [
       'process.env.SYNC_WORKER_LOOP === "1"',
       'process.argv.includes("--loop")'
@@ -3493,8 +3493,8 @@ const readPlanSqliteStatus = async () => {
         '"scripts/verifyFastResultGenerationReconciliation.cjs"',
         '"fast result generation receipt review isolation"',
         '"fast-result-generation-reconciliation"',
-        "Number(fastResultGeneration.body?.checks) === 23",
-        "Number(fastResultGeneration.body?.passed) === 23",
+        "Number(fastResultGeneration.body?.checks) >= 23",
+        "Number(fastResultGeneration.body?.passed) === Number(fastResultGeneration.body?.checks)",
         "receiptReviewCannotEnterFormalMetrics",
         "pairedReferenceSurvivesReconciliation",
         "invalidPairSourceFailsBeforeAnyWrite",

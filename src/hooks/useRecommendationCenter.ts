@@ -4,8 +4,8 @@ import { buildApiUrl } from '../services/runtimeUrls';
 import { createPollingController } from '../services/pollingController';
 import { parseRecommendationCenter, type RecommendationCenterData } from '../services/recommendationCenterView';
 
-interface Snapshot {data:RecommendationCenterData|null;loading:boolean;failed:boolean;authorizationRequired:boolean}
-const empty:Snapshot=Object.freeze({data:null,loading:true,failed:false,authorizationRequired:false});
+interface Snapshot {data:RecommendationCenterData|null;loading:boolean;failed:boolean;authorizationRequired:boolean;receivedAt:number}
+const empty:Snapshot=Object.freeze({data:null,loading:true,failed:false,authorizationRequired:false,receivedAt:0});
 let snapshot=empty;
 const listeners=new Set<()=>void>();
 let dispose:(()=>void)|undefined;
@@ -20,7 +20,7 @@ function start(){
       if(!response.ok)throw Object.assign(new Error('Recommendation request failed'),{status:response.status});
       return parseRecommendationCenter(await response.json());
     },
-    onData:data=>{const stamp=Date.parse(data.updatedAt);if(stamp<newest||stamp>Date.now()+300000)throw new Error('Regressed product snapshot');newest=stamp;emit({data,loading:false,failed:false,authorizationRequired:false});},
+    onData:data=>{const stamp=Date.parse(data.updatedAt),receivedAt=Date.now();if(stamp<newest||stamp>receivedAt+300000)throw new Error('Regressed product snapshot');newest=stamp;emit({data,loading:false,failed:false,authorizationRequired:false,receivedAt});},
     onError:error=>{const status=typeof error==='object'&&error!==null&&'status' in error?error.status:null;const authorizationRequired=status===401||status===403;emit({...snapshot,data:authorizationRequired?null:snapshot.data,loading:false,failed:true,authorizationRequired});},
     isVisible:()=>document.visibilityState==='visible',
   });

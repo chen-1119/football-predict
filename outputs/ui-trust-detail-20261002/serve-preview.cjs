@@ -1,0 +1,2 @@
+const http=require('node:http'),fs=require('node:fs'),path=require('node:path');
+http.createServer((req,res)=>{const name=new URL(req.url,'http://localhost').pathname.slice(1);if(!['before.html','after.html'].includes(name)){res.statusCode=404;res.end();return;}res.setHeader('Content-Type','text/html;charset=utf-8');res.end(fs.readFileSync(path.join(__dirname,name)));}).listen(8797,'127.0.0.1',()=>console.log('Component-only preview http://127.0.0.1:8797/after.html'));

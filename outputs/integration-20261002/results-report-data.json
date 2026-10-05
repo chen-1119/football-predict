@@ -1,0 +1,643 @@
+{
+  "version": "football-integration-results-report-v1",
+  "generatedAt": "2026-10-02T14:50:31.007Z",
+  "timeZone": "Asia/Shanghai",
+  "status": {
+    "deployedThisRound": false,
+    "newModelTrained": false,
+    "improvementProven": false,
+    "frontendSequence": 787,
+    "runtimeSequence": 785,
+    "observationAt": "2026-10-02T14:25:07.062Z",
+    "readiness": {
+      "serviceOk": true,
+      "dataFresh": false,
+      "sourceHealthOk": false,
+      "recommendationReliable": false
+    },
+    "secondBatch": "5 个任务两批交付均已集成，代码状态以本轮最终验收回执为准。",
+    "implementationHead": "a229d3b7b653f624e0859582b845d3f715c9faa6",
+    "finalVerifiedAt": "2026-10-02T14:44:55.756Z"
+  },
+  "publicReferenceRecord": {
+    "published": 152,
+    "settled": 151,
+    "won": 84,
+    "lost": 67,
+    "pending": 1,
+    "void": 0,
+    "disputed": 0,
+    "hitRate": 0.5562913907284768,
+    "referenceOnly": true,
+    "updatedAt": "2026-10-02T14:30:30.138Z",
+    "sourceUpdatedAt": "2026-09-30T15:08:02.777Z",
+    "businessDate": "2026-10-02",
+    "metricMeaning": "公开参考推荐的已结算方向命中率；不是新候选模型成绩，也不是经校准的正式推荐准确率。"
+  },
+  "historicalPair": {
+    "from": "2026-09-01T00:00:00+08:00",
+    "untilExclusive": "2026-10-01T00:00:00+08:00",
+    "receivedAt": "2026-10-02T13:50:23.423Z",
+    "model": {
+      "n": 154,
+      "won": 78,
+      "accuracy": 0.5064935064935064,
+      "brier": 0.6247951452865698,
+      "logLoss": 1.0400609233658802
+    },
+    "market": {
+      "n": 154,
+      "won": 83,
+      "accuracy": 0.538961038961039,
+      "brier": 0.5595852872058835,
+      "logLoss": 0.9428982262101696
+    },
+    "matchDays": 21,
+    "pairedUncertainty": {
+      "left": "publishedModel",
+      "right": "sameDecisionMarket",
+      "pairedRows": 154,
+      "matchDayBlocks": 21,
+      "method": "paired match-day cluster percentile bootstrap; resampled whole days, match-weighted mean",
+      "deltaConvention": "left minus right; lower Brier/LogLoss and higher accuracy are better",
+      "iterations": 1000,
+      "seed": 20261002,
+      "minBlocks": 10,
+      "minRows": 30,
+      "intervalLevel": 0.95,
+      "intervalAvailable": true,
+      "insufficientReason": null,
+      "metrics": {
+        "brier": {
+          "delta": 0.06520985808068627,
+          "interval": [
+            0.029707188256881817,
+            0.11765824544231952
+          ]
+        },
+        "logLoss": {
+          "delta": 0.09716269715571065,
+          "interval": [
+            0.04774352683010079,
+            0.16997494303222233
+          ]
+        },
+        "accuracy": {
+          "delta": -0.032467532467532464,
+          "interval": [
+            -0.08917197452229299,
+            0.02247191011235955
+          ]
+        }
+      },
+      "promotionEvidence": false
+    },
+    "modelVersions": {
+      "unified-poisson-bayes-v76": 19,
+      "unified-poisson-bayes-v75": 90,
+      "unified-poisson-bayes-v73": 45
+    },
+    "comparisonMeaning": "相同154场、同一决策时点官方SP的对照；方向命中按各自三项概率最大项计算，与公开151场推荐集合不同。",
+    "previous145Reproduced": false,
+    "previous145Explanation": "旧145场另有历史训练特征与watermark准入条件，本批154场不是其同口径复算。"
+  },
+  "funnel": {
+    "distinctSettledInWindow": 432,
+    "historyRows": 2272,
+    "limitExcluded": 0,
+    "outsideWindow": 1840,
+    "selected": 432,
+    "frozenProbabilityScorable": 180,
+    "sameDecisionPaired": 154,
+    "replayFeatureEligible": 0,
+    "primaryExclusions": {
+      "paired-accepted": 154,
+      "decision-clock-invalid": 199,
+      "frozen-decision-missing": 53,
+      "same-decision-sp-missing": 26
+    },
+    "overlappingExclusionReasons": {
+      "decision-clock-invalid": 199,
+      "clock-or-provider-attestation-rejected": 252,
+      "sp-extraction-or-event-mismatch": 268,
+      "frozen-decision-missing": 53,
+      "frozen-probabilities-invalid": 53,
+      "same-decision-sp-missing": 85
+    },
+    "featureMissing": {
+      "form": 408,
+      "lineup": 432,
+      "injuries": 432,
+      "weather": 432,
+      "xg": 432,
+      "scheduleDensity": 432,
+      "elo": 53,
+      "poisson": 53,
+      "leaguePrior": 53
+    },
+    "featureUnavailability": {
+      "export-omitted": 355,
+      "source-snapshot-field-missing": 2372
+    }
+  },
+  "coverage": {
+    "denominator": 432,
+    "scope": "All independent settled matches selected in the declared September window",
+    "frozenProbability": 0.4166666666666667,
+    "pairedMarket": 0.35648148148148145,
+    "timeAuditedFeatureReplay": 0
+  },
+  "fieldEvidenceMeaning": "0表示本批导出中没有满足时间审计条件的完整特征回放样本；不能推出线上所有数据源没有这些数据。缺失计数为字段级，可一场多项，不能相加当比赛数。",
+  "codeDelivery": {
+    "integratedFirstBatchCommits": 8,
+    "integratedTotalCommits": 15,
+    "integratedTasks": 5,
+    "batchesIntegrated": 2,
+    "confirmedBy": "总控协调记录与最终集成验收回执",
+    "fixes": [
+      "让质量检查选取与实际推荐相同的 BEST 记录，修复概率漂移漏报。",
+      "修正市场角色说明，使界面说明与已有概率融合逻辑一致。",
+      "补充日期合法性检查与历史样本集合对账，拒绝无效日期并区分154场与旧145场。",
+      "整合来源覆盖诊断、候选评估协议、公开页排版与移动端适配、发布证据检查和线上历史导出。",
+      "修复 P1 候选回放信息泄漏漏洞；同一套独立测试由旧代码 38/50 通过提升至修复后 50/50，原 432 场输入与 154 场完整评分未改变。",
+      "修复采集跨轮计数（cf34611），新影子采集接口默认关闭。",
+      "合入第二批推荐证据组件 UI（d74）：呈现已发布证据、时间和风险边界。"
+    ],
+    "tests": {
+      "targetedPassed": 270,
+      "pythonPassed": 12,
+      "browserChecks": 8,
+      "browserWidths": [
+        320,
+        390,
+        768,
+        1440
+      ],
+      "browserErrors": [],
+      "runtimeVersion": "v22.22.1",
+      "sourceUnchanged": true,
+      "finalChecks": [
+        {
+          "name": "targeted",
+          "startedAt": "2026-10-02T14:44:17.952Z",
+          "completedAt": "2026-10-02T14:44:42.174Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "final-targeted.log",
+          "logSha256": "be6e3c1250d8c06c0a399d7f583119300efebdea92f77b017b09b4180d0c8f6f",
+          "tests": 270,
+          "passed": 270,
+          "failed": 0
+        },
+        {
+          "name": "frontend-worker",
+          "startedAt": "2026-10-02T14:44:42.175Z",
+          "completedAt": "2026-10-02T14:44:43.122Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "final-frontend-worker.log",
+          "logSha256": "2722114a7b9a650d3b30762d684106cb450199f1d9a2e777a0a10f4cea163bf8"
+        },
+        {
+          "name": "full-worker",
+          "startedAt": "2026-10-02T14:44:43.122Z",
+          "completedAt": "2026-10-02T14:44:43.190Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "final-full-worker.log",
+          "logSha256": "1e4c00ca5731ff633a9b84e29c526205f1bc65214f9d37a5d52fa829eb82b484"
+        },
+        {
+          "name": "model-refreeze",
+          "startedAt": "2026-10-02T14:44:43.190Z",
+          "completedAt": "2026-10-02T14:44:43.296Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "final-model-refreeze.log",
+          "logSha256": "612cf2503512f7d227dac2c8f7d5c3824c3afd840f34c9731c7e22f6fa540f73"
+        },
+        {
+          "name": "candidate-protocol",
+          "startedAt": "2026-10-02T14:44:43.296Z",
+          "completedAt": "2026-10-02T14:44:43.348Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "final-candidate-protocol.log",
+          "logSha256": "05682339321c00774822d573cba796fbf192b053d62dd892c7e59f0733b6ed10"
+        },
+        {
+          "name": "historical-independent",
+          "startedAt": "2026-10-02T14:44:43.349Z",
+          "completedAt": "2026-10-02T14:44:55.718Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "final-historical-independent.log",
+          "logSha256": "03b9a08810adee9da89a05031ec68b99cbff5cd5fbd79b77601d65c5b788474d"
+        }
+      ],
+      "buildPassed": true,
+      "lintPassed": true,
+      "buildLintExecution": {
+        "buildExitCode": 0,
+        "lintExitCode": 0,
+        "evidenceSource": "总控最终执行回执确认；final-build.log 与 final-lint.log 对应本轮实际退出 0",
+        "inferredFromLogText": false
+      },
+      "authenticatedAnalysisTested": false,
+      "secondBatchUi": {
+        "unitTestsPassed": 26,
+        "unitTestsFailed": 0,
+        "browserChecks": 12,
+        "widths": [
+          320,
+          390,
+          768,
+          1440
+        ],
+        "horizontalOverflow": false,
+        "runtimeErrors": 0,
+        "contrastTextChecksPassed": 60,
+        "buildPassed": true,
+        "lintExitCode": 0,
+        "buildWarning": "Existing WorldCup image remains runtime-resolved",
+        "gitDiffCheckPassed": true,
+        "scope": "历史组件隔离回放；不是登录后的整页验收，也不是新生产效果。"
+      },
+      "scope": "代码正确性与页面交互验证；浏览器使用线上公开响应的本地回放，不证明候选已上线或预测准确率提高。"
+    }
+  },
+  "pending": [
+    "P1 候选回放信息泄漏漏洞已修复并通过固定独立验收；未来窗口实验仍待开展。",
+    "PublicBrowse.tsx、public-browse.css 和新增 published-evidence-snapshot.css 不在当前 UI 发布白名单；本轮新 UI 尚未部署。",
+    "线上dataFresh、sourceHealthOk、recommendationReliable尚未通过，完整发布门槛仍关闭。",
+    "没有完成新模型训练、未来窗口对照或效果提升验收。"
+  ],
+  "roadmap": [
+    {
+      "phase": "第一阶段",
+      "name": "补齐可复算证据",
+      "work": "冻结比赛身份、决策概率与赔率；保存每个输入的来源、载荷哈希、提供方时间、接收时间、首次可用时间，以及赛果标签的首次观察时间。",
+      "acceptance": "重放不得使用决策之后才知道的输入；标签不能用后补时间倒填。导出缺失与原源缺失分开记录，负例能阻断泄漏。"
+    },
+    {
+      "phase": "第二阶段",
+      "name": "预注册未来窗口对照",
+      "work": "在未来比赛结果出现前锁定候选版本、时间窗口、排除规则、指标和推广门槛；并行保留现有模型与同一时点市场基线。",
+      "acceptance": "训练、校准、验证和最终测试按时间分离；最终测试不用于反复挑参数。每日冻结预测，所有版本使用同一事件集合。"
+    },
+    {
+      "phase": "第三阶段",
+      "name": "校准与市场融合候选",
+      "work": "先比较概率校准和受约束的市场融合，再逐项检查Elo、近期表现、阵容、伤停、天气、真实xG等特征的增量贡献。",
+      "acceptance": "有可靠时点证据的字段才进入实验；同一测试集评估Brier、LogLoss、命中率和覆盖率，并报告配对不确定性。不能把同源模型当独立共识。"
+    },
+    {
+      "phase": "第四阶段",
+      "name": "分组诊断与推荐输出",
+      "work": "按联赛、胜平负、赔率区间和预测概率桶诊断偏差；界面给出等待资料、分析参考或可发布推荐，并展示版本、时间、风险和缺失项。",
+      "acceptance": "小样本分组不单独宣传效果；命中率与推荐覆盖率一起报告，避免靠减少或挑选样本制造提升。"
+    },
+    {
+      "phase": "第五阶段",
+      "name": "验收后分批上线",
+      "work": "完成候选独立复核与发布边界处理；先验证UI，模型经影子观察达标再推广；云采集迁移另行并行验收。",
+      "acceptance": "检查真实accepted版本、静态资源、受保护接口、进程与数据连续性、回退点；旧采集通道在迁移验收前保留。"
+    }
+  ],
+  "deliveryVerification": {
+    "verifiedAt": "2026-10-02T13:54:49.438Z",
+    "result": {
+      "ok": true,
+      "version": "history-regression-delivery-verification-v1",
+      "sourceRows": 432,
+      "pairedRows": 154,
+      "rawResponseBytes": 9383766,
+      "rawResponseSha256": "6ed9802d2a9e43930ed5db44a7f7b809145eed8908d8af47770e77a93dddd507",
+      "revalidatedSignatureAndClockAdmission": true,
+      "independentlyRecomputedMetrics": true,
+      "productionWrites": false,
+      "productionEligible": false
+    },
+    "cohort": {
+      "ok": true,
+      "realNewPairedRows": 154,
+      "old145MembershipReconstructed": false,
+      "hashTamperRejected": true,
+      "invalidCalendarRejected": true,
+      "productionWrites": false
+    },
+    "finalVerification": {
+      "version": "football-integration-final-verification-v1",
+      "verifiedAt": "2026-10-02T14:44:55.756Z",
+      "implementationHead": "a229d3b7b653f624e0859582b845d3f715c9faa6",
+      "runtimeVersion": "v22.22.1",
+      "sourceFiles": [
+        {
+          "file": "scripts/verifySourceCloudDiagnostics.cjs",
+          "sha256": "a8f0452720deeba8b689da900270ebe258cfd7dad09685e5ca5041bb55fdf7f0"
+        },
+        {
+          "file": "scripts/verifySourceCollectorShadowAdapter.cjs",
+          "sha256": "e4a083bfa6b2537f8904d3c5c3b20f91a47ce8a6e8b4df06f34581da7f4c2046"
+        },
+        {
+          "file": "scripts/verifyReleaseQualityEvidence.cjs",
+          "sha256": "9b201e943fd3d920171b733c1524474d384b257108c3e0480ffd70fbceda25b3"
+        },
+        {
+          "file": "tests/public-browse-flow.test.cjs",
+          "sha256": "cf819dd45e82728c483c364206b3f9fcdcb2c214d8a2afb9664b8786da29cecf"
+        },
+        {
+          "file": "tests/published-evidence-snapshot.test.cjs",
+          "sha256": "a69f8d3442cfb2cc965553a8392d5472627284e2a8d5e4d3f8878f6c3a2f513c"
+        },
+        {
+          "file": "tests/history-regression-admission.test.cjs",
+          "sha256": "b8682c01f7308eefc897fef536abf94814110e916623239a4508495f38b16298"
+        },
+        {
+          "file": "tests/history-regression-replay.test.cjs",
+          "sha256": "c64cf96378697cec37a73181b4fa4cd1ed019fc6c31ef7ce9085829f7552395c"
+        },
+        {
+          "file": "tests/history-regression-feature-admission.test.cjs",
+          "sha256": "d81d2313fbd8ed0a50b2988342aac1895f2355ae08858f9a93d41fcf3e279ca0"
+        },
+        {
+          "file": "tests/source-shadow-worker-transition.test.cjs",
+          "sha256": "f5b7055425bdf7bc89219f28004d61716787cde52461dfff4a52a1a2f94ef056"
+        },
+        {
+          "file": "tests/quality-history-interface.test.cjs",
+          "sha256": "8d9f37094fb797353a845c191df03413f18361d52fbc7c050fecf9b64f5001fa"
+        },
+        {
+          "file": "scripts/historyRegressionReplay.cjs",
+          "sha256": "1cda15da320381a59662ef60192a486202dfa39e565ca187552eee9d5f58329a"
+        },
+        {
+          "file": "scripts/runSyncWorker.cjs",
+          "sha256": "d11150b63bb9de720f27521b122fc524a56949db828e6b55266385246bda4047"
+        },
+        {
+          "file": "scripts/sourceCollectorShadowAdapter.cjs",
+          "sha256": "8b2389c9cf461795887cb0e5a1639cfb5290c4e610f886793130d402929666b0"
+        },
+        {
+          "file": "scripts/qualityHistoryRegressionEvidence.cjs",
+          "sha256": "72a4c01f20f51735ba1021663b9c0d7764dae87893df1610cbb2f147e884f8cc"
+        }
+      ],
+      "unchanged": true,
+      "checks": [
+        {
+          "name": "targeted",
+          "startedAt": "2026-10-02T14:44:17.952Z",
+          "completedAt": "2026-10-02T14:44:42.174Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "final-targeted.log",
+          "logSha256": "be6e3c1250d8c06c0a399d7f583119300efebdea92f77b017b09b4180d0c8f6f",
+          "tests": 270,
+          "passed": 270,
+          "failed": 0
+        },
+        {
+          "name": "frontend-worker",
+          "startedAt": "2026-10-02T14:44:42.175Z",
+          "completedAt": "2026-10-02T14:44:43.122Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "final-frontend-worker.log",
+          "logSha256": "2722114a7b9a650d3b30762d684106cb450199f1d9a2e777a0a10f4cea163bf8"
+        },
+        {
+          "name": "full-worker",
+          "startedAt": "2026-10-02T14:44:43.122Z",
+          "completedAt": "2026-10-02T14:44:43.190Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "final-full-worker.log",
+          "logSha256": "1e4c00ca5731ff633a9b84e29c526205f1bc65214f9d37a5d52fa829eb82b484"
+        },
+        {
+          "name": "model-refreeze",
+          "startedAt": "2026-10-02T14:44:43.190Z",
+          "completedAt": "2026-10-02T14:44:43.296Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "final-model-refreeze.log",
+          "logSha256": "612cf2503512f7d227dac2c8f7d5c3824c3afd840f34c9731c7e22f6fa540f73"
+        },
+        {
+          "name": "candidate-protocol",
+          "startedAt": "2026-10-02T14:44:43.296Z",
+          "completedAt": "2026-10-02T14:44:43.348Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "final-candidate-protocol.log",
+          "logSha256": "05682339321c00774822d573cba796fbf192b053d62dd892c7e59f0733b6ed10"
+        },
+        {
+          "name": "historical-independent",
+          "startedAt": "2026-10-02T14:44:43.349Z",
+          "completedAt": "2026-10-02T14:44:55.718Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "final-historical-independent.log",
+          "logSha256": "03b9a08810adee9da89a05031ec68b99cbff5cd5fbd79b77601d65c5b788474d"
+        }
+      ],
+      "ok": true,
+      "productionWrites": 0,
+      "deployed": false,
+      "newModelTrained": false,
+      "modelImprovementProven": false
+    },
+    "featureRepair": {
+      "sourceRows": 432,
+      "frozenProbabilityRows": 180,
+      "pairedRows": 154,
+      "fullFrozenReportIdentical": true,
+      "frozenReportHash": "5bff16be39453ac4c801a90659a0b9014e5d74bbff11c20eb0b159982a3c71c9",
+      "metrics": {
+        "publishedModel": {
+          "brier": 0.6247951452865698,
+          "logLoss": 1.0400609233658802,
+          "accuracy": 0.5064935064935064
+        },
+        "sameDecisionMarket": {
+          "brier": 0.5595852872058835,
+          "logLoss": 0.9428982262101696,
+          "accuracy": 0.538961038961039
+        }
+      },
+      "trainingTimeValidRows": [
+        0,
+        2
+      ],
+      "finalTestRows": 47,
+      "featureContract": {
+        "version": "prematch-scalar-features-v2",
+        "allowedNames": [
+          "elo",
+          "form",
+          "weather"
+        ],
+        "requiredClocks": [
+          "providerObservedAt",
+          "receivedAt",
+          "availableAt"
+        ],
+        "optionalClocks": [
+          "observedAt"
+        ],
+        "ordering": "providerObservedAt <= observedAt (if declared) <= receivedAt <= availableAt <= decision.at",
+        "eligibility": "features.candidateEligible must be true; each field must pass value, status, source/hash and original-clock checks"
+      },
+      "rawResponseSha256": "6ed9802d2a9e43930ed5db44a7f7b809145eed8908d8af47770e77a93dddd507",
+      "originalInputsAndReportsUnchanged": true,
+      "oldReceiptUnchanged": true,
+      "productionEligible": false,
+      "productionWrites": false,
+      "productionRecaptured": false
+    },
+    "independentBefore": {
+      "tests": 50,
+      "pass": 38,
+      "fail": 12,
+      "skipped": 0
+    },
+    "independentAfter": {
+      "tests": 50,
+      "pass": 50,
+      "fail": 0,
+      "skipped": 0
+    },
+    "meaning": "38/50→50/50 是同一套软件防泄漏测试的修复证据，不是预测准确率提升。原完整特征漏斗保持原口径；新标量训练准入的两个窗口分别仅 0 和 2 场，不能据此宣称新模型训练完成。"
+  },
+  "limitations": [
+    "这批九月数据属于回顾性研究；已知总体结果，不能当作未看过的未来确认。",
+    "154场冻结概率审查有效，不代表新增特征候选已经训练或通过验收。",
+    "95%区间来自21个比赛日的1000次成组bootstrap，只描述本批数据的不确定性，不是推广证明。",
+    "来源签名与导出承诺已核验；未重新抓取并独立解析全部原提供方HTTP载荷。",
+    "本轮未证实推荐命中率提升，不承诺60%、70%命中率或盈利。"
+  ],
+  "inputs": [
+    {
+      "path": "outputs/history-regression-20261002/report/summary.json",
+      "bytes": 48029,
+      "sha256": "2d5412b2836fc699c469fa42eccca2d8ec69672cc4e7a3eea7c0326ddd4c6262",
+      "fileModifiedAt": "2026-10-02T14:22:09.775Z"
+    },
+    {
+      "path": "outputs/history-regression-20261002/report/review.json",
+      "bytes": 829240,
+      "sha256": "f7eb506dfb29e4d06235b77a22036c528d27366d7b32196e3da6cb922f041257",
+      "fileModifiedAt": "2026-10-02T13:51:10.703Z"
+    },
+    {
+      "path": "outputs/history-regression-20261002/delivery-receipt.json",
+      "bytes": 5087,
+      "sha256": "564a957cc8a73a11ba046e10e87fe859b1d3501dff4f3ca1944e9ea728945191",
+      "fileModifiedAt": "2026-10-02T14:22:09.715Z"
+    },
+    {
+      "path": "outputs/integration-20261002/live-public-overview.json",
+      "bytes": 1747,
+      "sha256": "c235f461626cee98605905b4a2295971aa8a76babfbaac283129f44ba81298fa",
+      "fileModifiedAt": "2026-10-02T14:30:33.485Z"
+    },
+    {
+      "path": "outputs/integration-20261002/public-observation.json",
+      "bytes": 3971,
+      "sha256": "3534b597c267334ab74cb64ad2187b3275af36c43fb7caba5bc0f72cd4954fd3",
+      "fileModifiedAt": "2026-10-02T14:25:07.067Z"
+    },
+    {
+      "path": "outputs/integration-20261002/browser-verification.json",
+      "bytes": 1203,
+      "sha256": "e8583c926fbea68b292949958bab3c6ec0ddf91e602a2994035a4518e55d9fe6",
+      "fileModifiedAt": "2026-10-02T14:44:36.890Z"
+    },
+    {
+      "path": "outputs/integration-20261002/cohort-verification.json",
+      "bytes": 156,
+      "sha256": "86ad32b66778c8a6dc1456a7227da1877d1d4c7d421118cfe9de8e6d71f8c244",
+      "fileModifiedAt": "2026-10-02T14:28:41.272Z"
+    },
+    {
+      "path": "outputs/integration-20261002/final-verification.json",
+      "bytes": 4480,
+      "sha256": "82048930de0eb3d7ca1ffd4b2eff1706ed17ba8f03938f32a7de98fe1b6f8cf2",
+      "fileModifiedAt": "2026-10-02T14:44:55.784Z"
+    },
+    {
+      "path": "outputs/history-feature-admission-20261002/verification-receipt.json",
+      "bytes": 8631,
+      "sha256": "509655d26b5560311bb284beb75ac5be98e2b80e977cc555b16aaeeddf042f1a",
+      "fileModifiedAt": "2026-10-02T14:43:42.202Z"
+    },
+    {
+      "path": "outputs/ui-trust-detail-20261002/delivery-summary.json",
+      "bytes": 2304,
+      "sha256": "5b107bc295e904d598f9903819c0c1fbffd7772dc950271f96beeee4552fdb96",
+      "fileModifiedAt": "2026-10-02T14:36:45.385Z"
+    },
+    {
+      "path": "outputs/integration-20261002/python-tests.log",
+      "bytes": 116,
+      "sha256": "c82f4970dc5d35d0a918c53a1fe840ccd5ffa6516f04a0d2b7e0bbd59cb04a86",
+      "fileModifiedAt": "2026-10-02T14:28:41.462Z"
+    },
+    {
+      "path": "outputs/integration-20261002/final-build.log",
+      "bytes": 14176,
+      "sha256": "285f7dfbb03565cd2fecbbeabcaef58f41088f7f1b611607679056fb4a12ca6f",
+      "fileModifiedAt": "2026-10-02T14:39:52.263Z"
+    },
+    {
+      "path": "outputs/integration-20261002/final-lint.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "fileModifiedAt": "2026-10-02T14:39:25.935Z"
+    },
+    {
+      "path": "outputs/integration-20261002/final-targeted.log",
+      "bytes": 59031,
+      "sha256": "be6e3c1250d8c06c0a399d7f583119300efebdea92f77b017b09b4180d0c8f6f",
+      "fileModifiedAt": "2026-10-02T14:44:42.175Z"
+    },
+    {
+      "path": "outputs/integration-20261002/final-frontend-worker.log",
+      "bytes": 6603,
+      "sha256": "2722114a7b9a650d3b30762d684106cb450199f1d9a2e777a0a10f4cea163bf8",
+      "fileModifiedAt": "2026-10-02T14:44:43.123Z"
+    },
+    {
+      "path": "outputs/integration-20261002/final-full-worker.log",
+      "bytes": 62,
+      "sha256": "1e4c00ca5731ff633a9b84e29c526205f1bc65214f9d37a5d52fa829eb82b484",
+      "fileModifiedAt": "2026-10-02T14:44:43.190Z"
+    },
+    {
+      "path": "outputs/integration-20261002/final-model-refreeze.log",
+      "bytes": 404,
+      "sha256": "612cf2503512f7d227dac2c8f7d5c3824c3afd840f34c9731c7e22f6fa540f73",
+      "fileModifiedAt": "2026-10-02T14:44:43.296Z"
+    },
+    {
+      "path": "outputs/integration-20261002/final-candidate-protocol.log",
+      "bytes": 114,
+      "sha256": "05682339321c00774822d573cba796fbf192b053d62dd892c7e59f0733b6ed10",
+      "fileModifiedAt": "2026-10-02T14:44:43.349Z"
+    },
+    {
+      "path": "outputs/integration-20261002/final-historical-independent.log",
+      "bytes": 19859,
+      "sha256": "03b9a08810adee9da89a05031ec68b99cbff5cd5fbd79b77601d65c5b788474d",
+      "fileModifiedAt": "2026-10-02T14:44:55.719Z"
+    }
+  ]
+}

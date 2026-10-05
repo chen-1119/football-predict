@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "verifier": "remote-recommendation-parity-contract-v1",
+  "assertions": 30,
+  "guarantees": [
+    "scheduled BEST is canonical",
+    "post-kickoff SCHEDULED source lag is checked against the immutable archive rather than mutable BEST",
+    "a wall-clock post-kickoff SCHEDULED row fails closed without an immutable archive",
+    "committed result phase fails closed without an immutable archive",
+    "cold-start model-only BEST and its immutable archive remain explicit without pretending to be official HAD",
+    "result phase replays the frozen archive",
+    "direction drift is detected",
+    "protected list and detail parity is checked without leaking the token",
+    "an admin-only temporary QA code is verified and revoked without leaking secrets"
+  ]
+}

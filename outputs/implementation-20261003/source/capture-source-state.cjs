@@ -1,0 +1,15 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
+const root=path.resolve(__dirname,'../../..');
+const {validateReleaseSshHostKeyPin,buildPinnedSshBaseOptions}=require(path.join(root,'scripts/releaseSshHostKeyPin.cjs'));
+const pin=validateReleaseSshHostKeyPin({host:'134.175.132.183',port:22,knownHostsPath:'C:/Users/86188/Documents/football/.codex-tmp/football-production.known_hosts',expectedFingerprint:'SHA256:t3Y9DoAdbURl0ibCHQEYENSARoqcm3OSK+ERl/Sg8to'});
+const source=fs.readFileSync(path.join(__dirname,'read-source-state.py'));
+const destination=path.join(__dirname,'remote-source-state.json');
+if(fs.existsSync(destination))throw Error('OUTPUT_EXISTS');
+const result=spawnSync('ssh',['-p','22',...buildPinnedSshBaseOptions({keyPath:'C:/Users/86188/.ssh/football-new-20260819',pin}),'ubuntu@134.175.132.183','sudo -n timeout --signal=TERM --kill-after=5s 45s python3 -'],{input:source,windowsHide:true,timeout:55000,maxBuffer:2*1024*1024});
+if(result.status!==0)throw Error('READ_ONLY_DIAGNOSTIC_FAILED:'+result.status);
+const parsed=JSON.parse(result.stdout);
+if(parsed.productionWrites!==false)throw Error('READ_ONLY_MARKER_MISSING');
+parsed.transport={host:'134.175.132.183',fingerprint:pin.fingerprint,scriptSha256:crypto.createHash('sha256').update(source).digest('hex'),responseSha256:crypto.createHash('sha256').update(result.stdout).digest('hex'),receivedAt:new Date().toISOString()};
+fs.writeFileSync(destination,JSON.stringify(parsed,null,2)+'\n',{flag:'wx'});
+console.log(JSON.stringify({ok:true,destination,files:parsed.files.map(row=>({path:row.path,exists:row.exists,bytes:row.bytes})),journal:parsed.journal},null,2));

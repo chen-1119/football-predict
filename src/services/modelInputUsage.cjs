@@ -1,5 +1,6 @@
 "use strict";
 const { createHash } = require("node:crypto");
+const { strictInstant } = require("./strictInstant.cjs");
 const VERSION = "model-input-usage-v1";
 const digest = value => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const finite = value => typeof value === "number" && Number.isFinite(value);
@@ -7,6 +8,13 @@ const triplet = value => value && [value.home, value.draw, value.away].every(fin
 const clone = value => JSON.parse(JSON.stringify(value));
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 const same = (a, b) => finite(a) && finite(b) && Math.abs(a - b) < 1e-12;
+// Preserve original signed clock bytes while comparing every supported fraction.
+// Date.parse alone accepts calendar rollover and truncates submillisecond clocks.
+const clockNs = value => {
+  if (strictInstant(value) === null) return null;
+  const fraction = /\.(\d+)(?:Z|[+-]\d{2}:\d{2})$/.exec(value)?.[1] || "";
+  return BigInt(Date.parse(value)) * 1000000n + BigInt(fraction.padEnd(9, "0").slice(3) || "0");
+};
 
 // These receipts are created only by the executing arithmetic functions.
 // They attest arithmetic use, NOT source truth, freshness, or promotion eligibility.
@@ -20,8 +28,8 @@ function recordModelInputUsage(match, stage, computation) {
 function verifyModelInputUsage(receipt) {
   if (!receipt || receipt.version !== VERSION) return false;
   const { contentHash, ...body } = receipt;
-  if (digest(body) !== contentHash || !Number.isFinite(Date.parse(receipt.recordedAt))
-    || !receipt.sourceMatchId || !Number.isFinite(Date.parse(receipt.kickoffTime))) return false;
+  if (digest(body) !== contentHash || clockNs(receipt.recordedAt) === null
+    || !receipt.sourceMatchId || clockNs(receipt.kickoffTime) === null) return false;
   if (receipt.stage === "base-outcome-blend") {
     const weights = receipt.weights;
     const inputs = receipt.inputs;
@@ -62,11 +70,11 @@ function verifyModelInputUsage(receipt) {
 function summarizeModelInputUsage(model, match) {
   const receipts = model?.inputUsage;
   if (!Array.isArray(receipts) || !receipts.length) return null;
-  const modelClock = Date.parse(model.generatedAt || "");
+  const modelClock = clockNs(model.generatedAt), eventClock = clockNs(match?.kickoffTime);
+  if (modelClock === null || eventClock === null) return null;
   const valid = receipts.filter(r => verifyModelInputUsage(r)
     && r.sourceMatchId === String(match?.sourceMatchId || "")
-    && Date.parse(r.kickoffTime) === Date.parse(match?.kickoffTime || "")
-    && Number.isFinite(modelClock) && Date.parse(r.recordedAt) <= modelClock);
+    && clockNs(r.kickoffTime) === eventClock && clockNs(r.recordedAt) <= modelClock);
   if (valid.length !== receipts.length || new Set(valid.map(r => r.stage)).size !== valid.length) return null;
   const blend = valid.find(r => r.stage === "base-outcome-blend");
   const form = valid.find(r => r.stage === "form-lambda-blend");

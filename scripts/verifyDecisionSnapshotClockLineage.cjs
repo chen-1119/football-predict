@@ -297,8 +297,9 @@ const reusedIdFreshEvent = clone(freshModel);
 delete reusedIdFreshEvent.predictionMeta;
 reusedIdFreshEvent.kickoffTime = "2026-08-11T10:30:00.000Z";
 reusedIdFreshEvent.buyEndTime = "2026-08-11T10:20:00.000Z";
-reusedIdFreshEvent.probabilityModel.generatedAt = "2026-08-10T00:00:00.000Z";
-reusedIdFreshEvent.probabilityModel.unifiedPosterior.generatedAt = "2026-08-10T00:01:00.000Z";
+// Synthetic fresh computation completes after this cycle captures its inputs.
+reusedIdFreshEvent.probabilityModel.generatedAt = "2026-08-10T00:02:10.000Z";
+reusedIdFreshEvent.probabilityModel.unifiedPosterior.generatedAt = "2026-08-10T00:02:20.000Z";
 const reusedIdDecision = finalizePublishedPredictionDecisions(
   [reusedIdFreshEvent],
   new Map([[persistedFreshDecision.sourceMatchId, persistedFreshDecision]]),
@@ -619,7 +620,8 @@ assert.deepEqual(crossedWithTrustedExisting.probabilityModel, persistedFreshDeci
 assert.equal(crossedWithTrustedExisting.predictionMeta.decisionId, persistedFreshDecision.predictionMeta.decisionId);
 assert.equal(crossedWithTrustedExisting.predictionMeta.decisionRevision, persistedFreshDecision.predictionMeta.decisionRevision);
 assert.equal(crossedWithTrustedExisting.predictionMeta.decisionGeneratedAt, "2026-07-16T10:39:00.000Z");
-assert.equal(crossedWithTrustedExisting.predictionMeta.publicationFinalizedAt, "2026-07-16T11:51:00.000Z");
+assert.equal(crossedWithTrustedExisting.predictionMeta.publicationFinalizedAt, persistedFreshDecision.predictionMeta.publicationFinalizedAt);
+assert.equal(crossedWithTrustedExisting.predictionMeta.observedAt, "2026-07-16T11:51:00.000Z");
 assert.equal(crossedWithTrustedExisting.predictionMeta.publicationGate.status, "preserved");
 assert.equal(
   crossedWithTrustedExisting.predictionMeta.publicationGate.reasonCode,
@@ -739,10 +741,12 @@ tampered.clockAudit.markets.HAD.receivedAt = "2026-07-16T10:24:00.000Z";
 assert.equal(isDecisionClockAuditEligible(tampered), false, "validator must recompute clock order instead of trusting eligible=true");
 
 const root = path.resolve(__dirname, "..");
+const selfTestOnly = process.argv.includes("--self-test");
 let persistedRows = [];
-try {
+if (!selfTestOnly) try {
   persistedRows = require("../server/chunkedJsonFile.cjs")
-    .readChunkedJsonFile(path.join(root, "public/data/prediction-snapshots.json")).value?.rows || [];
+    .readChunkedJsonFile(process.env.DECISION_SNAPSHOT_CLOCK_INPUT_FILE
+      || path.join(root, "public/data/prediction-snapshots.json")).value?.rows || [];
 } catch (error) {
   if (error.code !== "ENOENT") throw error;
   persistedRows = [];
@@ -773,6 +777,7 @@ console.log(JSON.stringify({
   relayLineageRows: relayRows.length,
   failClosedCases: expectedFailures.length + 2,
   realDataCompatibility: {
+    skipped: selfTestOnly,
     persistedRows: persistedRows.length,
     persistedV2Rows: persistedV2.length,
     persistedClockEligibleRows: persistedClockEligible.length,

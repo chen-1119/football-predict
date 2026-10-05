@@ -1,0 +1,489 @@
+{
+  "version": "release-source-readiness-review-v1",
+  "generatedAt": "2026-10-02T15:48:19.087Z",
+  "observedAt": "2026-10-02T15:44:55.882Z",
+  "timezone": "Asia/Shanghai",
+  "candidateCommit": "c2f9be1bc1ae2b902e5bb4f15d161f3fff35f734",
+  "scope": {
+    "onlineReadsOnly": true,
+    "deployed": false,
+    "processOrDatabaseMutation": false,
+    "businessCodeModified": false,
+    "officialSourceProbeThisTurn": false
+  },
+  "live": {
+    "status": {
+      "serviceOk": true,
+      "dataFresh": false,
+      "sourceHealthOk": false,
+      "fastResultIntegrityOk": true,
+      "fastResultIntegrity": {
+        "available": true,
+        "valid": true,
+        "missing": false,
+        "legacy": false,
+        "reason": null,
+        "revision": 9143,
+        "transition": false,
+        "transitionSource": null,
+        "sqliteReason": null,
+        "validatedAt": null
+      },
+      "officialSourceSinglePoint": true,
+      "officialSourceRedundancy": {
+        "status": "watch",
+        "mode": "no-verified-independent-path",
+        "officialSourceSinglePoint": true,
+        "serverDirectAvailable": false,
+        "serverDirectProof": "none",
+        "trustedCollectorCount": 0,
+        "requiredTrustedCollectors": 2,
+        "collectorProof": "none",
+        "collectorEvidenceScope": "none",
+        "reason": "verified server direct/proxy unavailable and trusted collectors 0/2",
+        "independenceDomains": [],
+        "collectorEvidenceStore": {
+          "version": "sporttery-recent-collector-evidence-summary-v1",
+          "trustRegistryAvailable": true,
+          "maxAgeMinutes": 20,
+          "recentRows": 0,
+          "trustedCollectorCount": 0,
+          "independenceDomains": [],
+          "keyIds": [],
+          "domains": []
+        }
+      },
+      "primarySourceFresh": false,
+      "sourceDataFresh": false,
+      "fallbackDataFresh": false,
+      "fallbackWithinReliableWindow": true,
+      "fallbackAgeSeconds": 271,
+      "primaryAgeSeconds": 175012,
+      "fallbackMaxAgeSeconds": 3600,
+      "servingMode": "critical",
+      "modelEvaluationFresh": true,
+      "modelEvaluationCoverageOk": true,
+      "modelRiskStable": false,
+      "signedTrainingAssetOk": true,
+      "recommendationReliable": false,
+      "recommendationProjectionParityOk": true,
+      "recommendationCoverageOk": true
+    },
+    "frontendRelease": {
+      "version": "frontend-release-state-v1",
+      "kind": "frontend-only",
+      "phase": "accepted",
+      "runtimeSha256": "4ffe4a6f7328d68b6084b8ef2d51c399306b18e78d05abea9db4566a555f9042",
+      "runtimeSequence": 785,
+      "frontendSha256": "eef4d05777bbe03818b38780c1c26be474e9a09154e8475de9a0520998139f72",
+      "frontendSequence": 787,
+      "indexSha256": "ad35133366c97a22ca8ffbbefcaccf077c48f23789376c6438442922bbbe2ca5",
+      "distTreeHash": "f9966252e50c54bfba2bbd291347576a69429dcf6f571375d7a2aa5fba9261a2",
+      "acceptanceSha256": "a7cc5188038e808bd09126d8d58a00ccc6b01c45bb71687aa3b70cd439bb14ad",
+      "available": true,
+      "consistent": true
+    },
+    "sync": {
+      "running": true,
+      "apiSyncRunning": false,
+      "workerRunning": true,
+      "workerOk": true,
+      "workerState": "running",
+      "workerCheckedAt": "2026-10-02T15:42:31.929Z",
+      "workerAgeSeconds": 144,
+      "workerLastSuccessAt": "2026-09-30T15:50:20.314Z",
+      "workerLastCycleDurationMs": 292170,
+      "workerLastError": {
+        "at": "2026-10-02T15:42:09.857Z",
+        "message": "npm run validate:data exited with 1",
+        "code": "SYNC_WORKER_COMMAND_FAILED",
+        "timeoutMs": null
+      },
+      "fastResultWatcher": {
+        "enabled": true,
+        "pollMs": 1000,
+        "timeoutMs": 8000,
+        "terminationGraceMs": 1000,
+        "fingerprintPolicy": "relay-result-semantic-fingerprint-v1",
+        "resultSemanticFingerprintActive": false,
+        "completedResultSemanticFingerprint": false,
+        "running": false,
+        "pending": true,
+        "lastCheckedAt": "2026-10-02T15:44:54.966Z",
+        "lastAttemptAt": "2026-10-02T15:37:17.698Z",
+        "lastSuccessAt": null,
+        "lastPublishedAt": null,
+        "lastLatencyMs": 308,
+        "lastPublishedRows": 0,
+        "inputEvidence": {
+          "lastAuditedAt": "2026-09-30T10:53:49.384Z",
+          "publicationEligibleAtLastAudit": false,
+          "blocker": "relay-fast-envelope-clock-invalid",
+          "resultProbeReceivedAt": "2026-09-30T10:33:48.761Z",
+          "resultProbeAgeSeconds": 191467,
+          "resultProbeFreshness": "stale",
+          "freshnessMaxAgeSeconds": 1200
+        },
+        "lastError": {
+          "at": "2026-10-02T15:37:18.002Z",
+          "code": "PUBLISHER_RETRYABLE_SKIP",
+          "message": "fast result publisher deferred: trusted-fast-result-endpoints-unavailable"
+        },
+        "checks": 271612,
+        "runs": 5224,
+        "coalesced": 11,
+        "deferred": 116650,
+        "lastDeferredAt": "2026-10-02T15:44:52.973Z",
+        "lastDeferredReason": "sync lock held"
+      },
+      "nextWakeAt": null,
+      "cadence": {
+        "mode": "base",
+        "reason": "normal",
+        "intervalSeconds": 300,
+        "workflowMinutes": 5,
+        "hotWindowMinutes": 120
+      },
+      "lastCycle": {
+        "ok": false,
+        "degraded": null,
+        "skipped": null,
+        "reason": null,
+        "startedAt": "2026-10-02T15:37:17.687Z",
+        "finishedAt": "2026-10-02T15:42:09.857Z",
+        "durationMs": 292170,
+        "errorCode": "SYNC_WORKER_COMMAND_FAILED",
+        "timeoutMs": null
+      },
+      "cron": "off",
+      "lastSync": {
+        "type": "sync_failed",
+        "source": "external-sync-worker",
+        "ok": false,
+        "degraded": false,
+        "startedAt": "2026-10-02T15:37:17.687Z",
+        "finishedAt": "2026-10-02T15:42:09.857Z",
+        "durationMs": 292170,
+        "cycleState": "running",
+        "phase": "official-result-failed"
+      },
+      "lastDataPersist": null,
+      "lastDataCompact": null
+    },
+    "servedData": {
+      "historyCount": 2272,
+      "currentCount": 1,
+      "updatedAt": "2026-09-30T15:08:02.777Z",
+      "postgresHistoryMatches": 2272,
+      "differenceFromCollector": "2289仅为relaySnapshot.historyLane行数；当前服务和PostgreSQL历史仍2272，不能把采集快照计为发布或回测新增样本。"
+    },
+    "publicAudit": {
+      "checkedAt": "2026-10-02T15:43:42.810Z",
+      "required": 29,
+      "failed": 2,
+      "failures": [
+        {
+          "name": "v1 health ok when required",
+          "required": true,
+          "requiredByEnv": true,
+          "ok": false
+        },
+        {
+          "name": "trusted collector redundancy counts independent runtimes, not keys",
+          "required": true,
+          "version": "trusted-market-collector-evidence-v1",
+          "trustedEndpoints": 0,
+          "trustedKeyCount": 0,
+          "relayTrustedCollectorCount": 0,
+          "relayIndependenceDomainCount": 0,
+          "unassignedKeyCount": 0,
+          "storeVersion": "sporttery-recent-collector-evidence-summary-v1",
+          "storeTrustRegistryAvailable": true,
+          "storeTrustedCollectorCount": 0,
+          "storeIndependenceDomainCount": 0,
+          "combinedIndependenceDomainCount": 0,
+          "redundancyIndependenceDomainCount": 0,
+          "redundancyCollectorCount": 0,
+          "ok": false
+        }
+      ]
+    },
+    "sourceErrors": [
+      "sporttery current sync stale 48.38m",
+      "current matches 0 < 1"
+    ],
+    "sources": [
+      {
+        "id": "sporttery",
+        "status": "missing",
+        "updatedAt": "2026-10-02T14:55:02.335Z"
+      },
+      {
+        "id": "five-hundred",
+        "status": "stale",
+        "updatedAt": "2026-09-30T15:32:42.474Z"
+      },
+      {
+        "id": "weather",
+        "status": "unavailable",
+        "updatedAt": "2026-09-30T15:33:47.330Z"
+      },
+      {
+        "id": "free-football",
+        "status": "unavailable",
+        "updatedAt": "2026-10-02T15:40:09.779Z"
+      },
+      {
+        "id": "pre-match",
+        "status": "weak",
+        "updatedAt": "2026-10-02T15:40:24.299Z"
+      }
+    ],
+    "laneEvidence": {
+      "currentMatches": 0,
+      "officialOddsMatches": 0,
+      "current": {
+        "capturedAt": null,
+        "latestCapturedAt": null,
+        "ageMinutes": null,
+        "maxAgeMinutes": 20,
+        "maxFutureSkewMinutes": 5,
+        "futureClock": false,
+        "stale": true,
+        "rows": 0,
+        "usableEndpoints": 0,
+        "methods": []
+      },
+      "result": {
+        "capturedAt": "2026-10-02T14:55:02.847Z",
+        "latestCapturedAt": "2026-10-02T14:55:02.847Z",
+        "ageMinutes": 48.37,
+        "maxAgeMinutes": 20,
+        "maxFutureSkewMinutes": 5,
+        "futureClock": false,
+        "stale": true,
+        "rows": 10,
+        "usableEndpoints": 1,
+        "methods": [
+          "result"
+        ]
+      },
+      "history": {
+        "capturedAt": "2026-10-02T14:55:02.847Z",
+        "latestCapturedAt": "2026-10-02T14:55:33.353Z",
+        "ageMinutes": 48.37,
+        "maxAgeMinutes": 180,
+        "maxFutureSkewMinutes": 5,
+        "futureClock": false,
+        "stale": false,
+        "rows": 2289,
+        "usableEndpoints": 30,
+        "methods": [
+          "all",
+          "result"
+        ]
+      },
+      "lastCurrentOkAt": "2026-09-30T10:33:02.395Z",
+      "direct": {
+        "exists": true,
+        "ok": true,
+        "status": "disabled",
+        "checkedAt": "2026-10-02T15:43:24.907Z",
+        "transport": "direct-disabled",
+        "proxyConfigured": false,
+        "summary": {
+          "skipped": true,
+          "wafBlocked": false,
+          "previousStatus": "disabled",
+          "previousCheckedAt": "2026-08-18T13:01:40.239Z"
+        },
+        "guidance": [
+          "Sporttery direct fetch is disabled on this overseas server; relay snapshots and supplemental sources are used instead."
+        ]
+      },
+      "redundancy": {
+        "status": "watch",
+        "mode": "no-verified-independent-path",
+        "officialSourceSinglePoint": true,
+        "serverDirectAvailable": false,
+        "serverDirectProof": "none",
+        "trustedCollectorCount": 0,
+        "requiredTrustedCollectors": 2,
+        "collectorProof": "none",
+        "collectorEvidenceScope": "none",
+        "reason": "verified server direct/proxy unavailable and trusted collectors 0/2",
+        "independenceDomains": [],
+        "collectorEvidenceStore": {
+          "version": "sporttery-recent-collector-evidence-summary-v1",
+          "trustRegistryAvailable": true,
+          "maxAgeMinutes": 20,
+          "recentRows": 0,
+          "trustedCollectorCount": 0,
+          "independenceDomains": [],
+          "keyIds": [],
+          "domains": []
+        }
+      }
+    }
+  },
+  "officialCalendar": {
+    "title": "国家体育总局体育彩票管理中心关于2026年国庆节期间体育彩票市场休市的公告",
+    "url": "https://www.gstc.org.cn/newsDetail/160700/80256",
+    "publisher": "甘肃省体育彩票管理中心官方网站，转载国家体彩中心公告",
+    "publishedAt": "2026-09-24",
+    "noticeDate": "2026-09-22",
+    "verifiedOn": "2026-10-02",
+    "generalClosedFrom": "2026-10-01T00:00:00+08:00",
+    "generalClosedUntilExclusive": "2026-10-05T00:00:00+08:00",
+    "singleMatchSalesStop": "2026-09-30T22:00:00+08:00",
+    "singleMatchSalesResume": "2026-10-05T11:00:00+08:00",
+    "interpretation": "公告说明销售安排，不能证明API开放、567自动解除或空返回必属休市。current最后成功早于停销；9月30日18:53快赛果审计已因clock-invalid不具备发布资格。current首次失败时刻未公开，不能仅凭最后成功时间推断首次失败。"
+  },
+  "diagnosticTargets": [
+    {
+      "endpoint": "/api/v1/health",
+      "field": "sync.workerLastError",
+      "next": "定位2026-10-02T15:42:09.857Z一轮validate:data的具体失败输出；公开只有npm run validate:data exited with 1，需既有只读服务日志/状态，不直接重跑写入型sync。"
+    },
+    {
+      "endpoint": "/api/v1/health",
+      "field": "sync.lastSync.phase / sync.lastCycle",
+      "next": "official-result-failed区分官方结果阶段失败与慢补充源失败；代码 scripts/runSyncWorker.cjs:4726。"
+    },
+    {
+      "endpoint": "/api/v1/health",
+      "field": "sync.fastResultWatcher.lastError / inputEvidence",
+      "next": "检查trusted-fast-result-endpoints-unavailable、relay-fast-envelope-clock-invalid的原始签名封包、receipt、源时间，不修写旧时间戳。"
+    },
+    {
+      "endpoint": "/api/v1/source-health",
+      "field": "sources[id=sporttery].metrics.relaySnapshot.collectorState.currentLaneState",
+      "next": "lastOkAt、lastFailedAt、consecutiveFailures与current快照原始响应逐轮对齐；公共lastFailure=null不足以断定无失败。"
+    },
+    {
+      "endpoint": "/api/v1/source-health",
+      "field": "sources[id=sporttery].metrics.relaySnapshot.collectorAttestation / officialSourceRedundancy",
+      "next": "查当前lane可信key、运行环境/domain归属和20分钟证据窗口；只增加密钥不会增加独立采集器。"
+    }
+  ],
+  "releaseBoundaries": {
+    "policyHash": "9d091e0d49fe961fac48480d6ed2e2d18e76341b9db8eaaa715184942bfda758",
+    "sourcePaths": [
+      {
+        "path": "src/components/predictions/RecommendationEvidenceFacts.tsx",
+        "frontendOnlyAllowed": true
+      },
+      {
+        "path": "src/pages/MatchDetail.tsx",
+        "frontendOnlyAllowed": true
+      },
+      {
+        "path": "src/pages/PublicBrowse.tsx",
+        "frontendOnlyAllowed": false
+      },
+      {
+        "path": "src/services/recommendationOutputQualification.cjs",
+        "frontendOnlyAllowed": false
+      },
+      {
+        "path": "src/styles/public-browse.css",
+        "frontendOnlyAllowed": false
+      },
+      {
+        "path": "src/styles/published-evidence-snapshot.css",
+        "frontendOnlyAllowed": false
+      }
+    ],
+    "localReadinessMissing": [
+      "local release bundle is not valid",
+      "ssh host-key pin invalid: RELEASE_DEPLOY_HOST_KEY_SHA256 must be an explicit OpenSSH SHA-256 fingerprint",
+      "remote release completion marker is missing or does not match the bundle marker"
+    ],
+    "localMissingMeaning": "集成树未配置签名候选包、SSH固定主机指纹及密钥；这不等于远端服务故障，也不证明根工作区没有已有配置。本次未复制或输出密钥。",
+    "existingHealthPolicy": "现有native全量发布允许reference-shadow状态，REMOTE_REQUIRE_HEALTHY=0并非新建议、不能恢复推荐资格；collector契约仍强制。本次主动严格审计用1，27/29通过；即使沿用已有0，当前collector契约也失败。",
+    "preferredRoute": "本轮含worker、服务资格脚本及新增CSS，采用既有完整签名发布路径；UI-only无法覆盖。不要只改本地白名单，因为远端授权、runtime binding、原始full包共同绑定策略。",
+    "noDeploymentUntil": [
+      "配置完整的签名发布工作区及精确候选包就绪",
+      "采集器契约通过，数据恢复按产品门槛独立验收",
+      "全部新增文件纳入完整包并通过候选与页面验收"
+    ],
+    "evidence": [
+      {
+        "path": "scripts/createFrontendReleaseBundle.cjs",
+        "line": 261,
+        "fact": "仅叠加 FRONTEND_PATHS 内已经存在的文件；新增成员拒绝，非白名单成员不打包。"
+      },
+      {
+        "path": "scripts/releaseChangeClassification.cjs",
+        "line": 14,
+        "fact": "精确 UI 白名单和策略散列，新增 CSS/PublicBrowse 不在其中。"
+      },
+      {
+        "path": "deploy/light-server/release-native.sh",
+        "line": 283,
+        "fact": "现有 native full 流程公开验收固定 REMOTE_REQUIRE_HEALTHY=0，仍校验 PostgreSQL、公开契约，恢复 worker 后再校验 worker。"
+      },
+      {
+        "path": "scripts/verifyRemotePublicReadiness.cjs",
+        "line": 604,
+        "fact": "独立采集器契约校验始终必需；trustedKeyCount>=1 及 runtime/domain 一致性；不因健康总开关关闭而跳过。"
+      },
+      {
+        "path": "scripts/verifyNativeDeploymentCore.cjs",
+        "line": 13,
+        "fact": "验证 PostgreSQL、冻结发布、比分和推荐投影一致性；显式保留 recommendationReliable=false 和 reference-shadow。"
+      }
+    ]
+  },
+  "recommendationEligibility": {
+    "recommendationReliable": false,
+    "promoted": false,
+    "reason": "服务运行/历史更新/技术发布成功均不能替代概率校准和独立留出验证。"
+  },
+  "steps": [
+    {
+      "phase": "现在可继续",
+      "owner": "数据与评估任务",
+      "action": "继续保存线上历史及结算数据，分离 current/result/history lane，保留源时间、收到时间、hash、sourceCycleId；仅用可审计赛前快照做模型评分。",
+      "acceptance": "历史刷新成功不改变当前赔率、正式推荐资格；回测输入均早于 cutoff，迟到/缺失有原因计数。"
+    },
+    {
+      "phase": "现在可准备",
+      "owner": "采集与云迁移任务",
+      "action": "核对授权采集环境、实际调度和接收签名；将官方休市公告与 HTTP 567 等传输结果分别保留。现有 collector 运行状态与真正 current/result 成功单独计数。",
+      "acceptance": "休市仅改变诊断文案/明确调度规则，不把旧赔率变新、不把 current=0 自动当作采集成功；多密钥不冒充多运行环境。"
+    },
+    {
+      "phase": "10月5日11:00后",
+      "owner": "采集与发布任务",
+      "action": "先单次观察官方允许入口的 current/result 真实响应；如仍567，保存一次状态码、响应摘要/hash和时间，暂停该源并走站方放行/正式交付路径。若成功，按实际响应逐字段校验、签名上传并读取回执。",
+      "acceptance": "current/source时间真实且在20分钟现有窗口内，官方SP来源明确，current/result分别通过；不得伪造时间戳、扩大TTL或用参考赔率冒充官方。开售时间不等于567解除。"
+    },
+    {
+      "phase": "源恢复后",
+      "owner": "质量与发布任务",
+      "action": "重跑相同严格只读公网验收，再在配置完整的既有发布工作区准备完整签名版本；不得将本轮候选硬塞入UI通道。完成登录后列表/详情/手机布局回归。",
+      "acceptance": "数据fresh、源健康恢复；独立collector/runtime证据满足当前策略；包清单包含全部修改；Node22、质量和回归检查通过；远端 accepted/liveComplete、SHA、页面静态资源一致。"
+    },
+    {
+      "phase": "云迁移切换",
+      "owner": "云采集任务",
+      "action": "在已具备授权及可运行调度的目标环境完成连续7天影子采集、上传回读和差异复核；失败可回退旧通道。",
+      "acceptance": "每天预定周期有原始证据与签收回执，缺漏/迟到/身份映射/冲突可审计；完成后才停旧采集。当前报告不证明新云资源已建立。"
+    }
+  ],
+  "inputs": [
+    {
+      "name": "release-readiness-live.json",
+      "sha256": "2101e322679dd81550450baa612efc8fe25073916c31ee4d49b0fe4aeade5f1c"
+    },
+    {
+      "name": "release-readiness-status.json",
+      "sha256": "fc18277b4c5d7b12a5882cc9a5c7cb749f998279860762499ce0c58311e13aa6"
+    },
+    {
+      "name": "release-readiness-public.json",
+      "sha256": "496534ddcc4eaeaf7b0bd3b8faed3f7b3e98ff3bac1653d8979af40098429921"
+    }
+  ]
+}

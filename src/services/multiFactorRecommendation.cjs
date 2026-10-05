@@ -14,8 +14,8 @@ const finiteNumber = (value) => {
 
 const probability = (value) => {
   const numeric = finiteNumber(value);
-  if (numeric === null) return null;
-  return clamp(numeric > 1 ? numeric / 100 : numeric, 0, 1);
+  if (numeric === null || numeric < 0 || numeric > 100) return null;
+  return numeric > 1 ? numeric / 100 : numeric;
 };
 
 const weightedRange = (value, low, high, weight) => {
@@ -69,10 +69,15 @@ const evaluateMultiFactorRecommendation = (input = {}) => {
     : null;
   const trustPenalty = clamp(finiteNumber(input.trustPenalty) || 0, 0, 40);
   const riskPenalty = clamp(finiteNumber(input.riskPenalty) || 0, 0, 0.3);
-  const severeMissingCount = Math.max(0, Math.round(finiteNumber(input.severeMissingCount) || 0));
+  const rawSevereMissingCount = finiteNumber(input.severeMissingCount);
+  const severeMissingCount = Number.isSafeInteger(rawSevereMissingCount) && rawSevereMissingCount >= 0
+    ? rawSevereMissingCount
+    : null;
   const riskTagsCount = Math.max(0, Math.round(finiteNumber(input.riskTagsCount) || 0));
   const scoreAligned = input.scoreAligned === true;
-  const crossMarketCompatible = input.crossMarketCompatible !== false;
+  const crossMarketCompatible = typeof input.crossMarketCompatible === 'boolean'
+    ? input.crossMarketCompatible
+    : null;
   const handicapAligned = input.handicapAligned === true;
   const marketLeaderAlignment = input.marketLeaderAligned === true
     ? true
@@ -106,7 +111,7 @@ const evaluateMultiFactorRecommendation = (input = {}) => {
 
   const penalty = Math.min(10, trustPenalty * 0.28)
     + Math.min(9, riskPenalty * 36)
-    + Math.min(9, severeMissingCount * 4)
+    + Math.min(9, (severeMissingCount ?? 0) * 4)
     + Math.min(5, riskTagsCount * 0.65)
     + (externalMarketContradicted ? 7 : 0)
     + (externalMarketRisk === 'high' ? 3 : 0);
@@ -140,6 +145,8 @@ const evaluateMultiFactorRecommendation = (input = {}) => {
   if (marketProbability === null) blockers.push('missing-devigged-market-probability');
   if (modelGap === null) blockers.push('missing-model-separation');
   if (dataQuality === null) blockers.push('missing-data-quality');
+  if (severeMissingCount === null) blockers.push('missing-data-gap-assessment');
+  if (crossMarketCompatible === null) blockers.push('missing-cross-market-compatibility');
   if (!upstreamRecommended || !upstreamAligned) blockers.push('upstream-multi-factor-gate-not-passed');
   if (globalRiskTier !== 'stable') blockers.push('model-risk-not-promotable');
 
@@ -150,7 +157,7 @@ const evaluateMultiFactorRecommendation = (input = {}) => {
   if (dataQuality !== null && dataQuality < 0.42) blockers.push('insufficient-data-quality');
   if (severeMissingCount > 1) blockers.push('too-many-severe-data-gaps');
   if (!scoreAligned) blockers.push('score-matrix-not-aligned');
-  if (!crossMarketCompatible) blockers.push('had-hhad-conflict');
+  if (crossMarketCompatible === false) blockers.push('had-hhad-conflict');
   if (riskPenalty > 0.12) blockers.push('candidate-risk-too-high');
   if (riskTagsCount > 4) blockers.push('too-many-risk-tags');
   if (trendContradicts && (probabilityEdge === null || probabilityEdge < 0.04)) blockers.push('official-sp-movement-contradiction');

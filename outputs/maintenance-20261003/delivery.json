@@ -1,0 +1,131 @@
+{
+  "version": "football-maintenance-delivery-v1",
+  "generatedAt": "2026-10-02T18:12:52.136Z",
+  "codeBaseCommit": "b3f6812c456a15ee3e77c3092a4cd97253d5ebd0",
+  "branch": "codex/football-integration-oct02",
+  "pullRequest": "https://github.com/chen-1119/football-predict/pull/101",
+  "codeIdentity": [
+    {
+      "path": "scripts/runSportteryFastResultLane.cjs",
+      "bytes": 19384,
+      "sha256": "28ad8e85b942f74b3a0eb361f83e0312608c0e20cf39304e5d362e084a22f33f"
+    },
+    {
+      "path": "scripts/officialClosureRepairPolicy.cjs",
+      "bytes": 12816,
+      "sha256": "27587ce8958e96b24e7586befcf8f99249397c76b7a2665e1f683bbfdce8024f"
+    },
+    {
+      "path": "scripts/officialClosureRepairController.cjs",
+      "bytes": 41699,
+      "sha256": "d9670b127121e0beef36c734cb079c4fc323f02893a310c08dd362ee3e5289e7"
+    },
+    {
+      "path": "scripts/officialClosureRepairCli.cjs",
+      "bytes": 23514,
+      "sha256": "3f219db7ffc160703304476d9eb9807e672e81bac203fe6f3f55c42e37effd23"
+    },
+    {
+      "path": "scripts/proveOfficialClosureRepair.cjs",
+      "bytes": 15394,
+      "sha256": "ae3f57938dc62e52f33eee1d8bbf07a0cd961d4374badd2011d5403dc1bf7f29"
+    }
+  ],
+  "localCollector": {
+    "version": "football-fast-result-deployment-summary-v1",
+    "deployed": true,
+    "scope": "existing laptop fast-result runner only",
+    "scriptSha256": "28ad8e85b942f74b3a0eb361f83e0312608c0e20cf39304e5d362e084a22f33f",
+    "task": "FootballPredictSportteryFastResultLane",
+    "checkedAt": "2026-10-02T18:08:09.7655444+00:00",
+    "processId": 47112,
+    "taskRunning": true,
+    "observationSeconds": 61.3435896,
+    "cycleDelta": 0,
+    "logGrowthBytes": 0,
+    "failureBackoffSeconds": 300,
+    "dataFailureStillPresent": true,
+    "configurationChanged": false,
+    "historicalFailureStateCleared": false,
+    "oldLog": {
+      "bytes": 332100888,
+      "sha256": "a4e8f12c7004bae954de85da2a2e308bb12256c55d4103da1d9268b69b5840f5",
+      "preserved": true
+    },
+    "cloudCodeDeployed": false,
+    "rawReceipt": {
+      "path": "outputs/maintenance-20261003/fast-task-natural-recovery.json",
+      "bytes": 1998,
+      "sha256": "f035d7b24742e058aa193969c17e5667386cd3c8362792bbdae4317439f21c5d"
+    }
+  },
+  "production": {
+    "checkedAt": "2026-10-02T18:03:11.899Z",
+    "runtimeSequence": 785,
+    "runtimeSha256": "4ffe4a6f7328d68b6084b8ef2d51c399306b18e78d05abea9db4566a555f9042",
+    "frontendSequence": 787,
+    "frontendSha256": "eef4d05777bbe03818b38780c1c26be474e9a09154e8475de9a0520998139f72",
+    "fullOptimizationBatchDeployed": false,
+    "maintenanceActivated": false,
+    "signedCapsuleCreated": false,
+    "remoteMaintenanceWrites": 0,
+    "postgresGenerationIdentityVerified": true,
+    "frozenObservationCounts": {
+      "recommendations": 1777,
+      "publicDecisions": 7834,
+      "publicEvidence": 7834,
+      "archives": 1826
+    },
+    "serviceOk": true,
+    "sourceHealthOk": false,
+    "recommendationReliable": false,
+    "healthCheckedAt": "2026-10-02T18:00:42.199Z",
+    "currentReadSource": "postgres",
+    "workerFault": "matches-current.json must contain a non-empty array.",
+    "officialPublishRecovered": false
+  },
+  "source": {
+    "capturedAt": "2026-10-02T17:58:02.881Z",
+    "observedAt": "2026-10-02T18:03:11.899Z",
+    "bothSignaturesVerified": true,
+    "closureEligible": false,
+    "blockers": [
+      "closure-stop-sale-unproven"
+    ],
+    "semanticContractVerified": false,
+    "semanticEvidence": [
+      {
+        "claim": "官方移动计算器的默认数据渠道为 c，官方代码注释将 c 定义为现金、i 为网络、v 为电话、a 为全渠道。",
+        "url": "https://static.sporttery.cn/res_1_0/common/js/commonV1.js"
+      },
+      {
+        "claim": "同一官方页面加载的 dataTransfer.js 将 commonV1Fun.comDataChannel 原样用于 getMatchCalculatorV1 的 channel 参数。",
+        "url": "https://static.sporttery.cn/res_1_0/jcwm/default/jc/jsq/dataTransfer.js"
+      },
+      {
+        "claim": "这条官方页面引用链中的4份应用脚本未消费两个 SaleStatus 字段，也未定义其 0/1 语义；空赛事表由 data.length == 0 的页面分支处理。",
+        "url": "https://static.sporttery.cn/res_1_0/jcwm/default/jc/jsq/jc_hhgg.js"
+      }
+    ],
+    "productionAdmission": "fixed code-level refusal until official sales-status semantics receive separate review"
+  },
+  "laptopOffline": {
+    "websiteAndPostgresHostedRemotely": true,
+    "officialCollectorsStillRequiredLocally": true,
+    "migrationAccepted": false,
+    "physicalPowerOffTestCompleted": false
+  },
+  "verification": {
+    "nodeRunnerPassed": 110,
+    "existingClosureAssertions": 44,
+    "existingFastLanePassed": 50,
+    "receipt": "validation.json"
+  },
+  "nextSteps": [
+    "Obtain authoritative numeric sales-status definitions or an alternative explicit official closure contract; review source predicate independently.",
+    "If eligible, collect a new signed same-cycle source, run isolated live proof and supervised repair, prove normal worker publication and frozen-record continuity.",
+    "Pass original full-release gates, deploy optimized batch and verify live versions; only then report full deployment.",
+    "Complete independent cloud collector acceptance and seven qualified days before retiring laptop collection."
+  ],
+  "hitRateImprovementMeasured": false
+}

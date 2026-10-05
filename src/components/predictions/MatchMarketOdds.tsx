@@ -3,13 +3,16 @@ import { quoteInstant, resolveMatchQuotes } from '../../services/marketQuotePoli
 import type { ResolvedQuote } from '../../services/marketQuotePolicy';
 import { matchesSavedCaptureIdentity, type SavedMatchCapture } from './CapturedMatchData';
 import { MarketQuoteCard } from './MarketQuoteCard';
+import { useWallClock } from '../../hooks/useWallClock';
 
-export function MatchMarketOdds({ match, language, capturedData, nowMs = Date.now() }: {
+export function MatchMarketOdds({ match, language, capturedData, nowMs: providedNow }: {
   match: Match;
   language: 'zh' | 'en';
   capturedData?: SavedMatchCapture;
   nowMs?: number;
 }) {
+  const clockNow = useWallClock();
+  const nowMs = providedNow ?? clockNow;
   const kickoff = quoteInstant(match.kickoffTime);
   const upcoming = match.status === 'SCHEDULED' && kickoff !== null && kickoff > nowMs;
   // Current display may choose a fresh reference over a stale official quote, but the

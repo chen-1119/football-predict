@@ -20,7 +20,7 @@ async function harness({ data = evidence(), getStatus = 200, getError = null, po
   vm.runInNewContext(source, { module, exports: module.exports, Date: Clock, Intl, AbortController, setTimeout, clearTimeout,
     setInterval: fn => { intervals.push(fn); return intervals.length; }, clearInterval: () => {},
     fetch: async (url, options) => { fetches.push({ url, options }); if (options.method !== 'POST' && getError) throw getError; return options.method === 'POST' ? { ok: postStatus === 200, status: postStatus, json: async () => ({ ok: true, state: postState, referenceOnly: true, nextAllowedAt: '2026-09-22T06:10:00.000Z' }) } : { ok: getStatus === 200, status: getStatus, json: async () => data }; },
-    require: id => { if (id === 'react') return { useState: v => { const n = cursor++; if (!(n in cells)) cells[n] = v; return [cells[n], v => { cells[n] = typeof v === 'function' ? v(cells[n]) : v; }]; }, useEffect: fn => { if (initial) effects.push(fn); } }; if (id === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) }; if (id.endsWith('/accessControl')) return { getAccessAuthHeaders: () => ({ 'x-test-auth': 'present' }) }; if (id.endsWith('/runtimeUrls')) return { buildApiUrl: p => p }; if (id.endsWith('.css')) return {}; throw Error(id); }
+    require: function resolve(id) { if (id === 'react') return { useState: v => { const n = cursor++; if (!(n in cells)) cells[n] = typeof v === 'function' ? v() : v; return [cells[n], v => { cells[n] = typeof v === 'function' ? v(cells[n]) : v; }]; }, useEffect: fn => { if (initial) effects.push(fn); } }; if (id.endsWith('/useWallClock')) return require('./fixtures/wall-clock-module.cjs')(resolve('react'), { Date: Clock, window: { setInterval: fn => { intervals.push(fn); return intervals.length; }, clearInterval: () => {}, addEventListener: () => {}, removeEventListener: () => {} }, document: { addEventListener: () => {}, removeEventListener: () => {} } }); if (id === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) }; if (id.endsWith('/accessControl')) return { getAccessAuthHeaders: () => ({ 'x-test-auth': 'present' }) }; if (id.endsWith('/prematchEvidencePresentation')) return require('../src/services/prematchEvidencePresentation.ts'); if (id.endsWith('/runtimeUrls')) return { buildApiUrl: p => p }; if (id.endsWith('.css')) return {}; throw Error(id); }
   });
   const render = () => { cursor = 0; const result = module.exports.PrematchCollectionPanel({ matchId: data.matchId, language: 'zh', homeName: '主队', awayName: '客队', kickoffTime }); initial = false; return result; };
   render(); effects.forEach(fn => fn()); await new Promise(r => setTimeout(r, 0)); await new Promise(r => setTimeout(r, 0));
@@ -130,4 +130,29 @@ test('priority errors remain visible and kicked-off matches cannot queue request
   const u = await harness({ kickoffTime: '2026-09-22T05:00:00Z' }), button = nodes(u.render(), n => n.type === 'button')[1];
   assert.equal(button.props.disabled, true); await button.props.onClick(); assert.equal(u.fetches.length, 1);
   assert.equal(nodes(u.render(), n => n.props?.className === 'prematch-report__lineup').length, 0); assert.match(words(u.render()), /不补造首发名单/); assertDataOnly(u.render());
+});
+
+
+test('unknown injuries use an unknown count for totals and each team', async () => {
+  for (const status of ['missing', 'source_empty', 'stale', 'unavailable', 'blocked']) {
+    const data = evidence(); data.sections.injuries = section(status);
+    const tree = (await harness({ data })).render();
+    const metric = nodes(tree, n => n.props?.className === 'prematch-report__metrics')[0];
+    assert.match(words(metric), /已保存伤停条目— 条/);
+    assert.doesNotMatch(words(tree), /0 条记录|伤停条目0/);
+  }
+  const tree = (await harness()).render();
+  assert.match(words(tree), /主队 1 · 客队 —/);
+  assert.match(words(tree), /本次未保存该队伤停条目/);
+});
+
+test('stale payloads never regain collected or confirmed status through data presence', async () => {
+  const data = withLineups();
+  for (const item of Object.values(data.sections)) { item.status = 'stale'; item.previousValue = false; }
+  const frozen = JSON.stringify(data), tree = (await harness({ data })).render();
+  assert.ok(nodes(tree, n => n.props?.['data-evidence-state'] === 'stale').length >= 4);
+  assert.match(words(tree), /资料已过期 · 仅供参考/);
+  assert.doesNotMatch(words(tree), /确认首发|已采集 · 仅供参考/);
+  assert.match(words(tree), /球员甲|主队首发门将/);
+  assert.equal(JSON.stringify(data), frozen, 'presentation cannot mutate saved records');
 });

@@ -158,7 +158,11 @@ const evaluate=(overrides={})=>{
   assert.equal(typeof result,'boolean');return result;
 };
 check('actual production plan gate accepts current exact reconciliation contract',()=>assert.equal(evaluate(),true));
-check('actual production plan gate rejects stale count 21',()=>assert.equal(evaluate({verifyProduction:readiness.replaceAll('Number(fastResultGeneration.body?.checks) === 23','Number(fastResultGeneration.body?.checks) === 21')}),false));
+check('actual production plan gate rejects stale count 21',()=>{
+  const current='Number(fastResultGeneration.body?.checks) >= 23';
+  assert.ok(readiness.includes(current), 'negative fixture must mutate the current admission contract');
+  assert.equal(evaluate({verifyProduction:readiness.replaceAll(current,'Number(fastResultGeneration.body?.checks) >= 21')}),false);
+});
 for(const field of ['pairedReferenceSurvivesReconciliation','invalidPairSourceFailsBeforeAnyWrite']){
   check(`actual production plan gate rejects missing ${field}`,()=>assert.equal(evaluate({verifyProduction:readiness.replaceAll(field,'REMOVED_CONTRACT')}),false));
 }

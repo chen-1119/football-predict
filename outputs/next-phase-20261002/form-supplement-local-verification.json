@@ -1,0 +1,49 @@
+{
+  "canonicalVerificationInput": "original raw .remote-response.json decoded by Python; not JS reserialized values",
+  "candidateEligible": false,
+  "originalBaseCommit": "c2f9be1bc1ae2b902e5bb4f15d161f3fff35f734",
+  "productionWrites": false,
+  "files": [
+    {
+      "sha256": "7b663c881ef6c7ea60148b47bbb55b033dd06ba32c94a01279fe24d1f1ca6f1c",
+      "bytes": 24878,
+      "path": "scripts/historyRegressionRemote.py"
+    },
+    {
+      "sha256": "8a32aa1671a4b1fe5ef3cd311d2cdc9eac5e88776473d99356bf49877db09b13",
+      "bytes": 6473,
+      "path": "scripts/captureHistoryRegression.cjs"
+    },
+    {
+      "sha256": "50feca4cad21d393a721563f64aa2b1d444a75dad9430063a8e204b3abaf4d57",
+      "bytes": 7553,
+      "path": "scripts/verifyHistoryFormSupplement.py"
+    },
+    {
+      "sha256": "92b2851bf991e3eb814fc93fbd2fefdae53f1d25e176d5ea8d3d431fd15f1179",
+      "bytes": 22411,
+      "path": "tests/history-regression-remote.test.py"
+    },
+    {
+      "sha256": "7aaa19f01c04c57dd5a09477b2fdf1f6f8c4b0ab2db912893d702516fe8471fd",
+      "bytes": 4088,
+      "path": "tests/history-form-capture.test.cjs"
+    }
+  ],
+  "version": "history-form-supplement-local-validation-v1",
+  "checkedAt": "2026-10-02T16:00:43.0859196+00:00",
+  "remoteExecuted": false,
+  "gitDiffCheckPassed": true,
+  "defaultOutputByteIdenticalInControlledFixture": true,
+  "pythonTests": {
+    "failed": 0,
+    "command": "python -B tests/history-regression-remote.test.py",
+    "passed": 24
+  },
+  "nodeTests": {
+    "runtime": "v22.22.1",
+    "failed": 0,
+    "command": "node --test tests/history-form-capture.test.cjs",
+    "passed": 3
+  }
+}

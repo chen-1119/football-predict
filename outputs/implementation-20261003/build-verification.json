@@ -1,0 +1,54 @@
+{
+  "startedAt": "2026-10-02T16:29:33.467Z",
+  "node": "v22.22.1",
+  "productionWrites": false,
+  "deployed": false,
+  "jobs": [
+    {
+      "name": "typescript",
+      "args": [
+        "node_modules/typescript/bin/tsc",
+        "-b"
+      ],
+      "startedAt": "2026-10-02T16:29:33.468Z",
+      "completedAt": "2026-10-02T16:29:40.253Z",
+      "exitCode": 0,
+      "error": null
+    },
+    {
+      "name": "vite",
+      "args": [
+        "node_modules/vite/bin/vite.js",
+        "build"
+      ],
+      "startedAt": "2026-10-02T16:29:40.254Z",
+      "completedAt": "2026-10-02T16:29:52.858Z",
+      "exitCode": 0,
+      "error": null
+    },
+    {
+      "name": "strip-dist",
+      "args": [
+        "scripts/stripLargeStaticPayloads.cjs"
+      ],
+      "startedAt": "2026-10-02T16:29:52.858Z",
+      "completedAt": "2026-10-02T16:30:08.297Z",
+      "exitCode": 0,
+      "error": null
+    },
+    {
+      "name": "eslint",
+      "args": [
+        "node_modules/eslint/bin/eslint.js",
+        "src",
+        "vite.config.ts"
+      ],
+      "startedAt": "2026-10-02T16:30:08.297Z",
+      "completedAt": "2026-10-02T16:30:42.220Z",
+      "exitCode": 0,
+      "error": null
+    }
+  ],
+  "ok": true,
+  "completedAt": "2026-10-02T16:30:42.220Z"
+}

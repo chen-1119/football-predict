@@ -4,6 +4,7 @@ const https = require("https");
 const crypto = require("crypto");
 const { readChunkedJsonFile } = require("../server/chunkedJsonFile.cjs");
 const { predictionNowMs, predictionNowIso, executeWithPredictionClock } = require("../src/services/predictionExecutionClock.cjs");
+const { decisionCaptureDisposition, decisionObservationFor } = require("../src/services/decisionObservation.cjs");
 const { fitJointGoalRates } = require("../src/services/jointGoalFit.cjs");
 const { spawn } = require("child_process");
 const {
@@ -265,14 +266,14 @@ const ANALYST_OUTPUT_SECTIONS = Object.freeze([
 const PROBABILITY_FORECASTING_PRINCIPLES = Object.freeze({
   zh: [
     "先输出胜平负、比分分布、大小球、双方进球和让球概率，不把任务简化成只猜胜负。",
-    "独立概率先由 Elo 强度、Poisson 比分模型、近一年攻防、长期历史样本和赛程密度生成；世界杯先验仅在安全校验通过时参与，官方 SP 只作为市场校验和价值差参考。",
+    "基础概率结合球队强度、Elo、Poisson 与市场概率；世界杯先验仅在安全校验通过时参与。官方 SP 还用于后验混合、市场风控与价值比较；各阶段系数以计算记录为准，系数不等于最终贡献比例。",
     "推荐阈值跟随 model-calibration 动态变化；低命中联赛、市场或方向自动降权并提高概率差与让球支持要求。",
     "回测必须按时间滚动，严禁赛后 xG、赛后射门、最终排名、未公开首发或时间点不一致的临场赔率泄漏。",
     "评估以 log loss、Brier score、校准误差和分桶可靠性为主，命中率只作为辅助观察。",
   ],
   en: [
     "Output 1X2, score distribution, totals, BTTS, and handicap probabilities first instead of reducing the task to one winner.",
-    "Independent probabilities are generated first from Elo strength, Poisson score modelling, last-year attack/defense form, long-run history, and schedule density; World Cup priors participate only after safety validation, while official SP is only market validation and value-gap reference.",
+    "Base probabilities combine team strength, Elo, Poisson and market probabilities; World Cup priors participate only after safety validation. Official SP also informs posterior blending, market risk checks and value comparisons. Stage coefficients follow calculation records and are not final contribution shares.",
     "Recommendation gates follow model-calibration dynamically; cold leagues, markets, or directions are down-weighted with higher probability-gap and handicap-support requirements.",
     "Backtests must be time-ordered and must not leak post-match xG, post-match shots, final table rank, unpublished lineups, or late odds into earlier forecast nodes.",
     "Evaluate with log loss, Brier score, calibration error, and bucket reliability; hit rate is only a secondary diagnostic.",
@@ -2804,8 +2805,12 @@ function buildCalculationTraceFromPublishedModel(match, model) {
     },
     goals: {
       formula: {
-        zh: "P(大2.5)=1-sum_{g=0..2}Pois(g;lambda_home+lambda_away)；P(BTTS)=(1-e^-lambda_home)*(1-e^-lambda_away)。",
-        en: "P(Over2.5)=1-sum_{g=0..2}Pois(g;lambda_home+lambda_away); P(BTTS)=(1-e^-lambda_home)*(1-e^-lambda_away).",
+        zh: model.goalLinesBasis === "had-reweighted-score-matrix-v1"
+          ? "大/小2.5来自泊松比分矩阵按最终胜平负概率配平后的完整比分求和；双方进球仍为原始模型估计。"
+          : "P(大2.5)=1-sum_{g=0..2}Pois(g;lambda_home+lambda_away)；P(BTTS)=(1-e^-lambda_home)*(1-e^-lambda_away)。",
+        en: model.goalLinesBasis === "had-reweighted-score-matrix-v1"
+          ? "Over/under 2.5 sums the full Poisson score matrix reweighted to final 1X2 probabilities; BTTS remains a raw model estimate."
+          : "P(Over2.5)=1-sum_{g=0..2}Pois(g;lambda_home+lambda_away); P(BTTS)=(1-e^-lambda_home)*(1-e^-lambda_away).",
       },
       values: {
         over25: formulaNumber(model.goalLines?.over25, 1),
@@ -8283,13 +8288,13 @@ function multiFactorEvidenceForCandidate(match, candidate, context) {
   const handicapAligned = candidate.market === "HHAD"
     ? scoreShape.top1HhadCode === candidate.code || Number(scoreShape.hhadCodeCounts?.[candidate.code] || 0) >= 2
     : context.hadLeader?.code === candidate.code || scoreShape.top1Code === candidate.code;
-  const crossMarketCompatible = candidate.market !== "HHAD" || !context.hadLeader?.code
+  const crossMarketCompatible = candidate.market === "HAD"
     ? true
-    : isHandicapCodeCompatibleWithOutcomeCode(
-        context.hadLeader.code,
-        candidate.code,
-        Number(scoreShape.handicap)
-      );
+    : ["1", "X", "2"].includes(context.hadLeader?.code)
+      && ["1", "X", "2"].includes(candidate.code)
+      && Number.isFinite(scoreShape.handicap)
+      ? isHandicapCodeCompatibleWithOutcomeCode(context.hadLeader.code, candidate.code, scoreShape.handicap)
+      : null;
   const trend = candidateOfficialTrendEvidence(match, candidate);
   const externalMarket = candidateExternalMarketEvidence(match, candidate, context.evaluationAt);
   const upstream = upstreamPredictionForCandidate(candidate, context);
@@ -10098,12 +10103,19 @@ function dataGapProfile(match, context) {
   const coverageScore = Number.isFinite(Number(preMatchQuality?.score))
     ? Math.round(clamp(Number(preMatchQuality.score), 0, 100))
     : fallbackCoverageScore;
-  const severeMissingCount = Number.isFinite(Number(preMatchQuality?.severeMissingCount))
-    ? Number(preMatchQuality.severeMissingCount)
+  const rawSevereMissingCount = preMatchQuality?.severeMissingCount;
+  const observedSevereMissingCount = (
+    (typeof rawSevereMissingCount === "number" || typeof rawSevereMissingCount === "string")
+    && !(typeof rawSevereMissingCount === "string" && !rawSevereMissingCount.trim())
+    && Number.isFinite(Number(rawSevereMissingCount))
+    && Number(rawSevereMissingCount) >= 0
+  ) ? Number(rawSevereMissingCount) : null;
+  const severeMissingCount = preMatchQuality
+    ? observedSevereMissingCount
     : effectiveMissing.filter((item) => item.severity === "high").length;
   const sourceQuality = preMatchQuality?.sourceQuality || (coverageScore >= 78 && severeMissingCount === 0
     ? "high"
-    : coverageScore >= 58 && severeMissingCount <= 1
+    : coverageScore >= 58 && severeMissingCount !== null && severeMissingCount <= 1
       ? "medium"
       : "low");
   const fallbackTrustPenalty = (sourceQuality === "low" ? 5 : sourceQuality === "medium" ? 2 : 0)
@@ -11198,8 +11210,12 @@ function auditableDirectionalInputCoverage(match) {
   const leagueHistoryMatches = Math.max(0, Number(leaguePrior?.matches || 0));
   const leagueHistoryReady = Boolean(
     leagueHistoryMatches >= 30
-    && Number.isFinite(Number(leaguePrior?.homeGoalsAvg))
-    && Number.isFinite(Number(leaguePrior?.awayGoalsAvg))
+    && [leaguePrior?.homeGoalsAvg, leaguePrior?.awayGoalsAvg].every((value) => (
+      (typeof value === "number" || typeof value === "string")
+      && !(typeof value === "string" && !value.trim())
+      && Number.isFinite(Number(value))
+      && Number(value) >= 0
+    ))
     && modelInputProvenancePresent(leaguePrior)
   );
   const historicalTrainingReady = Boolean(
@@ -11773,18 +11789,42 @@ function predictionSetInternal(match) {
     bttsProbability = contextGoalAdjustment.btts;
     contextSignals.goalAdjustment = contextGoalAdjustment.meta;
   }
-  const goalsTip = over25Probability >= 0.52 ? "O2.5" : "U2.5";
-  const goalsProbability = goalsTip === "O2.5" ? over25Probability : 1 - over25Probability;
-  const goalsOdds = Number(clamp(1 / Math.max(goalsProbability, 0.36), 1.2, 2.78).toFixed(2));
-  const goalsTipLabel = goalsTip === "O2.5"
-    ? { zh: "大2.5球（≥3球）", en: "Over 2.5 goals" }
-    : { zh: "小2.5球（≤2球）", en: "Under 2.5 goals" };
+  const rawOver25Probability = over25Probability;
   const probabilityModel = buildProbabilityModel(match, probabilities, hhadProbabilities, homeLambda, awayLambda, over25Probability, bttsProbability, lambdaBlend, goalCalibration, contextSignals);
   const finalOneXTwoProbabilities = {
     home: (probabilityModel.oneXTwo.final?.home || pct1(independentProbabilities.home)) / 100,
     draw: (probabilityModel.oneXTwo.final?.draw || pct1(independentProbabilities.draw)) / 100,
     away: (probabilityModel.oneXTwo.final?.away || pct1(independentProbabilities.away)) / 100,
   };
+  const canonicalGoalLines = require("../src/services/publishedScoreDistribution.cjs").projectHadGoalLines(
+    homeLambda, awayLambda, {
+      "1": finalOneXTwoProbabilities.home,
+      X: finalOneXTwoProbabilities.draw,
+      "2": finalOneXTwoProbabilities.away,
+    }
+  );
+  if (canonicalGoalLines) over25Probability = canonicalGoalLines.over25;
+  probabilityModel.rawGoalLines = { over25: pct1(rawOver25Probability), under25: pct1(1 - rawOver25Probability) };
+  probabilityModel.goalLines = canonicalGoalLines
+    ? { over25: pct1(canonicalGoalLines.over25), under25: pct1(canonicalGoalLines.under25) }
+    : null;
+  probabilityModel.goalLinesBasis = canonicalGoalLines?.basis || "unavailable";
+  if (canonicalGoalLines && probabilityModel.calculationTrace?.goals) {
+    probabilityModel.calculationTrace.goals.formula = {
+      zh: "大/小2.5来自泊松比分矩阵按最终胜平负概率配平后的完整比分求和；双方进球仍为原始模型估计。",
+      en: "Over/under 2.5 sums the full Poisson score matrix reweighted to final 1X2 probabilities; BTTS remains a raw model estimate.",
+    };
+    probabilityModel.calculationTrace.goals.values.over25 = probabilityModel.goalLines.over25;
+    probabilityModel.calculationTrace.goals.values.under25 = probabilityModel.goalLines.under25;
+  }
+  const goalsDirectionAvailable = Boolean(canonicalGoalLines) && Math.abs(over25Probability - 0.5) >= 0.04;
+  const goalsTip = over25Probability > 0.5 ? "O2.5" : "U2.5";
+  const goalsProbability = goalsTip === "O2.5" ? over25Probability : 1 - over25Probability;
+  const goalsOdds = goalsDirectionAvailable
+    ? Number(clamp(1 / Math.max(goalsProbability, 0.36), 1.2, 2.78).toFixed(2)) : 0;
+  const goalsTipLabel = goalsTip === "O2.5"
+    ? { zh: "大2.5球（≥3球）", en: "Over 2.5 goals" }
+    : { zh: "小2.5球（≤2球）", en: "Under 2.5 goals" };
   const hhadScoreModel = probabilityModel.handicap?.scoreImplied || probabilityModel.handicap?.poisson || probabilityModel.handicap?.market;
   const hhadModelProbabilities = hhadScoreModel
     ? {
@@ -12128,10 +12168,10 @@ function predictionSetInternal(match) {
 
   const goals = {
     marketType: "GOALS",
-    tipCode: goalsTip,
-    tipLabel: goalsReferenceLabel,
+    tipCode: goalsDirectionAvailable ? goalsTip : "WATCH",
+    tipLabel: goalsDirectionAvailable ? goalsReferenceLabel : goalsWatchLabel,
     odds: goalsOdds,
-    trustScore: clamp(Math.round(goalsProbability * 100 - 2), 42, 58),
+    trustScore: goalsDirectionAvailable ? clamp(Math.round(goalsProbability * 100 - 2), 42, 58) : 0,
     recommendationAction: "reference",
     recommendationTier: "reference",
     explanation: {
@@ -12146,10 +12186,14 @@ function predictionSetInternal(match) {
       {
         zh: goalsGate.promote
           ? `比分热区：${score.home}-${score.away} 附近；${goalsTipLabel.zh} 的模型概率约 ${pct(goalsProbability)}%。`
-          : `比分热区：${score.home}-${score.away} 附近；候选方向 ${goalsTipLabel.zh} 的模型概率约 ${pct(goalsProbability)}%，低于强推阈值。`,
+          : goalsDirectionAvailable
+          ? `比分热区：${score.home}-${score.away} 附近；候选方向 ${goalsTipLabel.zh} 的模型概率约 ${pct(goalsProbability)}%，低于强推阈值。`
+          : `进球方向接近五五开，不给大球或小球单向建议。`,
         en: goalsGate.promote
           ? `Score heat zone: around ${score.home}-${score.away}; model probability for ${goalsTipLabel.en} is about ${pct(goalsProbability)}%.`
-          : `Score heat zone: around ${score.home}-${score.away}; candidate ${goalsTipLabel.en} is about ${pct(goalsProbability)}%, below the promotion threshold.`,
+          : goalsDirectionAvailable
+          ? `Score heat zone: around ${score.home}-${score.away}; candidate ${goalsTipLabel.en} is about ${pct(goalsProbability)}%, below the promotion threshold.`
+          : `The goal line is close to an even split, so no over/under direction is given.`,
       },
       {
         zh: `大 2.5 球概率约 ${pct(over25Probability)}%，该指标用于走势参考，不等同于官方总进球 SP。`,
@@ -12158,7 +12202,7 @@ function predictionSetInternal(match) {
     ],
     riskTags: goalsRiskTags,
     visibilityStatus: "FREE",
-    resultStatus: resultStatus(match, goalsTip, "GOALS"),
+    resultStatus: goalsDirectionAvailable ? resultStatus(match, goalsTip, "GOALS") : "PENDING",
   };
 
   const bestIsSteady = oneXTwoPromote
@@ -13789,9 +13833,17 @@ function applyPredictionPersistence(match, existing, capturedAt, options = {}) {
   const modelCompletedAfterCutoff = Number.isFinite(decisionGeneratedMs)
     && Number.isFinite(cutoffMs)
     && decisionGeneratedMs >= cutoffMs;
+  // A new decision cannot be minted from an older computation, even if its
+  // publication clock is current. Existing trusted decisions take the preserved
+  // branch below; only a real current-cycle rebuild may generate new lineage.
+  const computationIsCurrent = decisionCaptureDisposition({
+    probabilityModel: match?.probabilityModel,
+    predictionMeta: { decisionGeneratedAt },
+  }, capturedAt).fresh;
   const invalidPublicationClock = !Number.isFinite(capturedMs)
     || !Number.isFinite(finalizedMs)
     || finalizedMs < capturedMs
+    || !computationIsCurrent
     || (Number.isFinite(decisionGeneratedMs) && finalizedMs < decisionGeneratedMs);
   const locked = started || finalizedAfterCutoff || modelCompletedAfterCutoff || invalidPublicationClock;
   const lockedReason = invalidPublicationClock
@@ -13891,9 +13943,7 @@ function applyPredictionPersistence(match, existing, capturedAt, options = {}) {
       predictionMeta: {
         ...(existing?.predictionMeta || generatedMeta),
         dualMarketDecision: immutableDualMarketDecision,
-        syncCapturedAt: validAuditInstant(capturedAt),
-        publicationFinalizedAt: validAuditInstant(publicationFinalizedAt),
-        updatedAt: validAuditInstant(publicationFinalizedAt),
+        observedAt: validAuditInstant(publicationFinalizedAt),
         cutoffTime: existing?.predictionMeta?.cutoffTime || cutoffTime,
         updateReason: ATOMIC_DUAL_MARKET_DECISION_UPDATE_REASON,
       },
@@ -13939,7 +13989,7 @@ function applyPredictionPersistence(match, existing, capturedAt, options = {}) {
         : displayRefreshedPredictions,
       predictionMeta: {
         ...lockedMatch.predictionMeta,
-        publicationFinalizedAt: validAuditInstant(publicationFinalizedAt),
+        observedAt: validAuditInstant(publicationFinalizedAt),
         publicationGate: {
           ...publicationGateBase,
           status: "preserved",
@@ -14046,7 +14096,7 @@ function applyPredictionPersistence(match, existing, capturedAt, options = {}) {
       probabilityModel: existing?.probabilityModel || match.probabilityModel,
       predictionMeta: {
         ...normalizePredictionAuditMeta(existing?.predictionMeta || generatedMeta, existing || match),
-        updatedAt: publicationFinalizedAt,
+        observedAt: validAuditInstant(publicationFinalizedAt),
         dataPolicy: PREDICTION_DATA_POLICY,
         analystRuntime: ANALYST_RUNTIME,
         analystFramework: PREDICTION_ANALYST_FRAMEWORK,
@@ -16049,7 +16099,7 @@ function loadPredictionSnapshots(publicDir) {
         error.code = "PREDICTION_SNAPSHOT_INVALID";
         throw error;
       }
-      for (const field of ["observations", "publicReferenceDecisions", "publicReferenceEvidence"]) {
+      for (const field of ["observations", "decisionObservations", "publicReferenceDecisions", "publicReferenceEvidence"]) {
         if (Object.hasOwn(parsed, field) && !Array.isArray(parsed[field])) {
           const error = new Error(`prediction snapshot ${field} must be an array`);
           error.code = "PREDICTION_SNAPSHOT_INVALID";
@@ -16063,6 +16113,7 @@ function loadPredictionSnapshots(publicDir) {
         retentionDays: Number(parsed?.retentionDays || PREDICTION_SNAPSHOT_RETENTION_DAYS),
         maxRows: Number(parsed?.maxRows || PREDICTION_SNAPSHOT_MAX_ROWS),
         rows: Array.isArray(parsed?.rows) ? parsed.rows : [],
+        decisionObservations: Array.isArray(parsed?.decisionObservations) ? parsed.decisionObservations : [],
         publicReferenceDecisions: Array.isArray(parsed?.publicReferenceDecisions) ? parsed.publicReferenceDecisions : [],
         publicReferenceEvidence: Array.isArray(parsed?.publicReferenceEvidence) ? parsed.publicReferenceEvidence : [],
       };
@@ -16504,33 +16555,6 @@ function dualMarketDecisionBindingFromImmutableRowsOrExisting(match, rows) {
   return existing || null;
 }
 
-function predictionSnapshotComparable(row) {
-  if (!row || typeof row !== "object") return "";
-  return JSON.stringify({
-    ...row,
-    capturedAt: undefined,
-    firstSeenAt: undefined,
-    lastSeenAt: undefined,
-    seenCount: undefined,
-  });
-}
-
-function preserveImmutableLivePublicationTip(existingTip, nextTip) {
-  if (!existingTip?.livePublicationEvidence) return nextTip;
-  return {
-    ...(nextTip || existingTip),
-    oddsPoolCode: existingTip.oddsPoolCode,
-    tipCode: existingTip.tipCode,
-    handicapLine: existingTip.handicapLine,
-    odds: existingTip.odds,
-    tipLabel: existingTip.tipLabel,
-    liveRecommendationAction: existingTip.liveRecommendationAction,
-    liveRecommendationTier: existingTip.liveRecommendationTier,
-    liveRecommendation: existingTip.liveRecommendation,
-    livePublicationEvidence: existingTip.livePublicationEvidence,
-  };
-}
-
 function shouldCaptureLockedShadowRevision(match, capturedAt) {
   if (!match?.predictionMeta?.lockedAt || !match?.predictionMeta?.snapshot?.latestSignature) return true;
   const capturedMs = Date.parse(capturedAt || "");
@@ -16579,11 +16603,19 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
   const history = loadPredictionSnapshots(publicDir);
   const cutoff = Date.parse(capturedAt) - PREDICTION_SNAPSHOT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
   const byKey = new Map();
+  const reobservations = [];
+  const freshForCapture = (match) => {
+    const disposition = decisionCaptureDisposition(match, capturedAt);
+    if (!disposition.fresh) reobservations.push(decisionObservationFor(match, capturedAt, disposition.reason));
+    return disposition.fresh;
+  };
   const observations = (observationMatches || [])
     .filter((match) => shouldCaptureLockedShadowRevision(match, capturedAt))
+    .filter(freshForCapture)
     .map((match) => predictionSnapshotRow(match, capturedAt))
     .filter(Boolean)
     .map((row) => ({ ...row, auditRole: "shadow-candidate" }));
+  const historicalKeys = new Set();
 
   for (const row of history.rows) {
     const rowTime = Date.parse(row?.lastSeenAt || row?.capturedAt);
@@ -16593,11 +16625,14 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
     if (!Number.isFinite(rowTime) || rowTime < cutoff || !sourceMatchId || !phase || !signature) continue;
     const normalized = normalizePredictionSnapshotAudit(row);
     const featureHash = normalized?.featureSnapshotHash || normalized?.featureSnapshot?.hash || "legacy";
-    byKey.set(`${sourceMatchId}|${phase}|${signature}|${featureHash}`, normalized);
+    const key = `${sourceMatchId}|${phase}|${signature}|${featureHash}`;
+    // Normalization may help identify a legacy row, but must not rewrite it.
+    byKey.set(key, row);
+    historicalKeys.add(key);
   }
 
   let appended = 0;
-  let updated = 0;
+  const updated = 0;
   for (const match of matches || []) {
     // Public recommendation content remains frozen, but the independent shadow
     // audit may keep a latest eligible revision until the official cutoff.
@@ -16605,38 +16640,14 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
     if (!shouldCaptureLockedShadowRevision(match, capturedAt)) {
       continue;
     }
+    if (!freshForCapture(match)) continue;
     const row = predictionSnapshotRow(match, capturedAt);
     if (!row) continue;
     const featureHash = row.featureSnapshotHash || row.featureSnapshot?.hash || "legacy";
     const key = `${row.sourceMatchId}|${row.phase}|${row.signature}|${featureHash}`;
     const existing = byKey.get(key);
     if (existing) {
-      if (predictionSnapshotComparable(existing) !== predictionSnapshotComparable(row)) {
-        updated += 1;
-        byKey.set(key, {
-          ...existing,
-          ...row,
-          // Once a live pick has a publication binding inside this immutable
-          // decision snapshot, later heartbeat refreshes may update seen clocks
-          // but must never rewrite the published direction, SP or deadline.
-          best: preserveImmutableLivePublicationTip(existing.best, row.best),
-          // A decision snapshot is an immutable as-of record. Never repair an
-          // older row with clocks from a later sync; missing legacy lineage
-          // must remain visible and fail closed in promotion evidence.
-          decisionSnapshot: existing.decisionSnapshot || row.decisionSnapshot,
-          decisionSnapshotVersion: existing.decisionSnapshotVersion || row.decisionSnapshotVersion,
-          decisionAt: existing.decisionAt || row.decisionAt,
-          sourceCycleId: existing.sourceCycleId || row.sourceCycleId,
-          modelGeneratedAt: existing.modelGeneratedAt || row.modelGeneratedAt,
-          oddsObservedAt: existing.oddsObservedAt || row.oddsObservedAt,
-          oddsReceivedAt: existing.oddsReceivedAt || row.oddsReceivedAt,
-          handicapOddsObservedAt: existing.handicapOddsObservedAt || row.handicapOddsObservedAt,
-          handicapOddsReceivedAt: existing.handicapOddsReceivedAt || row.handicapOddsReceivedAt,
-          firstSeenAt: existing.firstSeenAt || existing.capturedAt || row.firstSeenAt,
-          lastSeenAt: capturedAt,
-          seenCount: Number(existing.seenCount || 1) + 1,
-        });
-      }
+      reobservations.push(decisionObservationFor(match, capturedAt, "existing-immutable-snapshot"));
     } else {
       appended += 1;
       byKey.set(key, row);
@@ -16661,8 +16672,9 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
     ].join("|");
     const existing = byKey.get(key);
     if (!existing) appended += 1;
-    else if (predictionSnapshotComparable(existing) !== predictionSnapshotComparable(observation)) updated += 1;
-    byKey.set(key, observation);
+    // The shadow stream is authoritative for this new capture, never for a
+    // previously persisted immutable record (including invalid legacy clocks).
+    if (!historicalKeys.has(key)) byKey.set(key, observation);
     observationKeyByCapture.set(captureKey, key);
   }
 
@@ -16674,7 +16686,7 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
           row?.decisionSnapshot?.capturedAt || row?.capturedAt,
         ].join("|");
         const observationKey = observationKeyByCapture.get(captureKey);
-        return !observationKey || observationKey === key;
+        return historicalKeys.has(key) || !observationKey || observationKey === key;
       })
       .map(([, row]) => row),
   );
@@ -16682,6 +16694,11 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
     acc[row.phase] = (acc[row.phase] || 0) + 1;
     return acc;
   }, {});
+  const decisionObservations = [...new Map([
+    ...(history.decisionObservations || []),
+    ...reobservations,
+  ].filter((record) => Date.parse(record.observedAt) >= cutoff)
+    .map((record) => [JSON.stringify(record), record])).values()].slice(-PREDICTION_SNAPSHOT_MAX_ROWS);
   const payload = {
     version: 3,
     source: "sporttery:prediction-snapshots",
@@ -16691,15 +16708,18 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
       ...(matches || []).map((match) => match?.predictionMeta?.publicReferenceDecision).filter(Boolean),
     ].filter((record) => Date.parse(record.recordedAt) >= cutoff)
       .map((record) => [record.contentHash, record])).values()],
-    updatedAt: appended || updated ? capturedAt : (history.updatedAt || capturedAt),
+    updatedAt: appended || updated || reobservations.length ? capturedAt : (history.updatedAt || capturedAt),
     retentionDays: PREDICTION_SNAPSHOT_RETENTION_DAYS,
     maxRows: PREDICTION_SNAPSHOT_MAX_ROWS,
     maxRowsPerMatch: PREDICTION_SNAPSHOT_MAX_ROWS_PER_MATCH,
     observations,
+    // Never pass reobservations to the prospective candidate selector.
+    decisionObservations,
     rows,
     summary: {
       total: rows.length,
       observations: observations.length,
+      reobservations: reobservations.length,
       byPhase,
       appended,
       updated,
@@ -18392,6 +18412,18 @@ async function sync() {
       unsettledRetentionHours: CURRENT_UNSETTLED_RETENTION_HOURS,
       archivedUnsettled: unresolvedArchive.length,
       behavior: "old-unsettled-exits-current-without-fabricated-settlement",
+      // This is a separate empty-list integrity proof. It does not make the
+      // current odds lane fresh or count as an independent market collector.
+      ...(split.current.length === 0 ? {
+        officialClosedSchedule: require('./officialClosedScheduleEvidence.cjs').captureOfficialClosedSchedule({
+          snapshotPath: process.env.SPORTTERY_RELAY_SNAPSHOT || process.env.SPORTTERY_RELAY_SNAPSHOT_PATH || DEFAULT_SPORTTERY_RELAY_SNAPSHOT,
+          alternateSnapshotPath: process.env.SPORTTERY_RELAY_SNAPSHOT && process.env.SPORTTERY_RELAY_SNAPSHOT_PATH,
+          trustRegistryPath: COLLECTOR_TRUST_REGISTRY_PATH,
+          asOf: new Date().toISOString(),
+          publicationSourceCycleId: sourceCycleId,
+          currentListEvaluatedAt: capturedAt,
+        }),
+      } : {}),
     },
     files: {
       current: split.current.length,

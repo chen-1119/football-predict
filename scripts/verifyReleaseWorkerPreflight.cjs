@@ -73,7 +73,7 @@ function verifyReleaseWorkerPreflight() {
   });
   check('client probe runs before any uploads',()=>{
     assert.match(client,/require\("\.\/releaseWorkerPreflight\.cjs"\)/);
-    assert.match(client,/shellQuote\(buildReadOnlyWorkerProbe\(\)\)/);
+    assert.match(client,/shellQuote\(buildReadOnlyWorkerProbe\(\{ releaseKind \}\)\)/);
     assert.ok(client.indexOf('const remotePreflight = runCommand')<client.indexOf('for (const artifact of uploads)'));
   });
   check('known worker failure stops the actual builder before all expensive preparation', () => {

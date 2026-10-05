@@ -876,8 +876,8 @@ const run = async () => {
     && appContextSource.includes("refreshFromServerEvent(eventType as RefreshableServerEventType, payload)")
   ));
   check("prediction cards use event identity and preserve the visible scroll anchor", (
-    predictionsSource.includes("key={matchEventKey}")
-    && predictionsSource.includes("eventKey={matchEventKey}")
+    predictionsSource.includes("key={getMatchEventKey(match)}")
+    && predictionsSource.includes("eventKey={getMatchEventKey(match)}")
     && matchSummaryRowSource.includes("data-match-event-key={eventKey}")
     && predictionsSource.includes("refreshScrollAnchorRef")
     && predictionsSource.includes("window.scrollBy({ top: delta")

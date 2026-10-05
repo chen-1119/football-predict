@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowRight, Clock, Heart, KeyRound, LogOut, ShieldCheck, UserRound } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useAccount } from '../context/AccountContext';
+import { useAccount } from '../context/AccountContextCore';
 import { useApp } from '../context/AppContextCore';
 import { formatAccessCode } from '../services/accessControl';
 import { safeAccountReturnTo } from '../services/accountApi';

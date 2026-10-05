@@ -1,0 +1,247 @@
+{
+  "version": "history-feature-admission-verification-v2",
+  "verifiedAt": "2026-10-02T14:41:21.226Z",
+  "baseCommit": "2d20938a13463294977696cc2fcef92bc746c902",
+  "scope": "New candidate feature admission acceptance; does not rewrite or extend old receipt acceptance",
+  "result": {
+    "sourceRows": 432,
+    "frozenProbabilityRows": 180,
+    "pairedRows": 154,
+    "fullFrozenReportIdentical": true,
+    "frozenReportHash": "5bff16be39453ac4c801a90659a0b9014e5d74bbff11c20eb0b159982a3c71c9",
+    "metrics": {
+      "publishedModel": {
+        "brier": 0.6247951452865698,
+        "logLoss": 1.0400609233658802,
+        "accuracy": 0.5064935064935064
+      },
+      "sameDecisionMarket": {
+        "brier": 0.5595852872058835,
+        "logLoss": 0.9428982262101696,
+        "accuracy": 0.538961038961039
+      }
+    },
+    "trainingTimeValidRows": [
+      0,
+      2
+    ],
+    "finalTestRows": 47,
+    "featureContract": {
+      "version": "prematch-scalar-features-v2",
+      "allowedNames": [
+        "elo",
+        "form",
+        "weather"
+      ],
+      "requiredClocks": [
+        "providerObservedAt",
+        "receivedAt",
+        "availableAt"
+      ],
+      "optionalClocks": [
+        "observedAt"
+      ],
+      "ordering": "providerObservedAt <= observedAt (if declared) <= receivedAt <= availableAt <= decision.at",
+      "eligibility": "features.candidateEligible must be true; each field must pass value, status, source/hash and original-clock checks"
+    },
+    "rawResponseSha256": "6ed9802d2a9e43930ed5db44a7f7b809145eed8908d8af47770e77a93dddd507",
+    "originalInputsAndReportsUnchanged": true,
+    "oldReceiptUnchanged": true,
+    "productionEligible": false,
+    "productionWrites": false,
+    "productionRecaptured": false
+  },
+  "tests": {
+    "local": {
+      "tests": 125,
+      "pass": 125,
+      "fail": 0,
+      "skipped": 0
+    },
+    "independentBefore": {
+      "tests": 50,
+      "pass": 38,
+      "fail": 12,
+      "skipped": 0
+    },
+    "independentAfter": {
+      "tests": 50,
+      "pass": 50,
+      "fail": 0,
+      "skipped": 0
+    },
+    "meaning": "Synthetic safety cases are software evidence, not model improvement. Independent suite also revalidates original real frozen evidence."
+  },
+  "files": [
+    {
+      "path": ".gitattributes",
+      "bytes": 1166,
+      "sha256": "f6f5ce62fa654bda4ef9761a800cf4b6efa5c373a4d2f47efe203c218d04f526"
+    },
+    {
+      "path": "scripts/historyRegressionReplay.cjs",
+      "bytes": 38566,
+      "sha256": "1cda15da320381a59662ef60192a486202dfa39e565ca187552eee9d5f58329a"
+    },
+    {
+      "path": "src/services/strictInstant.cjs",
+      "bytes": 1182,
+      "sha256": "82e96e15261aee874120cbdb36f12ecba9fed9dbc701d44d42fe449482678d85"
+    },
+    {
+      "path": "scripts/historyRegressionAdmission.cjs",
+      "bytes": 22151,
+      "sha256": "f2d3dd30c0e33cd713e61068d7d6644e516c66062adfec46e8815d1b1c66c870"
+    },
+    {
+      "path": "scripts/historyRegressionFeatureVerification.cjs",
+      "bytes": 9976,
+      "sha256": "cf0432d7d2ae3557b2340851305d1afada44e87bebdce5b1fcaab3226e3b0c86"
+    },
+    {
+      "path": "tests/history-regression-admission.test.cjs",
+      "bytes": 17003,
+      "sha256": "b8682c01f7308eefc897fef536abf94814110e916623239a4508495f38b16298"
+    },
+    {
+      "path": "tests/history-regression-replay.test.cjs",
+      "bytes": 20028,
+      "sha256": "c64cf96378697cec37a73181b4fa4cd1ed019fc6c31ef7ce9085829f7552395c"
+    },
+    {
+      "path": "tests/history-regression-feature-admission.test.cjs",
+      "bytes": 17868,
+      "sha256": "d81d2313fbd8ed0a50b2988342aac1895f2355ae08858f9a93d41fcf3e279ca0"
+    },
+    {
+      "path": "docs/history-regression-feature-admission-20261002.md",
+      "bytes": 4421,
+      "sha256": "7ec51082f0848305a4d6f748486f0d732824b5fe24b80ba39ab04d10ab50bcba"
+    },
+    {
+      "path": "outputs/history-regression-20261002/delivery-receipt.json",
+      "bytes": 5087,
+      "sha256": "564a957cc8a73a11ba046e10e87fe859b1d3501dff4f3ca1944e9ea728945191"
+    },
+    {
+      "path": "outputs/history-regression-20261002/online-sample-v3.json",
+      "bytes": 13970968,
+      "sha256": "151a20c0678b89ec41d0555f06149be75182beba0dbc17cd4a1b5a76435470e1"
+    },
+    {
+      "path": "outputs/history-regression-20261002/online-sample-v3.json.remote-response.json",
+      "bytes": 9383766,
+      "sha256": "6ed9802d2a9e43930ed5db44a7f7b809145eed8908d8af47770e77a93dddd507"
+    },
+    {
+      "path": "outputs/history-regression-20261002/admission-v3.json",
+      "bytes": 4781725,
+      "sha256": "f6438a625a8bd48505a6e12f08c0e6fac6dd4a4363bace896c49cd498448e287"
+    },
+    {
+      "path": "outputs/history-regression-20261002/report/attributions.json",
+      "bytes": 258073,
+      "sha256": "08d5a4db8a03ddb46fb0e5c00866c81f7513450283a02197d55ab1d4c286fb29"
+    },
+    {
+      "path": "outputs/history-regression-20261002/report/per-match-evidence.jsonl",
+      "bytes": 1773821,
+      "sha256": "cebb126e0344787c0cfe4be1773a98d473394b1c6d57cfc32c5704c9abc125b9"
+    },
+    {
+      "path": "outputs/history-regression-20261002/report/reliability.png",
+      "bytes": 153046,
+      "sha256": "fcd71da04ba4a3aabe90c649e03b95ca0db1832027583d241718b1268c402906"
+    },
+    {
+      "path": "outputs/history-regression-20261002/report/replay.json",
+      "bytes": 2139824,
+      "sha256": "b1e44f7f8c91e8bf7006e16f770a27b486a9c286166ece25197434260e0e5d43"
+    },
+    {
+      "path": "outputs/history-regression-20261002/report/report-manifest.json",
+      "bytes": 835,
+      "sha256": "b3d317575b23b76bfb873c7f0849510fcfdfe18a6defa2b4f69167da5d766800"
+    },
+    {
+      "path": "outputs/history-regression-20261002/report/review.json",
+      "bytes": 829240,
+      "sha256": "f7eb506dfb29e4d06235b77a22036c528d27366d7b32196e3da6cb922f041257"
+    },
+    {
+      "path": "outputs/history-regression-20261002/report/summary.json",
+      "bytes": 48029,
+      "sha256": "2d5412b2836fc699c469fa42eccca2d8ec69672cc4e7a3eea7c0326ddd4c6262"
+    },
+    {
+      "path": "docs/history-regression.md",
+      "bytes": 7115,
+      "sha256": "4c2d0e7caf113b93c75bd0222d8e638dfdde46bd7991824e7c0688293e106982"
+    },
+    {
+      "path": "docs/history-regression-results-20261002.md",
+      "bytes": 6879,
+      "sha256": "5031dbe29c8d87b1a2554a72712c2979f6b88dadf3a406cd2347f219f044ebed"
+    },
+    {
+      "path": "docs/history-regression-protocol.json",
+      "bytes": 1128,
+      "sha256": "4e6df3c59e1913f24cf0598f7a9ac58b5a77e3878c63b375a8390f56791f5604"
+    },
+    {
+      "path": "scripts/captureHistoryRegression.cjs",
+      "bytes": 5708,
+      "sha256": "87a9743826595f869ad7ff538459dba50c512d425e7454e83258e3afcf410c6f"
+    },
+    {
+      "path": "scripts/historyRegressionRemote.py",
+      "bytes": 21862,
+      "sha256": "6a814406b52e70f532e3edc346d906512b6e49d33a667305792a3a1be9488a7b"
+    },
+    {
+      "path": "scripts/reportHistoryRegression.cjs",
+      "bytes": 8361,
+      "sha256": "915be5610a1d37c62d54ae8464e90c1772fd3964b0d7c6a87cb100cfa90aa7bc"
+    },
+    {
+      "path": "scripts/plotHistoryRegression.py",
+      "bytes": 1947,
+      "sha256": "51802901b9f1e93a2264ee073edec81d75efdcbbc2b4e7731b6d550494bc95ad"
+    },
+    {
+      "path": "scripts/verifyHistoryRegressionDelivery.cjs",
+      "bytes": 5616,
+      "sha256": "278b19538740ac22ca3da401cb92eb6d7165e92f155d11503ec6105ae4a11453"
+    },
+    {
+      "path": "tests/history-regression-remote.test.py",
+      "bytes": 11143,
+      "sha256": "760ec37149172168b8d0479feb321de42b6b1103610fc1dda22081b918ed19e0"
+    },
+    {
+      "path": "outputs/history-feature-admission-20261002/external-snapshot-1e0d549176a9/tests/quality-history-interface.test.cjs",
+      "bytes": 17860,
+      "sha256": "6d3de620d836f5ccfe1bb6552f417d8c074f081a9952a4ad7d898763f823ac5b"
+    },
+    {
+      "path": "outputs/history-feature-admission-20261002/external-snapshot-1e0d549176a9/scripts/qualityHistoryRegressionEvidence.cjs",
+      "bytes": 20499,
+      "sha256": "d52b3f01b86f681347146ac18373d4e946b17b159bfd3bcd711a3b19828ab859"
+    },
+    {
+      "path": "outputs/history-feature-admission-20261002/before-final3.json",
+      "bytes": 27687,
+      "sha256": "3d6f3839170331ca6ae0795176c0c5b01c9537b8f86f4e9ed2cecc3091860fb6"
+    },
+    {
+      "path": "outputs/history-feature-admission-20261002/after-final3.json",
+      "bytes": 14079,
+      "sha256": "393a049b06d0a39e754adce6eec7aab3d07b46ece46df2b14ce5a961f78bc30e"
+    },
+    {
+      "path": "outputs/history-feature-admission-20261002/local-test-results.json",
+      "bytes": 32093,
+      "sha256": "f419d3f4a42aea1624ff1e19cb1a7a3e55cf22fc8be89f2248d1ed067412d5ee"
+    }
+  ]
+}

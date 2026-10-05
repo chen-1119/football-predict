@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const {
   parseVenueCoordinates,
+  nearestHourlyWeather,
   resolveLocation,
   teamCandidateMatches,
   teamLookupQuery,
@@ -54,6 +55,33 @@ assert.deepEqual(resolveLocation({ id: "sporttery_1", homeTeamId: "team_arsenal"
   matches: {},
   teams: { team_arsenal: teamLocation },
 }, 0), teamLocation);
+const matchVenue = {
+  name: "Neutral venue",
+  city: "Cardiff",
+  country: "Wales",
+  latitude: 51.478,
+  longitude: -3.182,
+  verified: true,
+  source: "official-match-centre",
+};
+assert.deepEqual(resolveLocation({
+  id: "sporttery_2",
+  homeTeamId: "team_arsenal",
+  externalSignals: { venue: matchVenue },
+}, {
+  matches: {},
+  teams: { team_arsenal: teamLocation },
+}, 0), matchVenue);
+assert.equal(resolveLocation({
+  id: "sporttery_3",
+  externalSignals: { venue: { latitude: null, longitude: null } },
+}, { matches: {}, teams: {} }, 0), null);
+assert.equal(nearestHourlyWeather({ hourly: {
+  time: ["2026-09-29T12:00"],
+  temperature_2m: [null],
+  precipitation: [0],
+  wind_speed_10m: [10],
+} }, Date.parse("2026-09-29T12:00:00Z")), null);
 
 const source = fs.readFileSync(path.join(__dirname, "syncWeatherData.cjs"), "utf8");
 assert.match(source, /reference-only-until-human-verified/);
@@ -64,7 +92,7 @@ assert.match(source, /locations\?\.teams/);
 
 console.log(JSON.stringify({
   ok: true,
-  checks: 19,
+  checks: 22,
   source: "TheSportsDB free team/venue lookup + Open-Meteo forecast",
   semantics: "provider venue mappings remain reference-only until reviewed",
 }, null, 2));

@@ -2,14 +2,18 @@ import type { SingleRow } from '../../services/recommendationCenterView';
 import { publicationLifecycle, publicationLifecycleLabel, primarySelectionSummary, handicapExtensionText, quoteSourceLabel, outcomeCategoryLabel, outcomeResearchReasonLabel, outcomeResearchFavoriteValueWarning } from '../../services/recommendationCenterView';
 import { publishedPickLabel, publishedResultLabel } from '../../services/publishedMatchRecommendation';
 import './published-match-pick.css';
-import { SelectionQualityNote, selectionReferenceLabel, SupplementaryResearchNote } from './SelectionQualityNote';
+import { SelectionQualityNote, SupplementaryResearchNote } from './SelectionQualityNote';
+import { selectionReferenceLabel } from '../../services/publishedRecommendationStatus.cjs';
+import { useWallClock } from '../../hooks/useWallClock';
 
 type Props = { row: SingleRow | null; language: 'zh'|'en'; loading?: boolean; failed?: boolean; compact?: boolean; now?: number };
 const time = (value:string,language:'zh'|'en') => new Intl.DateTimeFormat(language==='zh'?'zh-CN':'en-GB',{
   timeZone:'Asia/Shanghai',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false
 }).format(new Date(value));
 
-export function PublishedMatchPick({row,language,loading=false,failed=false,compact=false,now=Date.now()}:Props){
+export function PublishedMatchPick({row,language,loading=false,failed=false,compact=false,now:providedNow}:Props){
+  const clockNow=useWallClock();
+  const now=providedNow??clockNow;
   const zh=language==='zh';
   if(!row)return <div className="published-match-pick is-empty" role="status"><strong>{loading?(zh?'推荐加载中…':'Loading published pick…'):failed?(zh?'推荐暂未读取，请重试':'Published pick unavailable; retry'):(zh?'暂无已发布推荐':'No published pick')}</strong><small>{zh?'与今日推荐同步，发布后自动显示':'Synced with Today; appears after publication'}</small></div>;
   const d=row.decision,s=primarySelectionSummary(d),h=s.handicap,extension=h?handicapExtensionText(h,language):null;

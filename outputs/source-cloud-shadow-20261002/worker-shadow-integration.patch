@@ -1,0 +1,40 @@
+diff --git a/scripts/runSyncWorker.cjs b/scripts/runSyncWorker.cjs
+index c6ba3109555a7..f86463e7d7564 100644
+--- a/scripts/runSyncWorker.cjs
++++ b/scripts/runSyncWorker.cjs
+@@ -1,4 +1,5 @@
+ const fs = require("node:fs");
++const { readSourceCollectorShadowFiles } = require("./sourceCollectorShadowAdapter.cjs");
+ const path = require("node:path");
+ const crypto = require("node:crypto");
+ const { spawn } = require("node:child_process");
+@@ -4702,6 +4703,21 @@ const main = async () => {
+         error,
+         readJson(path.join(rootDir, "public", "data", "sync-meta.json"), null),
+       );
++      let sourceCollectionShadow = null;
++      if (process.env.SYNC_WORKER_SOURCE_SHADOW === "1") {
++        try {
++          const shadowFiles = [relaySnapshotPath];
++          if (fs.existsSync(`${relaySnapshotPath}.last-failed.json`)) shadowFiles.push(`${relaySnapshotPath}.last-failed.json`);
++          sourceCollectionShadow = readSourceCollectorShadowFiles(shadowFiles, {
++            asOf: failedAt, previous: workerStatusState?.sourceCollectionShadow,
++            closure: readJson(path.join(storeDir, "sporttery-sales-closure-verified.json"), null),
++            sourceDataUpdatedAt: null,
++          });
++        } catch {
++          sourceCollectionShadow = { state: "unknown-evidence", reason: "shadow-adapter-unavailable",
++            shadowOnly: true, publicationAction: "none", schedulingApplied: false };
++        }
++      }
+       relayWakeEligible = nextCadence.mode === "hot" && !postDeadlineCooldown && !currentSourceCooldown;
+       loopDelayMs = nextCycleDelayMs(
+         activeCycleStartedAt,
+@@ -4722,6 +4738,7 @@ const main = async () => {
+         cadence: nextCadence,
+         phase: "failed",
+         ...(currentSourceCooldown ? { failureCooldown: { ...currentSourceCooldown, delayMs: loopDelayMs } } : {}),
++        ...(sourceCollectionShadow ? { sourceCollectionShadow } : {}),
+         pipeline: describeCycleStages(),
+         wake: cycleWake,
+         relayWake: {

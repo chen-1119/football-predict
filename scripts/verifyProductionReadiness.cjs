@@ -1056,8 +1056,8 @@ const run = async () => {
       fastResultGeneration.status === 0
       && fastResultGeneration.body?.ok === true
       && fastResultGeneration.body?.verifier === "fast-result-generation-reconciliation"
-      && Number(fastResultGeneration.body?.checks) === 23
-      && Number(fastResultGeneration.body?.passed) === 23
+      && Number(fastResultGeneration.body?.checks) >= 23
+      && Number(fastResultGeneration.body?.passed) === Number(fastResultGeneration.body?.checks)
       && Array.isArray(fastResultGeneration.body?.failed)
       && fastResultGeneration.body.failed.length === 0
       && fastResultGenerationContract.receiptReviewCannotEnterFormalMetrics === true

@@ -773,6 +773,7 @@ const parseChildResult = (child, marker, label) => {
 };
 
 const budgetMarker = "__API_FOOTBALL_BUDGET_RESULT__";
+const budgetRoot = fs.mkdtempSync(path.join(os.tmpdir(), "football-api-budget-"));
 const budgetRunner = `
   const https = require("node:https");
   const api = require(${JSON.stringify(SYNC_FILE)});
@@ -815,6 +816,7 @@ const budgetChild = spawnSync(process.execPath, ["-e", budgetRunner], {
     API_FOOTBALL_KEY: "",
     APISPORTS_KEY: "",
     API_FOOTBALL_MAX_CALLS_PER_SYNC: "",
+    API_FOOTBALL_REQUEST_LEDGER_FILE: path.join(budgetRoot, "request-ledger.json"),
   },
 });
 const budgetRuntime = parseChildResult(budgetChild, budgetMarker, "per-sync request budget");
@@ -826,6 +828,47 @@ check(
     && budgetRuntime.budgetErrors === 1,
   "the real request path must pre-reserve exactly 12 attempts and count transport failures before blocking attempt 13"
 );
+fs.rmSync(budgetRoot, { recursive: true, force: true });
+
+const dailyRoot = fs.mkdtempSync(path.join(os.tmpdir(), "football-api-daily-"));
+try {
+  const marker = "__API_FOOTBALL_DAILY_RESULT__";
+  const runner = `
+    const api = require(${JSON.stringify(SYNC_FILE)});
+    const fs = require("node:fs");
+    const cache = api.createCache();
+    const budget = api.createRequestBudget(120);
+    for (let i = 0; i < 100; i += 1) api.reserveRequestAttempt(cache, budget, "/fixtures");
+    let blocked = false;
+    try { api.reserveRequestAttempt(api.createCache(), api.createRequestBudget(120), "/status"); }
+    catch (error) { blocked = /API_FOOTBALL_DAILY_CALL_LIMIT reached/.test(error.message); }
+    const persisted = JSON.parse(fs.readFileSync(process.env.API_FOOTBALL_REQUEST_LEDGER_FILE, "utf8"));
+    console.log(${JSON.stringify(marker)} + JSON.stringify({ blocked, count: persisted.count, attempts: budget.attempts }));
+  `;
+  const child = spawnSync(process.execPath, ["-e", runner], {
+    cwd: PROJECT_ROOT, encoding: "utf8", timeout: 10_000, windowsHide: true,
+    env: { ...process.env, API_FOOTBALL_REQUEST_LEDGER_FILE: path.join(dailyRoot, "request-ledger.json"),
+      API_FOOTBALL_DAILY_CALL_LIMIT: "100" },
+  });
+  const result = parseChildResult(child, marker, "durable daily request limit");
+  const secondMarker = "__API_FOOTBALL_RESTART_RESULT__";
+  const second = spawnSync(process.execPath, ["-e", `
+    const api = require(${JSON.stringify(SYNC_FILE)});
+    let blocked = false;
+    try { api.reserveRequestAttempt(api.createCache(), api.createRequestBudget(1), "/status"); }
+    catch (error) { blocked = /API_FOOTBALL_DAILY_CALL_LIMIT reached/.test(error.message); }
+    console.log(${JSON.stringify(secondMarker)} + JSON.stringify({ blocked }));
+  `], {
+    cwd: PROJECT_ROOT, encoding: "utf8", timeout: 10_000, windowsHide: true,
+    env: { ...process.env, API_FOOTBALL_REQUEST_LEDGER_FILE: path.join(dailyRoot, "request-ledger.json"),
+      API_FOOTBALL_DAILY_CALL_LIMIT: "100" },
+  });
+  const restarted = parseChildResult(second, secondMarker, "daily limit after process restart");
+  check(result.blocked && result.count === 100 && result.attempts === 100 && restarted.blocked,
+    "the durable ledger must block attempt 101 after process restart with an empty cache");
+} finally {
+  fs.rmSync(dailyRoot, { recursive: true, force: true });
+}
 
 const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "football-api-shadow-"));
 const runtimeMarker = "__API_FOOTBALL_RUNTIME_RESULT__";

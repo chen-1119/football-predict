@@ -8,3 +8,47 @@ deploy/light-server/football-automation.sudoers text eol=lf
 deploy/light-server/football-access-code-qa.cjs text eol=lf
 server/postgres/migrations/*.sql text eol=lf
 server/postgres/migrations/002_projection_runtime.sql whitespace=-blank-at-eof
+
+# Preserve byte-hashed history-regression code and evidence across Windows checkouts.
+.gitattributes text eol=lf
+src/services/strictInstant.cjs text eol=lf
+docs/history-regression* text eol=lf
+scripts/historyRegression* text eol=lf
+scripts/captureHistoryRegression.cjs text eol=lf
+scripts/reportHistoryRegression.cjs text eol=lf
+scripts/verifyHistoryRegressionDelivery.cjs text eol=lf
+scripts/plotHistoryRegression.py text eol=lf
+tests/history-regression-* text eol=lf
+outputs/history-regression-20261002/** text eol=lf
+outputs/history-regression-20261002/**/*.png -text
+outputs/history-feature-admission-20261002/** text eol=lf
+outputs/history-feature-admission-20261002/external-snapshot-*/** -text
+scripts/prospectiveDataCoverage*.cjs text eol=lf
+scripts/prospectiveRecommendationExperiment.cjs text eol=lf
+scripts/fixtures/prospective-recommendation-experiment-v1.json text eol=lf
+tests/prospective-recommendation-experiment.test.cjs text eol=lf
+docs/prospective-recommendation-diagnostic.md text eol=lf
+scripts/verifyHistoryFormSupplement.py text eol=lf
+tests/history-form-capture.test.cjs text eol=lf
+scripts/syncData.cjs text eol=lf
+scripts/validateData.cjs text eol=lf
+scripts/verifyFrontendEvidenceSemantics.cjs text eol=lf
+scripts/diagnoseFrozenModelDisagreement.cjs text eol=lf
+scripts/officialClosedScheduleEvidence.cjs text eol=lf
+src/components/predictions/RecommendationEvidenceFacts.tsx text eol=lf
+src/services/modelInputUsage.cjs text eol=lf
+src/services/recommendationReadinessPresentation.ts text eol=lf
+src/styles/published-evidence-snapshot.css text eol=lf
+tests/published-evidence-snapshot.test.cjs text eol=lf
+tests/frontend-evidence-shared-helper-gate.test.cjs text eol=lf
+tests/frozen-model-disagreement.test.cjs text eol=lf
+tests/model-input-usage-clock.test.cjs text eol=lf
+tests/official-closed-schedule-evidence.test.cjs text eol=lf
+tests/recommendation-readiness-presentation.test.cjs text eol=lf
+docs/model-disagreement-and-clock-repair-20261003.md text eol=lf
+scripts/runSportteryFastResultLane.cjs text eol=lf
+scripts/officialClosureRepair*.cjs text eol=lf
+scripts/proveOfficialClosureRepair.cjs text eol=lf
+tests/fast-result-retry-deadline.test.cjs text eol=lf
+tests/official-closure-repair-*.test.cjs text eol=lf
+docs/official-closure-maintenance.md text eol=lf

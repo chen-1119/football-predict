@@ -1,0 +1,1630 @@
+TAP version 13
+# Subtest: fresh continuity preserves separate frontend/runtime identities without claiming data/model readiness
+ok 1 - fresh continuity preserves separate frontend/runtime identities without claiming data/model readiness
+  ---
+  duration_ms: 3.8297
+  type: 'test'
+  ...
+# Subtest: continuity rejects stale cache across Shanghai midnight
+ok 2 - continuity rejects stale cache across Shanghai midnight
+  ---
+  duration_ms: 0.742
+  type: 'test'
+  ...
+# Subtest: continuity rejects future observation
+ok 3 - continuity rejects future observation
+  ---
+  duration_ms: 0.5986
+  type: 'test'
+  ...
+# Subtest: continuity rejects unknown frontend identity version
+ok 4 - continuity rejects unknown frontend identity version
+  ---
+  duration_ms: 0.435
+  type: 'test'
+  ...
+# Subtest: continuity rejects frontend runtime sequence inversion
+ok 5 - continuity rejects frontend runtime sequence inversion
+  ---
+  duration_ms: 0.4811
+  type: 'test'
+  ...
+# Subtest: continuity rejects missing observation
+ok 6 - continuity rejects missing observation
+  ---
+  duration_ms: 0.3341
+  type: 'test'
+  ...
+# Subtest: continuity rejects missing index on both accepted state and response
+ok 7 - continuity rejects missing index on both accepted state and response
+  ---
+  duration_ms: 0.4169
+  type: 'test'
+  ...
+# Subtest: continuity rejects old index cache
+ok 8 - continuity rejects old index cache
+  ---
+  duration_ms: 1.1513
+  type: 'test'
+  ...
+# Subtest: continuity rejects public private identity drift
+ok 9 - continuity rejects public private identity drift
+  ---
+  duration_ms: 0.7119
+  type: 'test'
+  ...
+# Subtest: continuity rejects runtime marker drift
+ok 10 - continuity rejects runtime marker drift
+  ---
+  duration_ms: 0.684
+  type: 'test'
+  ...
+# Subtest: continuity rejects DB publication drift
+ok 11 - continuity rejects DB publication drift
+  ---
+  duration_ms: 0.3972
+  type: 'test'
+  ...
+# Subtest: continuity rejects missing DB publication
+ok 12 - continuity rejects missing DB publication
+  ---
+  duration_ms: 0.2781
+  type: 'test'
+  ...
+# Subtest: continuity rejects server restart
+ok 13 - continuity rejects server restart
+  ---
+  duration_ms: 0.2855
+  type: 'test'
+  ...
+# Subtest: continuity rejects PID reuse
+ok 14 - continuity rejects PID reuse
+  ---
+  duration_ms: 0.2564
+  type: 'test'
+  ...
+# Subtest: continuity rejects missing process start
+ok 15 - continuity rejects missing process start
+  ---
+  duration_ms: 0.2666
+  type: 'test'
+  ...
+# Subtest: continuity rejects worker script drift
+ok 16 - continuity rejects worker script drift
+  ---
+  duration_ms: 0.2879
+  type: 'test'
+  ...
+# Subtest: continuity rejects missing nginx
+ok 17 - continuity rejects missing nginx
+  ---
+  duration_ms: 0.2711
+  type: 'test'
+  ...
+# Subtest: continuity rejects binding drift
+ok 18 - continuity rejects binding drift
+  ---
+  duration_ms: 0.2762
+  type: 'test'
+  ...
+# Subtest: continuity rejects unproven read-only capture
+ok 19 - continuity rejects unproven read-only capture
+  ---
+  duration_ms: 0.2825
+  type: 'test'
+  ...
+# Subtest: continuity rejects capture wrote production
+ok 20 - continuity rejects capture wrote production
+  ---
+  duration_ms: 0.2717
+  type: 'test'
+  ...
+# Subtest: continuity requires an explicit finite clock and rejects reverse capture order
+ok 21 - continuity requires an explicit finite clock and rejects reverse capture order
+  ---
+  duration_ms: 0.4761
+  type: 'test'
+  ...
+# Subtest: export integrity: valid historical export
+ok 22 - export integrity: valid historical export
+  ---
+  duration_ms: 17.5245
+  type: 'test'
+  ...
+# Subtest: export integrity: tampered bytes
+ok 23 - export integrity: tampered bytes
+  ---
+  duration_ms: 6.3343
+  type: 'test'
+  ...
+# Subtest: export integrity: missing real input
+ok 24 - export integrity: missing real input
+  ---
+  duration_ms: 6.4952
+  type: 'test'
+  ...
+# Subtest: export integrity: missing receipt file entry
+ok 25 - export integrity: missing receipt file entry
+  ---
+  duration_ms: 13.9755
+  type: 'test'
+  ...
+# Subtest: export integrity: duplicate receipt file entry
+ok 26 - export integrity: duplicate receipt file entry
+  ---
+  duration_ms: 14.2741
+  type: 'test'
+  ...
+# Subtest: export integrity: wrong generation binding
+ok 27 - export integrity: wrong generation binding
+  ---
+  duration_ms: 13.9664
+  type: 'test'
+  ...
+# Subtest: export integrity: wrong manifest entry
+ok 28 - export integrity: wrong manifest entry
+  ---
+  duration_ms: 14.1268
+  type: 'test'
+  ...
+# Subtest: export integrity: pointer changed during export
+ok 29 - export integrity: pointer changed during export
+  ---
+  duration_ms: 17.7177
+  type: 'test'
+  ...
+# Subtest: export integrity: repository data mislabeled online
+ok 30 - export integrity: repository data mislabeled online
+  ---
+  duration_ms: 14.0249
+  type: 'test'
+  ...
+# Subtest: list/detail probability and frozen version coverage is measured separately
+ok 31 - list/detail probability and frozen version coverage is measured separately
+  ---
+  duration_ms: 3.4152
+  type: 'test'
+  ...
+# Subtest: canonical BEST probability drift is rejected when WATCH precedes it
+ok 32 - canonical BEST probability drift is rejected when WATCH precedes it
+  ---
+  duration_ms: 1.573
+  type: 'test'
+  ...
+# Subtest: supporting market rows do not replace the canonical BEST probability
+ok 33 - supporting market rows do not replace the canonical BEST probability
+  ---
+  duration_ms: 12.6516
+  type: 'test'
+  ...
+# Subtest: projection rejects probability drift
+ok 34 - projection rejects probability drift
+  ---
+  duration_ms: 0.6714
+  type: 'test'
+  ...
+# Subtest: projection rejects probability missing on detail
+ok 35 - projection rejects probability missing on detail
+  ---
+  duration_ms: 1.1823
+  type: 'test'
+  ...
+# Subtest: projection rejects probability numeric string
+ok 36 - projection rejects probability numeric string
+  ---
+  duration_ms: 0.3535
+  type: 'test'
+  ...
+# Subtest: projection rejects probability out of range
+ok 37 - projection rejects probability out of range
+  ---
+  duration_ms: 0.2771
+  type: 'test'
+  ...
+# Subtest: projection rejects decision version drift
+ok 38 - projection rejects decision version drift
+  ---
+  duration_ms: 0.3561
+  type: 'test'
+  ...
+# Subtest: missing probability on both projections is unavailable rather than covered
+ok 39 - missing probability on both projections is unavailable rather than covered
+  ---
+  duration_ms: 0.3411
+  type: 'test'
+  ...
+# Subtest: equal malformed probability or frozen version cannot count as coverage
+ok 40 - equal malformed probability or frozen version cannot count as coverage
+  ---
+  duration_ms: 0.217
+  type: 'test'
+  ...
+# Subtest: projection requires input rows and an explicit clock
+ok 41 - projection requires input rows and an explicit clock
+  ---
+  duration_ms: 0.2813
+  type: 'test'
+  ...
+# Subtest: only the explicitly retired static payload can use 410; protected APIs still require auth denial
+ok 42 - only the explicitly retired static payload can use 410; protected APIs still require auth denial
+  ---
+  duration_ms: 0.2849
+  type: 'test'
+  ...
+# Subtest: cross midnight kickoff switches to immutable archive and leaves the record unchanged
+ok 43 - cross midnight kickoff switches to immutable archive and leaves the record unchanged
+  ---
+  duration_ms: 1.387
+  type: 'test'
+  ...
+# Subtest: existing remote verifier uses supplied login token with GET only; anonymous branch cannot pass
+ok 44 - existing remote verifier uses supplied login token with GET only; anonymous branch cannot pass
+  ---
+  duration_ms: 60.2728
+  type: 'test'
+  ...
+# Subtest: verified closure preserves original data clock and proposes low-frequency observation
+ok 45 - verified closure preserves original data clock and proposes low-frequency observation
+  ---
+  duration_ms: 9.0434
+  type: 'test'
+  ...
+# Subtest: closure cannot conceal transport, WAF, parsing or invalid row-count failures
+ok 46 - closure cannot conceal transport, WAF, parsing or invalid row-count failures
+  ---
+  duration_ms: 0.7166
+  type: 'test'
+  ...
+# Subtest: verified Finance Ministry notice is supported and response evidence is retained
+ok 47 - verified Finance Ministry notice is supported and response evidence is retained
+  ---
+  duration_ms: 1.5213
+  type: 'test'
+  ...
+# Subtest: empty without valid official window and scope remains unknown with backoff
+ok 48 - empty without valid official window and scope remains unknown with backoff
+  ---
+  duration_ms: 0.5654
+  type: 'test'
+  ...
+# Subtest: nonempty valid response during closure remains available
+ok 49 - nonempty valid response during closure remains available
+  ---
+  duration_ms: 0.2353
+  type: 'test'
+  ...
+# Subtest: ordinary and blocked backoff saturate and respect Retry-After
+ok 50 - ordinary and blocked backoff saturate and respect Retry-After
+  ---
+  duration_ms: 0.3302
+  type: 'test'
+  ...
+# Subtest: invalid clocks/counters/provider delay fail closed
+ok 51 - invalid clocks/counters/provider delay fail closed
+  ---
+  duration_ms: 0.46
+  type: 'test'
+  ...
+# Subtest: old official evidence is stale, not fresh or updated by export observation
+ok 52 - old official evidence is stale, not fresh or updated by export observation
+  ---
+  duration_ms: 2.5474
+  type: 'test'
+  ...
+# Subtest: estimated xG is never counted as measured coverage and missing injuries are not zero
+ok 53 - estimated xG is never counted as measured coverage and missing injuries are not zero
+  ---
+  duration_ms: 0.8274
+  type: 'test'
+  ...
+# Subtest: strict summaries cannot promote mismatched or unofficial SP
+ok 54 - strict summaries cannot promote mismatched or unofficial SP
+  ---
+  duration_ms: 1.6748
+  type: 'test'
+  ...
+# Subtest: missing/future observation clocks cannot borrow export timestamp
+ok 55 - missing/future observation clocks cannot borrow export timestamp
+  ---
+  duration_ms: 0.4336
+  type: 'test'
+  ...
+# Subtest: HHAD coverage checks its own pool, signed extraction and handicap line
+ok 56 - HHAD coverage checks its own pool, signed extraction and handicap line
+  ---
+  duration_ms: 0.5441
+  type: 'test'
+  ...
+# Subtest: empty cohort has null ratios and retains publication; invalid publication is rejected
+ok 57 - empty cohort has null ratios and retains publication; invalid publication is rejected
+  ---
+  duration_ms: 0.2254
+  type: 'test'
+  ...
+# Subtest: microsecond Python receipt clocks preserve originals with millisecond comparison
+ok 58 - microsecond Python receipt clocks preserve originals with millisecond comparison
+  ---
+  duration_ms: 0.3333
+  type: 'test'
+  ...
+# Subtest: file reader verifies hashes and generation binding before any coverage computation
+ok 59 - file reader verifies hashes and generation binding before any coverage computation
+  ---
+  duration_ms: 36.9022
+  type: 'test'
+  ...
+# Subtest: real collector endpoint serialization connects signed empty response to shadow closure
+ok 60 - real collector endpoint serialization connects signed empty response to shadow closure
+  ---
+  duration_ms: 10.2433
+  type: 'test'
+  ...
+# Subtest: raw bytes rehash and canonical payload mismatch are independently checked
+ok 61 - raw bytes rehash and canonical payload mismatch are independently checked
+  ---
+  duration_ms: 3.2564
+  type: 'test'
+  ...
+# Subtest: HTTP status, endpoint scope, clocks and cycle cannot be relabelled after signing
+ok 62 - HTTP status, endpoint scope, clocks and cycle cannot be relabelled after signing
+  ---
+  duration_ms: 5.9865
+  type: 'test'
+  ...
+# Subtest: collector HTTP 567 audit is blocked even when response body looks like JSON
+ok 63 - collector HTTP 567 audit is blocked even when response body looks like JSON
+  ---
+  duration_ms: 1.066
+  type: 'test'
+  ...
+# Subtest: proven JSON parse error differs from unknown legacy parser message
+ok 64 - proven JSON parse error differs from unknown legacy parser message
+  ---
+  duration_ms: 0.5851
+  type: 'test'
+  ...
+# Subtest: in-process collector failure adapter consumes actual Error response bytes and audit
+ok 65 - in-process collector failure adapter consumes actual Error response bytes and audit
+  ---
+  duration_ms: 0.5487
+  type: 'test'
+  ...
+# Subtest: valid JSON with wrong schema/provider rejection is failed and cannot become closed
+ok 66 - valid JSON with wrong schema/provider rejection is failed and cannot become closed
+  ---
+  duration_ms: 5.1639
+  type: 'test'
+  ...
+# Subtest: rows are derived from payload and not borrowed from endpoint summary
+ok 67 - rows are derived from payload and not borrowed from endpoint summary
+  ---
+  duration_ms: 3.135
+  type: 'test'
+  ...
+# Subtest: stale and future response evidence remains unknown, never refreshed by asOf
+ok 68 - stale and future response evidence remains unknown, never refreshed by asOf
+  ---
+  duration_ms: 2.874
+  type: 'test'
+  ...
+# Subtest: reobserving same failed attempt does not increment failure count or retry clock
+ok 69 - reobserving same failed attempt does not increment failure count or retry clock
+  ---
+  duration_ms: 1.2221
+  type: 'test'
+  ...
+# Subtest: latest current failure is selected; archive and calculator do not confer current freshness
+ok 70 - latest current failure is selected; archive and calculator do not confer current freshness
+  ---
+  duration_ms: 2.1499
+  type: 'test'
+  ...
+# Subtest: equal-clock conflicting attempts fail closed
+ok 71 - equal-clock conflicting attempts fail closed
+  ---
+  duration_ms: 1.2934
+  type: 'test'
+  ...
+# Subtest: bounded snapshot file reader hashes originals and treats missing evidence explicitly
+ok 72 - bounded snapshot file reader hashes originals and treats missing evidence explicitly
+  ---
+  duration_ms: 34.0003
+  type: 'test'
+  ...
+# Subtest: synthetic probability input fails closed rather than normalizing arbitrary numbers
+ok 73 - synthetic probability input fails closed rather than normalizing arbitrary numbers
+  ---
+  duration_ms: 2.1835
+  type: 'test'
+  ...
+# Subtest: synthetic frozen feature binding and time are necessary, presence never grants candidate authority
+ok 74 - synthetic frozen feature binding and time are necessary, presence never grants candidate authority
+  ---
+  duration_ms: 1.0217
+  type: 'test'
+  ...
+# Subtest: synthetic missing snapshot remains explicit and cannot be replaced with current data
+ok 75 - synthetic missing snapshot remains explicit and cannot be replaced with current data
+  ---
+  duration_ms: 3.4525
+  type: 'test'
+  ...
+# Subtest: synthetic capture identity prevents mixed generations and duplicate independent samples
+ok 76 - synthetic capture identity prevents mixed generations and duplicate independent samples
+  ---
+  duration_ms: 23.2908
+  type: 'test'
+  ...
+# Subtest: synthetic signed constructor fixture admits original and same-decision paired records
+ok 77 - synthetic signed constructor fixture admits original and same-decision paired records
+  ---
+  duration_ms: 16.175
+  type: 'test'
+  ...
+# Subtest: synthetic original forecast remains separate from missing or tampered signed-market evidence
+ok 78 - synthetic original forecast remains separate from missing or tampered signed-market evidence
+  ---
+  duration_ms: 19.8271
+  type: 'test'
+  ...
+# Subtest: synthetic clock tampering rejects the original forecast independently of market signing
+ok 79 - synthetic clock tampering rejects the original forecast independently of market signing
+  ---
+  duration_ms: 39.4057
+  type: 'test'
+  ...
+# Subtest: synthetic result observation receipt must belong to the same event, score and version
+ok 80 - synthetic result observation receipt must belong to the same event, score and version
+  ---
+  duration_ms: 56.795
+  type: 'test'
+  ...
+# Subtest: synthetic equivalent timezone event versions pass but wrong frozen event and probability units fail
+ok 81 - synthetic equivalent timezone event versions pass but wrong frozen event and probability units fail
+  ---
+  duration_ms: 47.2505
+  type: 'test'
+  ...
+# Subtest: synthetic raw exporter bytes are mandatory and local edits cannot keep an old receipt hash
+ok 82 - synthetic raw exporter bytes are mandatory and local edits cannot keep an old receipt hash
+  ---
+  duration_ms: 4.9494
+  type: 'test'
+  ...
+# Subtest: synthetic envelope validates limits, dates, row proofs, pages, registry and prior manifest binding
+ok 83 - synthetic envelope validates limits, dates, row proofs, pages, registry and prior manifest binding
+  ---
+  duration_ms: 63.4408
+  type: 'test'
+  ...
+# Subtest: synthetic exporter omission is the primary blocker rather than fabricated decision corruption
+ok 84 - synthetic exporter omission is the primary blocker rather than fabricated decision corruption
+  ---
+  duration_ms: 3.7458
+  type: 'test'
+  ...
+# Subtest: synthetic feature export omissions and unknown projection presence are distinct from saved-field absence
+ok 85 - synthetic feature export omissions and unknown projection presence are distinct from saved-field absence
+  ---
+  duration_ms: 0.2427
+  type: 'test'
+  ...
+# Subtest: synthetic positive: all reviewed names preserve original clocks in four stage inputs and audit evidence
+ok 86 - synthetic positive: all reviewed names preserve original clocks in four stage inputs and audit evidence
+  ---
+  duration_ms: 46.736
+  type: 'test'
+  ...
+# Subtest: synthetic positive: optional observedAt remains absent and equal required clocks are permitted
+ok 87 - synthetic positive: optional observedAt remains absent and equal required clocks are permitted
+  ---
+  duration_ms: 17.4092
+  type: 'test'
+  ...
+# Subtest: synthetic exploit: old availability cannot hide future provider and receipt clocks
+ok 88 - synthetic exploit: old availability cannot hide future provider and receipt clocks
+  ---
+  duration_ms: 15.4492
+  type: 'test'
+  ...
+# Subtest: synthetic exploit: camelCase finalScoreHome cannot manufacture a perfect candidate score
+ok 89 - synthetic exploit: camelCase finalScoreHome cannot manufacture a perfect candidate score
+  ---
+  duration_ms: 13.0632
+  type: 'test'
+  ...
+# Subtest: synthetic feature contract rejects unreviewed or outcome-derived spelling final_score_home
+ok 90 - synthetic feature contract rejects unreviewed or outcome-derived spelling final_score_home
+  ---
+  duration_ms: 18.9376
+  type: 'test'
+  ...
+# Subtest: synthetic feature contract rejects unreviewed or outcome-derived spelling final-score-home
+ok 91 - synthetic feature contract rejects unreviewed or outcome-derived spelling final-score-home
+  ---
+  duration_ms: 12.592
+  type: 'test'
+  ...
+# Subtest: synthetic feature contract rejects unreviewed or outcome-derived spelling FinalScoreHome
+ok 92 - synthetic feature contract rejects unreviewed or outcome-derived spelling FinalScoreHome
+  ---
+  duration_ms: 12.6869
+  type: 'test'
+  ...
+# Subtest: synthetic feature contract rejects unreviewed or outcome-derived spelling final.score.home
+ok 93 - synthetic feature contract rejects unreviewed or outcome-derived spelling final.score.home
+  ---
+  duration_ms: 10.079
+  type: 'test'
+  ...
+# Subtest: synthetic feature contract rejects unreviewed or outcome-derived spelling result
+ok 94 - synthetic feature contract rejects unreviewed or outcome-derived spelling result
+  ---
+  duration_ms: 11.6191
+  type: 'test'
+  ...
+# Subtest: synthetic feature contract rejects unreviewed or outcome-derived spelling resultObservedAt
+ok 95 - synthetic feature contract rejects unreviewed or outcome-derived spelling resultObservedAt
+  ---
+  duration_ms: 13.6366
+  type: 'test'
+  ...
+# Subtest: synthetic feature contract rejects unreviewed or outcome-derived spelling outcome_code
+ok 96 - synthetic feature contract rejects unreviewed or outcome-derived spelling outcome_code
+  ---
+  duration_ms: 11.4594
+  type: 'test'
+  ...
+# Subtest: synthetic feature contract rejects unreviewed or outcome-derived spelling closingOdds
+ok 97 - synthetic feature contract rejects unreviewed or outcome-derived spelling closingOdds
+  ---
+  duration_ms: 7.7179
+  type: 'test'
+  ...
+# Subtest: synthetic feature contract rejects unreviewed or outcome-derived spelling postMatchRating
+ok 98 - synthetic feature contract rejects unreviewed or outcome-derived spelling postMatchRating
+  ---
+  duration_ms: 9.9337
+  type: 'test'
+  ...
+# Subtest: synthetic feature contract rejects unreviewed or outcome-derived spelling xg
+ok 99 - synthetic feature contract rejects unreviewed or outcome-derived spelling xg
+  ---
+  duration_ms: 8.5385
+  type: 'test'
+  ...
+# Subtest: synthetic feature contract rejects unreviewed or outcome-derived spelling Elo
+ok 100 - synthetic feature contract rejects unreviewed or outcome-derived spelling Elo
+  ---
+  duration_ms: 7.3545
+  type: 'test'
+  ...
+# Subtest: synthetic feature contract rejects unreviewed or outcome-derived spelling elo.home
+ok 101 - synthetic feature contract rejects unreviewed or outcome-derived spelling elo.home
+  ---
+  duration_ms: 6.6931
+  type: 'test'
+  ...
+# Subtest: synthetic top-level qualification must be explicitly true: absent
+ok 102 - synthetic top-level qualification must be explicitly true: absent
+  ---
+  duration_ms: 6.4968
+  type: 'test'
+  ...
+# Subtest: synthetic top-level qualification must be explicitly true: false
+ok 103 - synthetic top-level qualification must be explicitly true: false
+  ---
+  duration_ms: 9.7952
+  type: 'test'
+  ...
+# Subtest: synthetic top-level qualification must be explicitly true: true string
+ok 104 - synthetic top-level qualification must be explicitly true: true string
+  ---
+  duration_ms: 8.9822
+  type: 'test'
+  ...
+# Subtest: synthetic top-level qualification must be explicitly true: false string
+ok 105 - synthetic top-level qualification must be explicitly true: false string
+  ---
+  duration_ms: 6.2865
+  type: 'test'
+  ...
+# Subtest: synthetic top-level qualification must be explicitly true: one
+ok 106 - synthetic top-level qualification must be explicitly true: one
+  ---
+  duration_ms: 9.3526
+  type: 'test'
+  ...
+# Subtest: synthetic top-level qualification must be explicitly true: null
+ok 107 - synthetic top-level qualification must be explicitly true: null
+  ---
+  duration_ms: 6.8824
+  type: 'test'
+  ...
+# Subtest: synthetic required clock providerObservedAt cannot be absent or synthesized
+ok 108 - synthetic required clock providerObservedAt cannot be absent or synthesized
+  ---
+  duration_ms: 8.7213
+  type: 'test'
+  ...
+# Subtest: synthetic required clock receivedAt cannot be absent or synthesized
+ok 109 - synthetic required clock receivedAt cannot be absent or synthesized
+  ---
+  duration_ms: 8.8171
+  type: 'test'
+  ...
+# Subtest: synthetic required clock availableAt cannot be absent or synthesized
+ok 110 - synthetic required clock availableAt cannot be absent or synthesized
+  ---
+  duration_ms: 9.4007
+  type: 'test'
+  ...
+# Subtest: synthetic providerObservedAt requires an explicit timezone
+ok 111 - synthetic providerObservedAt requires an explicit timezone
+  ---
+  duration_ms: 8.4784
+  type: 'test'
+  ...
+# Subtest: synthetic providerObservedAt rejects a nonexistent calendar date
+ok 112 - synthetic providerObservedAt rejects a nonexistent calendar date
+  ---
+  duration_ms: 6.8981
+  type: 'test'
+  ...
+# Subtest: synthetic providerObservedAt rejects future time even when availableAt is old
+ok 113 - synthetic providerObservedAt rejects future time even when availableAt is old
+  ---
+  duration_ms: 8.1722
+  type: 'test'
+  ...
+# Subtest: synthetic original providerObservedAt type undefined is rejected before JSON copying
+ok 114 - synthetic original providerObservedAt type undefined is rejected before JSON copying
+  ---
+  duration_ms: 7.8837
+  type: 'test'
+  ...
+# Subtest: synthetic original providerObservedAt type null is rejected before JSON copying
+ok 115 - synthetic original providerObservedAt type null is rejected before JSON copying
+  ---
+  duration_ms: 7.3629
+  type: 'test'
+  ...
+# Subtest: synthetic original providerObservedAt type number is rejected before JSON copying
+ok 116 - synthetic original providerObservedAt type number is rejected before JSON copying
+  ---
+  duration_ms: 8.2604
+  type: 'test'
+  ...
+# Subtest: synthetic original providerObservedAt type Date object is rejected before JSON copying
+ok 117 - synthetic original providerObservedAt type Date object is rejected before JSON copying
+  ---
+  duration_ms: 10.9918
+  type: 'test'
+  ...
+# Subtest: synthetic receivedAt requires an explicit timezone
+ok 118 - synthetic receivedAt requires an explicit timezone
+  ---
+  duration_ms: 7.94
+  type: 'test'
+  ...
+# Subtest: synthetic receivedAt rejects a nonexistent calendar date
+ok 119 - synthetic receivedAt rejects a nonexistent calendar date
+  ---
+  duration_ms: 7.2088
+  type: 'test'
+  ...
+# Subtest: synthetic receivedAt rejects future time even when availableAt is old
+ok 120 - synthetic receivedAt rejects future time even when availableAt is old
+  ---
+  duration_ms: 7.3926
+  type: 'test'
+  ...
+# Subtest: synthetic original receivedAt type undefined is rejected before JSON copying
+ok 121 - synthetic original receivedAt type undefined is rejected before JSON copying
+  ---
+  duration_ms: 7.7909
+  type: 'test'
+  ...
+# Subtest: synthetic original receivedAt type null is rejected before JSON copying
+ok 122 - synthetic original receivedAt type null is rejected before JSON copying
+  ---
+  duration_ms: 6.9577
+  type: 'test'
+  ...
+# Subtest: synthetic original receivedAt type number is rejected before JSON copying
+ok 123 - synthetic original receivedAt type number is rejected before JSON copying
+  ---
+  duration_ms: 6.6771
+  type: 'test'
+  ...
+# Subtest: synthetic original receivedAt type Date object is rejected before JSON copying
+ok 124 - synthetic original receivedAt type Date object is rejected before JSON copying
+  ---
+  duration_ms: 7.512
+  type: 'test'
+  ...
+# Subtest: synthetic availableAt requires an explicit timezone
+ok 125 - synthetic availableAt requires an explicit timezone
+  ---
+  duration_ms: 5.4129
+  type: 'test'
+  ...
+# Subtest: synthetic availableAt rejects a nonexistent calendar date
+ok 126 - synthetic availableAt rejects a nonexistent calendar date
+  ---
+  duration_ms: 5.9784
+  type: 'test'
+  ...
+# Subtest: synthetic availableAt rejects future time even when availableAt is old
+ok 127 - synthetic availableAt rejects future time even when availableAt is old
+  ---
+  duration_ms: 6.5711
+  type: 'test'
+  ...
+# Subtest: synthetic original availableAt type undefined is rejected before JSON copying
+ok 128 - synthetic original availableAt type undefined is rejected before JSON copying
+  ---
+  duration_ms: 6.8185
+  type: 'test'
+  ...
+# Subtest: synthetic original availableAt type null is rejected before JSON copying
+ok 129 - synthetic original availableAt type null is rejected before JSON copying
+  ---
+  duration_ms: 5.831
+  type: 'test'
+  ...
+# Subtest: synthetic original availableAt type number is rejected before JSON copying
+ok 130 - synthetic original availableAt type number is rejected before JSON copying
+  ---
+  duration_ms: 6.43
+  type: 'test'
+  ...
+# Subtest: synthetic original availableAt type Date object is rejected before JSON copying
+ok 131 - synthetic original availableAt type Date object is rejected before JSON copying
+  ---
+  duration_ms: 8.0563
+  type: 'test'
+  ...
+# Subtest: synthetic observedAt requires an explicit timezone
+ok 132 - synthetic observedAt requires an explicit timezone
+  ---
+  duration_ms: 5.6516
+  type: 'test'
+  ...
+# Subtest: synthetic observedAt rejects a nonexistent calendar date
+ok 133 - synthetic observedAt rejects a nonexistent calendar date
+  ---
+  duration_ms: 8.0838
+  type: 'test'
+  ...
+# Subtest: synthetic observedAt rejects future time even when availableAt is old
+ok 134 - synthetic observedAt rejects future time even when availableAt is old
+  ---
+  duration_ms: 5.4605
+  type: 'test'
+  ...
+# Subtest: synthetic original observedAt type undefined is rejected before JSON copying
+ok 135 - synthetic original observedAt type undefined is rejected before JSON copying
+  ---
+  duration_ms: 7.2019
+  type: 'test'
+  ...
+# Subtest: synthetic original observedAt type null is rejected before JSON copying
+ok 136 - synthetic original observedAt type null is rejected before JSON copying
+  ---
+  duration_ms: 6.2862
+  type: 'test'
+  ...
+# Subtest: synthetic original observedAt type number is rejected before JSON copying
+ok 137 - synthetic original observedAt type number is rejected before JSON copying
+  ---
+  duration_ms: 6.0567
+  type: 'test'
+  ...
+# Subtest: synthetic original observedAt type Date object is rejected before JSON copying
+ok 138 - synthetic original observedAt type Date object is rejected before JSON copying
+  ---
+  duration_ms: 6.8731
+  type: 'test'
+  ...
+# Subtest: synthetic required original clock ordering: provider after observation
+ok 139 - synthetic required original clock ordering: provider after observation
+  ---
+  duration_ms: 5.435
+  type: 'test'
+  ...
+# Subtest: synthetic required original clock ordering: observation after receipt
+ok 140 - synthetic required original clock ordering: observation after receipt
+  ---
+  duration_ms: 7.3817
+  type: 'test'
+  ...
+# Subtest: synthetic required original clock ordering: receipt after availability
+ok 141 - synthetic required original clock ordering: receipt after availability
+  ---
+  duration_ms: 6.3191
+  type: 'test'
+  ...
+# Subtest: synthetic required original clock ordering: provider after receipt without optional observation
+ok 142 - synthetic required original clock ordering: provider after receipt without optional observation
+  ---
+  duration_ms: 7.3775
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: missing true
+ok 143 - synthetic field provenance or completeness is not overridden by top-level true: missing true
+  ---
+  duration_ms: 5.6411
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: available false
+ok 144 - synthetic field provenance or completeness is not overridden by top-level true: available false
+  ---
+  duration_ms: 6.9392
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: field candidateEligible false
+ok 145 - synthetic field provenance or completeness is not overridden by top-level true: field candidateEligible false
+  ---
+  duration_ms: 5.9278
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: group candidateEligible false
+ok 146 - synthetic field provenance or completeness is not overridden by top-level true: group candidateEligible false
+  ---
+  duration_ms: 5.4858
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: missing status
+ok 147 - synthetic field provenance or completeness is not overridden by top-level true: missing status
+  ---
+  duration_ms: 5.2119
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: unavailable status
+ok 148 - synthetic field provenance or completeness is not overridden by top-level true: unavailable status
+  ---
+  duration_ms: 5.9074
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: unknown status
+ok 149 - synthetic field provenance or completeness is not overridden by top-level true: unknown status
+  ---
+  duration_ms: 7.5717
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: excluded status
+ok 150 - synthetic field provenance or completeness is not overridden by top-level true: excluded status
+  ---
+  duration_ms: 5.2732
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: named in missing list
+ok 151 - synthetic field provenance or completeness is not overridden by top-level true: named in missing list
+  ---
+  duration_ms: 5.3473
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: whitespace-only source
+ok 152 - synthetic field provenance or completeness is not overridden by top-level true: whitespace-only source
+  ---
+  duration_ms: 5.3328
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: missing payload hash
+ok 153 - synthetic field provenance or completeness is not overridden by top-level true: missing payload hash
+  ---
+  duration_ms: 8.3248
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: malformed payload hash
+ok 154 - synthetic field provenance or completeness is not overridden by top-level true: malformed payload hash
+  ---
+  duration_ms: 7.5031
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: NaN value
+ok 155 - synthetic field provenance or completeness is not overridden by top-level true: NaN value
+  ---
+  duration_ms: 5.6392
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: infinite value
+ok 156 - synthetic field provenance or completeness is not overridden by top-level true: infinite value
+  ---
+  duration_ms: 5.9458
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: numeric string value
+ok 157 - synthetic field provenance or completeness is not overridden by top-level true: numeric string value
+  ---
+  duration_ms: 5.9199
+  type: 'test'
+  ...
+# Subtest: synthetic field provenance or completeness is not overridden by top-level true: null value
+ok 158 - synthetic field provenance or completeness is not overridden by top-level true: null value
+  ---
+  duration_ms: 5.3612
+  type: 'test'
+  ...
+# Subtest: synthetic late receipt is gated independently at fit
+ok 159 - synthetic late receipt is gated independently at fit
+  ---
+  duration_ms: 7.3839
+  type: 'test'
+  ...
+# Subtest: synthetic late receipt is gated independently at calibrate
+ok 160 - synthetic late receipt is gated independently at calibrate
+  ---
+  duration_ms: 6.4908
+  type: 'test'
+  ...
+# Subtest: synthetic late receipt is gated independently at validation
+ok 161 - synthetic late receipt is gated independently at validation
+  ---
+  duration_ms: 6.1233
+  type: 'test'
+  ...
+# Subtest: synthetic late receipt is gated independently at final
+ok 162 - synthetic late receipt is gated independently at final
+  ---
+  duration_ms: 7.6643
+  type: 'test'
+  ...
+# Subtest: synthetic candidate admission leaves original frozen review and input unchanged
+ok 163 - synthetic candidate admission leaves original frozen review and input unchanged
+  ---
+  duration_ms: 17.9691
+  type: 'test'
+  ...
+# Subtest: synthetic providerObservedAt 1ns after decision is rejected without millisecond truncation
+ok 164 - synthetic providerObservedAt 1ns after decision is rejected without millisecond truncation
+  ---
+  duration_ms: 9.7767
+  type: 'test'
+  ...
+# Subtest: synthetic providerObservedAt 100us after decision is rejected without millisecond truncation
+ok 165 - synthetic providerObservedAt 100us after decision is rejected without millisecond truncation
+  ---
+  duration_ms: 7.2325
+  type: 'test'
+  ...
+# Subtest: synthetic receivedAt 1ns after decision is rejected without millisecond truncation
+ok 166 - synthetic receivedAt 1ns after decision is rejected without millisecond truncation
+  ---
+  duration_ms: 9.6818
+  type: 'test'
+  ...
+# Subtest: synthetic receivedAt 100us after decision is rejected without millisecond truncation
+ok 167 - synthetic receivedAt 100us after decision is rejected without millisecond truncation
+  ---
+  duration_ms: 6.5355
+  type: 'test'
+  ...
+# Subtest: synthetic availableAt 1ns after decision is rejected without millisecond truncation
+ok 168 - synthetic availableAt 1ns after decision is rejected without millisecond truncation
+  ---
+  duration_ms: 5.227
+  type: 'test'
+  ...
+# Subtest: synthetic availableAt 100us after decision is rejected without millisecond truncation
+ok 169 - synthetic availableAt 100us after decision is rejected without millisecond truncation
+  ---
+  duration_ms: 5.1418
+  type: 'test'
+  ...
+# Subtest: synthetic observedAt 1ns after decision is rejected without millisecond truncation
+ok 170 - synthetic observedAt 1ns after decision is rejected without millisecond truncation
+  ---
+  duration_ms: 6.3264
+  type: 'test'
+  ...
+# Subtest: synthetic observedAt 100us after decision is rejected without millisecond truncation
+ok 171 - synthetic observedAt 100us after decision is rejected without millisecond truncation
+  ---
+  duration_ms: 6.6627
+  type: 'test'
+  ...
+# Subtest: synthetic providerObservedAt 1ns after observedAt violates original clock order
+ok 172 - synthetic providerObservedAt 1ns after observedAt violates original clock order
+  ---
+  duration_ms: 8.1256
+  type: 'test'
+  ...
+# Subtest: synthetic observedAt 1ns after receivedAt violates original clock order
+ok 173 - synthetic observedAt 1ns after receivedAt violates original clock order
+  ---
+  duration_ms: 5.4644
+  type: 'test'
+  ...
+# Subtest: synthetic receivedAt 1ns after availableAt violates original clock order
+ok 174 - synthetic receivedAt 1ns after availableAt violates original clock order
+  ---
+  duration_ms: 6.979
+  type: 'test'
+  ...
+# Subtest: synthetic providerObservedAt 1ns after receivedAt violates original clock order
+ok 175 - synthetic providerObservedAt 1ns after receivedAt violates original clock order
+  ---
+  duration_ms: 5.7507
+  type: 'test'
+  ...
+# Subtest: synthetic equal submillisecond instants with different zones and decimal lengths retain their exact bytes
+ok 176 - synthetic equal submillisecond instants with different zones and decimal lengths retain their exact bytes
+  ---
+  duration_ms: 6.8338
+  type: 'test'
+  ...
+# Subtest: synthetic nanosecond feature clocks just before a nine-digit decision clock remain eligible
+ok 177 - synthetic nanosecond feature clocks just before a nine-digit decision clock remain eligible
+  ---
+  duration_ms: 7.4559
+  type: 'test'
+  ...
+# Subtest: synthetic: Brier uses sum of three classes; log loss and direction are explicit
+ok 178 - synthetic: Brier uses sum of three classes; log loss and direction are explicit
+  ---
+  duration_ms: 3.4416
+  type: 'test'
+  ...
+# Subtest: synthetic: all match-day members remain together and reliability/group counts reconcile
+ok 179 - synthetic: all match-day members remain together and reliability/group counts reconcile
+  ---
+  duration_ms: 35.1843
+  type: 'test'
+  ...
+# Subtest: synthetic: one late training label excludes its entire match day
+ok 180 - synthetic: one late training label excludes its entire match day
+  ---
+  duration_ms: 14.3
+  type: 'test'
+  ...
+# Subtest: synthetic: earliest prediction time takes precedence over nominal calendar start
+ok 181 - synthetic: earliest prediction time takes precedence over nominal calendar start
+  ---
+  duration_ms: 16.6371
+  type: 'test'
+  ...
+# Subtest: synthetic: late calibration and validation labels cannot leak to following stages
+ok 182 - synthetic: late calibration and validation labels cannot leak to following stages
+  ---
+  duration_ms: 12.0189
+  type: 'test'
+  ...
+# Subtest: synthetic: plugin receives only distinct past fit/calibration labels and no prediction labels
+ok 183 - synthetic: plugin receives only distinct past fit/calibration labels and no prediction labels
+  ---
+  duration_ms: 18.8106
+  type: 'test'
+  ...
+# Subtest: synthetic: final outcomes never choose candidates, and losing candidates do not see final rows
+ok 184 - synthetic: final outcomes never choose candidates, and losing candidates do not see final rows
+  ---
+  duration_ms: 20.9836
+  type: 'test'
+  ...
+# Subtest: synthetic: candidate abstentions are visible and cannot cherry-pick validation rows
+ok 185 - synthetic: candidate abstentions are visible and cannot cherry-pick validation rows
+  ---
+  duration_ms: 14.019
+  type: 'test'
+  ...
+# Subtest: synthetic: bootstrap uses whole days, paired metrics, deterministic seed, and small-sample refusal
+ok 186 - synthetic: bootstrap uses whole days, paired metrics, deterministic seed, and small-sample refusal
+  ---
+  duration_ms: 3.9114
+  type: 'test'
+  ...
+# Subtest: synthetic: chronological non-overlapping rolling validation and one reserved final holdout
+ok 187 - synthetic: chronological non-overlapping rolling validation and one reserved final holdout
+  ---
+  duration_ms: 18.166
+  type: 'test'
+  ...
+# Subtest: synthetic: duplicate matches, malformed clocks and windows fail closed
+ok 188 - synthetic: duplicate matches, malformed clocks and windows fail closed
+  ---
+  duration_ms: 1.39
+  type: 'test'
+  ...
+# Subtest: synthetic: empty admitted evidence never manufactures predictions or improvement
+ok 189 - synthetic: empty admitted evidence never manufactures predictions or improvement
+  ---
+  duration_ms: 1.2267
+  type: 'test'
+  ...
+# Subtest: synthetic: frozen inputs cannot be mutated by adapters
+ok 190 - synthetic: frozen inputs cannot be mutated by adapters
+  ---
+  duration_ms: 14.1779
+  type: 'test'
+  ...
+# Subtest: synthetic: original frozen review covers all admitted rows without training-window prerequisites
+ok 191 - synthetic: original frozen review covers all admitted rows without training-window prerequisites
+  ---
+  duration_ms: 2.9663
+  type: 'test'
+  ...
+# Subtest: synthetic: unknown result and closing fields cannot pass through prediction inputs
+ok 192 - synthetic: unknown result and closing fields cannot pass through prediction inputs
+  ---
+  duration_ms: 14.5329
+  type: 'test'
+  ...
+# Subtest: synthetic: declared features require finite values, source/hash and decision-time availability
+ok 193 - synthetic: declared features require finite values, source/hash and decision-time availability
+  ---
+  duration_ms: 74.1014
+  type: 'test'
+  ...
+# Subtest: synthetic: future-week kickoff with earlier forecast cannot consume later training labels
+ok 194 - synthetic: future-week kickoff with earlier forecast cannot consume later training labels
+  ---
+  duration_ms: 8.4685
+  type: 'test'
+  ...
+# Subtest: synthetic: malformed original probabilities and SP fail closed before JSON copying
+ok 195 - synthetic: malformed original probabilities and SP fail closed before JSON copying
+  ---
+  duration_ms: 0.8043
+  type: 'test'
+  ...
+# Subtest: synthetic: bootstrap empty or missing-market cases expose zero pairs and no interval
+ok 196 - synthetic: bootstrap empty or missing-market cases expose zero pairs and no interval
+  ---
+  duration_ms: 0.5063
+  type: 'test'
+  ...
+# Subtest: synthetic: upstream diagnostic groups report availability without becoming model features
+ok 197 - synthetic: upstream diagnostic groups report availability without becoming model features
+  ---
+  duration_ms: 4.9423
+  type: 'test'
+  ...
+# Subtest: fixture snapshot summary identifies an older match day without claiming current sales
+ok 198 - fixture snapshot summary identifies an older match day without claiming current sales
+  ---
+  duration_ms: 193.9638
+  type: 'test'
+  ...
+# Subtest: failed public response never invents a zero-fixture summary
+ok 199 - failed public response never invents a zero-fixture summary
+  ---
+  duration_ms: 55.3675
+  type: 'test'
+  ...
+# Subtest: public detail explicitly identifies fields outside the preview
+ok 200 - public detail explicitly identifies fields outside the preview
+  ---
+  duration_ms: 54.6673
+  type: 'test'
+  ...
+# Subtest: public fixtures select current business date and keep search/date in URL
+ok 201 - public fixtures select current business date and keep search/date in URL
+  ---
+  duration_ms: 38.9389
+  type: 'test'
+  ...
+# Subtest: case-insensitive English search and clear-filter empty action are usable
+ok 202 - case-insensitive English search and clear-filter empty action are usable
+  ---
+  duration_ms: 47.1053
+  type: 'test'
+  ...
+# Subtest: public quote snapshots distinguish missing prices from unverified time without exposing providers or inventing odds
+ok 203 - public quote snapshots distinguish missing prices from unverified time without exposing providers or inventing odds
+  ---
+  duration_ms: 29.0488
+  type: 'test'
+  ...
+# Subtest: network failure has retry and does not announce zero fixtures as a successful empty day
+ok 204 - network failure has retry and does not announce zero fixtures as a successful empty day
+  ---
+  duration_ms: 45.6874
+  type: 'test'
+  ...
+# Subtest: public historical sample reports actual loss and auditable quote fields; missing totals stay unknown
+ok 205 - public historical sample reports actual loss and auditable quote fields; missing totals stay unknown
+  ---
+  duration_ms: 31.8553
+  type: 'test'
+  ...
+# Subtest: unknown requested date stays visible in picker and yields genuine no-fixture state
+ok 206 - unknown requested date stays visible in picker and yields genuine no-fixture state
+  ---
+  duration_ms: 46.7267
+  type: 'test'
+  ...
+# Subtest: public detail drops unsafe back path and preserves its route as the sign-in return
+ok 207 - public detail drops unsafe back path and preserves its route as the sign-in return
+  ---
+  duration_ms: 46.7198
+  type: 'test'
+  ...
+# Subtest: public sample includes only actual published probability values and preserves missing outcomes
+ok 208 - public sample includes only actual published probability values and preserves missing outcomes
+  ---
+  duration_ms: 30.0863
+  type: 'test'
+  ...
+# Subtest: guest recommendation preview retains both combo entries and exact login return tabs without private reads
+ok 209 - guest recommendation preview retains both combo entries and exact login return tabs without private reads
+  ---
+  duration_ms: 47.3478
+  type: 'test'
+  ...
+# Subtest: inactive account combo entry distinguishes unclaimed trial from expired access and retains target
+ok 210 - inactive account combo entry distinguishes unclaimed trial from expired access and retains target
+  ---
+  duration_ms: 137.2735
+  type: 'test'
+  ...
+# Subtest: public fixture and review pages do not acquire an unrelated locked combo section
+ok 211 - public fixture and review pages do not acquire an unrelated locked combo section
+  ---
+  duration_ms: 77.3794
+  type: 'test'
+  ...
+# Subtest: captured production decisions keep probability, SP and provenance paired without reading current or legacy prices
+ok 212 - captured production decisions keep probability, SP and provenance paired without reading current or legacy prices
+  ---
+  duration_ms: 20.9462
+  type: 'test'
+  ...
+# Subtest: missing three-way SP shows only the archived selected price; invalid prices remain unknown
+ok 213 - missing three-way SP shows only the archived selected price; invalid prices remain unknown
+  ---
+  duration_ms: 1.6299
+  type: 'test'
+  ...
+# Subtest: model validation and service reference qualification stay distinct in both languages
+ok 214 - model validation and service reference qualification stay distinct in both languages
+  ---
+  duration_ms: 3.8415
+  type: 'test'
+  ...
+# Subtest: missing publication stays waiting and never displays a invented cutoff, version or probability
+ok 215 - missing publication stays waiting and never displays a invented cutoff, version or probability
+  ---
+  duration_ms: 0.1753
+  type: 'test'
+  ...
+# Subtest: real 05 receipt: file hashes, generation, admission, metrics and chronology pass independently
+ok 216 - real 05 receipt: file hashes, generation, admission, metrics and chronology pass independently
+  ---
+  duration_ms: 1.1552
+  type: 'test'
+  ...
+# Subtest: independent report negative: different event with unchanged row count
+ok 217 - independent report negative: different event with unchanged row count
+  ---
+  duration_ms: 611.3167
+  type: 'test'
+  ...
+# Subtest: independent report negative: duplicate review snapshot counted independently
+ok 218 - independent report negative: duplicate review snapshot counted independently
+  ---
+  duration_ms: 643.6007
+  type: 'test'
+  ...
+# Subtest: independent report negative: different decision in market comparison
+ok 219 - independent report negative: different decision in market comparison
+  ---
+  duration_ms: 550.2353
+  type: 'test'
+  ...
+# Subtest: independent report negative: different market time in saved admission
+ok 220 - independent report negative: different market time in saved admission
+  ---
+  duration_ms: 623.4587
+  type: 'test'
+  ...
+# Subtest: independent report negative: different odds in saved paired sample
+ok 221 - independent report negative: different odds in saved paired sample
+  ---
+  duration_ms: 611.7245
+  type: 'test'
+  ...
+# Subtest: independent report negative: missing frozen probability
+ok 222 - independent report negative: missing frozen probability
+  ---
+  duration_ms: 595.0985
+  type: 'test'
+  ...
+# Subtest: independent report negative: excluded events silently removed from denominator
+ok 223 - independent report negative: excluded events silently removed from denominator
+  ---
+  duration_ms: 585.1917
+  type: 'test'
+  ...
+# Subtest: independent report negative: missing-data funnel reason changed
+ok 224 - independent report negative: missing-data funnel reason changed
+  ---
+  duration_ms: 551.1845
+  type: 'test'
+  ...
+# Subtest: independent report negative: model Brier altered
+ok 225 - independent report negative: model Brier altered
+  ---
+  duration_ms: 594.0177
+  type: 'test'
+  ...
+# Subtest: independent report negative: market log loss altered
+ok 226 - independent report negative: market log loss altered
+  ---
+  duration_ms: 532.2101
+  type: 'test'
+  ...
+# Subtest: independent report negative: reliability bin inflated
+ok 227 - independent report negative: reliability bin inflated
+  ---
+  duration_ms: 540.9438
+  type: 'test'
+  ...
+# Subtest: independent report negative: paired confidence interval changed
+ok 228 - independent report negative: paired confidence interval changed
+  ---
+  duration_ms: 555.152
+  type: 'test'
+  ...
+# Subtest: independent report negative: 154 relabeled as original strict 145
+ok 229 - independent report negative: 154 relabeled as original strict 145
+  ---
+  duration_ms: 524.5888
+  type: 'test'
+  ...
+# Subtest: independent report negative: known history relabeled prospective
+ok 230 - independent report negative: known history relabeled prospective
+  ---
+  duration_ms: 531.9273
+  type: 'test'
+  ...
+# Subtest: independent report negative: test event inserted in training membership
+ok 231 - independent report negative: test event inserted in training membership
+  ---
+  duration_ms: 561.0696
+  type: 'test'
+  ...
+# Subtest: independent report negative: training result readiness backfilled
+ok 232 - independent report negative: training result readiness backfilled
+  ---
+  duration_ms: 547.1351
+  type: 'test'
+  ...
+# Subtest: independent report negative: insufficient training selects candidate
+ok 233 - independent report negative: insufficient training selects candidate
+  ---
+  duration_ms: 532.5243
+  type: 'test'
+  ...
+# Subtest: independent report negative: final-test tuning claimed
+ok 234 - independent report negative: final-test tuning claimed
+  ---
+  duration_ms: 543.9558
+  type: 'test'
+  ...
+# Subtest: independent report negative: replay relabeled published achievement
+ok 235 - independent report negative: replay relabeled published achievement
+  ---
+  duration_ms: 524.4378
+  type: 'test'
+  ...
+# Subtest: raw-response mutation cannot pass the saved transport proof
+ok 236 - raw-response mutation cannot pass the saved transport proof
+  ---
+  duration_ms: 85.3639
+  type: 'test'
+  ...
+# Subtest: duplicate event remains rejected after rebinding transport bytes and changing snapshot ID
+ok 237 - duplicate event remains rejected after rebinding transport bytes and changing snapshot ID
+  ---
+  duration_ms: 204.1029
+  type: 'test'
+  ...
+# Subtest: real-row negative: missing probability
+ok 238 - real-row negative: missing probability
+  ---
+  duration_ms: 8.1231
+  type: 'test'
+  ...
+# Subtest: real-row negative: market provider time after cutoff
+ok 239 - real-row negative: market provider time after cutoff
+  ---
+  duration_ms: 1.279
+  type: 'test'
+  ...
+# Subtest: real-row negative: market receipt time after kickoff
+ok 240 - real-row negative: market receipt time after kickoff
+  ---
+  duration_ms: 1.5807
+  type: 'test'
+  ...
+# Subtest: real-row negative: different-event wrapper
+ok 241 - real-row negative: different-event wrapper
+  ---
+  duration_ms: 2.0569
+  type: 'test'
+  ...
+# Subtest: real-row negative: review phase reused as prematch
+ok 242 - real-row negative: review phase reused as prematch
+  ---
+  duration_ms: 2.1413
+  type: 'test'
+  ...
+# Subtest: changing result receipt to an earlier unproved time cannot silently become a training label
+ok 243 - changing result receipt to an earlier unproved time cannot silently become a training label
+  ---
+  duration_ms: 2.0696
+  type: 'test'
+  ...
+# Subtest: same-match replay duplicate cannot inflate samples
+ok 244 - same-match replay duplicate cannot inflate samples
+  ---
+  duration_ms: 2.4787
+  type: 'test'
+  ...
+# Subtest: admission and scoring leave frozen input bytes unchanged
+ok 245 - admission and scoring leave frozen input bytes unchanged
+  ---
+  duration_ms: 37.5664
+  type: 'test'
+  ...
+# Subtest: synthetic positive control: explicit valid feature adapter gets separated stage inputs without result in predict
+ok 246 - synthetic positive control: explicit valid feature adapter gets separated stage inputs without result in predict
+  ---
+  duration_ms: 9.0137
+  type: 'test'
+  ...
+# Subtest: synthetic known-good rejection: availableAt after decision is blocked
+ok 247 - synthetic known-good rejection: availableAt after decision is blocked
+  ---
+  duration_ms: 4.8044
+  type: 'test'
+  ...
+# Subtest: synthetic required rejection: future observed/received clocks cannot be hidden by an old availableAt
+ok 248 - synthetic required rejection: future observed/received clocks cannot be hidden by an old availableAt
+  ---
+  duration_ms: 5.3437
+  type: 'test'
+  ...
+# Subtest: synthetic required rejection: missing feature providerObservedAt is unavailable
+ok 249 - synthetic required rejection: missing feature providerObservedAt is unavailable
+  ---
+  duration_ms: 4.1627
+  type: 'test'
+  ...
+# Subtest: synthetic required rejection: missing feature receivedAt is unavailable
+ok 250 - synthetic required rejection: missing feature receivedAt is unavailable
+  ---
+  duration_ms: 4.5519
+  type: 'test'
+  ...
+# Subtest: synthetic required rejection: result-derived feature name resultObservedAt
+ok 251 - synthetic required rejection: result-derived feature name resultObservedAt
+  ---
+  duration_ms: 4.1629
+  type: 'test'
+  ...
+# Subtest: synthetic required rejection: result-derived feature name finalScore
+ok 252 - synthetic required rejection: result-derived feature name finalScore
+  ---
+  duration_ms: 4.0552
+  type: 'test'
+  ...
+# Subtest: synthetic required rejection: result-derived feature name finalScoreHome
+ok 253 - synthetic required rejection: result-derived feature name finalScoreHome
+  ---
+  duration_ms: 3.9847
+  type: 'test'
+  ...
+# Subtest: synthetic required rejection: result-derived feature name closingOdds
+ok 254 - synthetic required rejection: result-derived feature name closingOdds
+  ---
+  duration_ms: 5.0482
+  type: 'test'
+  ...
+# Subtest: synthetic required rejection: result-derived feature name postMatchRating
+ok 255 - synthetic required rejection: result-derived feature name postMatchRating
+  ---
+  duration_ms: 3.9026
+  type: 'test'
+  ...
+# Subtest: synthetic required rejection: missing candidateEligible must not grant audited feature authority
+ok 256 - synthetic required rejection: missing candidateEligible must not grant audited feature authority
+  ---
+  duration_ms: 3.9118
+  type: 'test'
+  ...
+# Subtest: synthetic required rejection: nonexistent dates cannot be silently normalized
+ok 257 - synthetic required rejection: nonexistent dates cannot be silently normalized
+  ---
+  duration_ms: 0.3676
+  type: 'test'
+  ...
+# Subtest: synthetic default sample minima stop the adapter rather than auto-promote
+ok 258 - synthetic default sample minima stop the adapter rather than auto-promote
+  ---
+  duration_ms: 4.2323
+  type: 'test'
+  ...
+# Subtest: synthetic overlapping train/calibration windows are rejected
+ok 259 - synthetic overlapping train/calibration windows are rejected
+  ---
+  duration_ms: 0.3672
+  type: 'test'
+  ...
+# Subtest: synthetic final labels cannot retune validation selection
+ok 260 - synthetic final labels cannot retune validation selection
+  ---
+  duration_ms: 9.6883
+  type: 'test'
+  ...
+# Subtest: synthetic result observation time does not enter feature adapter input or prediction
+ok 261 - synthetic result observation time does not enter feature adapter input or prediction
+  ---
+  duration_ms: 8.7412
+  type: 'test'
+  ...
+# Subtest: synthetic required rejection: feature availability one nanosecond after decision
+ok 262 - synthetic required rejection: feature availability one nanosecond after decision
+  ---
+  duration_ms: 4.0492
+  type: 'test'
+  ...
+# Subtest: synthetic required rejection: receipt one nanosecond after declared availability
+ok 263 - synthetic required rejection: receipt one nanosecond after declared availability
+  ---
+  duration_ms: 4.5348
+  type: 'test'
+  ...
+# Subtest: synthetic required rejection: observation one nanosecond after receipt
+ok 264 - synthetic required rejection: observation one nanosecond after receipt
+  ---
+  duration_ms: 4.8613
+  type: 'test'
+  ...
+# Subtest: synthetic positive control: equal nanosecond instants across time zones preserve original clock text
+ok 265 - synthetic positive control: equal nanosecond instants across time zones preserve original clock text
+  ---
+  duration_ms: 4.4212
+  type: 'test'
+  ...
+# Subtest: disabled observer neither loads evidence nor carries shadow state into worker history
+ok 266 - disabled observer neither loads evidence nor carries shadow state into worker history
+  ---
+  duration_ms: 2.3976
+  type: 'test'
+  ...
+# Subtest: failed to running to failed retains the sequence and repeat attempts keep the same retry clock
+ok 267 - failed to running to failed retains the sequence and repeat attempts keep the same retry clock
+  ---
+  duration_ms: 3.9511
+  type: 'test'
+  ...
+# Subtest: verified source success resets the sequence and the next new failure starts at one
+ok 268 - verified source success resets the sequence and the next new failure starts at one
+  ---
+  duration_ms: 5.9406
+  type: 'test'
+  ...
+# Subtest: observer exceptions preserve the sequence without escaping into the worker error handler
+ok 269 - observer exceptions preserve the sequence without escaping into the worker error handler
+  ---
+  duration_ms: 1.0976
+  type: 'test'
+  ...
+# Subtest: unproven source success cannot reset a failure sequence
+ok 270 - unproven source success cannot reset a failure sequence
+  ---
+  duration_ms: 2.4918
+  type: 'test'
+  ...
+1..270
+# tests 270
+# suites 0
+# pass 270
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 24154.2245

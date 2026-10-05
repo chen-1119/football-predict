@@ -1,0 +1,9 @@
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'../..'),fixture=path.join(root,'tests/fixtures/recommendation-detail-20260922.json');
+const hash=p=>crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+const history=path.join(root,'../05-history-regression/outputs/history-regression-20261002'),receipt=JSON.parse(fs.readFileSync(path.join(history,'delivery-receipt.json'),'utf8'));
+const entries=Object.values(receipt).find(v=>Array.isArray(v)&&v.some(x=>x.path==='outputs/history-regression-20261002/report/summary.json'));
+const entry=entries?.find(x=>x.path==='outputs/history-regression-20261002/report/summary.json');assert.ok(entry,'Missing historical report file hash');
+const summaryPath=path.join(history,'report/summary.json'),summaryHash=hash(summaryPath);assert.equal(summaryHash,entry.sha256);
+const summary=JSON.parse(fs.readFileSync(summaryPath,'utf8')),captured=JSON.parse(fs.readFileSync(fixture,'utf8'));
+fs.writeFileSync(path.join(__dirname,'source-evidence.json'),JSON.stringify({verifiedAt:new Date().toISOString(),preview:{file:fixture,sha256:hash(fixture),source:captured.source,observedAt:captured.observedAt,decisionIds:captured.fixtures.map(x=>x.row.decision.decisionId),notNewOctober2Data:true,sourceAuthenticity:'Existing repository production-capture fixture; file hashed for reproducibility, not a fresh remote signature verification'},referenceOnly:{historySummaryFile:summaryPath,sha256:summaryHash,receiptHashVerified:true,sameDecisionPaired:summary.funnel.sameDecisionPaired,underlyingPublication:summary.publication,usedToGeneratePreview:false},authenticatedSessionObserved:false,productionWrites:0},null,2));console.log('Preview provenance recorded; historical summary hash verified');

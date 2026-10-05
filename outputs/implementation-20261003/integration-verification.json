@@ -1,0 +1,273 @@
+{
+  "version": "football-four-step-integration-verification-v1",
+  "startedAt": "2026-10-02T16:50:54.802Z",
+  "runtime": "v22.22.1",
+  "productionWrites": false,
+  "deployed": false,
+  "modelTrained": false,
+  "jobs": [
+    {
+      "name": "targeted-tests",
+      "args": [
+        "--test",
+        "tests/model-input-usage-clock.test.cjs",
+        "tests/frozen-model-disagreement.test.cjs",
+        "tests/recommendation-readiness-presentation.test.cjs",
+        "tests/published-evidence-snapshot.test.cjs",
+        "tests/prematch-collection-panel.test.cjs",
+        "tests/frontend-evidence-shared-helper-gate.test.cjs"
+      ],
+      "exitCode": 0,
+      "passed": 45,
+      "failed": 0,
+      "error": null
+    },
+    {
+      "name": "official-closed-schedule",
+      "args": [
+        "tests/official-closed-schedule-evidence.test.cjs"
+      ],
+      "exitCode": 0,
+      "passed": 44,
+      "failed": 0,
+      "error": null
+    },
+    {
+      "name": "data-validation-scopes",
+      "args": [
+        "scripts/verifyDataValidationScopes.cjs"
+      ],
+      "exitCode": 0,
+      "passed": 70,
+      "failed": 0,
+      "error": null
+    },
+    {
+      "name": "frontend-evidence-semantics",
+      "args": [
+        "scripts/verifyFrontendEvidenceSemantics.cjs"
+      ],
+      "exitCode": 0,
+      "passed": 31,
+      "failed": 0,
+      "error": null
+    },
+    {
+      "name": "form-recency-shadow",
+      "args": [
+        "scripts/verifyFormRecencyShadow.cjs"
+      ],
+      "exitCode": 0,
+      "passed": 24,
+      "failed": 0,
+      "error": null
+    },
+    {
+      "name": "legacy-reference-conflict",
+      "args": [
+        "scripts/verifyLegacyReferenceConflict.cjs"
+      ],
+      "exitCode": 0,
+      "passed": 14,
+      "failed": 0,
+      "error": null
+    }
+  ],
+  "evidence": [
+    {
+      "path": "src/services/modelInputUsage.cjs",
+      "ok": true
+    },
+    {
+      "path": "scripts/diagnoseFrozenModelDisagreement.cjs",
+      "ok": true
+    },
+    {
+      "path": "tests/model-input-usage-clock.test.cjs",
+      "ok": true
+    },
+    {
+      "path": "tests/frozen-model-disagreement.test.cjs",
+      "ok": true
+    },
+    {
+      "path": "docs/model-disagreement-and-clock-repair-20261003.md",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/model/clock-before.tap",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/model/clock-after.tap",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/model/tests.tap",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/model/form-recency-verification.txt",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/model/model-input-usage-fixed-fixture-clock.txt",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/model/legacy-verifier-limitations.json",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/model/disagreement-attribution.json",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/model/disagreement-attribution-v2.json",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/model/summary-clock-before.tap",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/model/summary-clock-after.tap",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/cloud/cloud-model-review.json",
+      "ok": true
+    },
+    {
+      "path": "src/services/recommendationReadinessPresentation.ts",
+      "ok": true
+    },
+    {
+      "path": "src/components/predictions/RecommendationEvidenceFacts.tsx",
+      "ok": true
+    },
+    {
+      "path": "src/styles/published-evidence-snapshot.css",
+      "ok": true
+    },
+    {
+      "path": "tests/recommendation-readiness-presentation.test.cjs",
+      "ok": true
+    },
+    {
+      "path": "tests/published-evidence-snapshot.test.cjs",
+      "ok": true
+    },
+    {
+      "path": "scripts/verifyFrontendEvidenceSemantics.cjs",
+      "ok": true
+    },
+    {
+      "path": "tests/frontend-evidence-shared-helper-gate.test.cjs",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/after-1440-expanded.png",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/after-1440.png",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/after-390-expanded.png",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/after-390.png",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/after.html",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/baseline-gate-observation.json",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/before-1440.png",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/before-390.png",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/before.html",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/browser-validation.json",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/code-validation.json",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/contrast-validation.json",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/implementation.md",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/lint.txt",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/shared-helper-tests.txt",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/source-evidence.json",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/states-1440-expanded.png",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/states-1440.png",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/states-390-expanded.png",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/states-390.png",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/states.html",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/static-gate-after.json",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/tests.txt",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/types.txt",
+      "ok": true
+    },
+    {
+      "path": "outputs/implementation-20261003/ui/verify-ui.cjs",
+      "ok": true
+    }
+  ],
+  "totalPassed": 228,
+  "ok": true,
+  "completedAt": "2026-10-02T16:51:02.651Z"
+}

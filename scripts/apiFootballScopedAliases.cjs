@@ -5,7 +5,7 @@
 // names/IDs were checked in the existing provider response; league/season and
 // fixture names were cross-checked at the official competition URLs below.
 // Do not turn the whole historical short-name dictionary into provider aliases.
-const VERSION = "api-football-scoped-aliases-v5-20260922";
+const VERSION = "api-football-scoped-aliases-v6-20260929";
 const SCOPED_ALIASES = Object.freeze([
   { localName: "赫塔费", providerName: "Getafe", providerTeamId: 546, clubUrl: "https://www.laliga.com/clubes/getafe-cf" },
   { localName: "维戈塞尔塔", providerName: "Celta Vigo", providerTeamId: 538, clubUrl: "https://www.laliga.com/clubes/rc-celta" },
@@ -58,6 +58,12 @@ const SCOPED_ALIASES = Object.freeze([
   [46, "efl trophy", "布莱克浦", "Blackpool", 1356, 1588823],
   [803, "asian games", "韩国亚运男足", "Korea Republic U23", 10177, 1639468],
   [803, "asian games", "沙特阿拉伯亚足", "Saudi Arabia U23", 10955, 1639468],
+  // 2026-09-29 live provider fixtures 1642007/1642008 and AFC/JFA women's
+  // semi-final reports. Exact event/team IDs only; no generic country alias.
+  [1245, "asian games women", "朝鲜女足", "Korea DPR W", 21343, 1642007],
+  [1245, "asian games women", "中国女足", "China W", 1723, 1642007],
+  [1245, "asian games women", "日本女足", "Japan W", 1720, 1642008],
+  [1245, "asian games women", "韩国女足", "South Korea W", 1728, 1642008],
 ].map(([leagueId, leagueAlias, localName, providerName, providerTeamId, evidenceFixtureId]) => ({ leagueId, leagueAlias, localName, providerName, providerTeamId, evidenceFixtureId })))
   .map(row => Object.freeze({ ...row, provider: "api-football", season: 2026 })));
 
@@ -74,6 +80,7 @@ const LOCAL_COMPETITIONS = Object.freeze({
   94: Object.freeze(["葡超", "葡萄牙超级联赛"]),
   46: Object.freeze(["英格兰锦标赛"]),
   803: Object.freeze(["亚运会男足"]),
+  1245: Object.freeze(["亚运会女足"]),
 });
 
 const validId = value => (typeof value === "number" && Number.isSafeInteger(value) && value > 0)

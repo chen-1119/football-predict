@@ -1,16 +1,15 @@
 import type { SelectionQuality, SupplementaryResearch, SingleRow } from '../../services/recommendationCenterView';
 
 import { selectionPriceStatus, selectionReferenceLabel } from '../../services/publishedRecommendationStatus.cjs';
-export { selectionPriceStatus, selectionReferenceLabel };
 export function SupplementaryResearchNote({research,settlement,language}:{research?:SupplementaryResearch|null;settlement?:SingleRow['supplementarySettlement'];language:'zh'|'en'}){
  if(!research)return null;
  const zh=language==='zh';
  const state=(key:'exactScore'|'totalGoals')=>({PENDING:zh?'待赛果':'Pending',WON:zh?'命中':'Hit',LOST:zh?'未命中':'Miss',VOID:zh?'无效':'Void',DISPUTED:zh?'赛果待核':'Disputed'}[settlement?.[key].state??'PENDING']);
  return <div className="supplementary-research-note" data-supplementary-version={research.version}>
-  <strong>{zh?'比分与进球数 · 唯一首选 · 低置信':'Score & goals · single primary · low confidence'}</strong>
-  <p>{research.version==='supplementary-research-v2'?(zh?'比分首选':'Score primary'):(zh?'同向比分':'Aligned score')} {research.exactScore.label} · {(research.exactScore.probability*100).toFixed(1)}% · {state('exactScore')}</p>
+  <strong>{zh?'比分与进球数 · 分布参考 · 未校准':'Score & goals · distribution reference · uncalibrated'}</strong>
+  <p>{research.version==='supplementary-research-v2'?(zh?'最高单点比分':'Modal score'):(zh?'同向比分参考':'Aligned score reference')} {research.exactScore.label} · {(research.exactScore.probability*100).toFixed(1)}% · {state('exactScore')}</p>
   <p>{zh?'总进球':'Total goals'} {research.totalGoals.label} · {(research.totalGoals.probability*100).toFixed(1)}% · {state('totalGoals')}</p>
-  <small>{zh?'未绑定官方 SP；命中统计独立记录，模型尚未验证。':'No official SP bound; hits tracked separately, model unvalidated.'}</small>
+  <small>{zh?'非正式推荐；未绑定官方 SP；命中统计独立记录，模型尚未验证。':'Not a formal pick; no official SP bound; hits tracked separately, model unvalidated.'}</small>
  </div>;
 }
 

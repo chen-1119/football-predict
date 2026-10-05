@@ -21,7 +21,7 @@ const evaluation = readJson(
   process.env.MODEL_EVALUATION_FILE || "public/data/model-evaluation.json",
   {},
 );
-const strategy = readJson("public/data/model-strategy.json", {});
+const strategy = readJson(process.env.MODEL_STRATEGY_FILE || "public/data/model-strategy.json", {});
 const currentMatches = readJson(
   process.env.RECOMMENDATION_ELIGIBILITY_CURRENT_MATCHES_FILE
     || "public/data/matches-current.json",
@@ -38,6 +38,12 @@ const predictionsListSource = fs.readFileSync(
 const bestTipsSource = fs.readFileSync(
   path.join(rootDir, "src/pages/BestTips.tsx"),
   "utf8"
+);
+const recommendationCenterSource = fs.readFileSync(
+  path.join(rootDir, "src/components/recommendations/RecommendationCenter.tsx"), "utf8",
+);
+const recommendationCenterViewSource = fs.readFileSync(
+  path.join(rootDir, "src/services/recommendationCenterView.ts"), "utf8",
 );
 const analysisReferenceSelectionSource = fs.readFileSync(
   path.join(rootDir, "src/services/analysisReferenceSelection.ts"),
@@ -218,16 +224,20 @@ check("frontend keeps formal gates while reference directions remain separately 
   && predictionsListSource.includes("selectOnSaleAnalysisReference(match")
   && analysisReferenceSelectionSource.includes("isModelOnlyAnalysisReferenceEligible(match, storedBest, now)")
   && analysisReferenceSelectionSource.includes("recommendationAction: 'reference'")
-  && bestTipsSource.includes("const formal = comboEnabled && isBeforeMatchSaleCutoff(match, now)")
-  && bestTipsSource.includes("const reference = selectOnSaleAnalysisReference(match, { allowModelOnly: false, now })")
-  && bestTipsSource.includes("const comboEnabled = formalPresentationAllowed")
-  && bestTipsSource.includes("const publishedIds = React.useMemo(() => new Set(")
-  && bestTipsSource.includes("pickCards.map((card)")
-  && bestTipsSource.includes("不计正式命中率")
-  && officialEligibilitySource.includes("prediction.recommendationAction === 'recommend'")
-  && officialEligibilitySource.includes("Number.isFinite(odds)")
-  && officialEligibilitySource.includes("odds > 1")
-  && officialEligibilitySource.includes("recommendationLinesMatch(prediction, evidence, currentOfficialHandicapLine)")
+  // /best now renders the frozen publication center. Its behavioral contracts
+  // are exercised by recommendation-center-view.test.cjs; do not require the
+  // removed live-list/combo implementation to reappear just to pass this gate.
+  && bestTipsSource.includes("from '../components/recommendations/RecommendationCenter'")
+  && bestTipsSource.includes("<RecommendationCenter")
+  && recommendationCenterSource.includes("useRecommendationCenter")
+  && recommendationCenterSource.includes("参考推荐 · 模型验证中")
+  && recommendationCenterSource.includes("参考串关 · 模型未验证")
+  && recommendationCenterViewSource.includes("d.modelValidation!=='unvalidated'")
+  && recommendationCenterViewSource.includes("Invalid pre-match publication")
+  && recommendationCenterViewSource.includes("Frozen HAD SP differs from selected SP")
+  && officialEligibilitySource.includes("prediction.recommendationAction !== 'recommend'")
+  && officialEligibilitySource.includes("!Number.isFinite(odds) || odds <= 1")
+  && officialEligibilitySource.includes("exports.recommendationLinesMatch)(prediction, evidence, currentOfficialHandicapLine)")
   && !displayRecommendationSource.includes("const getHandicapOverride =")
   && recommendationCopySource.includes("isFormalRecommendationPrediction(match, prediction)")
   && matchDetailSource.includes("isFormalPrimaryRecommendation")

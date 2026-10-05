@@ -1,0 +1,280 @@
+TAP version 13
+# Subtest: shared helper import plus actual calls is sufficient without a meaningless re-export
+ok 1 - shared helper import plus actual calls is sufficient without a meaningless re-export
+  ---
+  duration_ms: 46.3082
+  type: 'test'
+  ...
+# Subtest: synthetic removal of a shared helper call fails the static contract
+ok 2 - synthetic removal of a shared helper call fails the static contract
+  ---
+  duration_ms: 73.6767
+  type: 'test'
+  ...
+# Subtest: synthetic local implementations cannot shadow the audited shared helper import
+ok 3 - synthetic local implementations cannot shadow the audited shared helper import
+  ---
+  duration_ms: 100.4544
+  type: 'test'
+  ...
+# Subtest: close rounded component leaders are unknown, not forced directions
+ok 4 - close rounded component leaders are unknown, not forced directions
+  ---
+  duration_ms: 1.2103
+  type: 'test'
+  ...
+# Subtest: complete metadata has no source verification or model admission authority
+ok 5 - complete metadata has no source verification or model admission authority
+  ---
+  duration_ms: 0.9931
+  type: 'test'
+  ...
+# Subtest: later summary cutoff cannot become original-decision evidence even when latest observation is earlier
+ok 6 - later summary cutoff cannot become original-decision evidence even when latest observation is earlier
+  ---
+  duration_ms: 0.5663
+  type: 'test'
+  ...
+# Subtest: missing or invalid summary decision clock cannot be substituted by latest observation or original decision
+ok 7 - missing or invalid summary decision clock cannot be substituted by latest observation or original decision
+  ---
+  duration_ms: 0.4324
+  type: 'test'
+  ...
+# Subtest: latest result after the summary cutoff contradicts declared zero late rows at nanosecond precision
+ok 8 - latest result after the summary cutoff contradicts declared zero late rows at nanosecond precision
+  ---
+  duration_ms: 0.3644
+  type: 'test'
+  ...
+# Subtest: equal and earlier summary cutoffs compare exact zoned instants without claiming original source availability
+ok 9 - equal and earlier summary cutoffs compare exact zoned instants without claiming original source availability
+  ---
+  duration_ms: 0.3016
+  type: 'test'
+  ...
+# Subtest: reported clock-recorded label does not override missing raw observation counts
+ok 10 - reported clock-recorded label does not override missing raw observation counts
+  ---
+  duration_ms: 0.2564
+  type: 'test'
+  ...
+# Subtest: later evidence boundary cannot admit result recorded one nanosecond after actual decision
+ok 11 - later evidence boundary cannot admit result recorded one nanosecond after actual decision
+  ---
+  duration_ms: 0.1652
+  type: 'test'
+  ...
+# Subtest: invalid calendars and unknown sample size do not become full form coverage
+ok 12 - invalid calendars and unknown sample size do not become full form coverage
+  ---
+  duration_ms: 1.7112
+  type: 'test'
+  ...
+# Subtest: real frozen evidence joins recovered form by exact source snapshot and preserves 154/26
+ok 13 - real frozen evidence joins recovered form by exact source snapshot and preserves 154/26
+  ---
+  duration_ms: 255.4631
+  type: 'test'
+  ...
+# Subtest: receipt rejects invalid original calendar 2026-02-30T01:00:00Z
+ok 14 - receipt rejects invalid original calendar 2026-02-30T01:00:00Z
+  ---
+  duration_ms: 2.6465
+  type: 'test'
+  ...
+# Subtest: receipt rejects invalid original calendar 2026-10-03T24:00:00Z
+ok 15 - receipt rejects invalid original calendar 2026-10-03T24:00:00Z
+  ---
+  duration_ms: 0.4613
+  type: 'test'
+  ...
+# Subtest: receipt rejects invalid original calendar 2026-10-03 01:00:00
+ok 16 - receipt rejects invalid original calendar 2026-10-03 01:00:00
+  ---
+  duration_ms: 0.2168
+  type: 'test'
+  ...
+# Subtest: receipt rejects invalid original calendar null
+ok 17 - receipt rejects invalid original calendar null
+  ---
+  duration_ms: 0.1821
+  type: 'test'
+  ...
+# Subtest: self-consistent arithmetic recorded one nanosecond after model generation cannot claim verified use
+ok 18 - self-consistent arithmetic recorded one nanosecond after model generation cannot claim verified use
+  ---
+  duration_ms: 0.8464
+  type: 'test'
+  ...
+# Subtest: kickoff identity differing by one nanosecond is not the same event
+ok 19 - kickoff identity differing by one nanosecond is not the same event
+  ---
+  duration_ms: 0.2546
+  type: 'test'
+  ...
+# Subtest: invalid generatedAt cannot borrow JavaScript date rollover
+ok 20 - invalid generatedAt cannot borrow JavaScript date rollover
+  ---
+  duration_ms: 0.3038
+  type: 'test'
+  ...
+# Subtest: valid timezone-equivalent clocks retain original bytes, hashes and summary
+ok 21 - valid timezone-equivalent clocks retain original bytes, hashes and summary
+  ---
+  duration_ms: 1.3284
+  type: 'test'
+  ...
+# Subtest: seven actual scorer cases preserve parent-version math, original receipt hashes and valid summaries
+ok 22 - seven actual scorer cases preserve parent-version math, original receipt hashes and valid summaries
+  ---
+  duration_ms: 2926.4584
+  type: 'test'
+  ...
+# Subtest: data-only detail keeps actual injury fields and receipt time without source attribution or attempt clocks
+ok 23 - data-only detail keeps actual injury fields and receipt time without source attribution or attempt clocks
+  ---
+  duration_ms: 209.6949
+  type: 'test'
+  ...
+# Subtest: both team lineups retain formation, coach, real shirt numbers, starters and substitutes
+ok 24 - both team lineups retain formation, coach, real shirt numbers, starters and substitutes
+  ---
+  duration_ms: 58.1463
+  type: 'test'
+  ...
+# Subtest: previousValue keeps the actual injury and lineup records with original receipt times
+ok 25 - previousValue keeps the actual injury and lineup records with original receipt times
+  ---
+  duration_ms: 33.9047
+  type: 'test'
+  ...
+# Subtest: empty and failed data states never invent players, successful receipt times or collector diagnostics
+ok 26 - empty and failed data states never invent players, successful receipt times or collector diagnostics
+  ---
+  duration_ms: 457.3083
+  type: 'test'
+  ...
+# Subtest: GET failures stay readable without exposing source cards or remote URLs
+ok 27 - GET failures stay readable without exposing source cards or remote URLs
+  ---
+  duration_ms: 122.1351
+  type: 'test'
+  ...
+# Subtest: source metadata including legitimate and malicious sourcePage URLs is omitted in every display state
+ok 28 - source metadata including legitimate and malicious sourcePage URLs is omitted in every display state
+  ---
+  duration_ms: 690.5467
+  type: 'test'
+  ...
+# Subtest: explicit priority POST keeps authentication, single submission and cooldown while automatic reads stay separate
+ok 29 - explicit priority POST keeps authentication, single submission and cooldown while automatic reads stay separate
+  ---
+  duration_ms: 48.1589
+  type: 'test'
+  ...
+# Subtest: priority errors remain visible and kicked-off matches cannot queue requests or fabricate lineups
+ok 30 - priority errors remain visible and kicked-off matches cannot queue requests or fabricate lineups
+  ---
+  duration_ms: 184.2638
+  type: 'test'
+  ...
+# Subtest: unknown injuries use an unknown count for totals and each team
+ok 31 - unknown injuries use an unknown count for totals and each team
+  ---
+  duration_ms: 199.9821
+  type: 'test'
+  ...
+# Subtest: stale payloads never regain collected or confirmed status through data presence
+ok 32 - stale payloads never regain collected or confirmed status through data presence
+  ---
+  duration_ms: 16.4199
+  type: 'test'
+  ...
+# Subtest: captured production decisions keep probability, SP and provenance paired without reading current or legacy prices
+ok 33 - captured production decisions keep probability, SP and provenance paired without reading current or legacy prices
+  ---
+  duration_ms: 18.8747
+  type: 'test'
+  ...
+# Subtest: missing three-way SP shows only the archived selected price; invalid prices remain unknown
+ok 34 - missing three-way SP shows only the archived selected price; invalid prices remain unknown
+  ---
+  duration_ms: 1.6086
+  type: 'test'
+  ...
+# Subtest: model validation and service reference qualification stay distinct in both languages
+ok 35 - model validation and service reference qualification stay distinct in both languages
+  ---
+  duration_ms: 5.5532
+  type: 'test'
+  ...
+# Subtest: missing publication stays waiting and never displays a invented cutoff, version or probability
+ok 36 - missing publication stays waiting and never displays a invented cutoff, version or probability
+  ---
+  duration_ms: 0.2579
+  type: 'test'
+  ...
+# Subtest: historical online capture bytes remain bound to the prior UI source receipt
+ok 37 - historical online capture bytes remain bound to the prior UI source receipt
+  ---
+  duration_ms: 1.0409
+  type: 'test'
+  ...
+# Subtest: real recorded publications display analysis reference without hiding or changing frozen probabilities
+ok 38 - real recorded publications display analysis reference without hiding or changing frozen probabilities
+  ---
+  duration_ms: 17.3833
+  type: 'test'
+  ...
+# Subtest: synthetic missing publication is waiting; it does not invent probabilities or borrow a legacy pick
+ok 39 - synthetic missing publication is waiting; it does not invent probabilities or borrow a legacy pick
+  ---
+  duration_ms: 0.2764
+  type: 'test'
+  ...
+# Subtest: synthetic reference qualification never grants formal model promotion (zh)
+ok 40 - synthetic reference qualification never grants formal model promotion (zh)
+  ---
+  duration_ms: 0.1463
+  type: 'test'
+  ...
+# Subtest: synthetic unknown reason is readable without exposing source errors or private tokens (zh)
+ok 41 - synthetic unknown reason is readable without exposing source errors or private tokens (zh)
+  ---
+  duration_ms: 0.1959
+  type: 'test'
+  ...
+# Subtest: synthetic reference qualification never grants formal model promotion (en)
+ok 42 - synthetic reference qualification never grants formal model promotion (en)
+  ---
+  duration_ms: 1.1541
+  type: 'test'
+  ...
+# Subtest: synthetic unknown reason is readable without exposing source errors or private tokens (en)
+ok 43 - synthetic unknown reason is readable without exposing source errors or private tokens (en)
+  ---
+  duration_ms: 0.1986
+  type: 'test'
+  ...
+# Subtest: synthetic missing inputs show the service restriction but keep the frozen three-way probabilities
+ok 44 - synthetic missing inputs show the service restriction but keep the frozen three-way probabilities
+  ---
+  duration_ms: 0.7923
+  type: 'test'
+  ...
+# Subtest: synthetic known restrictions are mapped and de-duplicated; no UI probability threshold is evaluated
+ok 45 - synthetic known restrictions are mapped and de-duplicated; no UI probability threshold is evaluated
+  ---
+  duration_ms: 0.3504
+  type: 'test'
+  ...
+1..45
+# tests 45
+# suites 0
+# pass 45
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3038.001
