@@ -20,7 +20,9 @@ class Repository {
   async currentInputs(now) {
     const current=await this.current();
     const signals=await require('../../collectors/market/signalBridge.cjs').readMarketSignalRows(this.client,{allowEmpty:true});
-    return require('./currentInputs.cjs').joinCurrentMarket(current,signals,now);
+    const joined=require('./currentInputs.cjs').joinCurrentMarket(current,signals,now);
+    const {joinOfficialHandicap,readLiveOfficialSnapshot}=require('./liveOfficialHandicap.cjs');
+    return {...joined,current:joinOfficialHandicap(joined.current,readLiveOfficialSnapshot(),{now,trustRegistry:process.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH||require('node:path').resolve(__dirname,'../../deploy/light-server/collector-trust-registry.json')})};
   }
   async publication() { const {readPostgresPublicationIdentity}=require('../../server/postgresProjectionStore.cjs'); const value=await readPostgresPublicationIdentity(this.client); if(!value.available)throw Object.assign(new Error('Publication unavailable'),{code:'SOURCE_UNAVAILABLE'});return value.publication; }
   async insertDecision(d) {
