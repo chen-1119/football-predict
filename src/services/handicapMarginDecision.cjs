@@ -208,7 +208,8 @@ function buildHandicapMarginDecision(match, {now,cutoffTime,straightTipCode,cali
     straightTipCode:CODES.includes(straightTipCode)?straightTipCode:null,relation:relation(straightTipCode,line,tipCode),
     lambdas:{home:lambda.home,away:lambda.away,source:lambda.source},capturedMass:dist.capturedMass,tailMass:dist.tailMass,straightConditionedMass:dist.conditionedMass,
     marketReference:market?{source:market.source,handicapLine:line,observedAt:market.observedAt,odds:market.odds,probabilities:market.probabilities,
-      selectedOdds:market.odds[tipCode],selectedProbability:market.probabilities[tipCode],aligned:topCode(market.probabilities)===tipCode}:null,
+      selectedOdds:market.odds[tipCode],selectedProbability:market.probabilities[tipCode],aligned:topCode(market.probabilities)===tipCode,
+      ...(match.handicapQuoteProvenance?{quoteProvenance:structuredClone(match.handicapQuoteProvenance)}:{})}:null,
     calibration:'unvalidated',historicalCalibration:{version:'handicap-calibration-v2',applied:Boolean(calibration?.applied),profileHash:calibration?.applied?calibration?.profileHash||null:null,key:calibration?.key||null,reason:calibration?.reason||null,weight:calibration?.weight||null,residual:calibration?.residual||null,metrics:calibration?.metrics||null},
   };
   value.inputHash=handicapInputHash(value);return value;
