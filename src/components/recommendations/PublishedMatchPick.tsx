@@ -9,6 +9,12 @@ const time = (value:string,language:'zh'|'en') => new Intl.DateTimeFormat(langua
   timeZone:'Asia/Shanghai',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false
 }).format(new Date(value));
 
+export function MixedModelEstimateNote({language}:{language:'zh'|'en'}){
+  return <span data-model-source="mixed-uncalibrated">{language==='zh'
+    ? '混合模型估计·未校准。基础模型包含市场概率和球队/比分输入；本条实际采用项以可核验回执为准。赔率换算概率不等于独立预测，手设权重与启发式风险调整也不代表经过校准或未来命中率。'
+    : 'Mixed model estimate · uncalibrated. The base model includes market probabilities and team/score inputs; inputs actually used for this record require a verifiable receipt. Odds-implied probabilities are not independent predictions; hand-set weights and heuristic risk adjustments do not establish calibration or future hit rates.'}</span>;
+}
+
 export function PublishedMatchPick({row,language,loading=false,failed=false,compact=false,now=Date.now()}:Props){
   const zh=language==='zh';
   if(!row)return <div className="published-match-pick is-empty" role="status"><strong>{loading?(zh?'推荐加载中…':'Loading published pick…'):failed?(zh?'推荐暂未读取，请重试':'Published pick unavailable; retry'):(zh?'暂无已发布推荐':'No published pick')}</strong><small>{zh?'与今日推荐同步，发布后自动显示':'Synced with Today; appears after publication'}</small></div>;
@@ -31,6 +37,7 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
       {coherent?.hhadCode?<>{directions[0]}<details className="published-match-pick__probability-basis"><summary>{zh?'冻结条件分支 · 非独立推荐':'Frozen conditional branch · not an independent pick'}</summary>{directions[1]}<small>{probabilityNote}</small></details></>:directions}
     </div>
     <PublishedHadDistribution decision={d} language={language}/>
+    <small><MixedModelEstimateNote language={language}/></small>
     <small>{zh?'参考 / 观察 · 未校准；冻结主方向不代表价值推荐。':'Reference / watch · uncalibrated; the frozen primary is not a value recommendation.'}</small>
     <small className="published-match-pick__status" data-selection-status={row.selectionQuality?.status??'reference'}>{selectionReferenceLabel(row.selectionQuality,language)}{lifecycle!=='open'?` · ${publicationLifecycleLabel(lifecycle,language)}`:''}{failed?(zh?' · 更新暂时失败':' · Update temporarily failed'):''}</small>
     {compact&&<small className="published-match-pick__quote-time">{zh?'冻结 SP 采集':'Frozen SP observed'} {time(d.quoteObservedAt,language)}</small>}

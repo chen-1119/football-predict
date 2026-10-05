@@ -33,9 +33,10 @@ export function PublishedHadDistribution({decision,language}:{decision:Decision;
  const valid=codes.every(code=>Number.isFinite(decision.probabilities[code])&&decision.probabilities[code]>=0&&decision.probabilities[code]<=1)
   &&Math.abs(codes.reduce((sum,code)=>sum+decision.probabilities[code],0)-1)<=1e-6;
  return <section data-had-distribution="unconditional" aria-label={zh?'胜平负完整分布':'Full 1X2 distribution'}>
-  <small>{zh?'胜平负完整分布 · 无条件概率 · 未校准':'Full 1X2 distribution · unconditional · uncalibrated'}</small>
+  <small>{zh?'胜平负完整分布 · 无条件概率 · 混合模型估计 · 未校准':'Full 1X2 distribution · unconditional · mixed-model estimate · uncalibrated'}</small>
   {valid?<div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:8}}>{codes.map(code=><span key={code} data-had-code={code}>{labels[code]} {(decision.probabilities[code]*100).toFixed(1)}%</span>)}</div>:<small>{zh?'完整冻结概率暂不可用':'Complete frozen probabilities unavailable'}</small>}
   {valid&&<small>{zh?'模型赛果倾向：':'Model outcome tendency: '}{codes.filter(code=>decision.probabilities[code]===Math.max(...codes.map(item=>decision.probabilities[item]))).map(code=>labels[code]).join(' / ')}{zh?'；不是正式推荐。':'; not a formal recommendation.'}</small>}
+  <small data-model-origin="not-odds-independent">{zh?'原混合估计包含市场输入，未证明独立于赔率的预测优势。':'The original mixed estimate includes market inputs; predictive advantage independent of odds is unproven.'}</small>
  </section>;
 }
 export function SupplementaryResearchNote({research,decision,scoreDistribution,settlement,language,compact=false}:{research?:SupplementaryResearch|null;decision?:Decision;scoreDistribution?:PublishedScores|null;settlement?:SingleRow['supplementarySettlement'];language:'zh'|'en';compact?:boolean}){

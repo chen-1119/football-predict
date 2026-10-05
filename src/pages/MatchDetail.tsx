@@ -1,7 +1,7 @@
 import { PrematchCollectionPanel } from '../components/predictions/PrematchCollectionPanel';
 import { useRecommendationCenter } from '../hooks/useRecommendationCenter';
 import { publishedMatchRecommendation, publishedPosteriorDisagreement, usesPublishedRecommendation } from '../services/publishedMatchRecommendation';
-import { PublishedMatchPick } from '../components/recommendations/PublishedMatchPick';
+import { MixedModelEstimateNote, PublishedMatchPick } from '../components/recommendations/PublishedMatchPick';
 import { PublishedHadDistribution } from '../components/recommendations/SelectionQualityNote';
 import { DualResearchV2 } from '../components/recommendations/DualResearchV2';
 import { publishedDetailPresentation } from '../services/publishedDetailPresentation';
@@ -2356,9 +2356,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     && Number.isFinite(worldCupPriorWeight)
     && Number(worldCupPriorWeight) > 0
   );
-  const predictionDataPolicyCopy = language === 'zh'
-    ? `赛前独立模型使用 Elo、长期历史、近期状态、赛程密度和比分分布${worldCupPriorEnabled ? '，并使用已通过安全校验的世界杯先验' : '；世界杯先验仅在安全校验通过时启用，本场未启用'}。官方 HAD/HHAD SP 只用于市场与价值风险校验；截止后只结算赛果，不回写赛前方向。`
-    : `The pre-match model uses Elo, long-run history, recent form, schedule density, and score distributions${worldCupPriorEnabled ? ', plus a safety-validated World Cup prior' : '; World Cup priors are enabled only after safety validation and are disabled for this match'}. Official HAD/HHAD SP only validates market and value risk; after cutoff, settlement is added without rewriting the pre-match direction.`;
+  const predictionDataPolicyCopy = <><MixedModelEstimateNote language={language}/>{' '}{language === 'zh'
+    ? '截止后只结算赛果，不回写赛前方向。'
+    : 'After cutoff, settlement is added without rewriting the pre-match direction.'}</>;
   const worldCupPriorStrengthDiff = Number(worldCupPrior?.strengthDiff);
   const worldCupPriorHomeName = language === 'zh'
     ? worldCupPrior?.home?.nameZh || worldCupPrior?.home?.nameEn
@@ -2682,7 +2682,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     if (!trace) return null;
 
     const components = trace.outcome?.components || [];
-    const modelComponents = components.filter((component) => component.role === 'model' && Number(component.weight) > 0);
+    const weightedComponents = components.filter((component) => Number(component.weight) > 0);
     const marketComponent = components.find((component) => component.key === 'market');
     const lambdaValues = trace.expectedGoals?.values;
     const goalValues = trace.goals?.values;
@@ -2695,9 +2695,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           <div>
             <h4>{language === 'zh' ? '计算公式' : 'Calculation Formula'}</h4>
             <p>
-              {displayText(trace.policy?.[language] || (language === 'zh'
-                ? '先计算独立模型概率，再做风险校准；SP 只做市场校验。'
-                : 'Compute independent model probabilities first, then calibrate risk; SP is validation only.'))}
+              <MixedModelEstimateNote language={language}/>
             </p>
           </div>
           <span>{displayText(trace.version)}</span>
@@ -2706,11 +2704,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         <div className="formula-card-grid">
           <article className="formula-card is-primary">
             <span>{language === 'zh' ? '胜平负总公式' : '1X2 formula'}</span>
-            <code>{displayText(trace.outcome?.formula?.[language] || 'P_final=calibrate(normalize(sum(w_i*P_i)))')}</code>
+            <code>{displayText(trace.outcome?.formula?.[language] || 'P_base=heuristic_adjust(normalize(sum(w_i*P_i)))')}</code>
             <p>
               {language === 'zh'
-                ? '主胜、平局、客胜分别套用同一条公式，最后归一化并应用冷却/风险校准。'
-                : 'Home, draw, and away use the same formula, then normalization and risk calibration are applied.'}
+                ? '主胜、平局、客胜分别加权、归一化，再应用启发式风险调整。原公式中的 calibrate 是调整函数名，不代表概率已校准；基础输出也不等于最终公开方向。'
+                : 'Home, draw, and away are weighted and normalized, then adjusted by heuristic risk rules. In stored formulas, calibrate names an adjustment function, not validated probability calibration; base output is not the final public direction.'}
             </p>
           </article>
 
@@ -2724,8 +2722,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
             {trace.outcome?.calibration?.applied && (
               <p>
                 {language === 'zh'
-                  ? `已触发 ${trace.outcome.calibration.adjustments?.length || 0} 条风险校准。`
-                  : `${trace.outcome.calibration.adjustments?.length || 0} risk calibration rules applied.`}
+                  ? `已触发 ${trace.outcome.calibration.adjustments?.length || 0} 条启发式风险调整，概率仍未校准。`
+                  : `${trace.outcome.calibration.adjustments?.length || 0} heuristic risk rules applied; probabilities remain uncalibrated.`}
               </p>
             )}
           </article>
@@ -2733,9 +2731,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           <article className="formula-card">
             <span>{language === 'zh' ? '组件权重' : 'Component weights'}</span>
             <div className="formula-component-list">
-              {modelComponents.map((component) => (
+              {weightedComponents.map((component) => (
                 <div key={component.key}>
-                  <b>{displayText(component.label?.[language] || component.key)}</b>
+                  <b>{component.key === 'market' ? (language === 'zh' ? '市场概率输入' : 'Market probability input') : component.key === 'teamStrength' ? (language === 'zh' ? '球队强度输入' : 'Team strength input') : displayText(component.label?.[language] || component.key)}</b>
                   <strong>{formatModelWeight(component.weight)}</strong>
                   <em>{renderOutcomeLine(component.probabilities)}</em>
                 </div>
@@ -2747,7 +2745,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
             <span>{language === 'zh' ? '进球期望 lambda' : 'Expected goals lambda'}</span>
             <code>{displayText(trace.expectedGoals?.formula?.[language] || '--')}</code>
             <p>
-              {language === 'zh' ? '独立初值' : 'Independent seed'}:
+              {language === 'zh' ? '模型初值' : 'Model seed'}:
               {' '}
               <strong>{formatDecimal(lambdaValues?.independentHome)} / {formatDecimal(lambdaValues?.independentAway)}</strong>
               {' · '}
@@ -2786,9 +2784,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               <strong>{formatProbabilityValue(goalValues?.bttsYes)}</strong>
             </p>
             <p>
-              <strong>{displayText(trace.marketUse?.formula || 'marketWeight=0')}</strong>
+              <strong>{language === 'zh' ? '基础市场权重' : 'Base market weight'} {formatModelWeight(marketComponent?.weight ?? trace.outcome?.weights?.market)}</strong>
               {' · '}
-              {displayText(trace.marketUse?.[language] || (language === 'zh' ? 'SP 只做校验。' : 'SP is validation only.'))}
+              {language === 'zh' ? '市场概率可参与基础混合，SP 也用于偏离与风险诊断。保存的阶段权重不代表最终方向贡献度；实际采用以可核验回执为准。' : 'Market probabilities can enter the base blend; SP also supports divergence and risk diagnostics. A saved stage weight is not final-direction attribution; actual use requires a verifiable receipt.'}
             </p>
             {marketComponent && (
               <p>
@@ -3682,7 +3680,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               <div className="signal-summary-meta">
                 <span>{language === 'zh' ? '证据评分' : 'Evidence score'} <strong>{navEvidenceDetail}</strong></span>
                 {calibratedModelProbability && (
-                  <span>{language === 'zh' ? '模型概率' : 'Model probability'} <strong>{calibratedModelProbability}</strong></span>
+                  <span>{language === 'zh' ? '混合模型估计·未校准' : 'Mixed model estimate · uncalibrated'} <strong>{calibratedModelProbability}</strong></span>
                 )}
                 <span>{language === 'zh' ? '风险项' : 'Risks'} <strong>{matchSignal.riskCount}</strong></span>
                 {match.oddsTrend && (
@@ -3740,7 +3738,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   <span className="review-kicker">{language === 'zh' ? '官方市场' : 'Official market'}</span>
                   <h3 id="match-detail-odds-heading">{language === 'zh' ? '胜平负与让球赔率' : '1X2 and handicap odds'}</h3>
                 </div>
-                <span>{language === 'zh' ? '去水支持率仅用于市场校验' : 'De-vig support is market validation only'}</span>
+                <span>{language === 'zh' ? '去水概率是市场估计，基础模型可将其作为输入' : 'De-vig probabilities are market estimates and can be base-model inputs'}</span>
               </div>
               {poolRows.length > 0 ? (
                 <div className="detail-pool-table match-detail-v4__pool-table">
@@ -3868,7 +3866,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       {language === 'zh' ? '概率预测系统' : 'Probability Forecast'}
                     </span>
                     <h3>{language === 'zh' ? '赛前概率分布' : 'Pre-Match Probability Distribution'}</h3>
-                    <p>{displayText(probabilityModel.basis[language])}</p>
+                    <p><MixedModelEstimateNote language={language}/></p>
                   </div>
                   <span>{displayText(probabilityModel.version)}</span>
                 </div>
@@ -3886,7 +3884,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       </span>
                       {probabilityModel.oneXTwo.teamStrength && (
                         <span>
-                          {language === 'zh' ? '独立强度：' : 'Team strength: '}
+                          {language === 'zh' ? '球队强度输入：' : 'Team strength input: '}
                           {renderOutcomeLine(probabilityModel.oneXTwo.teamStrength)}
                         </span>
                       )}
@@ -3926,13 +3924,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                         <span className="probability-weight-line">
                           {language === 'zh' ? '集成权重' : 'Ensemble weights'}：
                           {language === 'zh'
-                            ? `独立强度 ${formatModelWeight(probabilityModel.ensembleWeights.teamStrength)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}${worldCupPriorEnabled ? ` / 世界杯先验 ${formatModelWeight(probabilityModel.ensembleWeights.worldCupPrior)}` : ''} / SP校验 ${formatModelWeight(probabilityModel.ensembleWeights.market)}`
-                            : `team strength ${formatModelWeight(probabilityModel.ensembleWeights.teamStrength)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}${worldCupPriorEnabled ? ` / World Cup prior ${formatModelWeight(probabilityModel.ensembleWeights.worldCupPrior)}` : ''} / SP validation ${formatModelWeight(probabilityModel.ensembleWeights.market)}`}
+                            ? `球队强度 ${formatModelWeight(probabilityModel.ensembleWeights.teamStrength)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}${worldCupPriorEnabled ? ` / 世界杯先验 ${formatModelWeight(probabilityModel.ensembleWeights.worldCupPrior)}` : ''} / 市场概率输入 ${formatModelWeight(probabilityModel.ensembleWeights.market)}`
+                            : `team strength ${formatModelWeight(probabilityModel.ensembleWeights.teamStrength)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}${worldCupPriorEnabled ? ` / World Cup prior ${formatModelWeight(probabilityModel.ensembleWeights.worldCupPrior)}` : ''} / market probability input ${formatModelWeight(probabilityModel.ensembleWeights.market)}`}
                         </span>
                       )}
                       {probabilityModel.dynamicCalibration && (
                         <span className="probability-weight-line">
-                          {language === 'zh' ? '动态校准' : 'Dynamic calibration'}：
+                          {language === 'zh' ? '动态风险调整（未校准）' : 'Dynamic risk adjustment (uncalibrated)'}：
                           {displayText(calibrationReasonLabels[probabilityModel.dynamicCalibration.gate?.reason || 'neutral-profile']?.[language] || probabilityModel.dynamicCalibration.gate?.reason || '--')}
                         </span>
                       )}
@@ -4071,14 +4069,14 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       <div className="probability-pair-grid" style={{ marginBottom: '0.75rem' }}>
                         {calibrationAdjustment?.oneXTwo?.applied && (
                           <span>
-                            {language === 'zh' ? '胜平负校准' : '1X2 calibration'}
+                            {language === 'zh' ? '胜平负启发式调整' : 'Heuristic 1X2 adjustment'}
                             <strong>{language === 'zh' ? '已降温' : 'Active'}</strong>
                             <em>{oneXTwoCalibrationAdjustments.length} {language === 'zh' ? '项' : 'rules'}</em>
                           </span>
                         )}
                         {calibrationAdjustment?.goals?.applied && (
                           <span>
-                            {language === 'zh' ? '进球校准' : 'Goals calibration'}
+                            {language === 'zh' ? '进球启发式调整' : 'Heuristic goal adjustment'}
                             <strong>{formatModelWeight(calibrationAdjustment.goals?.shrinkFactor)}</strong>
                             <em>{calibrationAdjustment.goals?.before?.over25 ?? '--'}% {'to'} {calibrationAdjustment.goals?.after?.over25 ?? '--'}%</em>
                           </span>
@@ -4101,9 +4099,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 </div>
 
                 <p className="probability-calibration-note">
-                  {language === 'zh'
-                    ? `概率先由独立强度、Elo、Poisson${worldCupPriorEnabled ? '和已通过安全校验的世界杯先验' : ''}生成，再按滚动表现做风险校准；SP 只参与市场分歧校验。`
-                    : `Probabilities are generated from independent strength, Elo, Poisson${worldCupPriorEnabled ? ', and a safety-validated World Cup prior' : ''}, then risk-calibrated on rolling results; SP is market-divergence validation only.`}
+                  <MixedModelEstimateNote language={language}/>
                 </p>
               </div>
             )}
@@ -4125,8 +4121,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                     : (isFormalPrimaryRecommendation ? 'What this formal pick is based on' : isLivePrimaryRecommendation || isArchivedLiveRecommendation ? 'What this live pick is based on' : 'What this analysis direction is based on')}</h3>
                   <p>
                     {useUnified ? (language === 'zh' ? '以下展示原模型快照中的输入信息；未提供与当前统一发布记录的独立采用绑定，不据此生成第二个推荐方向。' : 'These inputs belong to the original model snapshot. No independent adoption binding to the current publication is provided, and they do not generate a second pick.') : language === 'zh'
-                      ? '方向判断不是单点结论，会综合长期强弱、近况、进球区间、世界杯背景和可验证赛前信息，再用官方赔率与外部均赔做交叉确认；只有完整通过门槛才会标为正式推荐。'
-                      : 'The direction is not based on a single signal: it combines long-run strength, form, goal range, World Cup context, and verified pre-match information, then checks official and external odds; only the full gate can promote it to a formal pick.'}
+                      ? '基础模型混合市场概率和球队/比分输入。下列快照不证明各项已被本条发布记录采用，实际采用以可核验回执为准；启发式门槛不证明概率已校准。'
+                      : 'The base model blends market probabilities with team/score inputs. These snapshots do not prove adoption by this publication; actual use requires a verifiable receipt. Heuristic gates do not establish probability calibration.'}
                   </p>
                 </div>
               </div>
@@ -4200,8 +4196,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   <h3>{language === 'zh' ? '12项赛前分析框架' : '12-Point Pre-Match Framework'}</h3>
                   <p>
                     {language === 'zh'
-                      ? '综合长期强弱、近一年攻防、赛程密度、比分区间、世界杯背景与赛前信息生成判断；官方赔率、让球和走势只做校验与风险标记。'
-                      : 'Combines long-run strength, last-year form, schedule density, score range, World Cup context, and pre-match signals; official odds, handicap, and movement are validation and risk markers only.'}
+                      ? '此框架用于整理可用赛前资料。基础概率包含市场概率和球队/比分输入，仍属混合模型估计·未校准；每项资料是否被本条记录采用，以可核验回执为准。'
+                      : 'This framework organizes available pre-match data. Base probabilities include market probabilities and team/score inputs and remain uncalibrated mixed model estimates; adoption of each input requires a verifiable receipt for this record.'}
                   </p>
                 </div>
                 <span>{displayText(predictionMeta?.promptVersion || 'professional-football-analyst-v1')}</span>
@@ -4215,8 +4211,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 </span>
                 <span>
                   {language === 'zh'
-                    ? '伤停、首发、天气、裁判、攻防质量与外部赔率进入赛前信息层，随可验证信号辅助修正风险判断。'
-                    : 'Injuries, lineups, weather, referees, attacking quality, and external odds feed the pre-match signal layer when verified.'}
+                    ? '伤停、首发、天气、裁判、攻防质量与外部赔率须分别核验来源与采用回执；缺少回执时不宣称已进入本条模型计算。'
+                    : 'Injuries, lineups, weather, referees, attacking quality, and external odds each require verified sources and adoption receipts; without a receipt, their use in this model record is not established.'}
                 </span>
               </div>
               <div className="professional-framework-grid">
