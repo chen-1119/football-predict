@@ -57,7 +57,7 @@
         "scope": "competition-metadata-only; not independently verified event classification",
         "contentHash": "bf0117e55bde3c53c6032f92ccf3bcefab54d969244b8b9059860e8fe79e9766"
       },
-      "generatedAt": "2026-10-05T07:51:04.640Z",
+      "generatedAt": "2026-10-05T10:26:21.563Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序。基础概率结合 Elo、球队强度、Poisson 比分分布和市场赔率，随后进行反馈、校准与统一后验选择。赔率并非固定零权重；各阶段实际系数与缺失回退需分别核对，基础模型输出不等于最终冻结的公开方向。",
         "en": "Schedules use Sporttery business days and official kickoff order. Base probabilities mix Elo, team strength, Poisson scores and market odds before feedback, calibration and unified selection. Market weight is not fixed at zero. Stage coefficients and missing-input fallbacks must be audited separately; base output is not the final frozen public direction."
@@ -140,9 +140,9 @@
               },
               "weight": 0.15,
               "probabilities": {
-                "home": 61.5,
-                "draw": 23.3,
-                "away": 15.1
+                "home": 62.4,
+                "draw": 23,
+                "away": 14.6
               },
               "role": "base-model-and-validation"
             },
@@ -162,19 +162,19 @@
             }
           ],
           "raw": {
-            "home": 39.8,
+            "home": 39.9,
             "draw": 27.4,
-            "away": 32.8
+            "away": 32.7
           },
           "final": {
-            "home": 38.8,
-            "draw": 28.1,
-            "away": 33.1
+            "home": 38.9,
+            "draw": 28,
+            "away": 33
           },
           "expressions": {
-            "home": "0.35*35% + 0.5*36.6% + 0.15*61.5% = 39.8%",
-            "draw": "0.35*30% + 0.5*26.9% + 0.15*23.3% = 27.4%",
-            "away": "0.35*35% + 0.5*36.6% + 0.15*15.1% = 32.8%"
+            "home": "0.35*35% + 0.5*36.6% + 0.15*62.4% = 39.9%",
+            "draw": "0.35*30% + 0.5*26.9% + 0.15*23% = 27.4%",
+            "away": "0.35*35% + 0.5*36.6% + 0.15*14.6% = 32.7%"
           },
           "scoreFeedback": {
             "applied": true,
@@ -184,9 +184,9 @@
               "score-model-direction-disagreement"
             ],
             "before": {
-              "home": 39.8,
+              "home": 39.9,
               "draw": 27.4,
-              "away": 32.8
+              "away": 32.7
             },
             "scoreImplied": {
               "home": 34.5,
@@ -194,9 +194,9 @@
               "away": 34.5
             },
             "after": {
-              "home": 38.8,
-              "draw": 28.1,
-              "away": 33.1
+              "home": 38.9,
+              "draw": 28,
+              "away": 33
             },
             "leaders": {
               "before": "1",
@@ -209,14 +209,14 @@
             "reasons": [],
             "adjustments": [],
             "before": {
-              "home": 39.8,
+              "home": 39.9,
               "draw": 27.4,
-              "away": 32.8
+              "away": 32.7
             },
             "after": {
-              "home": 38.8,
-              "draw": 28.1,
-              "away": 33.1
+              "home": 38.9,
+              "draw": 28,
+              "away": 33
             }
           }
         },
@@ -291,8 +291,8 @@
             "source": "model-estimated",
             "dataQuality": "model-estimated",
             "expectedYellowCards": {
-              "home": 1.5,
-              "away": 2,
+              "home": 1.4,
+              "away": 2.1,
               "total": 3.5
             },
             "redCardRisk": {
@@ -478,7 +478,7 @@
                   "eligibleAtCutoff": false,
                   "cutoffTime": "2026-10-05T14:00:00.000Z",
                   "kickoffTime": "2026-10-05T16:00:00.000Z",
-                  "sourceObservedAt": "2026-10-05T07:33:10.228Z",
+                  "sourceObservedAt": "2026-10-05T10:22:11.370Z",
                   "expectedPublishedAt": "2026-10-04T16:00:00.000Z"
                 },
                 "teamCards": {
@@ -514,7 +514,7 @@
                   "eligibleAtCutoff": false,
                   "cutoffTime": "2026-10-05T14:00:00.000Z",
                   "kickoffTime": "2026-10-05T16:00:00.000Z",
-                  "sourceObservedAt": "2026-10-05T07:33:10.228Z",
+                  "sourceObservedAt": "2026-10-05T10:22:11.370Z",
                   "expectedPublishedAt": "2026-10-05T14:45:00.000Z"
                 },
                 "injuries": {
@@ -535,7 +535,7 @@
                   "eligibleAtCutoff": false,
                   "cutoffTime": "2026-10-05T14:00:00.000Z",
                   "kickoffTime": "2026-10-05T16:00:00.000Z",
-                  "sourceObservedAt": "2026-10-05T07:33:10.228Z",
+                  "sourceObservedAt": "2026-10-05T10:22:11.370Z",
                   "expectedPublishedAt": "2026-10-05T10:00:00.000Z"
                 },
                 "xg": {
@@ -727,7 +727,7 @@
         {
           "version": "model-input-usage-v1",
           "stage": "form-lambda-blend",
-          "recordedAt": "2026-10-05T07:51:04.638Z",
+          "recordedAt": "2026-10-05T10:26:21.561Z",
           "sourceMatchId": "2041805",
           "kickoffTime": "2026-10-06T00:00:00+08:00",
           "lambdaPolicy": "evidence-rate-support-v2",
@@ -741,19 +741,19 @@
             "home": 1.2524,
             "away": 1.2524
           },
-          "contentHash": "be49a3f65164034bb7b93ffe8eef89ebc20b7270cdab5d1659143490eefd7638"
+          "contentHash": "1ca4677d19e3db2d7e157a3680198189cd332d41cb3240fc66a1bfe72ca9f129"
         },
         {
           "version": "model-input-usage-v1",
           "stage": "base-outcome-blend",
-          "recordedAt": "2026-10-05T07:51:04.639Z",
+          "recordedAt": "2026-10-05T10:26:21.562Z",
           "sourceMatchId": "2041805",
           "kickoffTime": "2026-10-06T00:00:00+08:00",
           "inputs": {
             "market": {
-              "home": 0.615346287992028,
-              "draw": 0.23318385650224216,
-              "away": 0.15146985550572994
+              "home": 0.623619496392284,
+              "draw": 0.23001030776027093,
+              "away": 0.14637019584744515
             },
             "teamStrength": {
               "home": 0.35000000000000003,
@@ -811,13 +811,13 @@
             "worldCupPrior": 0
           },
           "output": {
-            "home": 0.39756107865367446,
-            "draw": 0.27440814459405505,
-            "away": 0.32803077675227044
+            "home": 0.3988020599137129,
+            "draw": 0.27393211228275943,
+            "away": 0.3272658278035277
           },
           "marketPool": "HAD",
           "marketSource": "500.com:HAD",
-          "contentHash": "fd0fac204b29096bb5ed9f7741b758c4aefff6823010eb8bbcca3ece95abbeb2"
+          "contentHash": "b1539309f243dcb098776bf61927649747d6a5fb1fa44c4a509526d2feeda097"
         }
       ],
       "dynamicCalibration": {
@@ -873,14 +873,14 @@
           ],
           "adjustments": [],
           "before": {
-            "home": 39.8,
+            "home": 39.9,
             "draw": 27.4,
-            "away": 32.8
+            "away": 32.7
           },
           "after": {
-            "home": 38.8,
-            "draw": 28.1,
-            "away": 33.1
+            "home": 38.9,
+            "draw": 28,
+            "away": 33
           },
           "scoreFeedback": {
             "applied": true,
@@ -890,9 +890,9 @@
               "score-model-direction-disagreement"
             ],
             "before": {
-              "home": 39.8,
+              "home": 39.9,
               "draw": 27.4,
-              "away": 32.8
+              "away": 32.7
             },
             "scoreImplied": {
               "home": 34.5,
@@ -900,9 +900,9 @@
               "away": 34.5
             },
             "after": {
-              "home": 38.8,
-              "draw": 28.1,
-              "away": 33.1
+              "home": 38.9,
+              "draw": 28,
+              "away": 33
             },
             "leaders": {
               "before": "1",
@@ -917,14 +917,14 @@
             "formalOutputChanged": false,
             "policy": "Keep score-distribution feedback, but skip every stacked outcome cooldown penalty; collect chronological evidence before activation.",
             "probabilities": {
-              "home": 38.8,
-              "draw": 28.1,
-              "away": 33.1
+              "home": 38.9,
+              "draw": 28,
+              "away": 33
             },
             "activeProbabilities": {
-              "home": 38.8,
-              "draw": 28.1,
-              "away": 33.1
+              "home": 38.9,
+              "draw": 28,
+              "away": 33
             },
             "activeLeader": "1",
             "shadowLeader": "1",
@@ -997,8 +997,8 @@
           "source": "model-estimated",
           "dataQuality": "model-estimated",
           "expectedYellowCards": {
-            "home": 1.5,
-            "away": 2,
+            "home": 1.4,
+            "away": 2.1,
             "total": 3.5
           },
           "redCardRisk": {
@@ -1184,7 +1184,7 @@
                 "eligibleAtCutoff": false,
                 "cutoffTime": "2026-10-05T14:00:00.000Z",
                 "kickoffTime": "2026-10-05T16:00:00.000Z",
-                "sourceObservedAt": "2026-10-05T07:33:10.228Z",
+                "sourceObservedAt": "2026-10-05T10:22:11.370Z",
                 "expectedPublishedAt": "2026-10-04T16:00:00.000Z"
               },
               "teamCards": {
@@ -1220,7 +1220,7 @@
                 "eligibleAtCutoff": false,
                 "cutoffTime": "2026-10-05T14:00:00.000Z",
                 "kickoffTime": "2026-10-05T16:00:00.000Z",
-                "sourceObservedAt": "2026-10-05T07:33:10.228Z",
+                "sourceObservedAt": "2026-10-05T10:22:11.370Z",
                 "expectedPublishedAt": "2026-10-05T14:45:00.000Z"
               },
               "injuries": {
@@ -1241,7 +1241,7 @@
                 "eligibleAtCutoff": false,
                 "cutoffTime": "2026-10-05T14:00:00.000Z",
                 "kickoffTime": "2026-10-05T16:00:00.000Z",
-                "sourceObservedAt": "2026-10-05T07:33:10.228Z",
+                "sourceObservedAt": "2026-10-05T10:22:11.370Z",
                 "expectedPublishedAt": "2026-10-05T10:00:00.000Z"
               },
               "xg": {
@@ -1412,7 +1412,7 @@
         "awayMatches": 0,
         "warehouseHistory": null,
         "historicalSource": null,
-        "lastUpdatedAt": "2026-10-05T06:09:25.474Z"
+        "lastUpdatedAt": "2026-10-05T07:51:04.640Z"
       },
       "form": {
         "version": "rolling-form-v2-asof",
@@ -1433,10 +1433,10 @@
             "beforeKickoffRows": 0,
             "afterDecisionRows": 0,
             "latestObservedAt": null,
-            "decisionAt": "2026-10-05T06:09:25.474Z",
+            "decisionAt": "2026-10-05T07:51:04.640Z",
             "temporalStatus": "empty",
             "sourceLabels": [],
-            "selectionHash": "947eccc101a97347dce3334a24e8de89af3983a76717203af47ff153349a4ccd"
+            "selectionHash": "d42f40c803d9ebee0c1f7cecca1c6fa6d98cea853ca76ba19ca5e800059d3ba9"
           },
           "wins": 0,
           "draws": 0,
@@ -1469,10 +1469,10 @@
             "beforeKickoffRows": 0,
             "afterDecisionRows": 0,
             "latestObservedAt": null,
-            "decisionAt": "2026-10-05T06:09:25.474Z",
+            "decisionAt": "2026-10-05T07:51:04.640Z",
             "temporalStatus": "empty",
             "sourceLabels": [],
-            "selectionHash": "26fcf03b54334322c75a5634463cba53a4926c72c64a3e6bed31edf21e2798f8"
+            "selectionHash": "6ed8cb82250da05b87e310e6e6b4d4522dcf0495a1a60f5b0138d29fc3f12444"
           },
           "wins": 0,
           "draws": 0,
@@ -1813,9 +1813,9 @@
       "internalDirectionalAudit": {
         "oneXTwo": {
           "market": {
-            "home": 61.5,
-            "draw": 23.3,
-            "away": 15.1
+            "home": 62.4,
+            "draw": 23,
+            "away": 14.6
           },
           "teamStrength": {
             "home": 35,
@@ -1839,12 +1839,12 @@
           },
           "worldCupPrior": null,
           "final": {
-            "home": 38.8,
-            "draw": 28.1,
-            "away": 33.1
+            "home": 38.9,
+            "draw": 28,
+            "away": 33
           },
           "unifiedPosterior": {
-            "home": 35.2,
+            "home": 35.3,
             "draw": 35,
             "away": 29.8
           }
@@ -1852,9 +1852,9 @@
         "handicap": {
           "line": "-1",
           "market": {
-            "home": 32.6,
-            "draw": 29.4,
-            "away": 38
+            "home": 32.8,
+            "draw": 30.3,
+            "away": 36.9
           },
           "poisson": {
             "home": 15.9,
@@ -1874,14 +1874,14 @@
         },
         "unifiedPosterior": {
           "version": "v76-paired-sample-policy-execution-clock-draw-aware-evidence-shrinkage-argmax",
-          "generatedAt": "2026-10-05T07:51:04.642Z",
+          "generatedAt": "2026-10-05T10:26:21.564Z",
           "selectedMarket": "HAD",
           "selectedCode": "1",
           "selectedLabelZh": "主胜 塞浦路斯",
           "selectedHandicapLine": "0",
-          "selectedProbability": 35.2,
-          "selectedGap": 0.2,
-          "selectedPosteriorScore": 0.2617,
+          "selectedProbability": 35.3,
+          "selectedGap": 0.3,
+          "selectedPosteriorScore": 0.2637,
           "selectedRecentReviewAdjustment": 0,
           "selectedRecentReviewReasons": [],
           "selectionPolicy": "calibrated-had-market-baseline",
@@ -1890,21 +1890,21 @@
             "version": "multi-factor-dynamic-evidence-v4",
             "eligible": false,
             "grade": "WATCH",
-            "evidenceScore": 9.2,
+            "evidenceScore": 9.3,
             "threshold": 66,
             "market": "HAD",
             "code": "1",
             "handicapLine": "0",
-            "odds": 1.44,
-            "modelProbability": 0.35166972149415326,
-            "marketProbability": 0.615346287992028,
-            "probabilityEdge": -0.2637,
-            "expectedValue": -0.4936,
-            "modelGap": 0.0015951238259717115,
+            "odds": 1.42,
+            "modelProbability": 0.35282119194798917,
+            "marketProbability": 0.623619496392284,
+            "probabilityEdge": -0.2708,
+            "expectedValue": -0.499,
+            "modelGap": 0.0031790974475386924,
             "minimumModelGap": 0.06,
             "dataQuality": 0.25,
             "components": {
-              "independentModel": 0.7,
+              "independentModel": 0.77,
               "modelSeparation": 0,
               "probabilityEdge": 0,
               "expectedValue": 0,
@@ -1978,8 +1978,8 @@
               "probabilityMove": null,
               "asianLineMovement": null,
               "companies": 0,
-              "updatedAt": "2026-10-05T07:50:25.634Z",
-              "cutoffAt": "2026-10-05T07:51:04.640Z"
+              "updatedAt": "2026-10-05T10:26:07.129Z",
+              "cutoffAt": "2026-10-05T10:26:21.563Z"
             },
             "upstream": {
               "marketType": "BEST",
@@ -2001,19 +2001,19 @@
               "HAD": {
                 "market": "HAD",
                 "code": "1",
-                "probability": 35.2,
-                "odds": 1.44,
-                "gap": 0.2,
-                "posteriorScore": 0.2617,
+                "probability": 35.3,
+                "odds": 1.42,
+                "gap": 0.3,
+                "posteriorScore": 0.2637,
                 "selectionPolicy": null
               },
               "HHAD": {
                 "market": "HHAD",
                 "code": "2",
                 "probability": 66.2,
-                "odds": 2.33,
+                "odds": 2.4,
                 "gap": 46.3,
-                "posteriorScore": 0.7893,
+                "posteriorScore": 0.7543,
                 "selectionPolicy": null
               }
             },
@@ -2021,27 +2021,27 @@
               "market": "HHAD",
               "code": "2",
               "probability": 66.2,
-              "odds": 2.33,
+              "odds": 2.4,
               "gap": 46.3,
-              "posteriorScore": 0.7893,
+              "posteriorScore": 0.7543,
               "selectionPolicy": null
             },
             "currentSelection": {
               "market": "HAD",
               "code": "1",
-              "probability": 35.2,
-              "odds": 1.44,
-              "gap": 0.2,
-              "posteriorScore": 0.2617,
+              "probability": 35.3,
+              "odds": 1.42,
+              "gap": 0.3,
+              "posteriorScore": 0.2637,
               "selectionPolicy": "calibrated-had-market-baseline"
             },
             "shadowSelection": {
               "market": "HAD",
               "code": "1",
-              "probability": 35.2,
-              "odds": 1.44,
-              "gap": 0.2,
-              "posteriorScore": 0.2617,
+              "probability": 35.3,
+              "odds": 1.42,
+              "gap": 0.3,
+              "posteriorScore": 0.2637,
               "selectionPolicy": null
             },
             "wouldChangeSelection": true
@@ -2056,27 +2056,27 @@
             "applied": true,
             "blockers": [],
             "leaderCode": "1",
-            "leaderProbability": 0.615346,
+            "leaderProbability": 0.623619,
             "selectedCode": "1",
-            "selectedSupport": 0.615346,
+            "selectedSupport": 0.623619,
             "directionGap": 0,
             "materialDirectionConflict": false,
             "rawSelection": {
               "market": "HHAD",
               "code": "2",
               "probability": 66.2,
-              "odds": 2.33,
+              "odds": 2.4,
               "gap": 46.3,
-              "posteriorScore": 0.7893,
+              "posteriorScore": 0.7543,
               "selectionPolicy": null
             },
             "activeSelection": {
               "market": "HAD",
               "code": "1",
-              "probability": 35.2,
-              "odds": 1.44,
-              "gap": 0.2,
-              "posteriorScore": 0.2617,
+              "probability": 35.3,
+              "odds": 1.42,
+              "gap": 0.3,
+              "posteriorScore": 0.2637,
               "selectionPolicy": "calibrated-had-market-baseline"
             }
           },
@@ -2115,11 +2115,11 @@
             "independentAgreement": null,
             "modelComponentCount": 3,
             "withinModelAgreement": 1,
-            "componentDispersion": 0.016363,
-            "independentSideGap": 0.0283,
+            "componentDispersion": 0.016667,
+            "independentSideGap": 0.0293,
             "drawAdjustment": 0.3,
             "drawSignals": {
-              "competitiveBalance": 0.834,
+              "competitiveBalance": 0.828,
               "scoreDraw": 0.31,
               "poissonDraw": 0.2687,
               "leagueDrawRate": null,
@@ -2175,14 +2175,15 @@
               "market": "HHAD",
               "code": "2",
               "probability": 66.2,
-              "odds": 2.33,
+              "odds": 2.4,
               "gap": 46.3,
-              "posteriorScore": 0.7893,
+              "posteriorScore": 0.7543,
               "worldCupContextBoost": 0,
-              "recentReviewAdjustment": -0.077,
+              "recentReviewAdjustment": -0.112,
               "recentReviewReasons": [
                 "prefer-1x2-when-close",
-                "one-goal-margin-trap"
+                "one-goal-margin-trap",
+                "weak-hhad-support"
               ],
               "multiFactorEvidence": {
                 "version": "multi-factor-dynamic-evidence-v4",
@@ -2191,13 +2192,13 @@
                 "market": "HHAD",
                 "code": "2",
                 "handicapLine": "-1",
-                "odds": 2.33,
-                "evidenceScore": 68.3,
+                "odds": 2.4,
+                "evidenceScore": 67,
                 "threshold": 74,
                 "modelProbability": 0.6623002122732068,
-                "marketProbability": 0.380497114217689,
-                "probabilityEdge": 0.2818,
-                "expectedValue": 0.5432,
+                "marketProbability": 0.368893879842785,
+                "probabilityEdge": 0.2934,
+                "expectedValue": 0.5895,
                 "modelGap": 0.4625585757121472,
                 "dataQuality": 0.25,
                 "components": {
@@ -2211,7 +2212,7 @@
                   "dataQuality": 0,
                   "upstreamGate": 0
                 },
-                "penalty": 4.73,
+                "penalty": 5.99,
                 "supportingFactors": [
                   "independent-model-probability",
                   "model-separation",
@@ -2247,7 +2248,7 @@
                   "severeMissingCount": 0,
                   "riskTagsCount": 0,
                   "trustPenalty": 7,
-                  "riskPenalty": 0.077,
+                  "riskPenalty": 0.112,
                   "inputSparseMarketFallback": true
                 }
               }
@@ -2256,9 +2257,9 @@
               "market": "HAD",
               "code": "X",
               "probability": 35,
-              "odds": 3.8,
+              "odds": 3.85,
               "gap": 0,
-              "posteriorScore": 0.3193,
+              "posteriorScore": 0.3188,
               "worldCupContextBoost": 0,
               "recentReviewAdjustment": 0,
               "recentReviewReasons": [],
@@ -2269,17 +2270,17 @@
                 "market": "HAD",
                 "code": "X",
                 "handicapLine": "0",
-                "odds": 3.8,
+                "odds": 3.85,
                 "evidenceScore": 42.6,
                 "threshold": 74,
-                "modelProbability": 0.35007459766818155,
-                "marketProbability": 0.23318385650224216,
-                "probabilityEdge": 0.1169,
-                "expectedValue": 0.3303,
+                "modelProbability": 0.3496420945004505,
+                "marketProbability": 0.23001030776027093,
+                "probabilityEdge": 0.1196,
+                "expectedValue": 0.3461,
                 "modelGap": 0,
                 "dataQuality": 0.25,
                 "components": {
-                  "independentModel": 0.6,
+                  "independentModel": 0.58,
                   "modelSeparation": 0,
                   "probabilityEdge": 14,
                   "expectedValue": 12,
@@ -2332,10 +2333,10 @@
             {
               "market": "HAD",
               "code": "1",
-              "probability": 35.2,
-              "odds": 1.44,
-              "gap": 0.2,
-              "posteriorScore": 0.2617,
+              "probability": 35.3,
+              "odds": 1.42,
+              "gap": 0.3,
+              "posteriorScore": 0.2637,
               "worldCupContextBoost": 0,
               "recentReviewAdjustment": 0,
               "recentReviewReasons": [],
@@ -2346,17 +2347,17 @@
                 "market": "HAD",
                 "code": "1",
                 "handicapLine": "0",
-                "odds": 1.44,
-                "evidenceScore": 9.2,
+                "odds": 1.42,
+                "evidenceScore": 9.3,
                 "threshold": 66,
-                "modelProbability": 0.35166972149415326,
-                "marketProbability": 0.615346287992028,
-                "probabilityEdge": -0.2637,
-                "expectedValue": -0.4936,
-                "modelGap": 0.0015951238259717115,
+                "modelProbability": 0.35282119194798917,
+                "marketProbability": 0.623619496392284,
+                "probabilityEdge": -0.2708,
+                "expectedValue": -0.499,
+                "modelGap": 0.0031790974475386924,
                 "dataQuality": 0.25,
                 "components": {
-                  "independentModel": 0.7,
+                  "independentModel": 0.77,
                   "modelSeparation": 0,
                   "probabilityEdge": 0,
                   "expectedValue": 0,
@@ -2410,9 +2411,9 @@
               "market": "HAD",
               "code": "2",
               "probability": 29.8,
-              "odds": 5.85,
+              "odds": 6.05,
               "gap": 0,
-              "posteriorScore": 0.2154,
+              "posteriorScore": 0.2147,
               "worldCupContextBoost": 0,
               "recentReviewAdjustment": 0,
               "recentReviewReasons": [],
@@ -2423,13 +2424,13 @@
                 "market": "HAD",
                 "code": "2",
                 "handicapLine": "0",
-                "odds": 5.85,
+                "odds": 6.05,
                 "evidenceScore": 38,
                 "threshold": 74,
-                "modelProbability": 0.29825568083766524,
-                "marketProbability": 0.15146985550572994,
-                "probabilityEdge": 0.1468,
-                "expectedValue": 0.7448,
+                "modelProbability": 0.29753671355156025,
+                "marketProbability": 0.14637019584744515,
+                "probabilityEdge": 0.1512,
+                "expectedValue": 0.8001,
                 "modelGap": 0,
                 "dataQuality": 0.25,
                 "components": {
@@ -2486,7 +2487,7 @@
               "market": "HHAD",
               "code": "X",
               "probability": 20,
-              "odds": 3.02,
+              "odds": 2.92,
               "gap": 0,
               "posteriorScore": 0.1139,
               "worldCupContextBoost": 0,
@@ -2501,13 +2502,13 @@
                 "market": "HHAD",
                 "code": "X",
                 "handicapLine": "-1",
-                "odds": 3.02,
+                "odds": 2.92,
                 "evidenceScore": 3.6,
                 "threshold": 74,
                 "modelProbability": 0.1997416365610596,
-                "marketProbability": 0.2935623430884819,
-                "probabilityEdge": -0.0938,
-                "expectedValue": -0.3968,
+                "marketProbability": 0.30320044918585065,
+                "probabilityEdge": -0.1035,
+                "expectedValue": -0.4168,
                 "modelGap": 0,
                 "dataQuality": 0.25,
                 "components": {
@@ -2567,7 +2568,7 @@
               "market": "HHAD",
               "code": "1",
               "probability": 13.8,
-              "odds": 2.72,
+              "odds": 2.7,
               "gap": 0,
               "posteriorScore": 0.0521,
               "worldCupContextBoost": 0,
@@ -2582,13 +2583,13 @@
                 "market": "HHAD",
                 "code": "1",
                 "handicapLine": "-1",
-                "odds": 2.72,
+                "odds": 2.7,
                 "evidenceScore": 3.6,
                 "threshold": 74,
                 "modelProbability": 0.13795815116573365,
-                "marketProbability": 0.32594054269382916,
-                "probabilityEdge": -0.188,
-                "expectedValue": -0.6248,
+                "marketProbability": 0.3279056709713644,
+                "probabilityEdge": -0.1899,
+                "expectedValue": -0.6275,
                 "modelGap": 0,
                 "dataQuality": 0.25,
                 "components": {
@@ -2652,12 +2653,12 @@
             "band": "low",
             "priceIndependent": true,
             "components": {
-              "probabilityStrength": 0.152,
-              "separationStrength": 0.009,
-              "evidenceQuality": 0.092,
+              "probabilityStrength": 0.155,
+              "separationStrength": 0.018,
+              "evidenceQuality": 0.093,
               "dataQuality": 0.25,
               "evidenceCoverage": 0,
-              "agreement": 0.209,
+              "agreement": 0.21,
               "independentAgreement": 0,
               "freshnessQuality": 1,
               "historicalReliability": 0
@@ -2670,20 +2671,20 @@
               "sparseInput": 0.045
             },
             "publicMetrics": {
-              "modelProbability": 0.35166972149415326,
+              "modelProbability": 0.35282119194798917,
               "evidenceCompleteness": 0,
               "evidenceCompletenessBasis": "input-coverage-ratio",
               "dataQuality": 0.25,
-              "evidenceScore": 0.092,
+              "evidenceScore": 0.09300000000000001,
               "marketConsistency": "aligned",
               "marketConsistencyBasis": "auditable-market-leader",
               "calibrationSample": 0,
               "freshnessQuality": 1,
-              "freshnessObservedAt": "2026-10-05T07:50:25.634Z",
-              "freshnessSourceUpdatedAt": "2026-10-05T07:50:25.634Z",
-              "freshnessAsOf": "2026-10-05T07:50:25.634Z",
-              "freshnessEvaluatedAt": "2026-10-05T07:51:04.640Z",
-              "freshnessAgeSeconds": 39,
+              "freshnessObservedAt": "2026-10-05T10:26:07.129Z",
+              "freshnessSourceUpdatedAt": "2026-10-05T10:26:07.129Z",
+              "freshnessAsOf": "2026-10-05T10:26:07.129Z",
+              "freshnessEvaluatedAt": "2026-10-05T10:26:21.563Z",
+              "freshnessAgeSeconds": 14,
               "freshnessSource": "500.com:HAD",
               "freshnessBasis": "observed-at"
             }
@@ -2701,71 +2702,71 @@
         "events": [
           {
             "operation": "iso",
-            "millis": 1791186664638
+            "millis": 1791195981561
           },
           {
             "operation": "iso",
-            "millis": 1791186664639
+            "millis": 1791195981562
           },
           {
             "operation": "iso",
-            "millis": 1791186664639
+            "millis": 1791195981562
           },
           {
             "operation": "iso",
-            "millis": 1791186664640
+            "millis": 1791195981563
           },
           {
             "operation": "millis",
-            "millis": 1791186664641
+            "millis": 1791195981564
           },
           {
             "operation": "millis",
-            "millis": 1791186664641
+            "millis": 1791195981564
           },
           {
             "operation": "millis",
-            "millis": 1791186664641
+            "millis": 1791195981564
           },
           {
             "operation": "millis",
-            "millis": 1791186664642
+            "millis": 1791195981564
           },
           {
             "operation": "millis",
-            "millis": 1791186664642
+            "millis": 1791195981564
           },
           {
             "operation": "millis",
-            "millis": 1791186664642
+            "millis": 1791195981564
           },
           {
             "operation": "millis",
-            "millis": 1791186664642
+            "millis": 1791195981564
           },
           {
             "operation": "millis",
-            "millis": 1791186664642
+            "millis": 1791195981564
           },
           {
             "operation": "iso",
-            "millis": 1791186664642
+            "millis": 1791195981564
           }
         ],
         "sourceVerified": false,
         "scope": "local calculation clock reads; not provider observation, publication time or source attestation",
-        "contentHash": "8dadf5ff24937d53ae924f76c882b78c15145051361a3fa1eace194c89627edc"
+        "contentHash": "a4e86c6183c0d240d6d4436ba6779584d77f47ba8ea52155b968bac82c408aac"
       }
     },
     "odds": {
-      "odds1": 1.44,
-      "oddsX": 3.8,
-      "odds2": 5.85
+      "odds1": 1.42,
+      "oddsX": 3.85,
+      "odds2": 6.05
     },
     "handicapOdds": {
-      "odds1": 2.72,
-      "oddsX": 3.02,
-      "odds2": 2.33
+      "odds1": 2.7,
+      "oddsX": 2.92,
+      "odds2": 2.4
     },
     "predictions": [
       {
@@ -2881,12 +2882,12 @@
           "band": "low",
           "priceIndependent": true,
           "components": {
-            "probabilityStrength": 0.152,
-            "separationStrength": 0.009,
-            "evidenceQuality": 0.092,
+            "probabilityStrength": 0.155,
+            "separationStrength": 0.018,
+            "evidenceQuality": 0.093,
             "dataQuality": 0.25,
             "evidenceCoverage": 0,
-            "agreement": 0.209,
+            "agreement": 0.21,
             "independentAgreement": 0,
             "freshnessQuality": 1,
             "historicalReliability": 0
@@ -2899,20 +2900,20 @@
             "sparseInput": 0.045
           },
           "publicMetrics": {
-            "modelProbability": 0.35166972149415326,
+            "modelProbability": 0.35282119194798917,
             "evidenceCompleteness": 0,
             "evidenceCompletenessBasis": "input-coverage-ratio",
             "dataQuality": 0.25,
-            "evidenceScore": 0.092,
+            "evidenceScore": 0.09300000000000001,
             "marketConsistency": "aligned",
             "marketConsistencyBasis": "auditable-market-leader",
             "calibrationSample": 0,
             "freshnessQuality": 1,
-            "freshnessObservedAt": "2026-10-05T07:50:25.634Z",
-            "freshnessSourceUpdatedAt": "2026-10-05T07:50:25.634Z",
-            "freshnessAsOf": "2026-10-05T07:50:25.634Z",
-            "freshnessEvaluatedAt": "2026-10-05T07:51:04.640Z",
-            "freshnessAgeSeconds": 39,
+            "freshnessObservedAt": "2026-10-05T10:26:07.129Z",
+            "freshnessSourceUpdatedAt": "2026-10-05T10:26:07.129Z",
+            "freshnessAsOf": "2026-10-05T10:26:07.129Z",
+            "freshnessEvaluatedAt": "2026-10-05T10:26:21.563Z",
+            "freshnessAgeSeconds": 14,
             "freshnessSource": "500.com:HAD",
             "freshnessBasis": "observed-at"
           }
@@ -2921,21 +2922,21 @@
           "version": "multi-factor-dynamic-evidence-v4",
           "eligible": false,
           "grade": "WATCH",
-          "evidenceScore": 9.2,
+          "evidenceScore": 9.3,
           "threshold": 66,
           "market": "HAD",
           "code": "1",
           "handicapLine": "0",
-          "odds": 1.44,
-          "modelProbability": 0.35166972149415326,
-          "marketProbability": 0.615346287992028,
-          "probabilityEdge": -0.2637,
-          "expectedValue": -0.4936,
-          "modelGap": 0.0015951238259717115,
+          "odds": 1.42,
+          "modelProbability": 0.35282119194798917,
+          "marketProbability": 0.623619496392284,
+          "probabilityEdge": -0.2708,
+          "expectedValue": -0.499,
+          "modelGap": 0.0031790974475386924,
           "minimumModelGap": 0.06,
           "dataQuality": 0.25,
           "components": {
-            "independentModel": 0.7,
+            "independentModel": 0.77,
             "modelSeparation": 0,
             "probabilityEdge": 0,
             "expectedValue": 0,
@@ -3009,8 +3010,8 @@
             "probabilityMove": null,
             "asianLineMovement": null,
             "companies": 0,
-            "updatedAt": "2026-10-05T07:50:25.634Z",
-            "cutoffAt": "2026-10-05T07:51:04.640Z"
+            "updatedAt": "2026-10-05T10:26:07.129Z",
+            "cutoffAt": "2026-10-05T10:26:21.563Z"
           },
           "upstream": {
             "marketType": "BEST",
@@ -3027,11 +3028,11 @@
           "eligible": false,
           "grade": "WITHHOLD",
           "statisticsTrack": "live-model",
-          "evidenceScore": 9.2,
+          "evidenceScore": 9.3,
           "minimumEvidenceScore": 45,
-          "probabilityEdge": -0.2637,
+          "probabilityEdge": -0.2708,
           "minimumProbabilityEdge": 0.015,
-          "expectedValue": -0.4936,
+          "expectedValue": -0.499,
           "minimumExpectedValue": 0,
           "dataQuality": 0.25,
           "minimumDataQuality": 0.5,
@@ -3074,7 +3075,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T10:22:11.370Z",
+      "updatedAt": "2026-10-05T10:26:07.129Z",
       "sourceMatchId": "2041805",
       "fixtureId": "1398658",
       "matchNo": "周一001",
@@ -3086,30 +3087,30 @@
       "handicapLine": "-1",
       "externalOdds": {
         "source": "500.com",
-        "odds1": 1.44,
-        "oddsX": 3.8,
-        "odds2": 5.85,
+        "odds1": 1.42,
+        "oddsX": 3.85,
+        "odds2": 6.05,
         "summary": {
-          "zh": "500彩票网胜平负参考：1.44 / 3.80 / 5.85",
-          "en": "500.com 1X2 reference: 1.44 / 3.80 / 5.85"
+          "zh": "500彩票网胜平负参考：1.42 / 3.85 / 6.05",
+          "en": "500.com 1X2 reference: 1.42 / 3.85 / 6.05"
         }
       },
       "bookmakerOdds": {
         "had": {
-          "odds1": 1.44,
-          "oddsX": 3.8,
-          "odds2": 5.85
+          "odds1": 1.42,
+          "oddsX": 3.85,
+          "odds2": 6.05
         },
         "hhad": {
-          "odds1": 2.72,
-          "oddsX": 3.02,
-          "odds2": 2.33
+          "odds1": 2.7,
+          "oddsX": 2.92,
+          "odds2": 2.4
         }
       },
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T10:20:05.731Z",
+        "updatedAt": "2026-10-05T10:22:30.610Z",
         "sourceMatchId": "2041805",
         "matchId": "fivehundred_2041805",
         "matchNo": "周一001",
@@ -3143,7 +3144,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T16:00:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-04T16:00:00.000Z"
             },
             "teamCards": {
@@ -3179,7 +3180,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T16:00:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-05T14:45:00.000Z"
             },
             "injuries": {
@@ -3200,7 +3201,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T16:00:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-05T10:00:00.000Z"
             },
             "xg": {
@@ -3423,14 +3424,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T10:22:19.414Z",
+        "lastCheckedAt": "2026-10-05T10:26:15.191Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T10:22:19.414Z",
+          "checkedAt": "2026-10-05T10:26:15.191Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -3614,21 +3615,21 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsObservedAt": "2026-10-05T10:22:11.370Z",
-    "oddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+    "oddsObservedAt": "2026-10-05T10:26:07.129Z",
+    "oddsUpdatedAt": "2026-10-05T10:26:07.129Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "oddsMarketProvenance": null,
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsObservedAt": "2026-10-05T10:22:11.370Z",
-    "handicapOddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+    "handicapOddsObservedAt": "2026-10-05T10:26:07.129Z",
+    "handicapOddsUpdatedAt": "2026-10-05T10:26:07.129Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapOddsMarketProvenance": null,
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T10:22:20.754Z",
+      "generatedAt": "2026-10-05T10:26:16.557Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -3823,24 +3824,24 @@
       "trainingSignature": "none|application:historical-training-application-v3-signed-seed-trusted-event-incremental",
       "worldCupPriorSignature": null,
       "scoreCalibrationSignature": null,
-      "generatedAt": "2026-10-05T07:51:04.640Z",
-      "modelGeneratedAt": "2026-10-05T07:51:04.640Z",
+      "generatedAt": "2026-10-05T10:26:21.563Z",
+      "modelGeneratedAt": "2026-10-05T10:26:21.563Z",
       "unifiedPosteriorGeneratedAt": null,
       "sourceCycleId": "sporttery-full-sync:2026-10-05T03:11:14.233Z",
-      "decisionId": "decision_kzkps3",
-      "decisionRevision": 5,
-      "decisionGeneratedAt": "2026-10-05T07:51:04.640Z",
-      "updatedAt": "2026-10-05T10:22:24.444Z",
-      "syncCapturedAt": "2026-10-05T07:50:55.997Z",
-      "publicationFinalizedAt": "2026-10-05T07:51:04.994Z",
+      "decisionId": "decision_u302p3",
+      "decisionRevision": 6,
+      "decisionGeneratedAt": "2026-10-05T10:26:21.563Z",
+      "updatedAt": "2026-10-05T10:26:21.792Z",
+      "syncCapturedAt": "2026-10-05T10:26:15.880Z",
+      "publicationFinalizedAt": "2026-10-05T10:26:21.792Z",
       "publicationGate": {
         "version": "prediction-publication-cutoff-gate-v1",
-        "syncCapturedAt": "2026-10-05T07:50:55.997Z",
-        "finalizedAt": "2026-10-05T07:51:04.994Z",
+        "syncCapturedAt": "2026-10-05T10:26:15.880Z",
+        "finalizedAt": "2026-10-05T10:26:21.792Z",
         "cutoffTime": "2026-10-05 22:00:00",
         "crossedCutoffDuringSync": false,
         "syncStartedAfterCutoff": false,
-        "candidateDecisionGeneratedAt": "2026-10-05T07:51:04.640Z",
+        "candidateDecisionGeneratedAt": "2026-10-05T10:26:21.563Z",
         "trustedExistingPreCutoffDecision": true,
         "status": "allowed",
         "reasonCode": "finalized-before-cutoff"
@@ -4048,8 +4049,8 @@
       "calibrationVersion": "rolling-calibration-v1",
       "featureSnapshot": {
         "version": "prediction-feature-snapshot-v4-clock-lineage",
-        "capturedAt": "2026-10-05T07:51:04.640Z",
-        "modelGeneratedAt": "2026-10-05T07:51:04.640Z",
+        "capturedAt": "2026-10-05T10:26:21.563Z",
+        "modelGeneratedAt": "2026-10-05T10:26:21.563Z",
         "sourceCycleId": "sporttery-full-sync:2026-10-05T03:11:14.233Z",
         "modelVersion": "unified-poisson-bayes-v76",
         "calibrationVersion": "rolling-calibration-v1",
@@ -4060,30 +4061,30 @@
         "market": {
           "had": {
             "odds": {
-              "odds1": 1.44,
-              "oddsX": 3.8,
-              "odds2": 5.85
+              "odds1": 1.42,
+              "oddsX": 3.85,
+              "odds2": 6.05
             },
             "source": "500.com:HAD",
             "sourceMethod": "500-fallback",
-            "observedAt": "2026-10-05T07:50:25.634Z",
+            "observedAt": "2026-10-05T10:26:07.129Z",
             "receivedAt": null,
-            "updatedAt": "2026-10-05T07:50:25.634Z",
+            "updatedAt": "2026-10-05T10:26:07.129Z",
             "provenance": null,
             "provenanceHash": null
           },
           "hhad": {
             "handicapLine": "-1",
             "odds": {
-              "odds1": 2.72,
-              "oddsX": 3.02,
-              "odds2": 2.33
+              "odds1": 2.7,
+              "oddsX": 2.92,
+              "odds2": 2.4
             },
             "source": "500.com:HHAD",
             "sourceMethod": "500-fallback",
-            "observedAt": "2026-10-05T07:50:25.634Z",
+            "observedAt": "2026-10-05T10:26:07.129Z",
             "receivedAt": null,
-            "updatedAt": "2026-10-05T07:50:25.634Z",
+            "updatedAt": "2026-10-05T10:26:07.129Z",
             "provenance": null,
             "provenanceHash": null
           },
@@ -4101,14 +4102,14 @@
                 "stage": "base-outcome-blend",
                 "used": false,
                 "weight": 0,
-                "receiptHash": "fd0fac204b29096bb5ed9f7741b758c4aefff6823010eb8bbcca3ece95abbeb2"
+                "receiptHash": "b1539309f243dcb098776bf61927649747d6a5fb1fa44c4a509526d2feeda097"
               },
               {
                 "key": "externalMarket",
                 "stage": "base-outcome-blend",
                 "used": true,
                 "weight": 0.15,
-                "receiptHash": "fd0fac204b29096bb5ed9f7741b758c4aefff6823010eb8bbcca3ece95abbeb2",
+                "receiptHash": "b1539309f243dcb098776bf61927649747d6a5fb1fa44c4a509526d2feeda097",
                 "poolCode": "HAD",
                 "source": "500.com:HAD"
               },
@@ -4117,7 +4118,7 @@
                 "stage": "form-lambda-blend",
                 "used": false,
                 "weight": 0,
-                "receiptHash": "be49a3f65164034bb7b93ffe8eef89ebc20b7270cdab5d1659143490eefd7638",
+                "receiptHash": "1ca4677d19e3db2d7e157a3680198189cd332d41cb3240fc66a1bfe72ca9f129",
                 "sources": [],
                 "fallbackMetrics": 0
               }
@@ -4150,10 +4151,10 @@
                 "beforeKickoffRows": 0,
                 "afterDecisionRows": 0,
                 "latestObservedAt": null,
-                "decisionAt": "2026-10-05T06:09:25.474Z",
+                "decisionAt": "2026-10-05T07:51:04.640Z",
                 "temporalStatus": "empty",
                 "sourceLabels": [],
-                "selectionHash": "947eccc101a97347dce3334a24e8de89af3983a76717203af47ff153349a4ccd"
+                "selectionHash": "d42f40c803d9ebee0c1f7cecca1c6fa6d98cea853ca76ba19ca5e800059d3ba9"
               },
               "wins": 0,
               "draws": 0,
@@ -4186,10 +4187,10 @@
                 "beforeKickoffRows": 0,
                 "afterDecisionRows": 0,
                 "latestObservedAt": null,
-                "decisionAt": "2026-10-05T06:09:25.474Z",
+                "decisionAt": "2026-10-05T07:51:04.640Z",
                 "temporalStatus": "empty",
                 "sourceLabels": [],
-                "selectionHash": "26fcf03b54334322c75a5634463cba53a4926c72c64a3e6bed31edf21e2798f8"
+                "selectionHash": "6ed8cb82250da05b87e310e6e6b4d4522dcf0495a1a60f5b0138d29fc3f12444"
               },
               "wins": 0,
               "draws": 0,
@@ -4361,12 +4362,12 @@
             "best": null
           }
         },
-        "hash": "3ic1h5"
+        "hash": "1jip69o"
       },
-      "featureSnapshotHash": "3ic1h5",
+      "featureSnapshotHash": "1jip69o",
       "updateReason": {
-        "zh": "官方 SP 或让球盘没有实质变化，原赛前方向继续保留；分析版本可更新，但不重算推荐方向。",
-        "en": "Official SP and handicap signals did not materially change, so the pre-match direction is preserved; analysis versions may update, but the recommendation direction is not recalculated."
+        "zh": "赛前赔率或让球信号发生实质变化，已生成新的临场预测；开赛后将锁定这版记录。",
+        "en": "Pre-match odds, handicap signals, or a trusted provider observation changed materially, so a new late forecast was generated and will be locked after kickoff."
       },
       "immutableAnalysisReferenceDecision": {
         "version": "immutable-analysis-reference-decision-v1",
@@ -4411,8 +4412,8 @@
         "phases": {
           "mid": 6
         },
-        "latestAt": "2026-10-05T10:22:20.081Z",
-        "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|1.44/3.80/5.85|-1:2.72/3.02/2.33|--"
+        "latestAt": "2026-10-05T10:26:15.880Z",
+        "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|1.42/3.85/6.05|-1:2.70/2.92/2.40|--"
       }
     },
     "prospectiveForecastInput": {
@@ -4432,28 +4433,28 @@
       "awayTeamName": "拉脱维亚",
       "leagueId": "league_141kv73",
       "odds": {
-        "odds1": 1.44,
-        "oddsX": 3.8,
-        "odds2": 5.85
+        "odds1": 1.42,
+        "oddsX": 3.85,
+        "odds2": 6.05
       },
       "oddsSource": "500.com:HAD",
-      "oddsObservedAt": "2026-10-05T10:22:11.370Z",
-      "oddsUpdatedAt": "2026-10-05T10:22:11.370Z",
-      "sourceCycleId": "sporttery-full-sync:2026-10-05T10:22:20.081Z",
+      "oddsObservedAt": "2026-10-05T10:26:07.129Z",
+      "oddsUpdatedAt": "2026-10-05T10:26:07.129Z",
+      "sourceCycleId": "sporttery-full-sync:2026-10-05T10:26:15.880Z",
       "handicapOdds": {
-        "odds1": 2.72,
-        "oddsX": 3.02,
-        "odds2": 2.33
+        "odds1": 2.7,
+        "oddsX": 2.92,
+        "odds2": 2.4
       },
       "handicapLine": "-1",
       "handicapOddsSource": "500.com:HHAD",
       "handicapOddsPoolCode": "HHAD",
-      "handicapOddsObservedAt": "2026-10-05T10:22:11.370Z",
-      "handicapOddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+      "handicapOddsObservedAt": "2026-10-05T10:26:07.129Z",
+      "handicapOddsUpdatedAt": "2026-10-05T10:26:07.129Z",
       "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
       "probabilityModel": {
         "version": "unified-poisson-bayes-v76",
-        "generatedAt": "2026-10-05T10:22:24.225Z",
+        "generatedAt": "2026-10-05T10:26:21.589Z",
         "sourceMatchId": "2041805",
         "eventVersion": "2026-10-06T00:00:00+08:00",
         "oneXTwo": {
@@ -4485,9 +4486,9 @@
       "externalSignals": {
         "bookmakerOdds": {
           "hhad": {
-            "odds1": 2.72,
-            "oddsX": 3.02,
-            "odds2": 2.33
+            "odds1": 2.7,
+            "oddsX": 2.92,
+            "odds2": 2.4
           }
         }
       }
@@ -7577,7 +7578,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T10:22:11.370Z",
+      "updatedAt": "2026-10-05T10:26:07.129Z",
       "sourceMatchId": "2041806",
       "fixtureId": "1398656",
       "matchNo": "周一002",
@@ -7612,7 +7613,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T10:20:05.731Z",
+        "updatedAt": "2026-10-05T10:22:30.610Z",
         "sourceMatchId": "2041806",
         "matchId": "fivehundred_2041806",
         "matchNo": "周一002",
@@ -7646,7 +7647,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -7682,7 +7683,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -7703,7 +7704,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -7926,14 +7927,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T10:22:19.414Z",
+        "lastCheckedAt": "2026-10-05T10:26:15.191Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T10:22:19.414Z",
+          "checkedAt": "2026-10-05T10:26:15.191Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -8118,21 +8119,21 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsObservedAt": "2026-10-05T10:22:11.370Z",
-    "oddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+    "oddsObservedAt": "2026-10-05T10:26:07.129Z",
+    "oddsUpdatedAt": "2026-10-05T10:26:07.129Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "oddsMarketProvenance": null,
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsObservedAt": "2026-10-05T10:22:11.370Z",
-    "handicapOddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+    "handicapOddsObservedAt": "2026-10-05T10:26:07.129Z",
+    "handicapOddsUpdatedAt": "2026-10-05T10:26:07.129Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapOddsMarketProvenance": null,
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T10:22:20.754Z",
+      "generatedAt": "2026-10-05T10:26:16.557Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -8334,7 +8335,7 @@
       "decisionId": "decision_bknd4g",
       "decisionRevision": 3,
       "decisionGeneratedAt": "2026-10-05T09:08:25.414Z",
-      "updatedAt": "2026-10-05T10:22:24.445Z",
+      "updatedAt": "2026-10-05T10:26:21.793Z",
       "syncCapturedAt": "2026-10-05T09:08:20.837Z",
       "publicationFinalizedAt": "2026-10-05T09:08:25.652Z",
       "publicationGate": {
@@ -8915,7 +8916,7 @@
         "phases": {
           "baseline": 6
         },
-        "latestAt": "2026-10-05T10:22:20.081Z",
+        "latestAt": "2026-10-05T10:26:15.880Z",
         "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|1.32/4.70/6.30|-1:2.09/3.50/2.74|--"
       }
     },
@@ -8941,9 +8942,9 @@
         "odds2": 6.3
       },
       "oddsSource": "500.com:HAD",
-      "oddsObservedAt": "2026-10-05T10:22:11.370Z",
-      "oddsUpdatedAt": "2026-10-05T10:22:11.370Z",
-      "sourceCycleId": "sporttery-full-sync:2026-10-05T10:22:20.081Z",
+      "oddsObservedAt": "2026-10-05T10:26:07.129Z",
+      "oddsUpdatedAt": "2026-10-05T10:26:07.129Z",
+      "sourceCycleId": "sporttery-full-sync:2026-10-05T10:26:15.880Z",
       "handicapOdds": {
         "odds1": 2.09,
         "oddsX": 3.5,
@@ -8952,12 +8953,12 @@
       "handicapLine": "-1",
       "handicapOddsSource": "500.com:HHAD",
       "handicapOddsPoolCode": "HHAD",
-      "handicapOddsObservedAt": "2026-10-05T10:22:11.370Z",
-      "handicapOddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+      "handicapOddsObservedAt": "2026-10-05T10:26:07.129Z",
+      "handicapOddsUpdatedAt": "2026-10-05T10:26:07.129Z",
       "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
       "probabilityModel": {
         "version": "unified-poisson-bayes-v76",
-        "generatedAt": "2026-10-05T10:22:24.233Z",
+        "generatedAt": "2026-10-05T10:26:21.596Z",
         "sourceMatchId": "2041806",
         "eventVersion": "2026-10-06T02:45:00+08:00",
         "oneXTwo": {
@@ -12055,7 +12056,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T10:22:17.398Z",
+      "updatedAt": "2026-10-05T10:26:13.404Z",
       "sourceMatchId": "2041807",
       "fixtureId": "1398612",
       "matchNo": "周一003",
@@ -12090,7 +12091,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T10:20:05.731Z",
+        "updatedAt": "2026-10-05T10:22:30.610Z",
         "sourceMatchId": "2041807",
         "matchId": "fivehundred_2041807",
         "matchNo": "周一003",
@@ -12124,7 +12125,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:51.757Z",
+              "sourceObservedAt": "2026-10-05T10:22:17.398Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -12160,7 +12161,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:51.757Z",
+              "sourceObservedAt": "2026-10-05T10:22:17.398Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -12181,7 +12182,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:51.757Z",
+              "sourceObservedAt": "2026-10-05T10:22:17.398Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -12404,7 +12405,7 @@
       "weather": {
         "source": "open-meteo",
         "provider": "open-meteo",
-        "updatedAt": "2026-10-05T10:22:17.398Z",
+        "updatedAt": "2026-10-05T10:26:13.404Z",
         "forecastTime": "2026-10-05T19:00Z",
         "verified": false,
         "confidence": "estimated-location",
@@ -12438,14 +12439,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T10:22:19.414Z",
+        "lastCheckedAt": "2026-10-05T10:26:15.191Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T10:22:19.414Z",
+          "checkedAt": "2026-10-05T10:26:15.191Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -12630,21 +12631,21 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsObservedAt": "2026-10-05T10:22:11.370Z",
-    "oddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+    "oddsObservedAt": "2026-10-05T10:26:07.129Z",
+    "oddsUpdatedAt": "2026-10-05T10:26:07.129Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "oddsMarketProvenance": null,
     "handicapLine": "+1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsObservedAt": "2026-10-05T10:22:11.370Z",
-    "handicapOddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+    "handicapOddsObservedAt": "2026-10-05T10:26:07.129Z",
+    "handicapOddsUpdatedAt": "2026-10-05T10:26:07.129Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapOddsMarketProvenance": null,
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T10:22:20.754Z",
+      "generatedAt": "2026-10-05T10:26:16.557Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -12846,7 +12847,7 @@
       "decisionId": "decision_166yruj",
       "decisionRevision": 5,
       "decisionGeneratedAt": "2026-10-05T07:51:04.648Z",
-      "updatedAt": "2026-10-05T10:22:24.446Z",
+      "updatedAt": "2026-10-05T10:26:21.794Z",
       "syncCapturedAt": "2026-10-05T07:50:55.997Z",
       "publicationFinalizedAt": "2026-10-05T07:51:04.999Z",
       "publicationGate": {
@@ -13427,7 +13428,7 @@
         "phases": {
           "baseline": 6
         },
-        "latestAt": "2026-10-05T10:22:20.081Z",
+        "latestAt": "2026-10-05T10:26:15.880Z",
         "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|4.35/3.95/1.55|+1:2.09/3.48/2.75|--"
       }
     },
@@ -13453,9 +13454,9 @@
         "odds2": 1.55
       },
       "oddsSource": "500.com:HAD",
-      "oddsObservedAt": "2026-10-05T10:22:11.370Z",
-      "oddsUpdatedAt": "2026-10-05T10:22:11.370Z",
-      "sourceCycleId": "sporttery-full-sync:2026-10-05T10:22:20.081Z",
+      "oddsObservedAt": "2026-10-05T10:26:07.129Z",
+      "oddsUpdatedAt": "2026-10-05T10:26:07.129Z",
+      "sourceCycleId": "sporttery-full-sync:2026-10-05T10:26:15.880Z",
       "handicapOdds": {
         "odds1": 2.09,
         "oddsX": 3.48,
@@ -13464,12 +13465,12 @@
       "handicapLine": "+1",
       "handicapOddsSource": "500.com:HHAD",
       "handicapOddsPoolCode": "HHAD",
-      "handicapOddsObservedAt": "2026-10-05T10:22:11.370Z",
-      "handicapOddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+      "handicapOddsObservedAt": "2026-10-05T10:26:07.129Z",
+      "handicapOddsUpdatedAt": "2026-10-05T10:26:07.129Z",
       "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
       "probabilityModel": {
         "version": "unified-poisson-bayes-v76",
-        "generatedAt": "2026-10-05T10:22:24.240Z",
+        "generatedAt": "2026-10-05T10:26:21.602Z",
         "sourceMatchId": "2041807",
         "eventVersion": "2026-10-06T02:45:00+08:00",
         "oneXTwo": {
@@ -16573,7 +16574,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T10:22:11.370Z",
+      "updatedAt": "2026-10-05T10:26:07.129Z",
       "sourceMatchId": "2041808",
       "fixtureId": "1398659",
       "matchNo": "周一004",
@@ -16608,7 +16609,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T10:20:05.731Z",
+        "updatedAt": "2026-10-05T10:22:30.610Z",
         "sourceMatchId": "2041808",
         "matchId": "fivehundred_2041808",
         "matchNo": "周一004",
@@ -16642,7 +16643,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -16678,7 +16679,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -16699,7 +16700,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -16922,14 +16923,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T10:22:19.414Z",
+        "lastCheckedAt": "2026-10-05T10:26:15.191Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T10:22:19.414Z",
+          "checkedAt": "2026-10-05T10:26:15.191Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -17114,21 +17115,21 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsObservedAt": "2026-10-05T10:22:11.370Z",
-    "oddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+    "oddsObservedAt": "2026-10-05T10:26:07.129Z",
+    "oddsUpdatedAt": "2026-10-05T10:26:07.129Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "oddsMarketProvenance": null,
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsObservedAt": "2026-10-05T10:22:11.370Z",
-    "handicapOddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+    "handicapOddsObservedAt": "2026-10-05T10:26:07.129Z",
+    "handicapOddsUpdatedAt": "2026-10-05T10:26:07.129Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapOddsMarketProvenance": null,
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T10:22:20.754Z",
+      "generatedAt": "2026-10-05T10:26:16.557Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -17330,7 +17331,7 @@
       "decisionId": "decision_1i4pdwy",
       "decisionRevision": 7,
       "decisionGeneratedAt": "2026-10-05T10:13:26.190Z",
-      "updatedAt": "2026-10-05T10:22:24.446Z",
+      "updatedAt": "2026-10-05T10:26:21.794Z",
       "syncCapturedAt": "2026-10-05T10:13:19.908Z",
       "publicationFinalizedAt": "2026-10-05T10:13:26.510Z",
       "publicationGate": {
@@ -17911,7 +17912,7 @@
         "phases": {
           "baseline": 6
         },
-        "latestAt": "2026-10-05T10:22:20.081Z",
+        "latestAt": "2026-10-05T10:26:15.880Z",
         "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|1.25/5.05/7.60|-1:1.83/3.85/3.09|--"
       }
     },
@@ -17937,9 +17938,9 @@
         "odds2": 7.6
       },
       "oddsSource": "500.com:HAD",
-      "oddsObservedAt": "2026-10-05T10:22:11.370Z",
-      "oddsUpdatedAt": "2026-10-05T10:22:11.370Z",
-      "sourceCycleId": "sporttery-full-sync:2026-10-05T10:22:20.081Z",
+      "oddsObservedAt": "2026-10-05T10:26:07.129Z",
+      "oddsUpdatedAt": "2026-10-05T10:26:07.129Z",
+      "sourceCycleId": "sporttery-full-sync:2026-10-05T10:26:15.880Z",
       "handicapOdds": {
         "odds1": 1.83,
         "oddsX": 3.85,
@@ -17948,12 +17949,12 @@
       "handicapLine": "-1",
       "handicapOddsSource": "500.com:HHAD",
       "handicapOddsPoolCode": "HHAD",
-      "handicapOddsObservedAt": "2026-10-05T10:22:11.370Z",
-      "handicapOddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+      "handicapOddsObservedAt": "2026-10-05T10:26:07.129Z",
+      "handicapOddsUpdatedAt": "2026-10-05T10:26:07.129Z",
       "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
       "probabilityModel": {
         "version": "unified-poisson-bayes-v76",
-        "generatedAt": "2026-10-05T10:22:24.246Z",
+        "generatedAt": "2026-10-05T10:26:21.608Z",
         "sourceMatchId": "2041808",
         "eventVersion": "2026-10-06T02:45:00+08:00",
         "oneXTwo": {
@@ -21062,7 +21063,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T10:22:11.370Z",
+      "updatedAt": "2026-10-05T10:26:07.129Z",
       "sourceMatchId": "2041809",
       "fixtureId": "1398609",
       "matchNo": "周一005",
@@ -21097,7 +21098,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T10:20:05.731Z",
+        "updatedAt": "2026-10-05T10:22:30.610Z",
         "sourceMatchId": "2041809",
         "matchId": "fivehundred_2041809",
         "matchNo": "周一005",
@@ -21131,7 +21132,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -21167,7 +21168,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -21188,7 +21189,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -21411,14 +21412,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T10:22:19.414Z",
+        "lastCheckedAt": "2026-10-05T10:26:15.191Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T10:22:19.414Z",
+          "checkedAt": "2026-10-05T10:26:15.191Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -21603,21 +21604,21 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsObservedAt": "2026-10-05T10:22:11.370Z",
-    "oddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+    "oddsObservedAt": "2026-10-05T10:26:07.129Z",
+    "oddsUpdatedAt": "2026-10-05T10:26:07.129Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "oddsMarketProvenance": null,
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsObservedAt": "2026-10-05T10:22:11.370Z",
-    "handicapOddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+    "handicapOddsObservedAt": "2026-10-05T10:26:07.129Z",
+    "handicapOddsUpdatedAt": "2026-10-05T10:26:07.129Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapOddsMarketProvenance": null,
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T10:22:20.754Z",
+      "generatedAt": "2026-10-05T10:26:16.557Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -21819,7 +21820,7 @@
       "decisionId": "decision_dct22j",
       "decisionRevision": 4,
       "decisionGeneratedAt": "2026-10-05T07:33:25.771Z",
-      "updatedAt": "2026-10-05T10:22:24.447Z",
+      "updatedAt": "2026-10-05T10:26:21.794Z",
       "syncCapturedAt": "2026-10-05T07:33:20.521Z",
       "publicationFinalizedAt": "2026-10-05T07:33:26.084Z",
       "publicationGate": {
@@ -22400,7 +22401,7 @@
         "phases": {
           "baseline": 6
         },
-        "latestAt": "2026-10-05T10:22:20.081Z",
+        "latestAt": "2026-10-05T10:26:15.880Z",
         "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|2.15/2.88/3.15|-1:5.00/3.62/1.53|--"
       }
     },
@@ -22426,9 +22427,9 @@
         "odds2": 3.15
       },
       "oddsSource": "500.com:HAD",
-      "oddsObservedAt": "2026-10-05T10:22:11.370Z",
-      "oddsUpdatedAt": "2026-10-05T10:22:11.370Z",
-      "sourceCycleId": "sporttery-full-sync:2026-10-05T10:22:20.081Z",
+      "oddsObservedAt": "2026-10-05T10:26:07.129Z",
+      "oddsUpdatedAt": "2026-10-05T10:26:07.129Z",
+      "sourceCycleId": "sporttery-full-sync:2026-10-05T10:26:15.880Z",
       "handicapOdds": {
         "odds1": 5,
         "oddsX": 3.62,
@@ -22437,12 +22438,12 @@
       "handicapLine": "-1",
       "handicapOddsSource": "500.com:HHAD",
       "handicapOddsPoolCode": "HHAD",
-      "handicapOddsObservedAt": "2026-10-05T10:22:11.370Z",
-      "handicapOddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+      "handicapOddsObservedAt": "2026-10-05T10:26:07.129Z",
+      "handicapOddsUpdatedAt": "2026-10-05T10:26:07.129Z",
       "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
       "probabilityModel": {
         "version": "unified-poisson-bayes-v76",
-        "generatedAt": "2026-10-05T10:22:24.251Z",
+        "generatedAt": "2026-10-05T10:26:21.613Z",
         "sourceMatchId": "2041809",
         "eventVersion": "2026-10-06T02:45:00+08:00",
         "oneXTwo": {
@@ -25565,7 +25566,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T10:22:11.370Z",
+      "updatedAt": "2026-10-05T10:26:07.129Z",
       "sourceMatchId": "2041810",
       "fixtureId": "1398654",
       "matchNo": "周一006",
@@ -25600,7 +25601,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T10:20:05.731Z",
+        "updatedAt": "2026-10-05T10:22:30.610Z",
         "sourceMatchId": "2041810",
         "matchId": "fivehundred_2041810",
         "matchNo": "周一006",
@@ -25634,7 +25635,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -25670,7 +25671,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -25691,7 +25692,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -25914,14 +25915,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T10:22:19.414Z",
+        "lastCheckedAt": "2026-10-05T10:26:15.191Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T10:22:19.414Z",
+          "checkedAt": "2026-10-05T10:26:15.191Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -26105,21 +26106,21 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsObservedAt": "2026-10-05T10:22:11.370Z",
-    "oddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+    "oddsObservedAt": "2026-10-05T10:26:07.129Z",
+    "oddsUpdatedAt": "2026-10-05T10:26:07.129Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "oddsMarketProvenance": null,
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsObservedAt": "2026-10-05T10:22:11.370Z",
-    "handicapOddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+    "handicapOddsObservedAt": "2026-10-05T10:26:07.129Z",
+    "handicapOddsUpdatedAt": "2026-10-05T10:26:07.129Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapOddsMarketProvenance": null,
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T10:22:20.754Z",
+      "generatedAt": "2026-10-05T10:26:16.557Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -26321,7 +26322,7 @@
       "decisionId": "decision_5iu5mn",
       "decisionRevision": 5,
       "decisionGeneratedAt": "2026-10-05T10:22:24.214Z",
-      "updatedAt": "2026-10-05T10:22:24.447Z",
+      "updatedAt": "2026-10-05T10:26:21.795Z",
       "syncCapturedAt": "2026-10-05T10:22:20.081Z",
       "publicationFinalizedAt": "2026-10-05T10:22:24.447Z",
       "publicationGate": {
@@ -26856,8 +26857,8 @@
       },
       "featureSnapshotHash": "3dblpq",
       "updateReason": {
-        "zh": "赛前赔率或让球信号发生实质变化，已生成新的临场预测；开赛后将锁定这版记录。",
-        "en": "Pre-match odds, handicap signals, or a trusted provider observation changed materially, so a new late forecast was generated and will be locked after kickoff."
+        "zh": "官方 SP 或让球盘没有实质变化，原赛前方向继续保留；分析版本可更新，但不重算推荐方向。",
+        "en": "Official SP and handicap signals did not materially change, so the pre-match direction is preserved; analysis versions may update, but the recommendation direction is not recalculated."
       },
       "immutableAnalysisReferenceDecision": {
         "version": "immutable-analysis-reference-decision-v1",
@@ -26902,7 +26903,7 @@
         "phases": {
           "baseline": 6
         },
-        "latestAt": "2026-10-05T10:22:20.081Z",
+        "latestAt": "2026-10-05T10:26:15.880Z",
         "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|1.35/4.35/6.30|-1:2.22/3.33/2.64|--"
       }
     },
@@ -26928,9 +26929,9 @@
         "odds2": 6.3
       },
       "oddsSource": "500.com:HAD",
-      "oddsObservedAt": "2026-10-05T10:22:11.370Z",
-      "oddsUpdatedAt": "2026-10-05T10:22:11.370Z",
-      "sourceCycleId": "sporttery-full-sync:2026-10-05T10:22:20.081Z",
+      "oddsObservedAt": "2026-10-05T10:26:07.129Z",
+      "oddsUpdatedAt": "2026-10-05T10:26:07.129Z",
+      "sourceCycleId": "sporttery-full-sync:2026-10-05T10:26:15.880Z",
       "handicapOdds": {
         "odds1": 2.22,
         "oddsX": 3.33,
@@ -26939,12 +26940,12 @@
       "handicapLine": "-1",
       "handicapOddsSource": "500.com:HHAD",
       "handicapOddsPoolCode": "HHAD",
-      "handicapOddsObservedAt": "2026-10-05T10:22:11.370Z",
-      "handicapOddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+      "handicapOddsObservedAt": "2026-10-05T10:26:07.129Z",
+      "handicapOddsUpdatedAt": "2026-10-05T10:26:07.129Z",
       "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
       "probabilityModel": {
         "version": "unified-poisson-bayes-v76",
-        "generatedAt": "2026-10-05T10:22:24.257Z",
+        "generatedAt": "2026-10-05T10:26:21.619Z",
         "sourceMatchId": "2041810",
         "eventVersion": "2026-10-06T02:45:00+08:00",
         "oneXTwo": {
@@ -30056,7 +30057,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-05T10:22:11.370Z",
+      "updatedAt": "2026-10-05T10:26:07.129Z",
       "sourceMatchId": "2041811",
       "fixtureId": "1398615",
       "matchNo": "周一007",
@@ -30091,7 +30092,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-05T10:20:05.731Z",
+        "updatedAt": "2026-10-05T10:22:30.610Z",
         "sourceMatchId": "2041811",
         "matchId": "fivehundred_2041811",
         "matchNo": "周一007",
@@ -30125,7 +30126,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-04T18:45:00.000Z"
             },
             "teamCards": {
@@ -30161,7 +30162,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-05T17:30:00.000Z"
             },
             "injuries": {
@@ -30182,7 +30183,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-05T14:00:00.000Z",
               "kickoffTime": "2026-10-05T18:45:00.000Z",
-              "sourceObservedAt": "2026-10-05T10:19:45.461Z",
+              "sourceObservedAt": "2026-10-05T10:22:11.370Z",
               "expectedPublishedAt": "2026-10-05T12:45:00.000Z"
             },
             "xg": {
@@ -30405,14 +30406,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-05T10:22:19.414Z",
+        "lastCheckedAt": "2026-10-05T10:26:15.191Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-05T10:22:19.414Z",
+          "checkedAt": "2026-10-05T10:26:15.191Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -30597,21 +30598,21 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsObservedAt": "2026-10-05T10:22:11.370Z",
-    "oddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+    "oddsObservedAt": "2026-10-05T10:26:07.129Z",
+    "oddsUpdatedAt": "2026-10-05T10:26:07.129Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "oddsMarketProvenance": null,
     "handicapLine": "+1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsObservedAt": "2026-10-05T10:22:11.370Z",
-    "handicapOddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+    "handicapOddsObservedAt": "2026-10-05T10:26:07.129Z",
+    "handicapOddsUpdatedAt": "2026-10-05T10:26:07.129Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapOddsMarketProvenance": null,
     "predictionHealth": {
       "version": "settled-prediction-health-v4-market-isolated",
-      "generatedAt": "2026-10-05T10:22:20.754Z",
+      "generatedAt": "2026-10-05T10:26:16.557Z",
       "total": {
         "settled": 0,
         "won": 0,
@@ -30813,7 +30814,7 @@
       "decisionId": "decision_tde4d6",
       "decisionRevision": 4,
       "decisionGeneratedAt": "2026-10-05T09:28:25.404Z",
-      "updatedAt": "2026-10-05T10:22:24.447Z",
+      "updatedAt": "2026-10-05T10:26:21.795Z",
       "syncCapturedAt": "2026-10-05T09:28:20.296Z",
       "publicationFinalizedAt": "2026-10-05T09:28:25.629Z",
       "publicationGate": {
@@ -31394,7 +31395,7 @@
         "phases": {
           "baseline": 6
         },
-        "latestAt": "2026-10-05T10:22:20.081Z",
+        "latestAt": "2026-10-05T10:26:15.880Z",
         "latestSignature": "1X2:HAD:WATCH:reference|BEST:HAD:WATCH:reference|GOALS::WATCH:reference|2.96/3.02/2.17|+1:1.52/3.90/4.65|--"
       }
     },
@@ -31420,9 +31421,9 @@
         "odds2": 2.17
       },
       "oddsSource": "500.com:HAD",
-      "oddsObservedAt": "2026-10-05T10:22:11.370Z",
-      "oddsUpdatedAt": "2026-10-05T10:22:11.370Z",
-      "sourceCycleId": "sporttery-full-sync:2026-10-05T10:22:20.081Z",
+      "oddsObservedAt": "2026-10-05T10:26:07.129Z",
+      "oddsUpdatedAt": "2026-10-05T10:26:07.129Z",
+      "sourceCycleId": "sporttery-full-sync:2026-10-05T10:26:15.880Z",
       "handicapOdds": {
         "odds1": 1.52,
         "oddsX": 3.9,
@@ -31431,12 +31432,12 @@
       "handicapLine": "+1",
       "handicapOddsSource": "500.com:HHAD",
       "handicapOddsPoolCode": "HHAD",
-      "handicapOddsObservedAt": "2026-10-05T10:22:11.370Z",
-      "handicapOddsUpdatedAt": "2026-10-05T10:22:11.370Z",
+      "handicapOddsObservedAt": "2026-10-05T10:26:07.129Z",
+      "handicapOddsUpdatedAt": "2026-10-05T10:26:07.129Z",
       "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
       "probabilityModel": {
         "version": "unified-poisson-bayes-v76",
-        "generatedAt": "2026-10-05T10:22:24.265Z",
+        "generatedAt": "2026-10-05T10:26:21.626Z",
         "sourceMatchId": "2041811",
         "eventVersion": "2026-10-06T02:45:00+08:00",
         "oneXTwo": {
