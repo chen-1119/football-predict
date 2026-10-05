@@ -12,6 +12,7 @@ const { readStorageMode, retiredSqliteStatus } = require("./storageMode.cjs");
 const storageMode = readStorageMode();
 const { publicationRefreshBlocked, nativePublicationReadError, publicationTransitionHealth } = require("./publicationRefreshPolicy.cjs");
 const { sendStaticFileResponse } = require("./staticFileResponse.cjs");
+const { readRequestJson } = require("./readRequestJson.cjs");
 const { readFrontendReleaseIdentity } = require("./frontendReleaseIdentity.cjs");
 const { compactApiFootballDiagnostics } = require("../src/services/apiFootballDiagnostics.cjs");
 const {
@@ -2658,18 +2659,6 @@ const handleEventStream = (req, res) => {
     removeSseClient(res);
   });
 };
-
-const readRequestJson = (req, maxBytes = 1024 * 1024) => new Promise((resolve, reject) => {
-  let body = "";
-  req.on("data", (chunk) => {
-    body += chunk;
-    if (body.length > maxBytes) {
-      req.destroy(new Error("request body too large"));
-    }
-  });
-  req.on("end", () => resolve(body ? safeJsonParse(body, {}) : {}));
-  req.on("error", reject);
-});
 
 const isAuthorized = (req, url) => {
   const remote = req.socket.remoteAddress || "";
