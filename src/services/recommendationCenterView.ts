@@ -670,15 +670,28 @@ function alignedHandicapCodes(straight:Outcome,line:number):Outcome[]{
   if(straight==='2')return line>0?['2','X']:['2'];
   return [line<0?'2':'1'];
 }
+function independentHandicapConflicts(straight:Outcome, handicap:Outcome, line:number):boolean{
+  if(!Number.isSafeInteger(line)||line===0)return false;
+  // The independently largest marginal outcomes may have no score in common.
+  // Keep the frozen HHAD distribution, but do not present such a pair as two
+  // recommendations that can land together.
+  const hadLower=straight==='1'?1:straight==='X'?0:-Infinity;
+  const hadUpper=straight==='2'?-1:straight==='X'?0:Infinity;
+  const hhadLower=handicap==='1'?1-line:handicap==='X'?-line:-Infinity;
+  const hhadUpper=handicap==='2'?-1-line:handicap==='X'?-line:Infinity;
+  return Math.max(hadLower,hhadLower)>Math.min(hadUpper,hhadUpper);
+}
 export function primarySelectionSummary(d:Pick<Decision,'tipCode'|'odds'|'modelProbability'|'handicapAnalysis'|'primaryPickPolicyVersion'>){
   const h=d.handicapAnalysis;
   if(!h)return {had:{code:d.tipCode,odds:d.odds,probability:d.modelProbability},handicap:null};
   if(d.primaryPickPolicyVersion==='independent-market-primary-v1'&&h.overallTipCode&&h.overallProbabilities){
     const code=h.overallTipCode;
+    const conflict=independentHandicapConflicts(d.tipCode,code,h.handicapLine);
     return {had:{code:d.tipCode,odds:d.odds,probability:d.modelProbability},handicap:{
-      status:'recommend' as const,code,line:h.handicapLine,lineText:h.handicapLineText,
-      probability:h.overallProbabilities[code],odds:h.marketReference?.odds?.[code]??null,
-      calibrated:false,conditional:false,overallCode:code,riskCode:null,riskProbability:null,suggestedCode:null,suggestedProbability:null}};
+      status:conflict?'pass' as const:'recommend' as const,code:conflict?null:code,line:h.handicapLine,lineText:h.handicapLineText,
+      probability:conflict?null:h.overallProbabilities[code],odds:conflict?null:h.marketReference?.odds?.[code]??null,
+      calibrated:false,conditional:false,overallCode:code,riskCode:conflict?code:null,
+      riskProbability:conflict?h.overallProbabilities[code]:null,suggestedCode:null,suggestedProbability:null}};
   }
   const aligned=alignedHandicapCodes(d.tipCode,h.handicapLine);
   const probabilityFor=(code:Outcome)=>{const value=h.probabilities?.[code];return typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1?value:null;};

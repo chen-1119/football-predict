@@ -54,9 +54,9 @@ function HandicapBlock({d,settlement,language}:{d:Decision;settlement?:Settlemen
     const q=h.marketReference?.odds;
     const marketProbability=q?(1/q[code])/(1/q['1']+1/q.X+1/q['2']):null;
     return <section className="rc-handicap" data-probability-basis="unconditional">
-      <header><div><span>{zh?'让球首选 · 完整概率':'Handicap primary · full probability'} {h.handicapLineText}</span><strong>{handicapTitle(code,zh)}</strong></div>
+      <header><div><span>{pass?(zh?'让球独立概率 · 与主方向互斥':'Standalone HHAD probability · conflicts with 1X2'):(zh?'让球首选 · 完整概率':'Handicap primary · full probability')} {h.handicapLineText}</span><strong>{handicapTitle(code,zh)}</strong></div>
         <span className={`rc-state rc-state--${settlement?.state||'PENDING'}`}>{settlement?resultLabel(settlement.state,zh):(zh?'待赛果':'Pending')}</span></header>
-      <p>{zh?'按完整比分分布累计让胜、让平、让负，选择最高概率项。低置信；条件概率仅用于下方解释。':'Select the largest unconditional handicap probability from the complete score matrix. Low confidence; conditional shares are explanatory only.'}</p>
+      <p>{pass?(zh?'独立让球概率最高项与胜平负首选不能同时命中，因此本场不把它作为第二条推荐；保留原始概率供风险诊断和复盘。':'The standalone HHAD leader cannot win together with the 1X2 primary, so it is not a second pick for this match. Original probabilities remain for risk analysis and review.'):(zh?'按完整比分分布累计让胜、让平、让负，选择最高概率项。低置信；条件概率仅用于下方解释。':'Select the largest unconditional handicap probability from the complete score matrix. Low confidence; conditional shares are explanatory only.')}</p>
       <div className="rc-handicap__probabilities">{(['1','X','2'] as const).map(c=><div key={c} className={c===code?'is-selected':''}><span>{handicapTitle(c,zh)}</span><strong>{(h.overallProbabilities![c]*100).toFixed(1)}%</strong></div>)}</div>
       <div className="rc-handicap__meta">{odds&&<span>SP {odds.toFixed(2)} · {zh?'模型估值':'Model EV'} {(100*(probability*odds-1)).toFixed(1)}%</span>}{marketProbability!=null&&<span>{zh?'相对市场':'Model edge'} {(100*(probability-marketProbability)).toFixed(1)}pp</span>}</div>
       <details><summary>{zh?'胜平负首选成立时的净胜球解释':'Margins conditional on the 1X2 pick'}</summary><p>{(['1','X','2'] as const).map(c=>`${handicapTitle(c,zh)} ${(h.probabilities[c]*100).toFixed(1)}%`).join(' · ')}</p></details>
@@ -81,7 +81,7 @@ function PrimaryPickHeader({d,language}:{d:Decision;language:Language}){
         ?` · ${zh?'相对市场':'edge'} ${d.directionSelection.selected.probabilityEdge>=0?'+':''}${(d.directionSelection.selected.probabilityEdge*100).toFixed(1)}pp`:''}</small>
     </div>
     <span className="rc-primary-divider" aria-hidden="true">｜</span>
-    <div className={`rc-primary-pick rc-primary-pick--hhad${h?.status==='pass'?' is-pass':''}`} data-handicap-extension={h?.status??'unavailable'}><span>{d.primaryPickPolicyVersion?(zh?'让球首选':'Handicap primary'):(zh?'让球延伸':'Handicap extension')}</span>{extension?<><strong>{extension.title}</strong><small>{extension.detail}</small></>:<><strong>—</strong><small>{zh?'等待有效让球线与净胜球数据':'Awaiting valid handicap inputs'}</small></>}</div>
+    <div className={`rc-primary-pick rc-primary-pick--hhad${h?.status==='pass'?' is-pass':''}`} data-handicap-extension={h?.status??'unavailable'}><span>{h?.status==='pass'?(zh?'让球不追':'Pass handicap'):d.primaryPickPolicyVersion?(zh?'让球首选':'Handicap primary'):(zh?'让球延伸':'Handicap extension')}</span>{extension?<><strong>{extension.title}</strong><small>{extension.detail}</small></>:<><strong>—</strong><small>{zh?'等待有效让球线与净胜球数据':'Awaiting valid handicap inputs'}</small></>}</div>
   </div>;
 }
 function OutcomeResearchPanel({research,language,now,quoteObservedAt,cutoffTime,kickoffTime}:{research:OutcomeCategoryResearch|null|undefined;language:Language;now:number;quoteObservedAt:string;cutoffTime:string;kickoffTime:string}){
