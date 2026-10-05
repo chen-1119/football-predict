@@ -305,9 +305,24 @@ check('lineup referee injury and xG cards require auditable provenance before su
   && detail.includes("tone: verifiedXgReady ? 'success' : xgHasValue ? 'warning' : 'neutral'"));
 check('published settlement is tied to record state while legacy references stay observational',
   recommendationCenter.includes("resultLabel(settlement.state,zh)")
-  && recommendationCenter.includes('selected?resultLabel(selected.state,zh)')
+  && recommendationCenter.includes('publishedResultProjection({decision:d,settlement,handicapSettlement},selectedMarket)')
+  && recommendationCenter.includes('const selected=result.displayed.settlement')
+  && recommendationCenter.includes('settlementResultLabel(selected,language)')
+  && recommendationCenter.includes('primaryMarketLabel(d,result.displayed.market,zh)')
   && recommendationCenter.includes('仅已结算计入命中率')
-  && publishedMatchRecommendation.includes('row.settlement.state')
+  && recommendationCenter.includes('沿用 HAD 冻结方向结算，不代表当前主方向汇总')
+  && publishedMatchRecommendation.includes("primaryPickPolicyVersion==='coherent-market-primary-v1'")
+  && publishedMatchRecommendation.includes("market==='HHAD'?row.handicapSettlement??null:row.settlement")
+  && publishedMatchRecommendation.includes("selectedMarket==='HAD'||selectedMarket==='HHAD'")
+  && publishedMatchRecommendation.includes('displayed:explicitMarket?resultFor(selectedMarket):primary')
+  && publishedMatchRecommendation.includes("if(!settlement)return language==='zh'?'结果待核':'Result awaiting verification'")
+  && publishedMatchRecommendation.includes('publishedResultProjection(row,selectedMarket)?.displayed.settlement')
+  && publishedMatchPick.includes('const result=publishedResultProjection(row)')
+  && publishedMatchPick.includes('primaryMarketLabel(d,result.primary.market,zh)')
+  && publishedMatchPick.includes('settlementResultLabel(result.companion.settlement,language)')
+  && predictions.includes('const unifiedResult = useUnified ? publishedResultProjection(unifiedRow) : null')
+  && predictions.includes('const displayedResultState = useUnified ? unifiedResult?.primary.settlement?.state : settledStatus')
+  && predictions.includes('primaryMarketLabel(unifiedRow.decision,unifiedResult.primary.market')
   && detail.includes('分析参考主方向符合赛果')
   && detail.includes('分析参考主方向不符合赛果'));
 check('combination surface uses bound market, SP, cutoff and freshness instead of pseudo-probability',

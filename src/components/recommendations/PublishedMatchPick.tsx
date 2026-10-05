@@ -1,6 +1,6 @@
 import type { SingleRow } from '../../services/recommendationCenterView';
 import { publicationLifecycle, publicationLifecycleLabel, primaryMarketLabel, coherentProbabilityNote, primarySelectionSummary, handicapExtensionText, quoteSourceLabel, outcomeCategoryLabel, outcomeResearchReasonLabel, outcomeResearchFavoriteValueWarning } from '../../services/recommendationCenterView';
-import { publishedPickLabel, publishedResultLabel } from '../../services/publishedMatchRecommendation';
+import { publishedPickLabel, publishedResultLabel, publishedResultProjection, settlementResultLabel } from '../../services/publishedMatchRecommendation';
 import './published-match-pick.css';
 import { SelectionQualityNote, selectionReferenceLabel, SupplementaryResearchNote } from './SelectionQualityNote';
 
@@ -19,6 +19,7 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
     &&(row.outcomeResearch.category==='balanced-draw'||row.outcomeResearch.category==='upset-signal')?row.outcomeResearch:null;
   const favoriteValueWarning=row.outcomeResearch?outcomeResearchFavoriteValueWarning(row.outcomeResearch,zh):null;
   const probabilityNote=coherentProbabilityNote(d,zh);
+  const result=publishedResultProjection(row)!;
   const hadCard=<div key="HAD"><small>{primaryMarketLabel(d,'HAD',zh)}</small><strong>{publishedPickLabel(s.had.code,language)}</strong><span>SP {s.had.odds.toFixed(2)} · {zh?'无条件概率':'Unconditional probability'} {(s.had.probability*100).toFixed(1)}%</span></div>;
   const hhadCard=<div key="HHAD" className={h?.status==='pass'?'is-pass':undefined} data-handicap-extension={h?.status??'unavailable'}><small>{h?.status==='pass'?(zh?'让球不追':'Pass handicap'):d.primaryPickPolicyVersion?primaryMarketLabel(d,'HHAD',zh):(zh?'让球延伸':'Handicap extension')}</small><strong>{extension?.title??'—'}</strong><span>{extension?.detail??(zh?'等待有效让球数据':'Awaiting handicap data')}</span></div>;
   return <div className={`published-match-pick${compact?' is-compact':''}`} data-decision-id={d.decisionId} data-record-hash={d.recordHash}>
@@ -47,7 +48,10 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
       {quoteStale&&<p role="status">{zh?'当前展示上次发布时的SP，已超过15分钟；等待真实新报价后更新，不作为当前可用串关报价。':'These are previously published prices, now over 15 minutes old. New verified quotes are required for current combo selection.'}</p>}
       <div className="published-match-pick__meta"><span>{zh?'发布时间':'Published'} {time(d.publishedAt,language)}</span><span>{zh?'SP采集':'SP observed'} {time(d.quoteObservedAt,language)}</span><span>{quoteSourceLabel(d,language)}</span></div>
       <SupplementaryResearchNote research={d.supplementaryResearch} decision={d} scoreDistribution={row.scoreDistribution} settlement={row.supplementarySettlement} language={language}/>
-      <div className="published-match-pick__result">{publishedResultLabel(row,language)}{row.settlement.score?` · ${row.settlement.score}`:''}</div>
+      <div className="published-match-pick__result" data-result-market={result.primary.market}>
+        <div>{result.coherent?`${primaryMarketLabel(d,result.primary.market,zh)}：`:''}{publishedResultLabel(row,language)}{result.primary.settlement?.score?` · ${result.primary.settlement.score}`:''}</div>
+        {result.companion&&<small>{primaryMarketLabel(d,result.companion.market,zh)}：{settlementResultLabel(result.companion.settlement,language)}</small>}
+      </div>
       <details><summary>{zh?'查看统一推荐版本':'Published record version'}</summary><code>{d.decisionId}</code></details>
     </>}
   </div>;

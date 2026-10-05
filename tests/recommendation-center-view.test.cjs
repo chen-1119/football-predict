@@ -1,7 +1,7 @@
 'use strict';
 const {test,after}=require('node:test'),assert=require('node:assert/strict');
 const ts=require(process.env.TYPESCRIPT_LIBRARY||'typescript');
-const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),vm=require('node:vm');
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'recommendation-center-test-'));
 after(()=>fs.rmSync(dir,{recursive:true,force:true}));
 const source=fs.readFileSync(path.join(__dirname,'../src/services/recommendationCenterView.ts'),'utf8');
@@ -9,6 +9,7 @@ fs.writeFileSync(path.join(dir,'view.cjs'),ts.transpileModule(source,{compilerOp
 fs.copyFileSync(path.join(__dirname,'../src/services/publishedRecommendationStatus.cjs'),path.join(dir,'publishedRecommendationStatus.cjs'));
 fs.copyFileSync(path.join(__dirname,'../src/services/coherentPrimarySelection.cjs'),path.join(dir,'coherentPrimarySelection.cjs'));
 const view=require(path.join(dir,'view.cjs'));
+const modelModule={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/services/publishedMatchRecommendation.ts'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{module:modelModule,exports:modelModule.exports,Date});
 const {parseRecommendationCenter,visiblePreview,primarySelectionSummary,comboLegSelection,handicapAnalysisBasis,calibrationSampleBasis,sameDirectionConcentration,boundOfficialHandicapSp}=view;
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {match,memoryPorts,validators}=require('./recommendationFixture.cjs');
@@ -279,6 +280,7 @@ function renderedText(data,props,now){
     }};
     if(id==='../FollowButton')return {FollowButton:()=>null};
     if(id==='../TeamBadge')return {TeamBadge:({team})=>react.createElement('span',{'data-badge-name':team.name.zh})};
+    if(id==='../../services/publishedMatchRecommendation')return modelModule.exports;
     if(id==='../../services/recommendationCenterView')return view;if(id==='./DualResearchV2')return {DualResearchV2:()=>null};if(id==='lucide-react')return {RefreshCw:()=>null,ChevronDown:()=>null,Search:()=>null,ArrowUpRight:()=>null};if(id.endsWith('.css'))return {};throw Error(id);
   }});
   return renderToStaticMarkup(react.createElement(module.exports.RecommendationCenter,{language:'zh',onSelectMatch:()=>{},...props}));
@@ -343,7 +345,6 @@ test('conditional risk stays conditional even when the independent diagnostic pr
 function renderPublished(row,compact,language='zh'){
   const vm=require('node:vm'),module={exports:{}},react=require('react'),{renderToStaticMarkup}=require('react-dom/server');
   const code=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/components/recommendations/PublishedMatchPick.tsx'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-  const modelModule={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/services/publishedMatchRecommendation.ts'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{module:modelModule,exports:modelModule.exports,Date});
   vm.runInNewContext(code,{module,exports:module.exports,Date,Intl,require:id=>{
     if(id==='react/jsx-runtime')return require(id);if(id==='../../services/recommendationCenterView')return view;
     if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
