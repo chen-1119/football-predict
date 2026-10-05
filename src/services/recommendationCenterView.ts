@@ -41,7 +41,7 @@ export interface SupplementaryResearch {
 export interface SupplementaryResult {state:ResultState;actual?:string;score?:string|null;resultEventId?:string|null}
 export interface SupplementarySummary {exactScore:Summary;totalGoals:Summary;excludedWithoutFrozenPicks:number}
 export interface Settlement { state:ResultState; score?:string|null; actual?:Outcome; resultEventId?:string|null; legs?:Array<{decisionId:string;selectionId?:string;state:ResultState;score?:string|null}> }
-export interface SelectionQuality {version:'recommendation-selection-quality-v1'|'recommendation-selection-quality-v2';status:'watch'|'reference-qualified';qualified:boolean;reasons:string[];samples:{elo:{home:number|null;away:number|null};form:{home:number|null;away:number|null}}|null;probabilityLead:number|null;marketProbability:number|null;modelMarketGap:number|null;expectedValue:number|null;marketFavorite:boolean;directionSelectionMode?:'model-leader'|'market-edge-override';marketRole?:'favorite'|'draw'|'nonfavorite'|null;crossTrack?:{referenceTipCode:Outcome;referenceRecordedAt:string;knownAtPublication:boolean}}
+export interface SelectionQuality {version:'recommendation-selection-quality-v1'|'recommendation-selection-quality-v2';assessmentBasis?:'coherent-primary-anchor-v1';assessedMarket?:'HAD'|'HHAD';status:'watch'|'reference-qualified';qualified:boolean;reasons:string[];samples:{elo:{home:number|null;away:number|null};form:{home:number|null;away:number|null}}|null;probabilityLead:number|null;marketProbability:number|null;modelMarketGap:number|null;expectedValue:number|null;marketFavorite:boolean;directionSelectionMode?:'model-leader'|'market-edge-override';marketRole?:'favorite'|'draw'|'nonfavorite'|null;crossTrack?:{referenceTipCode:Outcome;referenceRecordedAt:string;knownAtPublication:boolean}}
 export interface PublishedScore {home:number;away:number;label:string;probability:number;hadCode:Outcome;hhadCode:Outcome|null}
 export interface PublishedTotalGoals {label:string;probability:number}
 export interface PublishedScores {status:'available'|'unavailable';version:'published-score-distribution-v1';decisionId:string;recordHash:string;topScores:PublishedScore[];alignedScores:PublishedScore[];totalGoals?:PublishedTotalGoals[]}
@@ -353,9 +353,19 @@ function single(v:unknown):SingleRow{
         ||qualified||!quality.reasons.includes('cross-track-direction-conflict'))throw new Error('Invalid cross-track diagnostic');
       quality.crossTrack={referenceTipCode,referenceRecordedAt,knownAtPublication:c.knownAtPublication};
     }
-    // This diagnostic belongs to the frozen HAD decision, never to a later
-    // model update or an HHAD review selection.
-    if(quality.expectedValue!=null&&Math.abs(quality.expectedValue-(d.modelProbability*d.odds-1))>1e-8)throw new Error('Selection quality EV disagrees with frozen decision');
+    // The explicit current-view scope binds to the frozen coherent anchor.
+    // Unscoped historical records retain their original HAD assessment.
+    let assessedProbability:number|undefined=d.modelProbability,assessedOdds:number|undefined=d.odds;
+    if(q.assessmentBasis!==undefined){
+      if(q.assessmentBasis!=='coherent-primary-anchor-v1'||d.primaryPickPolicyVersion!=='coherent-market-primary-v1'||!d.coherentPrimary)throw new Error('Invalid selection quality assessment basis');
+      quality.assessmentBasis=q.assessmentBasis;quality.assessedMarket=d.coherentPrimary.anchorMarket;
+      if(d.coherentPrimary.anchorMarket==='HHAD'){
+        const code=d.coherentPrimary.anchorCode;
+        assessedProbability=d.handicapAnalysis?.overallProbabilities?.[code];
+        assessedOdds=d.handicapAnalysis?.marketReference?.odds?.[code];
+      }
+    }
+    if(quality.expectedValue!=null&&(assessedProbability==null||assessedOdds==null||Math.abs(quality.expectedValue-(assessedProbability*assessedOdds-1))>1e-8))throw new Error('Selection quality EV disagrees with frozen decision');
     if(qualified&&quality.reasons.length)throw new Error('Contradictory selection quality');
   }
   if(x.scoreDistribution!=null){
@@ -727,11 +737,11 @@ export function handicapExtensionText(h:NonNullable<ReturnType<typeof primarySel
   const zh=language==='zh';
   const title=(code:Outcome)=>zh?({'1':'让胜',X:'让平','2':'让负'}[code]):({'1':'Handicap home',X:'Handicap draw','2':'Handicap away'}[code]);
   if(h.status==='recommend')return {
-    title:`${h.lineText} · ${title(h.code!)}`,
-    detail:`${h.conditional?(zh?'条件占比 ':'Conditional share '):''}${(h.probability!*100).toFixed(1)}%${h.odds?' · SP '+h.odds.toFixed(2):''}${!h.conditional?(zh?' · 低置信':' · low confidence'):h.calibrated?(zh?' · 已校准':' · calibrated'):''}`,
+    title:`${handicapLineLabel(h.line,zh)} · ${title(h.code!)}`,
+    detail:`${h.conditional?(zh?'条件占比 ':'Conditional share '):(zh?'无条件概率 ':'Unconditional probability ')}${(h.probability!*100).toFixed(1)}%${h.odds?' · SP '+h.odds.toFixed(2):''}${!h.conditional?(zh?' · 低置信':' · low confidence'):h.calibrated?(zh?' · 已校准':' · calibrated'):''}`,
   };
   return {
-    title:`${h.lineText} · ${zh?'不追让球':'Pass handicap'}`,
+    title:`${handicapLineLabel(h.line,zh)} · ${zh?'不追让球':'Pass handicap'}`,
     detail:`${h.conditional?(zh?'条件模型偏 ':'Conditional model leans '):(zh?'盘口模型偏 ':'Model leans ')}${title(h.riskCode!)} ${(h.riskProbability!*100).toFixed(1)}%${h.suggestedCode?(zh?' · 同向备选 ':' · aligned alternative ')+title(h.suggestedCode)+' '+(h.suggestedProbability!*100).toFixed(1)+'%':''}`,
   };
 }
@@ -748,5 +758,33 @@ export function publishedHandicapCode(d:Pick<Decision,'primaryPickPolicyVersion'
 }
 export function primaryMarketLabel(d:Pick<Decision,'coherentPrimary'>,market:'HAD'|'HHAD',zh:boolean):string{
   const name=market==='HAD'?(zh?'胜平负':'1X2'):(zh?'让球':'Handicap');
+  if(d.coherentPrimary&&market==='HHAD'&&!d.coherentPrimary.hhadCode)return name+(zh?' · 暂不可用':' · unavailable');
   return name+(d.coherentPrimary?(d.coherentPrimary.anchorMarket===market?(zh?' · 主方向':' · primary'):(zh?' · 伴随方向':' · companion')):(zh?'首选':' primary'));
+}
+
+export function handicapLineLabel(line:number,zh:boolean):string{
+  const signed=`${line>0?'+':''}${line}`;
+  return zh?`主队${line<0?'让':'受让'}${Math.abs(line)}球（${signed}）`:`Home handicap ${signed}`;
+}
+
+export function coherentProbabilityNote(d:Pick<Decision,'primaryPickPolicyVersion'|'coherentPrimary'>,zh:boolean):string|null{
+  const c=d.primaryPickPolicyVersion==='coherent-market-primary-v1'?d.coherentPrimary:null;
+  if(!c?.hhadCode||c.companionConditionalProbability==null||c.jointProbability==null)return null;
+  const conditional=(c.companionConditionalProbability*100).toFixed(1),joint=(c.jointProbability*100).toFixed(1);
+  return zh?`主方向成立时，伴随方向条件占比 ${conditional}%；两方向同时成立的无条件概率 ${joint}%。条件占比不用于串关，也不是实际命中率。`:
+    `If the primary lands, the companion has a ${conditional}% conditional share. Both landing has ${joint}% unconditional probability. Conditional shares are not used for combos and are not observed hit rates.`;
+}
+
+/** Counts and reasons are reported evidence, never inferred from an empty preview. */
+export function comboEligibilityEvidence(data:RecommendationCenterData|null|undefined,zh:boolean){
+  const lane=data?.lanes.combos;
+  const values:Array<[string,number|undefined]>=[
+    [zh?'合格候选':'Eligible candidates',lane?.candidateCount],
+    [zh?'参考':'Reference',lane?.referenceCount],
+    [zh?'观察':'Watch',lane?.watchCount],
+  ];
+  const summary=values.filter(([,value])=>value!==undefined).map(([label,value])=>`${label} ${value}`).join(' · ');
+  const coverage=data?.coverage?.businessDate===data?.businessDate?data?.coverage:undefined;
+  const reasons=coverage?.missing.map(row=>`${row.homeTeamName} - ${row.awayTeamName}：${row.reasonText}`)??[];
+  return {summary,reasons,partial:coverage?.hasMore===true};
 }

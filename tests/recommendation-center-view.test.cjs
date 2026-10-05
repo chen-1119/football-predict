@@ -283,6 +283,18 @@ function renderedText(data,props,now){
   }});
   return renderToStaticMarkup(react.createElement(module.exports.RecommendationCenter,{language:'zh',onSelectMatch:()=>{},...props}));
 }
+
+test('empty combo renders reported candidate/reference/watch counts and supplied coverage reasons',async()=>{
+  const data=parseRecommendationCenter(await sample()),now=Date.parse(data.updatedAt);
+  data.previews=[];data.todayCombos=[];
+  Object.assign(data.lanes.combos,{candidateCount:0,referenceCount:7,watchCount:7});
+  data.coverage={businessDate:data.businessDate,missing:[{homeTeamName:'法国',awayTeamName:'比利时',reasonText:'模型与同期官方市场差异过大，仅供观望'}],hasMore:false};
+  const markup=renderedText(data,{selectedTab:'two'},now);
+  assert.match(markup,/本轮通过筛选的候选为0场/);
+  assert.match(markup,/合格候选 0 · 参考 7 · 观察 7/);
+  assert.match(markup,/法国 - 比利时：模型与同期官方市场差异过大/);
+  assert.doesNotMatch(markup,/新场次到达后自动重算/);
+});
 test('rendered mixed combo shows selected HHAD line and SP plus unconditional explanation',async()=>{
   const payload=await mixedSample(),c=payload.recommendationCenter.previews.find(c=>c.size===2);c.frozenAt=c.generatedAt;
   payload.recommendationCenter.review.combos=[{combo:c,settlement:{state:'PENDING'}}];

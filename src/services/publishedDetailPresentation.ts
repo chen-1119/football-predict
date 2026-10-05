@@ -6,7 +6,8 @@ import type { ScoreProbability } from './mockData';
 export function publishedDetailPresentation(decision: Decision | null, distribution: readonly ScoreProbability[] = [], boundDistribution?: PublishedScores | null) {
   if (!decision) return null;
   const outcome = (row: Pick<ScoreProbability, 'home' | 'away'>): Outcome => row.home > row.away ? '1' : row.home < row.away ? '2' : 'X';
-  let scoreSource: 'published-matrix' | 'legacy-supplemental' | 'unavailable' = boundDistribution === undefined ? 'legacy-supplemental' : 'unavailable';
+  const allowLegacy = boundDistribution === undefined && decision.primaryPickPolicyVersion !== 'coherent-market-primary-v1';
+  let scoreSource: 'published-matrix' | 'legacy-supplemental' | 'unavailable' = allowLegacy ? 'legacy-supplemental' : 'unavailable';
   let scores: ScoreProbability[] = [], alignedScores: ScoreProbability[] = [];
   if (boundDistribution !== undefined) {
     const h = decision.handicapAnalysis;
@@ -30,7 +31,7 @@ export function publishedDetailPresentation(decision: Decision | null, distribut
       alignedScores = boundDistribution.alignedScores.map(percentScore);
       scoreSource = 'published-matrix';
     }
-  } else {
+  } else if (allowLegacy) {
     const seen = new Set<string>();
     scores = distribution.filter(row => Number.isSafeInteger(row.home) && row.home >= 0
       && Number.isSafeInteger(row.away) && row.away >= 0

@@ -4,7 +4,7 @@ import { publishedMatchRecommendation, publishedPosteriorDisagreement, usesPubli
 import { PublishedMatchPick } from '../components/recommendations/PublishedMatchPick';
 import { DualResearchV2 } from '../components/recommendations/DualResearchV2';
 import { publishedDetailPresentation } from '../services/publishedDetailPresentation';
-import { boundOfficialHandicapSp } from '../services/recommendationCenterView';
+import { boundOfficialHandicapSp, handicapLineLabel, primaryMarketLabel } from '../services/recommendationCenterView';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContextCore';
 import type { FiveHundredRecentFormRow, League, Match, MatchProbabilityModel, MultiLangString, OutcomeProbability, PredictionDetail, ScoreProbability } from '../services/mockData';
@@ -1856,12 +1856,17 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     ? publishedPosteriorDisagreement(match, unifiedRow?.decision || null)
     : null;
   const publishedDetail = publishedDetailPresentation(unifiedRow?.decision || null, probabilityModel?.scoreDistribution, unifiedRow?.scoreDistribution);
+  const isCoherentPublication = unifiedRow?.decision.primaryPickPolicyVersion === 'coherent-market-primary-v1';
+  const isIndependentPublication = unifiedRow?.decision.primaryPickPolicyVersion === 'independent-market-primary-v1';
   const publishedMatrix = useUnified && publishedDetail?.scoreSource === 'published-matrix'
     ? unifiedRow?.scoreDistribution : null;
+  const publishedGlobalScore = publishedDetail?.scoreSource === 'published-matrix' ? publishedDetail.globalScores[0] : null;
   const publishedTotals = publishedMatrix?.status === 'available' ? publishedMatrix.totalGoals : undefined;
   const leadingPublishedTotal = publishedTotals?.reduce((best, row) => row.probability > best.probability ? row : best);
+  const publishedMarketOrder: ('HAD' | 'HHAD')[] = isCoherentPublication && unifiedRow?.decision.coherentPrimary?.anchorMarket === 'HHAD'
+    ? ['HHAD', 'HAD'] : ['HAD', 'HHAD'];
   const publishedHandicap = unifiedRow?.decision.handicapAnalysis;
-  const publishedHandicapDirection = unifiedRow?.decision.coherentPrimary?.hhadCode ?? (unifiedRow?.decision.primaryPickPolicyVersion==='coherent-market-primary-v1'?null:publishedHandicap?.overallTipCode ?? publishedHandicap?.tipCode);
+  const publishedHandicapDirection = unifiedRow?.decision.coherentPrimary?.hhadCode ?? (isCoherentPublication ? null : publishedHandicap?.overallTipCode ?? publishedHandicap?.tipCode);
   const publishedHandicapProbability = publishedHandicapDirection ? publishedHandicap?.overallProbabilities?.[publishedHandicapDirection] ?? publishedHandicap?.modelProbability : null;
   const publishedHandicapSp = boundOfficialHandicapSp(publishedHandicap, publishedHandicapDirection);
   const publishedHadNames = language === 'zh'
@@ -2131,8 +2136,12 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     ? [publishedDetail?.primaryScore, publishedDetail?.alternativeScore].filter((score): score is ScoreProbability => Boolean(score)).map((score, index) => ({
       ...score, tone: index === 0 ? 'aligned' : 'alternate',
       tag: index === 0
-        ? publishedDetail?.scoreSource === 'published-matrix' ? (unifiedRow?.decision.primaryPickPolicyVersion ? (language === 'zh' ? '比分首选 · 低置信' : 'Score primary · low confidence') : (language === 'zh' ? '同一模型同向比分' : 'Aligned score from the same model')) : (language === 'zh' ? '旧补充分布 · 同向参考' : 'Legacy supplemental aligned score')
-        : (language === 'zh' ? '全局备选 · 不改变首选' : 'Global alternative · primary unchanged'),
+        ? publishedDetail?.scoreSource === 'published-matrix'
+          ? isIndependentPublication
+            ? (language === 'zh' ? '全局比分分布参考 · 低置信' : 'Global score distribution reference · low confidence')
+            : (language === 'zh' ? '同向比分参考 · 低置信' : 'Aligned score reference · low confidence')
+          : (language === 'zh' ? '旧补充分布 · 同向参考' : 'Legacy supplemental aligned score')
+        : (language === 'zh' ? '全局比分分布参考' : 'Global score distribution reference'),
     }))
     : legacyScoreRecommendations;
   const displayedScoreText = useUnified ? publishedDetail?.primaryScore?.label || (language === 'zh' ? '暂无同向比分' : 'No aligned score available') : projectedScoreText;
@@ -2206,7 +2215,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     : publicRecommendationCopy.oddsLabel;
   const publicScoreNote = useUnified
     ? publishedDetail?.scoreSource === 'published-matrix'
-      ? (unifiedRow?.decision.primaryPickPolicyVersion ? (language === 'zh' ? '各玩法来自同一完整比分分布，分别选择首选。比分首选不强制符合胜平负或让球首选；单个比分概率不等于总进球或胜平负概率。' : 'Each market selects its own primary from the same full score distribution. The score mode need not match the marginal 1X2 or handicap pick.') : (language === 'zh' ? '比分与胜平负、让球来自同一发布记录。首选比分同时符合两个方向；全局备选保留模型原始排序。单一比分概率不是胜平负总概率，也不是实际命中率。' : 'Scores, 1X2 and handicap use the same published record. The primary score matches both directions; the global alternative keeps the model ranking. An individual score probability is neither an outcome total nor an observed hit rate.'))
+      ? isCoherentPublication
+        ? (language === 'zh' ? '同向比分参考符合本条主方向及已有的伴随方向。显示的是完整冻结矩阵中的无条件概率，未按同向范围重新归一化；全局比分分布参考和总进球分布最高项另作分布说明。' : 'Aligned score references match this record’s primary and any companion direction. Displayed probabilities are unconditional masses from the frozen matrix, without renormalizing the aligned subset. The global score mode and leading total-goals bucket describe the distribution separately.')
+        : isIndependentPublication
+          ? (language === 'zh' ? '此旧版记录的各玩法独立选择方向。比分展示全局分布最高项，可能与胜平负或让球方向不同；单一比分与总进球均为无条件概率，仅作分布参考。' : 'This legacy record selects each market independently. The global score mode may differ from its 1X2 or handicap direction. Score and total-goals probabilities are unconditional distribution references.')
+          : (language === 'zh' ? '比分与胜平负、让球来自同一发布记录。同向比分符合已记录方向；全局分布参考保留模型原始排序。单一比分概率不是胜平负总概率，也不是实际命中率。' : 'Scores, 1X2 and handicap use the same published record. Aligned scores match the recorded directions; global distribution references retain the original model ranking. A score probability is neither an outcome total nor an observed hit rate.')
       : publishedDetail?.scoreSource === 'legacy-supplemental'
         ? (language === 'zh' ? '此旧记录尚无同源比分，当前为旧补充模型中的同向参考，未绑定该发布记录。单一比分概率不等于胜平负总概率。' : 'This older publication has no bound score projection. The aligned reference uses an older supplemental model, not this publication. A score probability is not an outcome total.')
         : (language === 'zh' ? '当前发布记录暂无可核验的同源比分，待比分依据补齐后展示。胜平负、让球推荐保留原记录。' : 'No verified score projection is available for this publication. Scores will appear when its evidence is available; the recorded 1X2 and handicap picks remain available.')
@@ -3162,10 +3175,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                     </div>
                   ) : scoreRecommendations.length ? scoreRecommendations.map((score, index) => (
                     <div key={score.label} className={`recommendation-score-option is-${score.tone}`}>
-                      <span>{index === 0 ? (language === 'zh' ? '比分一' : 'Score 1') : (language === 'zh' ? '比分二' : 'Score 2')}</span>
+                      <span>{useUnified && isCoherentPublication ? (language === 'zh' ? '同向比分参考' : 'Aligned score reference') : index === 0 ? (language === 'zh' ? '比分一' : 'Score 1') : (language === 'zh' ? '比分二' : 'Score 2')}</span>
                       <strong>{score.label}</strong>
                       <em>{score.tag}</em>
-                      {useUnified && typeof score.probability === 'number' && Number.isFinite(score.probability) && <small>{score.probability.toFixed(1)}% · {language === 'zh' ? '单一比分概率' : 'Individual score probability'}</small>}
+                      {useUnified && typeof score.probability === 'number' && Number.isFinite(score.probability) && <small>{score.probability.toFixed(1)}% · {language === 'zh' ? '单一比分无条件概率' : 'Unconditional score probability'}</small>}
                     </div>
                   )) : (
                     <div className="recommendation-score-option is-empty">
@@ -3208,42 +3221,52 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   <b>{language === 'zh' ? '参考分析' : 'Reference analysis'}</b>
                 </div>
                 <div className="recommendation-score-list">
-                  <div className="recommendation-score-option">
-                    <span>{language === 'zh' ? '胜平负' : '1X2'}</span>
+                  {publishedMarketOrder.map(market => market === 'HAD' ? <div key={market} className="recommendation-score-option">
+                    <span>{primaryMarketLabel(unifiedRow.decision, 'HAD', language === 'zh')}</span>
                     <strong>{publishedHadNames[unifiedRow.decision.tipCode]}</strong>
-                    <em>{language === 'zh' ? '已冻结方向' : 'Frozen direction'}</em>
-                    <small>{(unifiedRow.decision.modelProbability * 100).toFixed(1)}% · SP {unifiedRow.decision.odds.toFixed(2)}</small>
-                  </div>
-                  <div className="recommendation-score-option">
-                    <span>{language === 'zh' ? '让球胜平负' : 'Handicap 1X2'}</span>
+                    <em>{isCoherentPublication
+                      ? unifiedRow.decision.coherentPrimary?.anchorMarket === 'HAD'
+                        ? (language === 'zh' ? '有效玩法中概率最高' : 'Highest probability among available markets')
+                        : (language === 'zh' ? '主方向下的兼容伴随' : 'Compatible companion to the primary')
+                      : (language === 'zh' ? '已冻结方向' : 'Frozen direction')}</em>
+                    <small>{(unifiedRow.decision.modelProbability * 100).toFixed(1)}% · {language === 'zh' ? '无条件概率' : 'Unconditional probability'} · SP {unifiedRow.decision.odds.toFixed(2)}</small>
+                  </div> : <div key={market} className="recommendation-score-option">
+                    <span>{publishedHandicapDirection ? primaryMarketLabel(unifiedRow.decision, 'HHAD', language === 'zh') : (language === 'zh' ? '让球胜平负' : 'Handicap 1X2')}</span>
                     <strong>{publishedHandicapDirection
-                      ? `${handicapTipLabel(publishedHandicapDirection)[language]} (${publishedHandicap!.handicapLine > 0 ? '+' : ''}${publishedHandicap!.handicapLine})`
+                      ? `${handicapTipLabel(publishedHandicapDirection)[language]} · ${handicapLineLabel(publishedHandicap!.handicapLine, language === 'zh')}`
                       : '—'}</strong>
                     <em>{publishedHandicapDirection
-                      ? publishedHandicap?.version === 'handicap-margin-v3'
-                        ? (language === 'zh' ? '完整比分矩阵概率最高' : 'Highest full-matrix probability')
-                        : publishedHandicap?.probabilityBasis === 'conditional-on-straight-primary'
-                          ? (language === 'zh' ? '旧版条件让球分析' : 'Legacy conditional handicap analysis')
-                          : (language === 'zh' ? '旧版独立让球分析' : 'Legacy standalone handicap analysis')
-                      : (language === 'zh' ? '冻结记录未包含让球分析' : 'No bound handicap analysis')}</em>
-                    <small>{publishedHandicapDirection && Number.isFinite(publishedHandicapProbability) ? `${(Number(publishedHandicapProbability) * 100).toFixed(1)}% · ` : ''}{publishedHandicapSp !== null
+                      ? isCoherentPublication
+                        ? unifiedRow.decision.coherentPrimary?.anchorMarket === 'HHAD'
+                          ? (language === 'zh' ? '有效玩法中概率最高' : 'Highest probability among available markets')
+                          : (language === 'zh' ? '主方向下的兼容伴随' : 'Compatible companion to the primary')
+                        : publishedHandicap?.version === 'handicap-margin-v3'
+                          ? (language === 'zh' ? '完整比分矩阵概率最高' : 'Highest full-matrix probability')
+                          : publishedHandicap?.probabilityBasis === 'conditional-on-straight-primary'
+                            ? (language === 'zh' ? '旧版条件让球分析' : 'Legacy conditional handicap analysis')
+                            : (language === 'zh' ? '旧版独立让球分析' : 'Legacy standalone handicap analysis')
+                      : (language === 'zh' ? '本条暂无可用让球方向' : 'No available handicap direction in this record')}</em>
+                    <small>{publishedHandicapDirection && Number.isFinite(publishedHandicapProbability) ? `${(Number(publishedHandicapProbability) * 100).toFixed(1)}% · ${isCoherentPublication ? (language === 'zh' ? '无条件概率 · ' : 'Unconditional probability · ') : ''}` : ''}{publishedHandicapSp !== null
                       ? `SP ${publishedHandicapSp.toFixed(2)}`
                       : (language === 'zh' ? '本条未绑定该方向的官方让球 SP' : 'No official handicap SP bound to this outcome')}</small>
-                  </div>
+                  </div>)}
                   <div className="recommendation-score-option">
-                    <span>{language === 'zh' ? '比分' : 'Exact score'}</span>
+                    <span>{isCoherentPublication ? (language === 'zh' ? '同向比分参考' : 'Aligned score reference') : isIndependentPublication ? (language === 'zh' ? '全局比分分布参考' : 'Global score distribution reference') : (language === 'zh' ? '比分参考' : 'Score reference')}</span>
                     <strong>{publishedDetail?.scoreSource === 'published-matrix' ? publishedDetail.primaryScore?.label || '—' : '—'}</strong>
                     <em>{publishedDetail?.scoreSource === 'published-matrix'
                       ? (language === 'zh' ? '同一冻结比分矩阵' : 'Same frozen score matrix')
                       : (language === 'zh' ? '同源比分矩阵不可用' : 'Bound score matrix unavailable')}</em>
                     <small>{publishedDetail?.scoreSource === 'published-matrix' && publishedDetail.primaryScore
-                      ? `${publishedDetail.primaryScore.probability.toFixed(1)}% · ` : ''}{language === 'zh' ? '本条未绑定竞彩比分 SP，仅作模型参考' : 'No official exact-score SP bound; model reference only'}</small>
+                      ? `${publishedDetail.primaryScore.probability.toFixed(1)}% · ${language === 'zh' ? '无条件概率' : 'Unconditional probability'} · ` : ''}{language === 'zh' ? '本条未绑定竞彩比分 SP，仅作模型参考' : 'No official exact-score SP bound; model reference only'}</small>
+                    {isCoherentPublication && publishedGlobalScore && publishedGlobalScore.label !== publishedDetail?.primaryScore?.label && <small>
+                      {language === 'zh' ? '全局比分分布参考：' : 'Global score distribution reference: '}{publishedGlobalScore.label} · {publishedGlobalScore.probability.toFixed(1)}% · {language === 'zh' ? '无条件概率' : 'Unconditional probability'}
+                    </small>}
                   </div>
                   <div className="recommendation-score-option">
-                    <span>{language === 'zh' ? '总进球数' : 'Total goals'}</span>
+                    <span>{language === 'zh' ? '总进球分布最高项' : 'Leading total-goals bucket'}</span>
                     <strong>{leadingPublishedTotal ? `${leadingPublishedTotal.label}${language === 'zh' ? ' 球' : ' goals'}` : '—'}</strong>
                     <em>{leadingPublishedTotal
-                      ? `${(leadingPublishedTotal.probability * 100).toFixed(1)}% · ${language === 'zh' ? '完整矩阵聚合' : 'Full-matrix aggregate'}`
+                      ? `${(leadingPublishedTotal.probability * 100).toFixed(1)}% · ${language === 'zh' ? '完整矩阵无条件概率' : 'Unconditional full-matrix probability'}`
                       : (language === 'zh' ? '同源总进球分布不可用' : 'Bound total-goals distribution unavailable')}</em>
                     <small>{language === 'zh' ? '本条未绑定竞彩总进球 SP，仅作模型参考' : 'No official total-goals SP bound; model reference only'}</small>
                   </div>
@@ -4257,7 +4280,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               <div className="card score-projection-card match-detail-v4__score-projection">
                 <h4 className="match-detail-v4__score-heading">
                   <Trophy size={16} />
-                  {t('scorePrediction')}
+                  {useUnified && isCoherentPublication ? (language === 'zh' ? '同向比分参考' : 'Aligned score reference') : t('scorePrediction')}
                 </h4>
                 <div className="match-detail-v4__score-value">
                   {displayedScoreText}

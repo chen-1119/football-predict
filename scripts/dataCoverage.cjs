@@ -28,6 +28,8 @@ const TEXT=Object.freeze({
   'model-lead-too-thin':'模型首位领先过薄，仅供观望',
   'material-model-market-disagreement':'模型与同期官方市场差异过大，仅供观望',
   'cross-track-direction-conflict':'同场赛前参考与发布方向相反，仅供观望',
+  'anchor-market-unavailable':'主方向玩法的冻结报价未通过核验，仅供观望',
+  'quote-stale':'主方向玩法的报价已过期或时间未通过核验，等待真实新报价',
   'awaiting-publication':'正在等待赛前推荐发布',
   'input-invalid':'比赛输入未通过核验，暂未入选',
 });
