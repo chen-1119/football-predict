@@ -71,7 +71,17 @@
 
 ```text
 node scripts/runRecommendationVersionComparison.cjs freeze --input <只读线上原始导出> --public-reference-input <原键序公开参考原件> --output <新实验目录>
+node scripts/readRecommendationResultHeads.cjs --experiment <已封存实验目录> --output <新的只读赛果导出>
 node scripts/runRecommendationVersionComparison.cjs compare --results <新只读线上赛果导出> --output <已封存实验目录>
 ```
 
 `freeze` 读取一次原文件字节并计算 SHA，保存真实代码提交和关键文件 SHA。再次冻结必须使用新实验目录和新版本，不能修改已封存预测。部署仍由本聊天原发布跟进在真实安全窗口重新检查，完成正式签名发布与线上验收后才可称上线；本地构建和 Git 推送不等同上线。
+
+### 今晚已封存的版本与执行状态
+
+- 新实验在北京时间 **23:16:36.519** 生成，7 场全部开赛前；代码提交为 `bcba5501afdf0110ce95da13f8425ce9f980cbd2`。仓库中的 `research/2026-10-05/independent-outcome-shadow-v2.json` 与私有封存文件字节一致，内容哈希为 `53b846177dd372f7cd3b2551f2b0aea4e80b94e1c34cd953ab528fbf9440a31a`。
+- 冻结与比较 CLI 已实际运行。再次冻结被拒绝，原文件哈希不变。233 个原发布批次、85 条当天公开参考及 7 条前一天公开参考都保持独立统计。
+- 最新实际只读结果采样为 **23:23:49.039227**：7 场确认结果均为 0，全部待赛果，命中率为 null。结果读取器使用固定 SSH 指纹、只读 PG 事务、15 秒查询预算与 2 秒锁预算，原响应独立保存；生产写入为 0。
+- V2 主策略、展示及版本比较联合回归 166 项通过、0 跳过，结果读取器另外 9 项通过。TypeScript / Vite / 静态数据剥离完整构建通过；展示语义 31 项通过，完整发布验证契约已通过。全仓 lint 仍沿用前述未通过状态，没有记为通过。
+- 23:23:52 正式只读发布准备检查仍为 `transition-window-closed`，现网运行标记仍为 r792 的 `014a9f9105cd0987a402d629b319b6ed4da42c8799b2d696aab21ed41c0d7166`。下一检查安排在 10 月 6 日 00:05，仍须由完整控制器重新准入。
+- 已设置当前聊天赛果跟进，10 月 6 日 02:10、05:10、08:10 检查；仅新增确认结果、失败或完成时通知。七场全部确认或官方无效且没有争议后停止本轮跟进。发布验收与赛果核对分别运行。
