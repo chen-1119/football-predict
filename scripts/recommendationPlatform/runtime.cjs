@@ -9,6 +9,7 @@ const {selectionQuality,publishedSelectionQuality,prospectiveRiskReasons,isQuali
 const {classifyOutcomeResearch}=require('../../src/services/outcomeCategoryResearch.cjs');
 const {conflictForDecision}=require('../../src/services/recommendationCrossTrackConflict.cjs');
 const {buildPublishedScoreDistribution}=require('../../src/services/publishedScoreDistribution.cjs');
+const {evaluateEvidencePriceRecommendation}=require('../../src/services/evidencePriceRecommendationPolicy.cjs');
 const {buildQualityReport}=require('./qualityReport.cjs');
 const {buildDataCoverage}=require('../dataCoverage.cjs');
 const {createDualResearchRecord}=require('./dualChoiceResearch.cjs');
@@ -230,8 +231,16 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
         && row.settlement.state==='PENDING';
       const quality=publishedSelectionQuality(row.decision,open?{now}:{});
       const conflict=conflictForDecision(targetMatches,row.decision,now);
+      const referenceMatch=targetMatches.find(match=>String(match?.sourceMatchId||match?.id||'').replace(/^sporttery_/,'')===row.decision.sourceMatchId
+        && time(match.eventVersion||match.kickoffTime)===time(row.decision.eventVersion)
+        && match.homeTeamId===row.decision.homeTeamId && match.awayTeamId===row.decision.awayTeamId)||null;
+      // A current, read-only strategy assessment never replaces the frozen
+      // publication, its primary/conditional branch, or historical denominators.
+      // No calibration authorization adapter is installed: formal picks remain
+      // withheld, while unconditional model tendencies can be compared later.
+      const strategyAssessment=evaluateEvidencePriceRecommendation(row.decision,{asOf:now,referenceMatch});
       const risk=quality.assessmentBasis==='coherent-primary-anchor-v1'?[]:prospectiveRiskReasons(quality);
-      const current=(!conflict&&!risk.length)?{...row,selectionQuality:quality}:{...row,selectionQuality:{...quality,status:'watch',qualified:false,
+      const current=(!conflict&&!risk.length)?{...row,strategyAssessment,selectionQuality:quality}:{...row,strategyAssessment,selectionQuality:{...quality,status:'watch',qualified:false,
         reasons:[...new Set([...(quality.reasons||[]),...risk,...(conflict?[conflict.reason]:[])])],
         ...(conflict?{crossTrack:conflict}:{})}};
       // The research projection is read-only and exists only for an open

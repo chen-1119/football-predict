@@ -68,7 +68,7 @@ test('current center shows the won HHAD primary and lost HAD companion while sta
   const primary=nodes(card,node=>node.props?.['data-result-market']==='HHAD');assert.equal(primary.length,1);
   assert.equal(words(primary[0]),'让球 · 主方向：命中');assert.match(primary[0].props.className,/rc-state--WON/);
   const companion=nodes(card,node=>node.props?.['data-companion-result-market']==='HAD');assert.equal(companion.length,1);
-  assert.equal(words(companion[0]),'胜平负 · 伴随方向：未命中');
+  assert.equal(words(companion[0]),'胜平负 · 条件分支：未命中');
   const stats=byClass(tree,'rc-stats-wrap')[0];assert.match(words(stats),/胜平负归档统计（HAD）/);assert.match(words(stats),/沿用 HAD 冻结方向结算，不代表当前主方向汇总/);
   assert.match(words(byClass(stats,'rc-stats')[0]),/0\.0%.*0 \/ 1/);assert.equal(JSON.stringify(ui.data),before);
 });
@@ -79,7 +79,7 @@ test('review HAD baseline and explicit HHAD filter override the coherent primary
   const before=JSON.stringify(ui.data);
   let tree=ui.render(),card=byClass(tree,'rc-pick')[0],result=nodes(card,node=>Boolean(node.props?.['data-result-market']))[0];
   // The review endpoint explicitly selects HAD for its default baseline.
-  assert.equal(result.props['data-result-market'],'HAD');assert.equal(words(result),'胜平负 · 伴随方向：未命中');assert.match(result.props.className,/rc-state--LOST/);
+  assert.equal(result.props['data-result-market'],'HAD');assert.equal(words(result),'胜平负 · 条件分支：未命中');assert.match(result.props.className,/rc-state--LOST/);
   assert.equal(nodes(card,node=>Boolean(node.props?.['data-companion-result-market'])).length,0);
   assert.match(words(byClass(tree,'rc-stats-wrap')[0]),/胜平负归档统计（HAD）/);assert.match(words(byClass(tree,'rc-stats')[0]),/0\.0%.*0 \/ 1/);
   const coherentBreakdown=nodes(tree,node=>node.type==='article'&&words(node).includes('兼容策略 · HHAD方向'));
@@ -91,7 +91,7 @@ test('review HAD baseline and explicit HHAD filter override the coherent primary
   nodes(tree,node=>node.type==='select')[2].props.onChange({target:{value:'LOST'}});tree=ui.render();assert.equal(byClass(tree,'rc-pick').length,0);
   assert.match(words(byClass(tree,'rc-stats')[0]),/100\.0%.*1 \/ 1/,'result filters retain the HHAD cohort denominator');
   button(tree,'清除筛选').props.onClick();tree=ui.renderSettled();result=nodes(byClass(tree,'rc-pick')[0],node=>Boolean(node.props?.['data-result-market']))[0];
-  assert.equal(result.props['data-result-market'],'HAD');assert.equal(words(result),'胜平负 · 伴随方向：未命中');assert.equal(JSON.stringify(ui.data),before);
+  assert.equal(result.props['data-result-market'],'HAD');assert.equal(words(result),'胜平负 · 条件分支：未命中');assert.equal(JSON.stringify(ui.data),before);
 });
 
 test('current center leaves a missing HHAD primary unresolved beside the recorded HAD outcome',async()=>{
@@ -99,7 +99,7 @@ test('current center leaves a missing HHAD primary unresolved beside the recorde
   ui.data.current=[row];ui.data.businessDate=new Date(Date.now()+8*3600000).toISOString().slice(0,10);
   const card=byClass(ui.render(),'rc-pick')[0],result=nodes(card,node=>node.props?.['data-result-market']==='HHAD')[0];
   assert.match(words(result),/^让球 · 主方向：.*待核$/);assert.doesNotMatch(result.props.className,/rc-state--LOST|rc-state--WON/);
-  assert.equal(words(nodes(card,node=>node.props?.['data-companion-result-market']==='HAD')[0]),'胜平负 · 伴随方向：未命中');
+  assert.equal(words(nodes(card,node=>node.props?.['data-companion-result-market']==='HAD')[0]),'胜平负 · 条件分支：未命中');
 });
 
 test('review reads real pages of twelve out of sixty-nine without changing aggregate statistics',async()=>{

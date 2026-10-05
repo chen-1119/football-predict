@@ -364,7 +364,7 @@ test('new v3 narrow-win record renders the same independent selection in recomme
     assert.ok(html.includes(copy.title));assert.ok(html.includes(copy.detail));assert.match(html,/data-handicap-extension="recommend"/);
     assert.ok(html.includes(row.decision.decisionId));assert.ok(html.includes(row.decision.recordHash));
   }
-  const detailed=renderedText(data,{},p.now);assert.match(detailed,/无条件概率/);assert.match(detailed,/主方向确定后/);
+  const detailed=renderedText(data,{},p.now);assert.match(detailed,/无条件概率/);assert.match(detailed,/条件分支不是独立推荐/);assert.match(detailed,/不把条件分支占比当作模型胜率/);
   const combo=renderedText(data,{mode:'review',initialTab:frozen.size===2?'two':'three'});
   assert.match(combo,/让球胜平负<!-- --> -2|让球胜平负 -2/);assert.match(combo,/SP 1\.60/);
   assert.equal(JSON.stringify(data),before);

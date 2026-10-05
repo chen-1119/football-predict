@@ -44,12 +44,20 @@ export function publishedDetailPresentation(decision: Decision | null, distribut
   const primaryScore = (decision.primaryPickPolicyVersion === 'independent-market-primary-v1' ? scores[0] : alignedScores[0]) || null;
   // Without an aligned primary, an alternate must not visually take its place.
   const alternativeScore = !decision.primaryPickPolicyVersion && primaryScore ? scores.find(row => row.label !== primaryScore.label) || null : null;
+  const coherent = decision.primaryPickPolicyVersion === 'coherent-market-primary-v1' ? decision.coherentPrimary : null;
+  // Compatibility only asks whether the actual anchor can land on this score.
+  // Do not also require its conditional branch, or reweight the score probability.
+  const globalTopScores = scores.slice(0, 3).map(row => ({ ...row, primaryCompatible:
+    scoreSource !== 'published-matrix' || !coherent ? null
+      : coherent.anchorMarket === 'HAD' ? outcome(row) === coherent.anchorCode
+        : decision.handicapAnalysis ? outcome({ home: row.home + decision.handicapAnalysis.handicapLine, away: row.away }) === coherent.anchorCode
+          : null }));
   return {
     decisionId: decision.decisionId, recordHash: decision.recordHash,
     tipCode: decision.tipCode, modelProbability: decision.modelProbability,
     probabilities: { home: decision.probabilities['1'] * 100, draw: decision.probabilities.X * 100, away: decision.probabilities['2'] * 100 },
     modelGeneratedAt: decision.modelGeneratedAt, publishedAt: decision.publishedAt,
     quoteObservedAt: decision.quoteObservedAt, cutoffTime: decision.cutoffTime,
-    primaryScore, alternativeScore, scoreSource, globalScores: scores, alignedScores,
+    primaryScore, alternativeScore, scoreSource, globalScores: scores, globalTopScores, alignedScores,
   };
 }

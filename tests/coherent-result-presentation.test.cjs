@@ -120,13 +120,13 @@ test('result labels distinguish no publication, missing result, and every record
 test('actual PublishedMatchPick labels both coherent markets with their own 1-1 outcomes',()=>{
  const r=row(),before=JSON.stringify(r),text=renderedResults(render(r));
  assert.match(text,/让球\s*·\s*主方向[：:]\s*命中(?:\s|·|$)/);
- assert.match(text,/胜平负\s*·\s*伴随方向[：:]\s*未命中(?:\s|$)/);
+ assert.match(text,/胜平负\s*·\s*条件分支[：:]\s*未命中(?:\s|$)/);
  assert.match(text,/1-1/);assert(text.indexOf('让球')<text.indexOf('胜平负'));assert.equal(JSON.stringify(r),before);
 });
 
 test('actual PublishedMatchPick keeps a missing HHAD primary unresolved beside a known HAD result',()=>{
  const r=row();delete r.handicapSettlement;r.settlement={state:'WON',score:'1-1'};
- const text=renderedResults(render(r));assert.match(text,/让球\s*·\s*主方向[：:]\s*[^\s]*待核/);assert.match(text,/胜平负\s*·\s*伴随方向[：:]\s*命中(?:\s|$)/);assert.doesNotMatch(text,/1-1/);
+ const text=renderedResults(render(r));assert.match(text,/让球\s*·\s*主方向[：:]\s*[^\s]*待核/);assert.match(text,/胜平负\s*·\s*条件分支[：:]\s*命中(?:\s|$)/);assert.doesNotMatch(text,/1-1/);
 });
 
 test('required evidence scanner rejects fixed-HAD results, missing version guards and detached market-role rendering',()=>{
