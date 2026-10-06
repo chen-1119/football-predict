@@ -358,6 +358,43 @@ const readPostgresMatchById = async (pool, id, options = {}) => {
   return result.available ? result.value : null;
 };
 
+// Only detail routes use alias admission. Accounts, publishers and settlement
+// continue to use the original reader and immutable identities.
+const readPostgresMatchDetailById = async (pool, id, options = {}) => {
+  const matchId = String(id || '').trim();
+  const {detailAliasSource} = require('../src/services/matchDetailIdentity.js');
+  const sourceId = detailAliasSource(matchId);
+  if (!sourceId) return readPostgresMatchById(pool,matchId,options);
+  const result = await withReadSnapshot(pool,options.publicationIdentity,async (client,publication) => {
+    await client.query("SET LOCAL statement_timeout = '2500ms'");
+    const rows = await client.query(`SELECT payload,dataset,match_id,source_match_id,kickoff_time::text AS kickoff_time FROM football.match_snapshots
+      WHERE dataset IN ('current','history') AND (match_id=$1 OR source_match_id=$2)
+      ORDER BY CASE dataset WHEN 'current' THEN 0 ELSE 1 END,kickoff_time DESC LIMIT 17`,[matchId,sourceId]);
+    if (!rows.rows.length || rows.rows.length > 16) return null;
+    const candidates = parsePayloadRows(rows.rows);
+    if (candidates.length !== rows.rows.length) return null;
+    // Exact canonical IDs retain the existing strict path. Never attach an
+    // alias receipt to an already exact response or rewrite a stored row.
+    const match = candidates.reduce((current,candidate) =>
+      current ? reconcileMatchLifecycle(current,candidate) : resolveMatchLifecycle(candidate),null);
+    if (match.id === matchId) return match;
+    const {DETAIL_ALIAS_DECISION_HEADS_SQL,decisionRowMatchesPayload,postgresClock,bindMatchDetailAlias} = require('./matchDetailIdentity.cjs');
+    const {exactDetailClock} = require('../src/services/matchDetailIdentity.js');
+    if (rows.rows.some((row,i) => row.match_id !== candidates[i].id || row.source_match_id !== candidates[i].sourceMatchId
+      || exactDetailClock(postgresClock(row.kickoff_time)) === null
+      || exactDetailClock(postgresClock(row.kickoff_time)) !== exactDetailClock(candidates[i].kickoffTime))) return null;
+    const frozen = await client.query(DETAIL_ALIAS_DECISION_HEADS_SQL,[sourceId,matchId]);
+    if (frozen.rows.length > 16 || frozen.rows.some(row => !decisionRowMatchesPayload(row))) return null;
+    const clock = await client.query('SELECT clock_timestamp()::text AS observed_at');
+    const observedAt = postgresClock(clock.rows[0]?.observed_at);
+    const decisions = parsePayloadRows(frozen.rows);
+    if (decisions.length !== frozen.rows.length) return null;
+    return bindMatchDetailAlias({requestedId:matchId,
+      candidates:[match,...candidates],decisions,publication,observedAt});
+  });
+  return result.available ? result.value : null;
+};
+
 const readPostgresOddsHistoryRows = async (pool, options = {}) => {
   const safeLimit = Math.max(1, Math.min(500, Number(options.limit || 200)));
   const matchId = String(options.matchId || "").trim();
@@ -461,6 +498,7 @@ module.exports = {
   readPostgresHistoryMatchesForList,
   readPostgresHistoryMatchesPage,
   readPostgresMatchById,
+  readPostgresMatchDetailById,
   readPostgresOddsHistoryRows,
   readPostgresPredictionSnapshotRows,
   readPostgresPublicationIdentity,

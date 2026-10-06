@@ -58,6 +58,7 @@ const {
   readPostgresHistoryMatchesForList,
   readPostgresHistoryMatchesPage,
   readPostgresMatchById,
+  readPostgresMatchDetailById,
   readPostgresOddsHistoryRows,
   readPostgresPredictionSnapshotRows,
   readPostgresPublicReferenceEvidence,
@@ -6170,6 +6171,21 @@ const readMatchById = async (matchId, options = {}) => {
   return resolved ? enrichMatchHistoricalTraining(resolved) : null;
 };
 
+const readMatchDetailById = async (matchId, options = {}) => {
+  const decodedId = decodeURIComponent(matchId || '');
+  if (!shouldPreferPostgresRead()) {
+    const match = await readMatchById(decodedId,options);
+    return match?.id === decodedId ? match : null;
+  }
+  const basePublication = options.basePublication || resolveBasePublication();
+  const meta = readStablePublicationMetadata(basePublication,'sync-meta.json',null);
+  const postgresStatus = await getCachedPostgresReadStatus(meta,basePublication.identity || null);
+  requireNativePostgresReadStatus(postgresStatus);
+  if (!postgresFreshEnough(postgresStatus,'historyMatches',1)) return null;
+  const match = await readPostgresMatchDetailById(postgresPool,decodedId,{publicationIdentity:basePublication.identity || null});
+  return match ? enrichMatchHistoricalTraining(match) : null;
+};
+
 const readOddsHistoryPage = async (url) => {
   const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") || 200)));
   if (shouldPreferPostgresRead()) {
@@ -11333,7 +11349,7 @@ const buildV1MatchPayload = async (matchId) => {
 
   const promise = (async () => {
     const [match, sources] = await Promise.all([
-      readMatchById(decodedId, { basePublication }),
+      readMatchDetailById(decodedId, { basePublication }),
       getSourceHealth().catch(() => null)
     ]);
     if (!match) return null;
@@ -11845,7 +11861,7 @@ const handleApi = async (req, res, url) => {
   const matchDetailRoute = url.pathname.match(/^\/api\/matches\/([^/]+)$/);
   if (matchDetailRoute) {
     const [match, globalRiskTier] = await Promise.all([
-      readMatchById(matchDetailRoute[1]),
+      readMatchDetailById(matchDetailRoute[1]),
       readGlobalRecommendationRiskTier(),
     ]);
     return match

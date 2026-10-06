@@ -1,4 +1,6 @@
 import { PrematchCollectionPanel } from '../components/predictions/PrematchCollectionPanel';
+import { acceptMatchDetail, detailResponseMatchesFields } from '../services/matchDetailIdentity.js';
+import type { DetailIdentityBinding } from '../services/matchDetailIdentity.js';
 import { useRecommendationCenter } from '../hooks/useRecommendationCenter';
 import { publishedMatchRecommendation, publishedPosteriorDisagreement, usesPublishedRecommendation } from '../services/publishedMatchRecommendation';
 import { MixedModelEstimateNote, PublishedMatchPick } from '../components/recommendations/PublishedMatchPick';
@@ -62,8 +64,9 @@ interface MatchDetailProps {
 
 type MatchDetailCacheEntry = {
   etag: string;
-  match: Match;
+  match: DetailMatch;
 };
+type DetailMatch = Match & { detailIdentity?: DetailIdentityBinding };
 
 type DetailRequestStatus = 'loading' | 'ready' | 'failed';
 
@@ -1209,7 +1212,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   const displayText = (value: string | null | undefined, fallback = '') => formatSourceNeutralText(value, language, fallback);
   const [activeTab, setActiveTab] = useState<DetailTab>(initialTab);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [fullMatch, setFullMatch] = useState<Match | null>(null);
+  const [fullMatch, setFullMatch] = useState<DetailMatch | null>(null);
   const [detailRequestState, setDetailRequestState] = useState<{
     matchId: string;
     status: DetailRequestStatus;
@@ -1356,7 +1359,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           }
           if (!response) continue;
           if (response.status === 304 && cached) {
+            if (!await acceptMatchDetail(matchId,cached.match)) {
+              matchDetailResponseCache.delete(requestUrl);
+              lastFailure = 'cached-identity-invalid';
+              continue;
+            }
             if (!cancelled) {
+              setNowMs(Date.now());
               setFullMatch(cached.match);
               setDetailRequestState({ matchId, status: 'ready' });
               markDetailNavigation(matchId, detailNavigationStartedAtRef.current, 'data', 'ready', `${detailRequest.source}-cache`);
@@ -1373,8 +1382,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
             }
           }
           const matchPayload = data?.match || data;
-          if (!cancelled && matchPayload?.id === matchId) {
-            const resolvedMatch = matchPayload as Match;
+          if (!cancelled && response.ok && await acceptMatchDetail(matchId,matchPayload)) {
+            if (cancelled || controller.signal.aborted) return;
+            const resolvedMatch = matchPayload as DetailMatch;
             const etag = response.headers.get('etag');
             if (etag) {
               matchDetailResponseCache.set(requestUrl, { etag, match: resolvedMatch });
@@ -1383,6 +1393,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 if (oldestKey) matchDetailResponseCache.delete(oldestKey);
               }
             }
+            setNowMs(Date.now());
             setFullMatch(resolvedMatch);
             setDetailRequestState({ matchId, status: 'ready' });
             markDetailNavigation(matchId, detailNavigationStartedAtRef.current, 'data', 'ready', detailRequest.source);
@@ -1410,11 +1421,15 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
   // 获取比赛详情
   const match = useMemo(() => {
-    const detailMatch = fullMatch?.id === matchId ? fullMatch : null;
+    const detailMatch = fullMatch && detailResponseMatchesFields(matchId,fullMatch,nowMs) ? fullMatch : null;
+    // A verified alias response is one atomic PG snapshot. Do not let a
+    // differently named context row replace it via the permissive lifecycle
+    // fallback or merge source clocks from a different observation.
+    if (detailMatch && detailMatch.id !== matchId) return resolveMatchLifecycle(detailMatch,nowMs);
     const contextMatch = matches.find((item) => item.id === matchId);
     return selectFreshestMatch(detailMatch, contextMatch, worldCupSeededMatch, nowMs);
   }, [fullMatch, matchId, matches, nowMs, worldCupSeededMatch]);
-  const hasAuthoritativeDetailMatch = fullMatch?.id === matchId;
+  const hasAuthoritativeDetailMatch = detailResponseMatchesFields(matchId,fullMatch,nowMs);
   const shellKickoffAt = Date.parse(match?.kickoffTime || '');
   const isPastKickoffAwaitingAuthoritativeDetail = Boolean(
     match
