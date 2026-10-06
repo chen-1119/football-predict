@@ -104,6 +104,7 @@ export function RecommendationEvidenceFacts({
     const view = publishedDetailPresentation(publishedDecision);
     const conditionalBranch = isFrozenHadConditionalBranch(publishedDecision);
     return <section className={joinClassNames('recommendation-evidence-facts', className)} data-testid="published-recommendation-evidence" data-decision-id={view?.decisionId} data-record-hash={view?.recordHash}>
+      <details className="published-match-pick__basis" data-frozen-record-evidence="HAD"><summary>{language === 'zh' ? '查看原冻结胜平负记录' : 'View original frozen 1X2 record'}</summary>
       <h3>{language === 'zh' ? '原冻结胜平负记录' : 'Original frozen 1X2 record'}</h3>
       {view ? <>
         <strong data-frozen-had-role={conditionalBranch ? 'conditional-branch' : 'selection'}>{conditionalBranch
@@ -121,6 +122,7 @@ export function RecommendationEvidenceFacts({
         <small>{language === 'zh' ? '参考／影子模型概率，尚未验证为真实命中率。以下补充资料不构成本条发布记录的采用凭证。' : 'Reference/shadow model probabilities are not validated hit rates. Supplemental data does not prove adoption by this publication.'}</small>
       </> : <p>{language === 'zh' ? '暂无已发布推荐，等待统一记录；不使用旧模型方向或概率补位。' : 'No published recommendation yet; legacy model directions and probabilities are not substituted.'}</p>}
       {supplementaryModel && <details><summary>{language === 'zh' ? '补充模型快照的数据记录（未绑定本次发布）' : 'Supplemental model data (not bound to this publication)'}</summary><p>{language === 'zh' ? '下列时点、绑定和采用情况仅属于原模型快照，不代表上方已发布方向使用了这些输入。' : 'The times, bindings and adoption below belong only to the original model snapshot, not the published pick above.'}</p><DataAdoptionDetails match={match} language={language} /></details>}
+      </details>
     </section>;
   }
   const breakdown = getPublishedRecommendationEvidenceBreakdown(match, prediction);
