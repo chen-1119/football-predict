@@ -9,15 +9,23 @@ function validateSequenceBranches(source) {
   source = source.replace(/\r\n?/g, "\n");
   const marker = 'if [ "$MANIFEST_KIND" = "frontend-only" ]; then';
   const begin = source.lastIndexOf(marker);
-  const end = source.indexOf('\nreadonly TRUSTED_SOURCE_DIR=', begin);
-  assert.ok(begin >= 0 && end > begin, "missing exclusive frontend branch");
+  // The reviewed dispatch and its closing fi are at column zero; nested fi
+  // statements are indented. Full-only logging may precede trusted extraction,
+  // so that later declaration is not the frontend branch boundary.
+  assert.ok(begin >= 0 && (begin === 0 || source[begin - 1] === "\n"), "missing exclusive frontend branch");
+  const close = /\nfi(?=\n|$)/.exec(source.slice(begin));
+  assert.ok(close, "missing exclusive frontend branch closure");
+  const end = begin + close.index + close[0].length;
+  assert.ok(source.indexOf('\nreadonly TRUSTED_SOURCE_DIR=', end) > end, "missing full release continuation");
   const frontend = source.slice(begin, end);
   const full = source.slice(end);
   const count = value => value.split(BURN).length - 1;
   assert.equal(count(frontend), 1, "frontend must consume exactly once");
   assert.equal(count(full), 1, "full must consume exactly once");
   assert.equal(count(source.slice(0, begin)), 0, "no consumption before dispatch");
-  assert.ok(source.indexOf('readonly MANIFEST_SEQUENCE="$manifest_sequence"') < begin);
+  const sequence = source.indexOf('readonly MANIFEST_SEQUENCE="$manifest_sequence"');
+  assert.ok(sequence >= 0 && sequence < begin, "signed sequence must precede dispatch");
+  assert.doesNotMatch(frontend, /\n(?:else|elif)(?:\s|$)/, "frontend dispatch cannot fall through to a full alternative");
   assert.match(frontend, /if \[ "\$frontend_status" -ne 0 \]; then[\s\S]*?exit "\$frontend_status"\n  fi/);
   assert.match(frontend, /\n  exit 0\nfi\s*$/);
   assert.ok(frontend.indexOf(BURN) < frontend.indexOf('apply "$BUNDLE_SHA"'));

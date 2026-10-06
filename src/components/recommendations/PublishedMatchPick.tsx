@@ -2,7 +2,8 @@ import type { SingleRow } from '../../services/recommendationCenterView';
 import { publicationLifecycle, publicationLifecycleLabel, primaryMarketLabel, coherentProbabilityNote, primarySelectionSummary, handicapExtensionText, quoteSourceLabel, outcomeCategoryLabel, outcomeResearchReasonLabel, outcomeResearchFavoriteValueWarning } from '../../services/recommendationCenterView';
 import { publishedPickLabel, publishedResultLabel, publishedResultProjection, settlementResultLabel } from '../../services/publishedMatchRecommendation';
 import './published-match-pick.css';
-import { SelectionQualityNote, selectionReferenceLabel, SupplementaryResearchNote, PublishedHadDistribution, PublishedHadDirection, PublishedScoreDirection, PublishedPrimaryDirection, StrategyAssessmentNote } from './SelectionQualityNote';
+import { SelectionQualityNote, SupplementaryResearchNote, PublishedHadDistribution, PublishedHadDirection, PublishedScoreDirection, PublishedPrimaryDirection, StrategyAssessmentNote } from './SelectionQualityNote';
+import { selectionReferenceLabel } from '../../services/publishedRecommendationStatus.cjs';
 
 type Props = { row: SingleRow | null; language: 'zh'|'en'; loading?: boolean; failed?: boolean; compact?: boolean; now?: number };
 const time = (value:string,language:'zh'|'en') => new Intl.DateTimeFormat(language==='zh'?'zh-CN':'en-GB',{

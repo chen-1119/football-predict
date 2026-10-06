@@ -4,7 +4,6 @@ import { publishedDetailPresentation } from '../../services/publishedDetailPrese
 
 import { selectionPriceStatus, selectionReferenceLabel } from '../../services/publishedRecommendationStatus.cjs';
 import { publicationLifecycle, publicationLifecycleLabel } from '../../services/publishedRecommendationStatus.cjs';
-export { selectionPriceStatus, selectionReferenceLabel };
 /** Display only the verified projection's frozen anchor, never recompute a
  * direction from either market's odds or marginal ranking in the UI. */
 function primaryDirection(d:Decision,language:'zh'|'en',selectedMarket?:'HAD'|'HHAD'){

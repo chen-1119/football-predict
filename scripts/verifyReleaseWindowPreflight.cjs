@@ -398,6 +398,48 @@ function verifyReleaseWindowPreflight() {
     assert.throws(() => evaluate(fixture.run(helper)));
   });
   const create = readSource("scripts/createReleaseBundle.cjs");
+  const wrapper = readSource("deploy/light-server/football-release");
+  const { BURN, validateSequenceBranches } = require("./releaseSequencePreflight.cjs");
+  const mutateWrapper = (before, after) => {
+    assert.equal(wrapper.split(before).length - 1, 1, "mutation must target one real wrapper fragment");
+    const changed = wrapper.replace(before, after); assert.notEqual(changed, wrapper); return changed;
+  };
+  const mutateFrontend = (before, after) => {
+    const { frontend } = validateSequenceBranches(wrapper);
+    assert.equal(frontend.split(before).length - 1, 1, "mutation must target one real frontend fragment");
+    const changed = wrapper.replace(frontend, frontend.replace(before, after)); assert.notEqual(changed, wrapper); return changed;
+  };
+  check("real frontend closing fi excludes the full logging continuation without losing nested failure handling", () => {
+    const { frontend, full } = validateSequenceBranches(wrapper);
+    assert.match(frontend, /\n  exit 0\nfi$/);
+    assert.match(frontend, /\n    exit "\$frontend_status"\n  fi/);
+    assert.doesNotMatch(frontend, /readonly LOG_PATH="\$LATEST_LOG_PATH"/);
+    assert.match(full, /readonly LOG_PATH="\$LATEST_LOG_PATH"/);
+    assert.ok(full.indexOf('readonly LOG_PATH="$LATEST_LOG_PATH"') < full.indexOf('readonly TRUSTED_SOURCE_DIR='));
+    assert.equal(frontend.split(BURN).length - 1, 1); assert.equal(full.split(BURN).length - 1, 1);
+    validateSequenceBranches(mutateWrapper('readonly LOG_PATH="$LATEST_LOG_PATH"', '# full-only fixture continuation\nreadonly LOG_PATH="$LATEST_LOG_PATH"'));
+  });
+  check("frontend success and failure must both exit before the real full continuation", () => {
+    for (const [before, after] of [['  exit 0\nfi', '  :\nfi'], ['    exit "$frontend_status"', '    :'],
+      ['  exit 0\nfi', '  exit 0\nelse\n  :\nfi'], ['  exit 0\nfi', '  exit 0\nelif true; then\n  :\nfi']]) {
+      const changed = mutateFrontend(before, after);
+      assert.throws(() => validateSequenceBranches(changed));
+    }
+  });
+  check("sequence consumption cannot move before dispatch or repeat in either real branch", () => {
+    const { frontend, full } = validateSequenceBranches(wrapper);
+    assert.throws(() => validateSequenceBranches(wrapper.replace(frontend, BURN + '\n' + frontend)));
+    assert.throws(() => validateSequenceBranches(wrapper.replace(frontend, frontend.replace(BURN, BURN + '\n' + BURN))));
+    assert.throws(() => validateSequenceBranches(wrapper.replace(full, full.replace(BURN, BURN + '\n' + BURN))));
+    const noSignedSequence = mutateWrapper('readonly MANIFEST_SEQUENCE="$manifest_sequence"', 'readonly OTHER_SEQUENCE="$manifest_sequence"');
+    assert.throws(() => validateSequenceBranches(noSignedSequence));
+  });
+  check("missing top-level dispatch closure or full continuation fails the source gate", () => {
+    const noClosure = mutateFrontend('  exit 0\nfi', '  exit 0\n  fi');
+    const noFull = mutateWrapper('readonly TRUSTED_SOURCE_DIR=', 'readonly OTHER_SOURCE_DIR=');
+    assert.throws(() => validateSequenceBranches(noClosure));
+    assert.throws(() => validateSequenceBranches(noFull));
+  });
   check("actual deploy prefix requests upload stage and blocks clone or upload after a rejected observation", () => {
     const deploy = readSource("scripts/deployReleaseBundle.cjs");
     const start = deploy.indexOf("  // Reject a closed window before the archive scan, local clone, or uploads.");
