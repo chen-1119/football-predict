@@ -9510,22 +9510,7 @@ function sideFormSnapshot(match, side) {
 
 function formNeedPressure(match, side) {
   const form = sideFormSnapshot(match, side);
-  if (!form || Number(form.sampleSize || 0) < 3) return 0;
-  const ppg = Number(form.pointsPerMatch);
-  const goalDiff = Number(form.goalDiffAvg);
-  const restDays = Number(form.restDays);
-  let pressure = 0;
-  if (Number.isFinite(ppg)) {
-    if (ppg < 0.95) pressure += 5;
-    else if (ppg < 1.25) pressure += 3;
-    else if (ppg > 2.05) pressure -= 2;
-  }
-  if (Number.isFinite(goalDiff)) {
-    if (goalDiff < -0.55) pressure += 3;
-    else if (goalDiff > 0.85) pressure -= 1;
-  }
-  if (Number.isFinite(restDays) && restDays <= 3) pressure += 2;
-  return clamp(pressure, -4, 10);
+  return require('../src/services/formNeedPressure.cjs').formNeedPressureFromSnapshot(form);
 }
 
 function groupNeedPressure(advanceProbability) {
@@ -17981,8 +17966,15 @@ async function sync() {
   // Existing locked decisions still flow through applyPredictionPersistence's
   // preservation branch and retain their original revision/source cycle.
   output = finalizePublishedPredictionDecisions(output, existingBySourceId, capturedAt);
+  const prematchV3Registry = await require('../src/services/prematchV3ModelRegistry.cjs').loadPrematchV3ModelRegistry({
+    asOf: new Date().toISOString(),
+  });
   output = require('../src/services/prospectiveForecastInput.cjs').attachProspectiveForecastInputs(
-    output, prospectiveAuditMatches, Date.now(),
+    output, prospectiveAuditMatches, Date.now(), {
+      baseline: prematchV3Registry.baseline, parameters: prematchV3Registry.parameters,
+      modelRegistry: { asOf: prematchV3Registry.asOf, status: prematchV3Registry.status,
+        storage: prematchV3Registry.storage, blockers: prematchV3Registry.blockers, receipts: prematchV3Registry.receipts },
+    },
   );
   output = attachImmutableAnalysisReferenceDecisions(output, existingBySourceId, capturedAt);
   output = output.map((match) => attachWorldCupPrior(match, worldCupKimiDataset));
