@@ -18,15 +18,26 @@ const {officialResultValidators,resultAllowsCalibration}=require('./officialResu
 
 function freshPublication(p,now){return p && /^[a-f0-9]{64}$/.test(p.manifestHash||'') && typeof p.generationId==='string' && p.generationId.length>0 && Number.isFinite(time(p.committedAt)) && now>=time(p.committedAt) && now-time(p.committedAt)<=15*60000;}
 function requireBeforeCutoff(records,now){if(records.some(d=>now>=time(d.cutoffTime)))throw Object.assign(new Error('Cutoff crossed'),{code:'DEADLINE_CROSSED'});}
-async function assessInputs(repo,publication,now){
+function completedInputClock(inputs,startedAt,clock){
+  const now=clock(),known=inputs.inputKnowledgeAt===undefined?startedAt:time(inputs.inputKnowledgeAt);
+  if(!Number.isSafeInteger(now)||now<startedAt||!Number.isFinite(known)||known<startedAt||known>now
+    ||(inputs.inputKnowledgeAt!==undefined&&inputs.inputKnowledgeAt!==new Date(known).toISOString())
+    ||(inputs.inputCapture&&(inputs.inputCapture.version!=='current-input-capture-v1'
+      ||time(inputs.inputCapture.startedAt)!==startedAt||time(inputs.inputCapture.capturedAt)!==known)))
+    throw Object.assign(new Error('Input capture clock invalid'),{code:'INPUT_CAPTURE_CLOCK_INVALID'});
+  return now;
+}
+async function assessInputs(repo,publication,now,clock){
+  const startedAt=now;
   const committed=time(publication?.committedAt);
   if(!publication || !/^[a-f0-9]{64}$/.test(publication.manifestHash||'') || !publication.generationId
     || !Number.isFinite(committed) || committed>now)throw Object.assign(new Error('Valid committed input required'),{code:'SOURCE_STALE'});
   const inputs=repo.currentInputs?await repo.currentInputs(now):{current:await repo.current(),receiptHashes:new Set()};
   const [historical,rawHeads]=await Promise.all([repo.latest(),repo.resultHeads()]);
+  now=completedInputClock(inputs,startedAt,clock);
   const calibrationHeads=new Map(rawHeads.filter(e=>validResultEvent(e)&&resultAllowsCalibration(e)).map(e=>[e.eventKey,e]));
   const handicapCalibration=buildHandicapCalibration(historical.filter(validDecision),calibrationHeads,day(now),{asOf:now});
-  const assessed=evaluateCurrent(inputs.current,{now,publication,handicapCalibration});
+  const assessed=evaluateCurrent(inputs.current,{now,publication,handicapCalibration,inputCapture:inputs.inputCapture});
   // A full model publication is not a quote clock. An older generation may
   // supply a still-valid prospective model ONLY with a fresh, independently
   // acquired exact-event receipt in this transaction. Model/cutoff policy is
@@ -38,7 +49,8 @@ async function assessInputs(repo,publication,now){
     assessed.decisions=fresh;
   }
   const quoteTimes=assessed.decisions.map(d=>time(d.quoteObservedAt));
-  return {...assessed,currentInputs:inputs.current,handicapCalibration,attempted:inputs.current.length,inputAsOf:quoteTimes.length?new Date(Math.min(...quoteTimes)).toISOString():publication.committedAt};
+  return {...assessed,currentInputs:inputs.current,handicapCalibration,attempted:inputs.current.length,assessmentAt:now,
+    ...(inputs.inputCapture?{inputCapture:inputs.inputCapture}:{}),inputAsOf:quoteTimes.length?new Date(Math.min(...quoteTimes)).toISOString():publication.committedAt};
 }
 /** Bind the exact current inputs inside the caller's transaction. The source
  * may have advanced since the separate single-publication transaction ended.
@@ -79,12 +91,12 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
   }
   async function publish(){return stage('publish',async repo=>{
     const publication=await repo.publication(),now=clock();
-    const {decisions,issues,attempted,inputAsOf,handicapCalibration}=await assessInputs(repo,publication,now);
+    const {decisions,issues,attempted,inputAsOf,handicapCalibration,inputCapture}=await assessInputs(repo,publication,now,clock);
     const bound=await bindCurrentDecisions(repo,decisions,clock);
     const accepted=bound.accepted;issues.push(...bound.issues);
     for(const issue of issues)await repo.issue('publish',issue);
     requireBeforeCutoff(accepted,clock());
-    return {publication,decisionIds:accepted.map(d=>d.decisionId),inputAsOf,basePublicationAsOf:publication.committedAt,issues:issues.length,attempted,handicapCalibration:{profileHash:handicapCalibration.profileHash,sampleRows:handicapCalibration.sampleRows,activeGroups:Object.values(handicapCalibration.groups).filter(g=>g.active).length}};
+    return {publication,decisionIds:accepted.map(d=>d.decisionId),inputAsOf,...(inputCapture?{inputCapture}:{}),basePublicationAsOf:publication.committedAt,issues:issues.length,attempted,handicapCalibration:{profileHash:handicapCalibration.profileHash,sampleRows:handicapCalibration.sampleRows,activeGroups:Object.values(handicapCalibration.groups).filter(g=>g.active).length}};
   });}
   // Research has its own transaction. A missing migration, late cutoff, or
   // invalid research row cannot roll back the published single lane.
@@ -118,6 +130,7 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
         return {ok:true,enabled:false,created:0,eligible:0,issues:0};
       const now=clock(),publication=await repo.publication();
       const inputs=await repo.currentInputs(now);
+      completedInputClock(inputs,now,clock);
       let created=0,eligible=0,issues=0;
       // The warehouse can contain more than one row for a source match. Do not
       // freeze whichever row an unordered query happened to return first.
@@ -146,10 +159,10 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     });}catch(error){return {ok:false,enabled:true,errorCode:String(error.code||'DUAL_RESEARCH_V2_FAILED').slice(0,64)};}
   }
   async function combos(){return stage('combos',async repo=>{
-    const publication=await repo.publication(),now=clock();
+    const publication=await repo.publication();let now=clock();
     // Recheck actual sale state and exact current input before freezing. A
     // retained preview alone is never authority to publish after suspension.
-    const assessed=await assessInputs(repo,publication,now);
+    const assessed=await assessInputs(repo,publication,now,clock);now=assessed.assessmentAt;
     const bound=await bindCurrentDecisions(repo,assessed.decisions,clock);
     const candidates=bound.accepted;
     const issues=[...assessed.issues,...bound.issues];
@@ -167,7 +180,7 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
       else previews.push(selection);
     }
     requireBeforeCutoff(created,clock());
-    return {publication,previews,inputAsOf:assessed.inputAsOf,basePublicationAsOf:publication.committedAt,candidateCount:eligibleSources.size,referenceCount:candidates.length,watchCount:candidates.filter(d=>!eligibleSources.has(d.sourceMatchId)).length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length,handicapCalibration:{profileHash:assessed.handicapCalibration.profileHash,sampleRows:assessed.handicapCalibration.sampleRows,activeGroups:Object.values(assessed.handicapCalibration.groups).filter(g=>g.active).length}};
+    return {publication,previews,inputAsOf:assessed.inputAsOf,...(assessed.inputCapture?{inputCapture:assessed.inputCapture}:{}),basePublicationAsOf:publication.committedAt,candidateCount:eligibleSources.size,referenceCount:candidates.length,watchCount:candidates.filter(d=>!eligibleSources.has(d.sourceMatchId)).length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length,handicapCalibration:{profileHash:assessed.handicapCalibration.profileHash,sampleRows:assessed.handicapCalibration.sampleRows,activeGroups:Object.values(assessed.handicapCalibration.groups).filter(g=>g.active).length}};
   });}
   async function settle(){return stage('settlement',async repo=>{
     const verify=validators || officialResultValidators(clock());

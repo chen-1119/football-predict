@@ -18,9 +18,10 @@ const eventKey = row => JSON.stringify([String(row.sourceMatchId || row.id || ''
 
 /** Freeze a single compatible pair from the prospective score distribution.
  * Legacy policy replay remains available for archived records only. */
-function makeDecision(match, { now, publication, handicapCalibration=null, primaryPolicy=PRIMARY_POLICY }) {
+function makeDecision(match, { now, publication, handicapCalibration=null, primaryPolicy=PRIMARY_POLICY,inputCapture=null }) {
   const result = evaluateForecast(match, { now, publication });
   if (!result.eligible) return { decision: null, reason: result.reason };
+  const capture=require('./inputCapture.cjs').captureBinding(inputCapture,new Date(now).toISOString());
   let candidate = result.candidate;
   const input = require('../../src/services/prospectiveForecastInput.cjs').forecastInputFor(match);
   if (!input) return { decision:null, reason:'prospective-input-invalid' };
@@ -57,12 +58,12 @@ function makeDecision(match, { now, publication, handicapCalibration=null, prima
   const scoreModelInput = require('../../src/services/handicapMarginDecision.cjs').lambdasFor(input.probabilityModel);
   const supplementaryResearch = supplementaryPolicy.buildSupplementaryResearch({ ...candidate, hadInputHash, handicapAnalysis, scoreModelInput, supplementaryPolicyVersion });
   const inputHash = hash({ hadInputHash, handicapInputHash: handicapAnalysis?.inputHash || null,selectionPolicyVersion,modelInputEvidenceHash:modelInputEvidence?.contentHash||null,
-    supplementaryPolicyVersion, supplementaryResearchHash: supplementaryResearch?.contentHash || null, primaryPickPolicyVersion, scoreModelInput, ...(coherentPrimary?{coherentPrimary}:{}) });
+    supplementaryPolicyVersion, supplementaryResearchHash: supplementaryResearch?.contentHash || null, primaryPickPolicyVersion, scoreModelInput, ...(coherentPrimary?{coherentPrimary}:{}),...capture });
   const identity = [VERSION, candidate.sourceMatchId, candidate.eventVersion, candidate.market, inputHash];
   const decisionId = `decision_${hash(identity)}`;
   const body = { ...candidate, hadInputHash, inputHash, handicapAnalysis, version: VERSION, policyVersion: VERSION, decisionId, id: decisionId,
     statisticsTrack: 'unified-decision', selectionPolicyVersion, supplementaryPolicyVersion, supplementaryResearch, primaryPickPolicyVersion, scoreModelInput, ...(coherentPrimary?{coherentPrimary}:{}),
-    publishedAt: new Date(now).toISOString(), publicationStatus: 'PUBLISHED',
+    publishedAt: new Date(now).toISOString(), publicationStatus: 'PUBLISHED',...(inputCapture?{inputCapture:structuredClone(inputCapture),...capture}:{}),
     evaluationRule: 'latest-published-input-before-cutoff-per-event', modelValidation: 'unvalidated',
     upstreamModelVersion: String(input?.probabilityModel?.version || 'unknown'),
     sourceCycleId: String(input?.sourceCycleId || publication.sourceCycleId || ''),
@@ -77,6 +78,9 @@ function validDecision(row) {
   if (!row || row.version !== VERSION || row.policyVersion !== VERSION || row.market !== 'HAD' || row.handicapLine !== 0 || row.modelValidation !== 'unvalidated') return false;
   const { recordHash, ...body } = row;
   if (hash(body) !== recordHash || row.decisionId !== `decision_${hash([VERSION, row.sourceMatchId, row.eventVersion, row.market, row.inputHash])}` || row.id !== row.decisionId) return false;
+  const captureBinding=row.inputCapture===undefined?{}:{inputCaptureHash:row.inputCaptureHash};
+  if(row.inputCapture===undefined?row.inputCaptureHash!==undefined:!row.hadInputHash||
+    !require('./inputCapture.cjs').validInputCapture(row.inputCapture,row.publishedAt)||row.inputCaptureHash!==hash(row.inputCapture))return false;
   const qualityBinding=row.selectionPolicyVersion==null?{}:{selectionPolicyVersion:row.selectionPolicyVersion,modelInputEvidenceHash:row.inputEvidence?.model?.inputEvidence?.contentHash||null};
   if(row.selectionPolicyVersion!=null){
     const selectionPolicy=require('../../src/services/recommendationSelectionQuality.cjs');
@@ -96,7 +100,7 @@ function validDecision(row) {
   const supplementaryBinding = row.supplementaryPolicyVersion === undefined ? {} : {
     supplementaryPolicyVersion: row.supplementaryPolicyVersion, supplementaryResearchHash: row.supplementaryResearch?.contentHash || null };
   if (!require('../../src/services/supplementaryResearch.cjs').validSupplementaryResearch(row)) return false;
-  if (row.hadInputHash && row.inputHash !== hash({ hadInputHash:row.hadInputHash, handicapInputHash:row.handicapAnalysis?.inputHash || null,...qualityBinding,...supplementaryBinding,...primaryBinding })) return false;
+  if (row.hadInputHash && row.inputHash !== hash({ hadInputHash:row.hadInputHash, handicapInputHash:row.handicapAnalysis?.inputHash || null,...qualityBinding,...supplementaryBinding,...primaryBinding,...captureBinding })) return false;
   if (!validHandicapMarginDecision(row.handicapAnalysis)) return false;
   if (row.handicapAnalysis && row.handicapAnalysis.straightTipCode !== row.tipCode) return false;
   if (row.handicapAnalysis?.version === 'handicap-margin-v3' && (row.handicapAnalysis.computedAt !== row.publishedAt
