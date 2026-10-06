@@ -1,90 +1,16 @@
 {
   "version": 1,
   "source": "external-signals+pre-match-signals",
-  "updatedAt": "2026-10-06T17:16:21.784Z",
+  "updatedAt": "2026-10-06T17:18:49.420Z",
   "sources": {
     "500.com:jczq": {
       "url": "https://trade.500.com/jczq/",
-      "updatedAt": "2026-10-06T17:15:56.780Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "rows": 9,
       "mapped": 45
     },
-    "500.com:details": {
-      "url": "https://trade.500.com/jczq/",
-      "mode": "full-details",
-      "updatedAt": "2026-10-06T17:16:00.344Z",
-      "scannedRows": 9,
-      "resultArchiveDates": [
-        "2026-10-06"
-      ],
-      "currentResultRows": 0,
-      "resultRows": 0,
-      "updated": 0,
-      "detailsUpdatedThisRun": 0,
-      "resultMerged": 0,
-      "cachedMerged": 568,
-      "detailsStoredTotal": 573,
-      "currentEligibleRows": 9,
-      "currentMatchesWithDetails": 9,
-      "requestedPages": 2,
-      "refreshMinutes": 180,
-      "nearRefreshMinutes": 60,
-      "urgentRefreshMinutes": 20,
-      "timeoutSeconds": 10,
-      "maxErrors": 3,
-      "errors": 1
-    },
-    "open-meteo:forecast": {
-      "url": "https://api.open-meteo.com/v1/forecast",
-      "updatedAt": "2026-10-06T17:16:05.421Z",
-      "rows": 9,
-      "mapped": 1,
-      "skipped": 8,
-      "errors": 0,
-      "maxAgeMinutes": 180,
-      "lookaheadDays": 10,
-      "provider": "open-meteo"
-    },
-    "thesportsdb:team-venue": {
-      "url": "https://www.thesportsdb.com/api/v1/json/{key}/searchteams.php",
-      "updatedAt": "2026-10-06T17:16:05.421Z",
-      "attempted": 4,
-      "added": 1,
-      "unresolved": 3,
-      "storedTeams": 1,
-      "reviewSemantics": "reference-only-until-human-verified"
-    },
-    "api-football": {
-      "url": "https://v3.football.api-sports.io",
-      "updatedAt": "2026-10-06T17:16:07.790Z",
-      "syncMode": "shadow-enrichment",
-      "shadowOnly": true,
-      "features": {
-        "injuries": true,
-        "lineups": true,
-        "liveScore": true,
-        "odds": false
-      },
-      "authority": {
-        "officialFixtureIdentity": false,
-        "officialOdds": false,
-        "officialResult": false,
-        "settlement": false,
-        "formalRecommendation": false
-      },
-      "fixtureMatches": 0,
-      "mappedSignals": 0,
-      "callsThisSync": 0,
-      "injuryCalls": 0,
-      "injurySkippedByAccess": 0,
-      "lineupCalls": 0,
-      "oddsCalls": 0,
-      "liveScoreCalls": 0,
-      "liveScoreObservations": 0,
-      "maxCallsPerSync": 35
-    },
     "preMatchSignals": {
-      "updatedAt": "2026-10-06T17:16:21.784Z",
+      "updatedAt": "2026-10-06T17:18:49.420Z",
       "rows": 19,
       "summary": {
         "rows": 19,
@@ -292271,7 +292197,7 @@
     },
     "166047": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041814",
       "fixtureId": "1398670",
       "matchNo": "周二004",
@@ -292285,27 +292211,12 @@
         "had": {
           "odds1": 5.5,
           "oddsX": 3.8,
-          "odds2": 1.46,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.46
         },
         "hhad": {
           "odds1": 2.32,
           "oddsX": 3,
-          "odds2": 2.75,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.75
         }
       },
       "infoMatchId": "166047",
@@ -292459,11 +292370,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 5.5,
+        "oddsX": 3.8,
+        "odds2": 1.46,
+        "summary": {
+          "zh": "500彩票网胜平负参考：5.50 / 3.80 / 1.46",
+          "en": "500.com 1X2 reference: 5.50 / 3.80 / 1.46"
+        }
+      }
     },
     "166048": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041815",
       "fixtureId": "1398668",
       "matchNo": "周二005",
@@ -292477,27 +292398,12 @@
         "had": {
           "odds1": 2.17,
           "oddsX": 2.65,
-          "odds2": 3.45,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 3.45
         },
         "hhad": {
           "odds1": 4.95,
           "oddsX": 3.6,
-          "odds2": 1.54,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.54
         }
       },
       "infoMatchId": "166048",
@@ -292651,17 +292557,27 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 2.17,
+        "oddsX": 2.65,
+        "odds2": 3.45,
+        "summary": {
+          "zh": "500彩票网胜平负参考：2.17 / 2.65 / 3.45",
+          "en": "500.com 1X2 reference: 2.17 / 2.65 / 3.45"
+        }
+      }
     },
     "166049": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041816",
       "fixtureId": "1398620",
       "matchNo": "周二006",
       "leagueName": "欧国联",
       "homeTeamName": "苏格兰",
-      "awayTeamName": "斯洛文尼",
+      "awayTeamName": "斯洛文尼亚",
       "kickoffTime": "2026-10-07T02:45:00+08:00",
       "buyEndTime": "2026-10-06 22:00:00",
       "handicapLine": "-1",
@@ -292669,27 +292585,12 @@
         "had": {
           "odds1": 1.62,
           "oddsX": 3.25,
-          "odds2": 4.9,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 4.9
         },
         "hhad": {
           "odds1": 3.72,
           "oddsX": 2.84,
-          "odds2": 1.97,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.97
         }
       },
       "infoMatchId": "166049",
@@ -292843,11 +292744,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.62,
+        "oddsX": 3.25,
+        "odds2": 4.9,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.62 / 3.25 / 4.90",
+          "en": "500.com 1X2 reference: 1.62 / 3.25 / 4.90"
+        }
+      }
     },
     "166050": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T07:06:49.210Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041817",
       "fixtureId": "1398666",
       "matchNo": "周二007",
@@ -292859,17 +292770,9 @@
       "handicapLine": "-2",
       "bookmakerOdds": {
         "hhad": {
-          "odds1": 1.78,
-          "oddsX": 4.3,
-          "odds2": 2.98,
-          "source": "500.com:jczq",
-          "handicapLine": "-2",
-          "sourceObservedAt": "2026-10-06T07:06:49.210Z",
-          "receivedAt": "2026-10-06T07:06:49.210Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-06T07:06:49.210Z"
+          "odds1": 1.7,
+          "oddsX": 4.4,
+          "odds2": 3.2
         }
       },
       "infoMatchId": "166050",
@@ -293021,11 +292924,21 @@
         "fiveHundred.europeOdds",
         "fiveHundred.asianHandicap"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.7,
+        "oddsX": 4.4,
+        "odds2": 3.2,
+        "summary": {
+          "zh": "500彩票网让球参考(-2)：1.70 / 4.40 / 3.20",
+          "en": "500.com handicap reference (-2): 1.70 / 4.40 / 3.20"
+        }
+      }
     },
     "166051": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041818",
       "fixtureId": "1398663",
       "matchNo": "周二008",
@@ -293039,27 +292952,12 @@
         "had": {
           "odds1": 10,
           "oddsX": 5.5,
-          "odds2": 1.18,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.18
         },
         "hhad": {
           "odds1": 2.04,
           "oddsX": 4.05,
-          "odds2": 2.55,
-          "source": "500.com:jczq",
-          "handicapLine": "2",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.55
         }
       },
       "infoMatchId": "166051",
@@ -293213,11 +293111,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 10,
+        "oddsX": 5.5,
+        "odds2": 1.18,
+        "summary": {
+          "zh": "500彩票网胜平负参考：10.00 / 5.50 / 1.18",
+          "en": "500.com 1X2 reference: 10.00 / 5.50 / 1.18"
+        }
+      }
     },
     "166052": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041819",
       "fixtureId": "1398617",
       "matchNo": "周二009",
@@ -293231,15 +293139,7 @@
         "hhad": {
           "odds1": 1.62,
           "oddsX": 4.3,
-          "odds2": 3.6,
-          "source": "500.com:jczq",
-          "handicapLine": "-2",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 3.6
         }
       },
       "infoMatchId": "166052",
@@ -293388,11 +293288,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.62,
+        "oddsX": 4.3,
+        "odds2": 3.6,
+        "summary": {
+          "zh": "500彩票网让球参考(-2)：1.62 / 4.30 / 3.60",
+          "en": "500.com handicap reference (-2): 1.62 / 4.30 / 3.60"
+        }
+      }
     },
     "166053": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041820",
       "fixtureId": "1398672",
       "matchNo": "周二010",
@@ -293406,27 +293316,12 @@
         "had": {
           "odds1": 8.7,
           "oddsX": 4.8,
-          "odds2": 1.24,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.24
         },
         "hhad": {
           "odds1": 3.18,
           "oddsX": 3.32,
-          "odds2": 1.95,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.95
         }
       },
       "infoMatchId": "166053",
@@ -293580,11 +293475,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 8.7,
+        "oddsX": 4.8,
+        "odds2": 1.24,
+        "summary": {
+          "zh": "500彩票网胜平负参考：8.70 / 4.80 / 1.24",
+          "en": "500.com 1X2 reference: 8.70 / 4.80 / 1.24"
+        }
+      }
     },
     "166054": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041821",
       "fixtureId": "1495294",
       "matchNo": "周二011",
@@ -293598,27 +293503,12 @@
         "had": {
           "odds1": 1.49,
           "oddsX": 4,
-          "odds2": 4.8,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 4.8
         },
         "hhad": {
           "odds1": 2.75,
           "oddsX": 3.2,
-          "odds2": 2.21,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.21
         }
       },
       "infoMatchId": "166054",
@@ -293772,17 +293662,27 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.49,
+        "oddsX": 4,
+        "odds2": 4.8,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.49 / 4.00 / 4.80",
+          "en": "500.com 1X2 reference: 1.49 / 4.00 / 4.80"
+        }
+      }
     },
     "166055": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041822",
       "fixtureId": "1358414",
       "matchNo": "周二012",
       "leagueName": "美职足",
-      "homeTeamName": "芝加哥",
-      "awayTeamName": "温哥华",
+      "homeTeamName": "芝加哥火焰",
+      "awayTeamName": "温哥华白帽",
       "kickoffTime": "2026-10-07T08:30:00+08:00",
       "buyEndTime": "2026-10-06 22:00:00",
       "handicapLine": "1",
@@ -293790,27 +293690,12 @@
         "had": {
           "odds1": 2.71,
           "oddsX": 3.7,
-          "odds2": 2.04,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.04
         },
         "hhad": {
           "odds1": 1.58,
           "oddsX": 3.95,
-          "odds2": 4.12,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 4.12
         }
       },
       "infoMatchId": "166055",
@@ -293964,7 +293849,17 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 2.71,
+        "oddsX": 3.7,
+        "odds2": 2.04,
+        "summary": {
+          "zh": "500彩票网胜平负参考：2.71 / 3.70 / 2.04",
+          "en": "500.com 1X2 reference: 2.71 / 3.70 / 2.04"
+        }
+      }
     },
     "1358266": {
       "source": "500.com:jczq+500.com:details",
@@ -294215,13 +294110,13 @@
     },
     "1358414": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041822",
       "fixtureId": "1358414",
       "matchNo": "周二012",
       "leagueName": "美职足",
-      "homeTeamName": "芝加哥",
-      "awayTeamName": "温哥华",
+      "homeTeamName": "芝加哥火焰",
+      "awayTeamName": "温哥华白帽",
       "kickoffTime": "2026-10-07T08:30:00+08:00",
       "buyEndTime": "2026-10-06 22:00:00",
       "handicapLine": "1",
@@ -294229,27 +294124,12 @@
         "had": {
           "odds1": 2.71,
           "oddsX": 3.7,
-          "odds2": 2.04,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.04
         },
         "hhad": {
           "odds1": 1.58,
           "oddsX": 3.95,
-          "odds2": 4.12,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 4.12
         }
       },
       "infoMatchId": "166055",
@@ -294403,7 +294283,17 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 2.71,
+        "oddsX": 3.7,
+        "odds2": 2.04,
+        "summary": {
+          "zh": "500彩票网胜平负参考：2.71 / 3.70 / 2.04",
+          "en": "500.com 1X2 reference: 2.71 / 3.70 / 2.04"
+        }
+      }
     },
     "1358416": {
       "source": "500.com:jczq",
@@ -479952,7 +479842,7 @@
     },
     "1398617": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041819",
       "fixtureId": "1398617",
       "matchNo": "周二009",
@@ -479966,15 +479856,7 @@
         "hhad": {
           "odds1": 1.62,
           "oddsX": 4.3,
-          "odds2": 3.6,
-          "source": "500.com:jczq",
-          "handicapLine": "-2",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 3.6
         }
       },
       "infoMatchId": "166052",
@@ -480123,17 +480005,27 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.62,
+        "oddsX": 4.3,
+        "odds2": 3.6,
+        "summary": {
+          "zh": "500彩票网让球参考(-2)：1.62 / 4.30 / 3.60",
+          "en": "500.com handicap reference (-2): 1.62 / 4.30 / 3.60"
+        }
+      }
     },
     "1398620": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041816",
       "fixtureId": "1398620",
       "matchNo": "周二006",
       "leagueName": "欧国联",
       "homeTeamName": "苏格兰",
-      "awayTeamName": "斯洛文尼",
+      "awayTeamName": "斯洛文尼亚",
       "kickoffTime": "2026-10-07T02:45:00+08:00",
       "buyEndTime": "2026-10-06 22:00:00",
       "handicapLine": "-1",
@@ -480141,27 +480033,12 @@
         "had": {
           "odds1": 1.62,
           "oddsX": 3.25,
-          "odds2": 4.9,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 4.9
         },
         "hhad": {
           "odds1": 3.72,
           "oddsX": 2.84,
-          "odds2": 1.97,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.97
         }
       },
       "infoMatchId": "166049",
@@ -480315,7 +480192,17 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.62,
+        "oddsX": 3.25,
+        "odds2": 4.9,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.62 / 3.25 / 4.90",
+          "en": "500.com 1X2 reference: 1.62 / 3.25 / 4.90"
+        }
+      }
     },
     "1398621": {
       "source": "500.com:jczq+500.com:details",
@@ -481080,7 +480967,7 @@
     },
     "1398663": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041818",
       "fixtureId": "1398663",
       "matchNo": "周二008",
@@ -481094,27 +480981,12 @@
         "had": {
           "odds1": 10,
           "oddsX": 5.5,
-          "odds2": 1.18,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.18
         },
         "hhad": {
           "odds1": 2.04,
           "oddsX": 4.05,
-          "odds2": 2.55,
-          "source": "500.com:jczq",
-          "handicapLine": "2",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.55
         }
       },
       "infoMatchId": "166051",
@@ -481268,11 +481140,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 10,
+        "oddsX": 5.5,
+        "odds2": 1.18,
+        "summary": {
+          "zh": "500彩票网胜平负参考：10.00 / 5.50 / 1.18",
+          "en": "500.com 1X2 reference: 10.00 / 5.50 / 1.18"
+        }
+      }
     },
     "1398666": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T07:06:49.210Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041817",
       "fixtureId": "1398666",
       "matchNo": "周二007",
@@ -481284,17 +481166,9 @@
       "handicapLine": "-2",
       "bookmakerOdds": {
         "hhad": {
-          "odds1": 1.78,
-          "oddsX": 4.3,
-          "odds2": 2.98,
-          "source": "500.com:jczq",
-          "handicapLine": "-2",
-          "sourceObservedAt": "2026-10-06T07:06:49.210Z",
-          "receivedAt": "2026-10-06T07:06:49.210Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-06T07:06:49.210Z"
+          "odds1": 1.7,
+          "oddsX": 4.4,
+          "odds2": 3.2
         }
       },
       "infoMatchId": "166050",
@@ -481446,11 +481320,21 @@
         "fiveHundred.europeOdds",
         "fiveHundred.asianHandicap"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.7,
+        "oddsX": 4.4,
+        "odds2": 3.2,
+        "summary": {
+          "zh": "500彩票网让球参考(-2)：1.70 / 4.40 / 3.20",
+          "en": "500.com handicap reference (-2): 1.70 / 4.40 / 3.20"
+        }
+      }
     },
     "1398668": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041815",
       "fixtureId": "1398668",
       "matchNo": "周二005",
@@ -481464,27 +481348,12 @@
         "had": {
           "odds1": 2.17,
           "oddsX": 2.65,
-          "odds2": 3.45,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 3.45
         },
         "hhad": {
           "odds1": 4.95,
           "oddsX": 3.6,
-          "odds2": 1.54,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.54
         }
       },
       "infoMatchId": "166048",
@@ -481638,11 +481507,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 2.17,
+        "oddsX": 2.65,
+        "odds2": 3.45,
+        "summary": {
+          "zh": "500彩票网胜平负参考：2.17 / 2.65 / 3.45",
+          "en": "500.com 1X2 reference: 2.17 / 2.65 / 3.45"
+        }
+      }
     },
     "1398670": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041814",
       "fixtureId": "1398670",
       "matchNo": "周二004",
@@ -481656,27 +481535,12 @@
         "had": {
           "odds1": 5.5,
           "oddsX": 3.8,
-          "odds2": 1.46,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.46
         },
         "hhad": {
           "odds1": 2.32,
           "oddsX": 3,
-          "odds2": 2.75,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.75
         }
       },
       "infoMatchId": "166047",
@@ -481830,11 +481694,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 5.5,
+        "oddsX": 3.8,
+        "odds2": 1.46,
+        "summary": {
+          "zh": "500彩票网胜平负参考：5.50 / 3.80 / 1.46",
+          "en": "500.com 1X2 reference: 5.50 / 3.80 / 1.46"
+        }
+      }
     },
     "1398672": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041820",
       "fixtureId": "1398672",
       "matchNo": "周二010",
@@ -481848,27 +481722,12 @@
         "had": {
           "odds1": 8.7,
           "oddsX": 4.8,
-          "odds2": 1.24,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.24
         },
         "hhad": {
           "odds1": 3.18,
           "oddsX": 3.32,
-          "odds2": 1.95,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.95
         }
       },
       "infoMatchId": "166053",
@@ -482022,7 +481881,17 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 8.7,
+        "oddsX": 4.8,
+        "odds2": 1.24,
+        "summary": {
+          "zh": "500彩票网胜平负参考：8.70 / 4.80 / 1.24",
+          "en": "500.com 1X2 reference: 8.70 / 4.80 / 1.24"
+        }
+      }
     },
     "1405672": {
       "source": "500.com:jczq+500.com:details",
@@ -589553,7 +589422,7 @@
     },
     "1495294": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041821",
       "fixtureId": "1495294",
       "matchNo": "周二011",
@@ -589567,27 +589436,12 @@
         "had": {
           "odds1": 1.49,
           "oddsX": 4,
-          "odds2": 4.8,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 4.8
         },
         "hhad": {
           "odds1": 2.75,
           "oddsX": 3.2,
-          "odds2": 2.21,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.21
         }
       },
       "infoMatchId": "166054",
@@ -589741,7 +589595,17 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.49,
+        "oddsX": 4,
+        "odds2": 4.8,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.49 / 4.00 / 4.80",
+          "en": "500.com 1X2 reference: 1.49 / 4.00 / 4.80"
+        }
+      }
     },
     "1495313": {
       "source": "500.com:jczq+500.com:details",
@@ -921239,7 +921103,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041805",
         "matchId": "fivehundred_2041805",
         "matchNo": "周一001",
@@ -921604,7 +921468,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041806",
         "matchId": "fivehundred_2041806",
         "matchNo": "周一002",
@@ -921969,7 +921833,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041807",
         "matchId": "fivehundred_2041807",
         "matchNo": "周一003",
@@ -922368,7 +922232,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041808",
         "matchId": "fivehundred_2041808",
         "matchNo": "周一004",
@@ -922733,7 +922597,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041809",
         "matchId": "fivehundred_2041809",
         "matchNo": "周一005",
@@ -923098,7 +922962,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041810",
         "matchId": "fivehundred_2041810",
         "matchNo": "周一006",
@@ -923463,7 +923327,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041811",
         "matchId": "fivehundred_2041811",
         "matchNo": "周一007",
@@ -923828,7 +923692,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041812",
         "matchId": "fivehundred_2041812",
         "matchNo": "周二001",
@@ -924182,7 +924046,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041813",
         "matchId": "fivehundred_2041813",
         "matchNo": "周二003",
@@ -924676,7 +924540,7 @@
     },
     "2041814": {
       "source": "500.com:jczq+pre-match-signals+500.com:details",
-      "updatedAt": "2026-10-06T17:16:05.421Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041814",
       "fixtureId": "1398670",
       "matchNo": "周二004",
@@ -924690,33 +924554,18 @@
         "had": {
           "odds1": 5.5,
           "oddsX": 3.8,
-          "odds2": 1.46,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.46
         },
         "hhad": {
           "odds1": 2.32,
           "oddsX": 3,
-          "odds2": 2.75,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.75
         }
       },
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041814",
         "matchId": "fivehundred_2041814",
         "matchNo": "周二004",
@@ -925228,11 +925077,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 5.5,
+        "oddsX": 3.8,
+        "odds2": 1.46,
+        "summary": {
+          "zh": "500彩票网胜平负参考：5.50 / 3.80 / 1.46",
+          "en": "500.com 1X2 reference: 5.50 / 3.80 / 1.46"
+        }
+      }
     },
     "2041815": {
       "source": "500.com:jczq+pre-match-signals+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041815",
       "fixtureId": "1398668",
       "matchNo": "周二005",
@@ -925246,33 +925105,18 @@
         "had": {
           "odds1": 2.17,
           "oddsX": 2.65,
-          "odds2": 3.45,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 3.45
         },
         "hhad": {
           "odds1": 4.95,
           "oddsX": 3.6,
-          "odds2": 1.54,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.54
         }
       },
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041815",
         "matchId": "fivehundred_2041815",
         "matchNo": "周二005",
@@ -925750,11 +925594,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 2.17,
+        "oddsX": 2.65,
+        "odds2": 3.45,
+        "summary": {
+          "zh": "500彩票网胜平负参考：2.17 / 2.65 / 3.45",
+          "en": "500.com 1X2 reference: 2.17 / 2.65 / 3.45"
+        }
+      }
     },
     "2041816": {
       "source": "500.com:jczq+pre-match-signals+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041816",
       "fixtureId": "1398620",
       "matchNo": "周二006",
@@ -925768,33 +925622,18 @@
         "had": {
           "odds1": 1.62,
           "oddsX": 3.25,
-          "odds2": 4.9,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 4.9
         },
         "hhad": {
           "odds1": 3.72,
           "oddsX": 2.84,
-          "odds2": 1.97,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.97
         }
       },
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041816",
         "matchId": "fivehundred_2041816",
         "matchNo": "周二006",
@@ -926272,11 +926111,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.62,
+        "oddsX": 3.25,
+        "odds2": 4.9,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.62 / 3.25 / 4.90",
+          "en": "500.com 1X2 reference: 1.62 / 3.25 / 4.90"
+        }
+      }
     },
     "2041817": {
       "source": "500.com:jczq+pre-match-signals+500.com:details",
-      "updatedAt": "2026-10-06T07:06:49.210Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041817",
       "fixtureId": "1398666",
       "matchNo": "周二007",
@@ -926288,23 +926137,15 @@
       "handicapLine": "-2",
       "bookmakerOdds": {
         "hhad": {
-          "odds1": 1.78,
-          "oddsX": 4.3,
-          "odds2": 2.98,
-          "source": "500.com:jczq",
-          "handicapLine": "-2",
-          "sourceObservedAt": "2026-10-06T07:06:49.210Z",
-          "receivedAt": "2026-10-06T07:06:49.210Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-06T07:06:49.210Z"
+          "odds1": 1.7,
+          "oddsX": 4.4,
+          "odds2": 3.2
         }
       },
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041817",
         "matchId": "fivehundred_2041817",
         "matchNo": "周二007",
@@ -926780,11 +926621,21 @@
         "fiveHundred.europeOdds",
         "fiveHundred.asianHandicap"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.7,
+        "oddsX": 4.4,
+        "odds2": 3.2,
+        "summary": {
+          "zh": "500彩票网让球参考(-2)：1.70 / 4.40 / 3.20",
+          "en": "500.com handicap reference (-2): 1.70 / 4.40 / 3.20"
+        }
+      }
     },
     "2041818": {
       "source": "500.com:jczq+pre-match-signals+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041818",
       "fixtureId": "1398663",
       "matchNo": "周二008",
@@ -926798,33 +926649,18 @@
         "had": {
           "odds1": 10,
           "oddsX": 5.5,
-          "odds2": 1.18,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.18
         },
         "hhad": {
           "odds1": 2.04,
           "oddsX": 4.05,
-          "odds2": 2.55,
-          "source": "500.com:jczq",
-          "handicapLine": "2",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.55
         }
       },
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041818",
         "matchId": "fivehundred_2041818",
         "matchNo": "周二008",
@@ -927302,11 +927138,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 10,
+        "oddsX": 5.5,
+        "odds2": 1.18,
+        "summary": {
+          "zh": "500彩票网胜平负参考：10.00 / 5.50 / 1.18",
+          "en": "500.com 1X2 reference: 10.00 / 5.50 / 1.18"
+        }
+      }
     },
     "2041819": {
       "source": "500.com:jczq+pre-match-signals+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041819",
       "fixtureId": "1398617",
       "matchNo": "周二009",
@@ -927320,21 +927166,13 @@
         "hhad": {
           "odds1": 1.62,
           "oddsX": 4.3,
-          "odds2": 3.6,
-          "source": "500.com:jczq",
-          "handicapLine": "-2",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 3.6
         }
       },
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041819",
         "matchId": "fivehundred_2041819",
         "matchNo": "周二009",
@@ -927807,11 +927645,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.62,
+        "oddsX": 4.3,
+        "odds2": 3.6,
+        "summary": {
+          "zh": "500彩票网让球参考(-2)：1.62 / 4.30 / 3.60",
+          "en": "500.com handicap reference (-2): 1.62 / 4.30 / 3.60"
+        }
+      }
     },
     "2041820": {
       "source": "500.com:jczq+pre-match-signals+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041820",
       "fixtureId": "1398672",
       "matchNo": "周二010",
@@ -927825,33 +927673,18 @@
         "had": {
           "odds1": 8.7,
           "oddsX": 4.8,
-          "odds2": 1.24,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.24
         },
         "hhad": {
           "odds1": 3.18,
           "oddsX": 3.32,
-          "odds2": 1.95,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.95
         }
       },
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041820",
         "matchId": "fivehundred_2041820",
         "matchNo": "周二010",
@@ -928329,11 +928162,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 8.7,
+        "oddsX": 4.8,
+        "odds2": 1.24,
+        "summary": {
+          "zh": "500彩票网胜平负参考：8.70 / 4.80 / 1.24",
+          "en": "500.com 1X2 reference: 8.70 / 4.80 / 1.24"
+        }
+      }
     },
     "2041821": {
       "source": "500.com:jczq+pre-match-signals+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041821",
       "fixtureId": "1495294",
       "matchNo": "周二011",
@@ -928347,33 +928190,18 @@
         "had": {
           "odds1": 1.49,
           "oddsX": 4,
-          "odds2": 4.8,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 4.8
         },
         "hhad": {
           "odds1": 2.75,
           "oddsX": 3.2,
-          "odds2": 2.21,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.21
         }
       },
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041821",
         "matchId": "fivehundred_2041821",
         "matchNo": "周二011",
@@ -928851,11 +928679,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.49,
+        "oddsX": 4,
+        "odds2": 4.8,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.49 / 4.00 / 4.80",
+          "en": "500.com 1X2 reference: 1.49 / 4.00 / 4.80"
+        }
+      }
     },
     "2041822": {
       "source": "500.com:jczq+pre-match-signals+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041822",
       "fixtureId": "1358414",
       "matchNo": "周二012",
@@ -928869,33 +928707,18 @@
         "had": {
           "odds1": 2.71,
           "oddsX": 3.7,
-          "odds2": 2.04,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.04
         },
         "hhad": {
           "odds1": 1.58,
           "oddsX": 3.95,
-          "odds2": 4.12,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 4.12
         }
       },
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041822",
         "matchId": "fivehundred_2041822",
         "matchNo": "周二012",
@@ -929373,7 +929196,17 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 2.71,
+        "oddsX": 3.7,
+        "odds2": 2.04,
+        "summary": {
+          "zh": "500彩票网胜平负参考：2.71 / 3.70 / 2.04",
+          "en": "500.com 1X2 reference: 2.71 / 3.70 / 2.04"
+        }
+      }
     },
     "2041835": {
       "source": "500.com:jczq+pre-match-signals+500.com:details",
@@ -929402,7 +929235,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-06T17:16:21.784Z",
+        "updatedAt": "2026-10-06T17:18:49.420Z",
         "sourceMatchId": "2041835",
         "matchId": "fivehundred_2041835",
         "matchNo": "周二002",
@@ -1584346,7 +1584179,7 @@
     },
     "2026-10-06:周二004": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041814",
       "fixtureId": "1398670",
       "matchNo": "周二004",
@@ -1584360,27 +1584193,12 @@
         "had": {
           "odds1": 5.5,
           "oddsX": 3.8,
-          "odds2": 1.46,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.46
         },
         "hhad": {
           "odds1": 2.32,
           "oddsX": 3,
-          "odds2": 2.75,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.75
         }
       },
       "apiFootball": {
@@ -1584557,11 +1584375,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 5.5,
+        "oddsX": 3.8,
+        "odds2": 1.46,
+        "summary": {
+          "zh": "500彩票网胜平负参考：5.50 / 3.80 / 1.46",
+          "en": "500.com 1X2 reference: 5.50 / 3.80 / 1.46"
+        }
+      }
     },
     "2026-10-07:爱沙尼亚:冰岛": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041814",
       "fixtureId": "1398670",
       "matchNo": "周二004",
@@ -1584575,27 +1584403,12 @@
         "had": {
           "odds1": 5.5,
           "oddsX": 3.8,
-          "odds2": 1.46,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.46
         },
         "hhad": {
           "odds1": 2.32,
           "oddsX": 3,
-          "odds2": 2.75,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.75
         }
       },
       "apiFootball": {
@@ -1584772,11 +1584585,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 5.5,
+        "oddsX": 3.8,
+        "odds2": 1.46,
+        "summary": {
+          "zh": "500彩票网胜平负参考：5.50 / 3.80 / 1.46",
+          "en": "500.com 1X2 reference: 5.50 / 3.80 / 1.46"
+        }
+      }
     },
     "2026-10-06:周二005": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041815",
       "fixtureId": "1398668",
       "matchNo": "周二005",
@@ -1584790,27 +1584613,12 @@
         "had": {
           "odds1": 2.17,
           "oddsX": 2.65,
-          "odds2": 3.45,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 3.45
         },
         "hhad": {
           "odds1": 4.95,
           "oddsX": 3.6,
-          "odds2": 1.54,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.54
         }
       },
       "apiFootball": {
@@ -1584987,11 +1584795,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 2.17,
+        "oddsX": 2.65,
+        "odds2": 3.45,
+        "summary": {
+          "zh": "500彩票网胜平负参考：2.17 / 2.65 / 3.45",
+          "en": "500.com 1X2 reference: 2.17 / 2.65 / 3.45"
+        }
+      }
     },
     "2026-10-07:卢森堡:保加利亚": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041815",
       "fixtureId": "1398668",
       "matchNo": "周二005",
@@ -1585005,27 +1584823,12 @@
         "had": {
           "odds1": 2.17,
           "oddsX": 2.65,
-          "odds2": 3.45,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 3.45
         },
         "hhad": {
           "odds1": 4.95,
           "oddsX": 3.6,
-          "odds2": 1.54,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.54
         }
       },
       "apiFootball": {
@@ -1585202,17 +1585005,27 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 2.17,
+        "oddsX": 2.65,
+        "odds2": 3.45,
+        "summary": {
+          "zh": "500彩票网胜平负参考：2.17 / 2.65 / 3.45",
+          "en": "500.com 1X2 reference: 2.17 / 2.65 / 3.45"
+        }
+      }
     },
     "2026-10-06:周二006": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041816",
       "fixtureId": "1398620",
       "matchNo": "周二006",
       "leagueName": "欧国联",
       "homeTeamName": "苏格兰",
-      "awayTeamName": "斯洛文尼",
+      "awayTeamName": "斯洛文尼亚",
       "kickoffTime": "2026-10-07T02:45:00+08:00",
       "buyEndTime": "2026-10-06 22:00:00",
       "handicapLine": "-1",
@@ -1585220,27 +1585033,12 @@
         "had": {
           "odds1": 1.62,
           "oddsX": 3.25,
-          "odds2": 4.9,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 4.9
         },
         "hhad": {
           "odds1": 3.72,
           "oddsX": 2.84,
-          "odds2": 1.97,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.97
         }
       },
       "apiFootball": {
@@ -1585417,17 +1585215,27 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.62,
+        "oddsX": 3.25,
+        "odds2": 4.9,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.62 / 3.25 / 4.90",
+          "en": "500.com 1X2 reference: 1.62 / 3.25 / 4.90"
+        }
+      }
     },
     "2026-10-07:苏格兰:斯洛文尼": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041816",
       "fixtureId": "1398620",
       "matchNo": "周二006",
       "leagueName": "欧国联",
       "homeTeamName": "苏格兰",
-      "awayTeamName": "斯洛文尼",
+      "awayTeamName": "斯洛文尼亚",
       "kickoffTime": "2026-10-07T02:45:00+08:00",
       "buyEndTime": "2026-10-06 22:00:00",
       "handicapLine": "-1",
@@ -1585435,27 +1585243,12 @@
         "had": {
           "odds1": 1.62,
           "oddsX": 3.25,
-          "odds2": 4.9,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 4.9
         },
         "hhad": {
           "odds1": 3.72,
           "oddsX": 2.84,
-          "odds2": 1.97,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.97
         }
       },
       "infoMatchId": "166049",
@@ -1585609,11 +1585402,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.62,
+        "oddsX": 3.25,
+        "odds2": 4.9,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.62 / 3.25 / 4.90",
+          "en": "500.com 1X2 reference: 1.62 / 3.25 / 4.90"
+        }
+      }
     },
     "2026-10-06:周二007": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T07:06:49.210Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041817",
       "fixtureId": "1398666",
       "matchNo": "周二007",
@@ -1585625,17 +1585428,9 @@
       "handicapLine": "-2",
       "bookmakerOdds": {
         "hhad": {
-          "odds1": 1.78,
-          "oddsX": 4.3,
-          "odds2": 2.98,
-          "source": "500.com:jczq",
-          "handicapLine": "-2",
-          "sourceObservedAt": "2026-10-06T07:06:49.210Z",
-          "receivedAt": "2026-10-06T07:06:49.210Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-06T07:06:49.210Z"
+          "odds1": 1.7,
+          "oddsX": 4.4,
+          "odds2": 3.2
         }
       },
       "apiFootball": {
@@ -1585810,11 +1585605,21 @@
         "fiveHundred.europeOdds",
         "fiveHundred.asianHandicap"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.7,
+        "oddsX": 4.4,
+        "odds2": 3.2,
+        "summary": {
+          "zh": "500彩票网让球参考(-2)：1.70 / 4.40 / 3.20",
+          "en": "500.com handicap reference (-2): 1.70 / 4.40 / 3.20"
+        }
+      }
     },
     "2026-10-07:英格兰:捷克": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T07:06:49.210Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041817",
       "fixtureId": "1398666",
       "matchNo": "周二007",
@@ -1585826,17 +1585631,9 @@
       "handicapLine": "-2",
       "bookmakerOdds": {
         "hhad": {
-          "odds1": 1.78,
-          "oddsX": 4.3,
-          "odds2": 2.98,
-          "source": "500.com:jczq",
-          "handicapLine": "-2",
-          "sourceObservedAt": "2026-10-06T07:06:49.210Z",
-          "receivedAt": "2026-10-06T07:06:49.210Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-06T07:06:49.210Z"
+          "odds1": 1.7,
+          "oddsX": 4.4,
+          "odds2": 3.2
         }
       },
       "apiFootball": {
@@ -1586011,11 +1585808,21 @@
         "fiveHundred.europeOdds",
         "fiveHundred.asianHandicap"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.7,
+        "oddsX": 4.4,
+        "odds2": 3.2,
+        "summary": {
+          "zh": "500彩票网让球参考(-2)：1.70 / 4.40 / 3.20",
+          "en": "500.com handicap reference (-2): 1.70 / 4.40 / 3.20"
+        }
+      }
     },
     "2026-10-06:周二008": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041818",
       "fixtureId": "1398663",
       "matchNo": "周二008",
@@ -1586029,27 +1585836,12 @@
         "had": {
           "odds1": 10,
           "oddsX": 5.5,
-          "odds2": 1.18,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.18
         },
         "hhad": {
           "odds1": 2.04,
           "oddsX": 4.05,
-          "odds2": 2.55,
-          "source": "500.com:jczq",
-          "handicapLine": "2",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.55
         }
       },
       "apiFootball": {
@@ -1586226,11 +1586018,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 10,
+        "oddsX": 5.5,
+        "odds2": 1.18,
+        "summary": {
+          "zh": "500彩票网胜平负参考：10.00 / 5.50 / 1.18",
+          "en": "500.com 1X2 reference: 10.00 / 5.50 / 1.18"
+        }
+      }
     },
     "2026-10-07:克罗地亚:西班牙": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041818",
       "fixtureId": "1398663",
       "matchNo": "周二008",
@@ -1586244,27 +1586046,12 @@
         "had": {
           "odds1": 10,
           "oddsX": 5.5,
-          "odds2": 1.18,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.18
         },
         "hhad": {
           "odds1": 2.04,
           "oddsX": 4.05,
-          "odds2": 2.55,
-          "source": "500.com:jczq",
-          "handicapLine": "2",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.55
         }
       },
       "apiFootball": {
@@ -1586441,11 +1586228,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 10,
+        "oddsX": 5.5,
+        "odds2": 1.18,
+        "summary": {
+          "zh": "500彩票网胜平负参考：10.00 / 5.50 / 1.18",
+          "en": "500.com 1X2 reference: 10.00 / 5.50 / 1.18"
+        }
+      }
     },
     "2026-10-06:周二009": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041819",
       "fixtureId": "1398617",
       "matchNo": "周二009",
@@ -1586459,15 +1586256,7 @@
         "hhad": {
           "odds1": 1.62,
           "oddsX": 4.3,
-          "odds2": 3.6,
-          "source": "500.com:jczq",
-          "handicapLine": "-2",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 3.6
         }
       },
       "apiFootball": {
@@ -1586639,11 +1586428,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.62,
+        "oddsX": 4.3,
+        "odds2": 3.6,
+        "summary": {
+          "zh": "500彩票网让球参考(-2)：1.62 / 4.30 / 3.60",
+          "en": "500.com handicap reference (-2): 1.62 / 4.30 / 3.60"
+        }
+      }
     },
     "2026-10-07:瑞士:北马其顿": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041819",
       "fixtureId": "1398617",
       "matchNo": "周二009",
@@ -1586657,15 +1586456,7 @@
         "hhad": {
           "odds1": 1.62,
           "oddsX": 4.3,
-          "odds2": 3.6,
-          "source": "500.com:jczq",
-          "handicapLine": "-2",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 3.6
         }
       },
       "apiFootball": {
@@ -1586837,11 +1586628,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.62,
+        "oddsX": 4.3,
+        "odds2": 3.6,
+        "summary": {
+          "zh": "500彩票网让球参考(-2)：1.62 / 4.30 / 3.60",
+          "en": "500.com handicap reference (-2): 1.62 / 4.30 / 3.60"
+        }
+      }
     },
     "2026-10-06:周二010": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041820",
       "fixtureId": "1398672",
       "matchNo": "周二010",
@@ -1586855,27 +1586656,12 @@
         "had": {
           "odds1": 8.7,
           "oddsX": 4.8,
-          "odds2": 1.24,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.24
         },
         "hhad": {
           "odds1": 3.18,
           "oddsX": 3.32,
-          "odds2": 1.95,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.95
         }
       },
       "apiFootball": {
@@ -1587052,11 +1586838,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 8.7,
+        "oddsX": 4.8,
+        "odds2": 1.24,
+        "summary": {
+          "zh": "500彩票网胜平负参考：8.70 / 4.80 / 1.24",
+          "en": "500.com 1X2 reference: 8.70 / 4.80 / 1.24"
+        }
+      }
     },
     "2026-10-07:摩尔多瓦:斯洛伐克": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041820",
       "fixtureId": "1398672",
       "matchNo": "周二010",
@@ -1587070,27 +1586866,12 @@
         "had": {
           "odds1": 8.7,
           "oddsX": 4.8,
-          "odds2": 1.24,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.24
         },
         "hhad": {
           "odds1": 3.18,
           "oddsX": 3.32,
-          "odds2": 1.95,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 1.95
         }
       },
       "apiFootball": {
@@ -1587267,11 +1587048,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 8.7,
+        "oddsX": 4.8,
+        "odds2": 1.24,
+        "summary": {
+          "zh": "500彩票网胜平负参考：8.70 / 4.80 / 1.24",
+          "en": "500.com 1X2 reference: 8.70 / 4.80 / 1.24"
+        }
+      }
     },
     "2026-10-06:周二011": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041821",
       "fixtureId": "1495294",
       "matchNo": "周二011",
@@ -1587285,27 +1587076,12 @@
         "had": {
           "odds1": 1.49,
           "oddsX": 4,
-          "odds2": 4.8,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 4.8
         },
         "hhad": {
           "odds1": 2.75,
           "oddsX": 3.2,
-          "odds2": 2.21,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.21
         }
       },
       "apiFootball": {
@@ -1587482,11 +1587258,21 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.49,
+        "oddsX": 4,
+        "odds2": 4.8,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.49 / 4.00 / 4.80",
+          "en": "500.com 1X2 reference: 1.49 / 4.00 / 4.80"
+        }
+      }
     },
     "2026-10-07:美国:加拿大": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041821",
       "fixtureId": "1495294",
       "matchNo": "周二011",
@@ -1587500,27 +1587286,12 @@
         "had": {
           "odds1": 1.49,
           "oddsX": 4,
-          "odds2": 4.8,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 4.8
         },
         "hhad": {
           "odds1": 2.75,
           "oddsX": 3.2,
-          "odds2": 2.21,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.21
         }
       },
       "apiFootball": {
@@ -1587697,17 +1587468,27 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.49,
+        "oddsX": 4,
+        "odds2": 4.8,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.49 / 4.00 / 4.80",
+          "en": "500.com 1X2 reference: 1.49 / 4.00 / 4.80"
+        }
+      }
     },
     "2026-10-06:周二012": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041822",
       "fixtureId": "1358414",
       "matchNo": "周二012",
       "leagueName": "美职足",
-      "homeTeamName": "芝加哥",
-      "awayTeamName": "温哥华",
+      "homeTeamName": "芝加哥火焰",
+      "awayTeamName": "温哥华白帽",
       "kickoffTime": "2026-10-07T08:30:00+08:00",
       "buyEndTime": "2026-10-06 22:00:00",
       "handicapLine": "1",
@@ -1587715,27 +1587496,12 @@
         "had": {
           "odds1": 2.71,
           "oddsX": 3.7,
-          "odds2": 2.04,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.04
         },
         "hhad": {
           "odds1": 1.58,
           "oddsX": 3.95,
-          "odds2": 4.12,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 4.12
         }
       },
       "apiFootball": {
@@ -1587912,17 +1587678,27 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 2.71,
+        "oddsX": 3.7,
+        "odds2": 2.04,
+        "summary": {
+          "zh": "500彩票网胜平负参考：2.71 / 3.70 / 2.04",
+          "en": "500.com 1X2 reference: 2.71 / 3.70 / 2.04"
+        }
+      }
     },
     "2026-10-07:芝加哥:温哥华": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-06T17:08:33.947Z",
+      "updatedAt": "2026-10-06T17:17:59.573Z",
       "sourceMatchId": "2041822",
       "fixtureId": "1358414",
       "matchNo": "周二012",
       "leagueName": "美职足",
-      "homeTeamName": "芝加哥",
-      "awayTeamName": "温哥华",
+      "homeTeamName": "芝加哥火焰",
+      "awayTeamName": "温哥华白帽",
       "kickoffTime": "2026-10-07T08:30:00+08:00",
       "buyEndTime": "2026-10-06 22:00:00",
       "handicapLine": "1",
@@ -1587930,27 +1587706,12 @@
         "had": {
           "odds1": 2.71,
           "oddsX": 3.7,
-          "odds2": 2.04,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 2.04
         },
         "hhad": {
           "odds1": 1.58,
           "oddsX": 3.95,
-          "odds2": 4.12,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-06T17:08:33.947Z",
-          "receivedAt": "2026-10-06T17:08:33.947Z",
-          "validUntil": "2026-10-06T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "post-cutoff",
-          "updatedAt": "2026-10-06T17:08:33.947Z"
+          "odds2": 4.12
         }
       },
       "infoMatchId": "166055",
@@ -1588104,7 +1587865,17 @@
         "fiveHundred.asianHandicap",
         "fiveHundred.marketConsensus"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 2.71,
+        "oddsX": 3.7,
+        "odds2": 2.04,
+        "summary": {
+          "zh": "500彩票网胜平负参考：2.71 / 3.70 / 2.04",
+          "en": "500.com 1X2 reference: 2.71 / 3.70 / 2.04"
+        }
+      }
     },
     "2026-10-06:韩国:乌兹别克斯坦": {
       "updatedAt": "2026-10-06T03:10:15.986Z",
