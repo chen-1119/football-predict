@@ -98,7 +98,7 @@ function unitArguments({ directory, sandbox, unit, commandIndex, timeoutMs }) {
     "RestrictNamespaces=yes", "LockPersonality=yes", "SystemCallArchitectures=native", "RestrictAddressFamilies=AF_UNIX",
     "SystemCallFilter=~@debug @mount @reboot @swap @privileged", "SystemCallErrorNumber=EPERM", "CapabilityBoundingSet=", "AmbientCapabilities=",
     "KillMode=control-group", "SendSIGKILL=yes", "TimeoutStopSec=3s", "RuntimeMaxSec=" + Math.ceil(timeoutMs / 1000) + "s",
-    "TimeoutStartSec=" + Math.ceil(timeoutMs / 1000) + "s", "TasksMax=128", "MemoryHigh=768M", "MemoryMax=1G",
+    "TimeoutStartSec=" + Math.ceil(timeoutMs / 1000) + "s", "TasksMax=128", "MemoryHigh=896M", "MemoryMax=1G",
     "MemorySwapMax=0", "OOMPolicy=stop", "LimitFSIZE=167772160", "LimitCORE=0", "CPUWeight=50", "IOWeight=25",
     "ReadWritePaths=+/workspace/dist +/workspace/node_modules/.vite-temp +/workspace/node_modules/.tmp/tsconfig.app.tsbuildinfo +/workspace/node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "StandardInput=null", "StandardOutput=file:" + directory + "/stdout-" + commandIndex + ".log",

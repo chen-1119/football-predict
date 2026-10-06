@@ -42,6 +42,7 @@ async function fixture(options = {}) {
     lstatSync(name, opts) { return stats(fs.lstatSync(physical(name), opts), opts?.bigint); },
     statSync(name, opts) { return stats(fs.statSync(physical(name), opts), opts?.bigint); },
     fstatSync(fd, opts) { return stats(fs.fstatSync(fd, opts), opts?.bigint); },
+    fchownSync(_fd, uid, gid) { assert.equal(uid, 0); assert.equal(gid, 0); },
     existsSync(name) { return fs.existsSync(physical(name)); },
     readdirSync(name, opts) { return fs.readdirSync(physical(name), opts); },
     openSync(name, flags, mode) { const fd = fs.openSync(physical(name), flags, mode); handles.set(fd, name); return fd; },
@@ -57,7 +58,7 @@ async function fixture(options = {}) {
     writeFileSync(name, bytes, opts) { return fs.writeFileSync(typeof name === "number" ? name : physical(name), bytes, opts); },
     mkdirSync(name, opts) { return fs.mkdirSync(physical(name), opts); },
     chmodSync(name, mode) { return fs.chmodSync(physical(name), mode); },
-    renameSync(from, to) { events.push("rename:" + to); return fs.renameSync(physical(from), physical(to)); },
+    renameSync(from, to) { events.push("rename:" + to); const value = fs.renameSync(physical(from), physical(to)); options.afterRename?.(from, to); return value; },
     symlinkSync(target, name) { assert.ok(!path.posix.isAbsolute(target)); return fs.symlinkSync(target, physical(name)); },
     statfsSync(name, opts) { return name === "/sys/fs/cgroup" ? { type: 0x63677270 } : opts?.bigint ? { bavail: 20n * 1024n ** 3n, bsize: 1n } : { bavail: 20 * 1024 ** 3, bsize: 1 }; },
     rmSync(name, opts) { assert.match(name, /^\/var\/lib\/football-release\/frontend-builds\/[a-f0-9]{24}$/); events.push("cleanup-stage"); return fs.rmSync(physical(name), opts); },
@@ -71,20 +72,22 @@ async function fixture(options = {}) {
   };
   const oldTar = tar(sourceFiles), nextFiles = { ...sourceFiles, "src/App.css": "body{color:new}" }, nextTar = tar(nextFiles);
   const runtimeSHA = sha(oldTar.bytes), candidateSHA = sha(nextTar.bytes), sequence = 12, runtimeSequence = 11, lockSHA = sha(sourceFiles["package-lock.json"]);
-  const work = RELEASE + "/work/" + candidateSHA + ".Fixture", attempt = RELEASE + "/frontend-authorizations/" + candidateSHA;
-  for (const name of [INSTALL, RELEASE, RELEASE + "/frontend-builds", RELEASE + "/frontend-dependencies", RELEASE + "/frontend-authorizations", RELEASE + "/recovery", APP, work, "/run", "/sys/fs/cgroup", "/etc/football-release"]) dir(name);
+  const work = RELEASE + "/work/" + candidateSHA + ".Fixture", attempt = RELEASE + "/frontend-authorizations/" + candidateSHA + "." + sequence;
+  for (const name of [INSTALL, RELEASE, RELEASE + "/frontend-builds", RELEASE + "/frontend-dependencies", RELEASE + "/frontend-authorizations", RELEASE + "/frontend-attempts", RELEASE + "/logs", RELEASE + "/status", RELEASE + "/recovery", APP, work, "/run", "/sys/fs/cgroup", "/sys/fs/cgroup/system.slice", "/etc/football-release"]) dir(name);
   put("/sys/fs/cgroup/cgroup.controllers", "cpu memory\n");
   const moduleNames = controllerSource.match(/const MODULES = Object\.freeze\(\[([\s\S]*?)\]\);/)[1].match(/"[A-Za-z]+\.cjs"/g).map(x => JSON.parse(x));
   for (const name of moduleNames) put(INSTALL + "/" + name, fs.readFileSync(path.join(__dirname, name === "frontendReleaseIdentity.cjs" ? "../server/" + name : name)));
   put(INSTALL + "/node_modules/typescript/lib/typescript.js", parserBytes); put(INSTALL + "/node_modules/typescript/package.json", parserPackage);
   put(NODE, "fixture node binary bytes, never executed", 0o755);
-  put("/etc/football-release/signing-public.pem", publicPem); put("/etc/football-release/expected-site", "fixture-site\n"); put("/etc/football-release/expected-channel", "fixture\n"); put("/etc/football-release/public-base-url", "https://fixture.invalid/\n");
+  put("/etc/football-release/signing-public.pem", publicPem, 0o644); put("/etc/football-release/expected-site", "fixture-site\n", 0o644); put("/etc/football-release/expected-channel", "fixture\n", 0o644); put("/etc/football-release/public-base-url", "https://fixture.invalid/\n", 0o644);
+  put("/etc/football-release/upload-owner", "fixture-user\n", 0o644);
   put(RELEASE + "/highest-accepted-sequence", String(sequence) + "\n");
-  put(APP + "/.release-bundle-sha256", runtimeSHA + "\n"); put(APP + "/.release-live-complete", runtimeSHA + "\n");
+  put(APP + "/.release-bundle-sha256", runtimeSHA + "\n", 0o644); put(APP + "/.release-live-complete", runtimeSHA + "\n", 0o644);
   for (const [name, bytes] of Object.entries(sourceFiles)) if (name.startsWith("dist/")) put(APP + "/" + name, bytes, 0o644);
   put(APP + "/runtime-sentinel", "unchanged runtime"); put(RELEASE + "/database-sentinel", "unchanged database");
   const baselineDir = RELEASE + "/source-baselines/" + runtimeSHA; put(baselineDir + "/original.tgz", oldTar.bytes);
   put(work + "/" + candidateSHA + ".tgz", nextTar.bytes);
+  put(work + "/" + candidateSHA + ".sha256", candidateSHA + "  " + candidateSHA + ".tgz\n");
   const baselineEvidence = await archive.captureReleaseArchiveSourceEvidence(physical(baselineDir + "/original.tgz"));
   const candidateEvidence = await archive.captureReleaseArchiveSourceEvidence(physical(work + "/" + candidateSHA + ".tgz"));
   const oldDist = dist.inspectPrebuiltDist(physical(APP + "/dist"));
@@ -123,6 +126,8 @@ async function fixture(options = {}) {
   const buildModule = { ...build, snapshotBuildInputs: (input, opts) => build.snapshotBuildInputs(physical(input), opts) };
   const command = (exe, args) => {
     events.push("command:" + exe + ":" + args.join(" "));
+    if (exe === "/usr/bin/id" && args.length === 2 && args[0] === "-g" && args[1] === "fixture-user") return { status: 0, stdout: "0\n" };
+    if (exe === "/usr/bin/systemctl" && args[0] === "list-units") return { status: options.unitObservationFailure ? 1 : 0, stdout: options.activeBuild ? "football-frontend-build-fixture.service loaded active running\n" : "" };
     if (exe === "/usr/bin/systemctl" && args.length === 2 && args[0] === "is-active") return { status: options.serviceFailure ? 3 : 0, stdout: options.serviceFailure ? "inactive\n" : "active\n" };
     assert.equal(exe, "/usr/bin/tar", "no full release/build/provider command allowed"); assert.deepEqual(Array.from(args).slice(0, 3), ["--no-same-owner", "--no-same-permissions", "-xzf"]);
     const destination = args[5], packed = sha(get(args[3])) === runtimeSHA ? oldTar : nextTar;
@@ -155,7 +160,8 @@ async function fixture(options = {}) {
       setImmediate(() => { if (ended) return; response.emit("data", bytes); if (ended) return; ended = true; active--; response.emit("end"); });
     }); return req;
   } };
-  const vmProcess = { platform: "linux", getuid: () => 0, execPath: NODE, version: "v22.22.1", versions: { node: "22.22.1" }, env: {}, argv: [], exitCode: 0 };
+  const vmProcess = { platform: "linux", getuid: () => 0, execPath: NODE, version: "v22.22.1", versions: { node: "22.22.1" }, env: {}, argv: [], execArgv: [], exitCode: 0 };
+  const context = vm.createContext({ Buffer, URL, console, setTimeout, clearTimeout });
   const evaluate = (code, filename, closure) => {
     const module = { exports: {} };
     const requireFixture = name => {
@@ -165,8 +171,11 @@ async function fixture(options = {}) {
       if (Object.hasOwn(closure, name)) return closure[name];
       assert.ok(name.startsWith("node:"), "unexpected VM require " + name); return require(name);
     };
-    vm.runInNewContext(code, { require: requireFixture, module, exports: module.exports, __dirname: INSTALL, __filename: filename,
-      Buffer, URL, process: vmProcess, console, setTimeout, clearTimeout }, { filename });
+    // One CommonJS realm, with per-module lexical require/filename/process.
+    // Independent realms would incorrectly reject a legitimate plain input
+    // crossing two fixed root modules' Object.prototype checks.
+    const wrapper = vm.runInContext("(function(require,module,exports,__dirname,__filename,process){\n" + code + "\n})", context, { filename });
+    wrapper(requireFixture, module, module.exports, INSTALL, filename, vmProcess);
     return module.exports;
   };
   const sandboxReader = evaluate(fs.readFileSync(path.join(__dirname, "frontendBuildSandbox.cjs"), "utf8"), INSTALL + "/frontendBuildSandbox.cjs",
@@ -257,10 +266,26 @@ async function fixture(options = {}) {
     releasePrebuiltDist: distModule,
   };
   const fixed = Object.fromEntries(Object.entries(closure).map(([name, value]) => [INSTALL + "/" + name + ".cjs", value]));
+  fixed[INSTALL + "/frontendPolicyRefresh.cjs"] = {};
+  fixed[INSTALL + "/frontendReleaseAttempt.cjs"] = {};
   const controller = evaluate(controllerSource, INSTALL + "/frontendReleaseController.cjs", fixed);
+  fixed[INSTALL + "/frontendReleaseController.cjs"] = controller;
+  fixed[INSTALL + "/frontendPolicyRefresh.cjs"] = evaluate(fs.readFileSync(path.join(__dirname, "frontendPolicyRefresh.cjs"), "utf8"), INSTALL + "/frontendPolicyRefresh.cjs", fixed);
+  fixed[INSTALL + "/frontendReleaseAttempt.cjs"] = evaluate(fs.readFileSync(path.join(__dirname, "frontendReleaseAttempt.cjs"), "utf8"), INSTALL + "/frontendReleaseAttempt.cjs", fixed);
+  const attemptBridge = (method, input) => vm.runInContext("(function(api,text){return api[" + JSON.stringify(method) + "](JSON.parse(text));})", context)(fixed[INSTALL + "/frontendReleaseAttempt.cjs"], JSON.stringify(input));
+  // The wrapper first creates a valid signed attempt. Negative controller
+  // observations are introduced afterwards, at their intended gate.
+  const savedOptions = { ...options }; for (const name of Object.keys(options)) delete options[name];
+  try {
+    put(RELEASE + "/highest-accepted-sequence", String(runtimeSequence) + "\n");
+    attemptBridge("prepareFrontendReleaseAttempt", { sha256: candidateSHA, sequence, workDir: work });
+    put(RELEASE + "/highest-accepted-sequence", String(sequence) + "\n");
+    attemptBridge("writeFrontendReleaseAttemptStatus", { sha256: candidateSHA, sequence, phase: "running", exitCode: null });
+  } finally { Object.assign(options, savedOptions); }
   return { controller, root, put, get, parsed, physical, dir, sign, manifest, runtimeSHA, candidateSHA, sequence, oldState, oldDist, binding, work, attempt, dependencyRoot,
-    events, requests, options, transactionModule, sandboxReader, vmProcess,
-    async apply() { return controller.main(["apply", candidateSHA, String(sequence), work]); },
+    events, requests, options, transactionModule, sandboxReader, vmProcess, policyRefresh: fixed[INSTALL + "/frontendPolicyRefresh.cjs"], runtimeSequence,
+    async apply() { try { const result = await controller.main(["apply", candidateSHA, String(sequence), work]); attemptBridge("writeFrontendReleaseAttemptStatus", { sha256: candidateSHA, sequence, phase: "complete", exitCode: 0 }); return result; }
+      catch (e) { try { attemptBridge("writeFrontendReleaseAttemptStatus", { sha256: candidateSHA, sequence, phase: "failed", exitCode: 1 }); } catch { /* Preserve the original failure in negative fixtures. */ } throw e; } },
     counters() { return { sandboxCalls, installedCalls, acceptedCalls, recoveryCalls, beginCalls, lockCalls, active, maxActive }; },
     async dispose() { for (let i = 0; i < 20 && active; i++) await tick(); assert.equal(active, 0); assert.equal(handles.size, 0); assert.equal(fs.statSync(root).ino, rootInode); assert.equal(fs.realpathSync(root), root); fs.rmSync(root, { recursive: true }); },
   };
@@ -294,14 +319,14 @@ async function verify() {
     f.manifest.createdAt = new Date(Date.now() - 7200000).toISOString(); f.manifest.expiresAt = new Date(Date.now() - 3600000).toISOString(); f.sign();
   }, /expired/);
   await rejected("full kind cannot enter the frontend apply route", {}, f => { f.manifest.releaseKind = "full"; delete f.manifest.frontendAuthorization; f.sign(); }, /identity-or-policy/);
-  await rejected("signed state hash drift stops before build", {}, f => f.put(STATE, json({ ...f.oldState, acceptanceSha256: sha("external") })), /signed-current-state/);
-  await rejected("public runtime binding drift stops before build", {}, f => f.put(APP + "/.frontend-release-binding.json", json({ ...f.binding, inventorySha256: sha("external") }), 0o644), /runtime-or-policy-binding/);
+  await rejected("signed state hash drift stops before build", {}, f => f.put(STATE, json({ ...f.oldState, acceptanceSha256: sha("external") })), /signed-current-state|attempt-current-state-invalid/);
+  await rejected("public runtime binding drift stops before build", {}, f => f.put(APP + "/.frontend-release-binding.json", json({ ...f.binding, inventorySha256: sha("external") }), 0o644), /runtime-or-policy-binding|attempt-current-binding-invalid/);
   await rejected("complete source inventory mismatch cannot pass a valid signature", {}, f => {
     f.manifest.frontendAuthorization.baseline.inventorySha256 = sha("wrong inventory"); f.binding.inventorySha256 = sha("wrong inventory");
     f.put(BINDING, json(f.binding)); f.put(APP + "/.frontend-release-binding.json", json(f.binding), 0o644); f.sign();
-  }, /inventory-commitment/);
-  await rejected("archive bytes drift is rejected before extraction", {}, f => f.put(f.work + "/" + f.candidateSHA + ".tgz", "not the signed archive"), /header|gzip|archive|compression/);
-  await rejected("retained archive is copied from one stable descriptor and detects source growth", { retainedSourceDrift: true }, null, /retained-content-drift/);
+  }, /inventory-commitment|prepared-attempt-does-not-match-current-invocation/);
+  await rejected("archive bytes drift is rejected before extraction", {}, f => f.put(f.work + "/" + f.candidateSHA + ".tgz", "not the signed archive"), /header|gzip|archive|compression|attempt-signed-identity-invalid/);
+  await rejected("retained archive is copied from one stable descriptor and detects source growth", { retainedSourceDrift: true }, null, /retained-content-drift|attempt-read-drift/);
   await rejected("extracted file drift fails before any build", { extractDrift: true }, null, /extracted-file-drift|extracted-content-drift/);
   await rejected("dependency record requires complete raw-byte hash", {}, f => f.put(f.dependencyRoot + "/complete.json", json({ version: "frontend-build-dependencies-v1", recordSha256: sha("wrong") })), /dependency-store-binding/);
   await rejected("runtime boundary refusal never falls back to full", { boundaryFailure: true }, null, /runtime-source-boundary/);
@@ -337,7 +362,7 @@ async function verify() {
     await assert.rejects(f.apply(), /begin-after-pending/); assert.equal(f.counters().recoveryCalls, 1); assert.equal(f.counters().sandboxCalls, 1); assert.equal(f.requests.length, 0);
   }));
   await check("recovery with no accept intent is reachable with no health/service network", () => withFixture({ networkFailure: true, serviceFailure: true }, async f => {
-    f.dir(CURRENT); const result = await f.controller.main(["recover"]); assert.equal(result.action, "rollback"); assert.equal(f.requests.length, 0); assert.ok(!f.events.some(e => e.includes("systemctl")));
+    f.dir(CURRENT); const result = await f.controller.main(["recover"]); assert.equal(result.action, "rollback"); assert.equal(f.requests.length, 0); assert.ok(!f.events.some(e => e.includes("systemctl:is-active")));
   }));
   await check("valid accept intent rollforward uses fresh health/services without rebuilding", () => withFixture({ acceptFailure: true }, async f => {
     await assert.rejects(f.apply(), /after-accept-intent/); assert.equal(f.counters().acceptedCalls, 1); assert.equal(f.counters().recoveryCalls, 1); assert.equal(f.counters().sandboxCalls, 1);
@@ -354,5 +379,5 @@ async function verify() {
     boundary: "Unchanged controller VM. Real RSA signatures, source archive inventory/schema, dependency snapshots, artifact hashes, sandbox receipt reader and acceptance schema. Root/lock, tar process, runtime capture, sandbox execution, HTTP/services and transaction mutations are explicit test adapters, not production proof.",
     buildExecutions: 0, networkRequests: 0, productionWrites: 0 };
 }
-module.exports = { verify };
+module.exports = { verify, createControllerFixture: fixture };
 if (require.main === module) verify().then(report => { console.log(JSON.stringify(report)); if (!report.ok) process.exitCode = 1; }).catch(error => { console.error(error.stack); process.exitCode = 1; });

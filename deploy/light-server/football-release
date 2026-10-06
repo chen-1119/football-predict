@@ -26,6 +26,8 @@ readonly NODE_BIN="/opt/node-v22.22.1/bin/node"
 readonly RECOVERY_HELPER="/usr/local/libexec/football-release-recovery.cjs"
 readonly SOURCE_BASELINE_HELPER_DIR="/usr/local/libexec/football-release-source-baseline"
 readonly FRONTEND_HELPER_DIR="/usr/local/libexec/football-release-frontend"
+readonly FRONTEND_ATTEMPT_ROOT="/var/lib/football-release/frontend-attempts"
+readonly FRONTEND_POLICY_BOOTSTRAP_PENDING="/var/lib/football-release/frontend-policy-bootstrap/pending.json"
 readonly EXPECTED_POLICY_VERSION="release-secret-policy-v2"
 readonly EXPECTED_MANIFEST_VERSION="3"
 readonly EXPECTED_SIGNATURE_ALGORITHM="rsa-sha256-pkcs1-v1_5"
@@ -138,16 +140,21 @@ assert_frontend_controller() {
     [[ "$metadata" =~ ^0:0:([0-7]{3,4})$ ]] && (( (8#${BASH_REMATCH[1]} & 8#022) == 0 )) \
       || die "frontend controller directory is not root controlled"
   done
-  for module in frontendReleaseController.cjs frontendReleaseAuthorization.cjs frontendReleaseTransaction.cjs frontendReleaseIdentity.cjs frontendInstalledRuntime.cjs frontendRuntimeBoundary.cjs frontendBuildSandbox.cjs frontendBuildEvidence.cjs releaseSourceBaseline.cjs releaseSigning.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs; do
+  for module in frontendReleaseController.cjs frontendReleaseAuthorization.cjs frontendReleaseTransaction.cjs frontendReleaseIdentity.cjs frontendInstalledRuntime.cjs frontendRuntimeBoundary.cjs frontendBuildSandbox.cjs frontendBuildEvidence.cjs frontendPolicyRefresh.cjs frontendReleaseAttempt.cjs releaseSourceBaseline.cjs releaseSigning.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs; do
     assert_root_controlled_file "${FRONTEND_HELPER_DIR}/${module}" 644 "fixed frontend policy"
   done
 }
 
 acquire_release_lock() {
+  local allow_policy_bootstrap_pending="${1:-0}"
   exec 9>"$LOCK_FILE"
   flock -n 9 || die "another release or recovery is active"
   [ ! -e "/var/lib/football-release/reference-repairs/current" ] && [ ! -L "/var/lib/football-release/reference-repairs/current" ] \
     || die "a signed PostgreSQL reference repair requires its own recovery"
+  if [ "$allow_policy_bootstrap_pending" -ne 1 ]; then
+    [ ! -e "$FRONTEND_POLICY_BOOTSTRAP_PENDING" ] && [ ! -L "$FRONTEND_POLICY_BOOTSTRAP_PENDING" ] \
+      || die "frontend policy bootstrap is pending; release execution is blocked"
+  fi
 }
 
 assert_regular_upload() {
@@ -173,6 +180,14 @@ write_status() {
   local sha="$4"
   local started_at="$5"
   local upload_group="$6"
+  if [ "${FRONTEND_ATTEMPT_READY:-0}" -eq 1 ]; then
+    # Closing the append stream makes the final attempt log an immutable,
+    # bounded snapshot before the helper publishes the SHA latest projection.
+    if [ "$state" != "running" ]; then exec 1>&3 2>&4; fi
+    env -i PATH="$PATH" LANG=C.UTF-8 "$NODE_BIN" "${FRONTEND_HELPER_DIR}/frontendReleaseAttempt.cjs" \
+      status "$sha" "$MANIFEST_SEQUENCE" "$state" "$exit_code"
+    return
+  fi
   local status_path="${STATUS_DIR}/${sha}.status"
   local tmp
   tmp="$(mktemp "${STATUS_DIR}/.${sha}.status.XXXXXX")"
@@ -231,11 +246,21 @@ fi
 if [ "${1:-}" = "--recover" ]; then
   [ "$#" -eq 1 ] || die "usage: football-release --recover"
   check_recovery_runtime
-  acquire_release_lock
+  acquire_release_lock 1
   if [ -e "${RECOVERY_CURRENT}/frontend-transaction.json" ] || [ -L "${RECOVERY_CURRENT}/frontend-transaction.json" ] \
+    || [ -e "${RECOVERY_CURRENT}/frontend-policy-refresh.json" ] || [ -L "${RECOVERY_CURRENT}/frontend-policy-refresh.json" ] \
     || [ -e "${RECOVERY_CURRENT}/phase.json" ] || [ -L "${RECOVERY_CURRENT}/phase.json" ]; then
     assert_frontend_controller
     exec env -i PATH="$PATH" LANG=C.UTF-8 "$NODE_BIN" "${FRONTEND_HELPER_DIR}/frontendReleaseController.cjs" recover
+  fi
+  if [ ! -e "$RECOVERY_CURRENT" ] && [ ! -L "$RECOVERY_CURRENT" ] \
+    && [ -d "$FRONTEND_ATTEMPT_ROOT" ] && [ ! -L "$FRONTEND_ATTEMPT_ROOT" ]; then
+    for attempt_entry in "$FRONTEND_ATTEMPT_ROOT"/*; do
+      if [ -e "$attempt_entry" ] || [ -L "$attempt_entry" ]; then
+        assert_frontend_controller
+        exec env -i PATH="$PATH" LANG=C.UTF-8 "$NODE_BIN" "${FRONTEND_HELPER_DIR}/frontendReleaseController.cjs" recover
+      fi
+    done
   fi
   exec env -i \
     PATH="$PATH" \
@@ -254,6 +279,22 @@ acquire_release_lock
 [ ! -e "$RECOVERY_CURRENT" ] && [ ! -L "$RECOVERY_CURRENT" ] \
   || die "an unresolved release recovery transaction already exists: ${RECOVERY_CURRENT}; run --recover"
 check_release_runtime
+
+# This also guards the full continuation. A killed frontend invocation must be
+# classified by the fixed cold recovery before any later release changes state.
+# An empty initial namespace does not require an existing frontend baseline.
+if [ -e "$FRONTEND_ATTEMPT_ROOT" ] || [ -L "$FRONTEND_ATTEMPT_ROOT" ]; then
+  [ -d "$FRONTEND_ATTEMPT_ROOT" ] && [ ! -L "$FRONTEND_ATTEMPT_ROOT" ] \
+    && [ "$(stat -c '%u:%g:%a' -- "$FRONTEND_ATTEMPT_ROOT")" = "0:0:700" ] \
+    || die "frontend attempt root is unsafe"
+  for attempt_entry in "$FRONTEND_ATTEMPT_ROOT"/*; do
+    if [ -e "$attempt_entry" ] || [ -L "$attempt_entry" ]; then
+      assert_frontend_controller
+      env -i PATH="$PATH" LANG=C.UTF-8 "$NODE_BIN" "${FRONTEND_HELPER_DIR}/frontendReleaseAttempt.cjs" check-pending
+      break
+    fi
+  done
+fi
 
 readonly UPLOAD_OWNER="$(read_single_line "$UPLOAD_OWNER_FILE" "upload owner")"
 readonly UPLOAD_GROUP="$(id -gn "$UPLOAD_OWNER")"
@@ -285,13 +326,8 @@ readonly SOURCE_SHA="${INCOMING_DIR}/${SHA_NAME}"
 readonly SOURCE_MANIFEST="${INCOMING_DIR}/${MANIFEST_NAME}"
 readonly SOURCE_SIGNATURE="${INCOMING_DIR}/${SIGNATURE_NAME}"
 readonly STATUS_PATH="${STATUS_DIR}/${BUNDLE_SHA}.status"
-readonly LOG_PATH="${LOG_DIR}/${BUNDLE_SHA}.log"
+readonly LATEST_LOG_PATH="${LOG_DIR}/${BUNDLE_SHA}.log"
 readonly STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-: >"$LOG_PATH"
-chown root:"$UPLOAD_GROUP" "$LOG_PATH"
-chmod 0640 "$LOG_PATH"
-exec >>"$LOG_PATH" 2>&1
 
 status_started=0
 status_finalized=0
@@ -309,8 +345,6 @@ cleanup_on_exit() {
 }
 trap cleanup_on_exit EXIT
 
-write_status "running" "0" "" "$BUNDLE_SHA" "$STARTED_AT" "$UPLOAD_GROUP"
-status_started=1
 printf 'football-release: validating signed bundle %s\n' "$BUNDLE_SHA"
 
 assert_regular_upload "$SOURCE_BUNDLE" "$UPLOAD_OWNER" "$MAX_BUNDLE_BYTES"
@@ -429,7 +463,6 @@ process.stdout.write(String(manifest.releaseSequence));
 NODE
 )"
 readonly MANIFEST_SEQUENCE="$manifest_sequence"
-write_status "running" "0" "" "$BUNDLE_SHA" "$STARTED_AT" "$UPLOAD_GROUP"
 
 inventory_path="${work_dir}/archive-inventory.json"
 python3 - "$BUNDLE_PATH" "$inventory_path" "$MAX_ARCHIVE_ENTRIES" \
@@ -551,7 +584,15 @@ PY
 
 if [ "$MANIFEST_KIND" = "frontend-only" ]; then
   [ ! -e "$RECOVERY_CURRENT" ] && [ ! -L "$RECOVERY_CURRENT" ] || die "unresolved recovery before frontend build"
+  env -i PATH="$PATH" LANG=C.UTF-8 "$NODE_BIN" "${FRONTEND_HELPER_DIR}/frontendReleaseAttempt.cjs" \
+    prepare "$BUNDLE_SHA" "$MANIFEST_SEQUENCE" "$work_dir"
+  readonly FRONTEND_ATTEMPT_READY=1
   consume_release_sequence_before_execution "$MANIFEST_SEQUENCE"
+  readonly LOG_PATH="${FRONTEND_ATTEMPT_ROOT}/${BUNDLE_SHA}.${MANIFEST_SEQUENCE}/output.log"
+  exec 3>&1 4>&2
+  exec >>"$LOG_PATH" 2>&1
+  write_status "running" "0" "" "$BUNDLE_SHA" "$STARTED_AT" "$UPLOAD_GROUP"
+  status_started=1
   printf 'football-release: signature accepted keyId=%s; starting single-build frontend release\n' "$TRUSTED_KEY_ID"
   set +e
   env -i PATH="$PATH" LANG=C.UTF-8 "$NODE_BIN" "${FRONTEND_HELPER_DIR}/frontendReleaseController.cjs" \
@@ -559,17 +600,27 @@ if [ "$MANIFEST_KIND" = "frontend-only" ]; then
   frontend_status="$?"
   set -e
   if [ "$frontend_status" -ne 0 ]; then
+    printf 'football-release: frontend-only release failed with exit %s; no full fallback\n' "$frontend_status"
     write_status "failed" "0" "$frontend_status" "$BUNDLE_SHA" "$STARTED_AT" "$UPLOAD_GROUP"
     status_finalized=1
-    printf 'football-release: frontend-only release failed with exit %s; no full fallback\n' "$frontend_status"
     exit "$frontend_status"
   fi
-  write_status "complete" "1" "0" "$BUNDLE_SHA" "$STARTED_AT" "$UPLOAD_GROUP"
-  status_finalized=1
   rm -f -- "$SOURCE_BUNDLE" "$SOURCE_SHA" "$SOURCE_MANIFEST" "$SOURCE_SIGNATURE"
   printf 'football-release: frontend-only release complete %s\n' "$BUNDLE_SHA"
+  write_status "complete" "1" "0" "$BUNDLE_SHA" "$STARTED_AT" "$UPLOAD_GROUP"
+  status_finalized=1
   exit 0
 fi
+
+# A rejected signature, sequence, or archive cannot truncate a prior SHA log or
+# replace its status. The full route retains its existing logging continuation.
+readonly LOG_PATH="$LATEST_LOG_PATH"
+: >"$LOG_PATH"
+chown root:"$UPLOAD_GROUP" "$LOG_PATH"
+chmod 0640 "$LOG_PATH"
+exec >>"$LOG_PATH" 2>&1
+write_status "running" "0" "" "$BUNDLE_SHA" "$STARTED_AT" "$UPLOAD_GROUP"
+status_started=1
 
 readonly TRUSTED_SOURCE_DIR="${work_dir}/trusted"
 [ ! -e "$TRUSTED_SOURCE_DIR" ] || die "trusted extraction path already exists"
