@@ -10,7 +10,7 @@ const team = require('./prematchTeamEvidenceV3.cjs');
 const learning = require('./prematchV3Learning.cjs');
 const { stableHash } = require('./webConsensusEvidence.cjs');
 const { epochNanoseconds } = require('./prematchV3Clock.cjs');
-const { validateResponse: validateOnlineResponse, MAX_MODEL_ARTIFACT_BYTES } = require('../../scripts/readPrematchV3OnlineInputs.cjs');
+const { validateResponse: validateOnlineResponse, MAX_MODEL_ARTIFACT_BYTES } = require('./prematchV3OnlineResponse.cjs');
 
 const VERSION = 'prematch-v3-private-model-read-v1';
 const KEYS = Object.freeze({ baseline: 'prematch-v3-baseline', parameters: 'prematch-v3-parameters' });

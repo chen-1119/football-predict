@@ -4,15 +4,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const cp = require('node:child_process');
-const { strictInstant } = require('../src/services/strictInstant.cjs');
 const { epochNanoseconds } = require('../src/services/prematchV3Clock.cjs');
-const { sportteryDeadlineClock } = require('../src/services/sportteryDeadlineClock.cjs');
 const { validateReleaseSshHostKeyPin, buildPinnedSshBaseOptions } = require('./releaseSshHostKeyPin.cjs');
 const MAX_BYTES = 12 * 1024 * 1024;
-const MAX_MODEL_ARTIFACT_BYTES = 4 * 1024 * 1024;
-const MODEL_ARTIFACT_KEYS = Object.freeze(['prematch-v3-baseline', 'prematch-v3-parameters']);
-const MAX_MATCHES = 128, MAX_INVENTORY = 24, CLOCK_SKEW_MS = 120000;
-const VERSION = 'prematch-v3-online-readonly-v2';
+const CLOCK_SKEW_MS = 120000;
+const {VERSION, MAX_MODEL_ARTIFACT_BYTES, MODEL_ARTIFACT_KEYS, MAX_MATCHES, MAX_INVENTORY, validDate, validateResponse} = require('../src/services/prematchV3OnlineResponse.cjs');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 function check(value, code) { if (!value) throw Error(`V3_READER_${code}`); }
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -20,9 +16,6 @@ const text = (value, maximum) => typeof value === 'string' && value.length > 0 &
   && value === value.trim() && !/[\x00-\x1f\x7f]/.test(value);
 const instant = epochNanoseconds;
 const displayMilliseconds = nanoseconds => Number(nanoseconds / 1000000n) + Number(nanoseconds % 1000000n) / 1000000;
-function validDate(date) {
-  return typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date) && Boolean(strictInstant(`${date}T00:00:00Z`));
-}
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (object(value)) return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
@@ -67,78 +60,6 @@ SELECT jsonb_build_object(
 );
 ROLLBACK;
 `;
-}
-function validateResponse(value, date) {
-  check(validDate(date), 'DATE');
-  check(object(value) && value.version === VERSION && value.readOnly === 'on' && value.productionWrites === 0
-    && value.businessDate === date && instant(value.observedAt) !== null
-    && Array.isArray(value.matches) && value.matches.length <= MAX_MATCHES
-    && Array.isArray(value.modelArtifactInventory) && value.modelArtifactInventory.length <= MAX_INVENTORY
-    && Array.isArray(value.modelArtifacts) && value.modelArtifacts.length <= MODEL_ARTIFACT_KEYS.length
-    && object(value.generation), 'RESPONSE');
-  check(text(value.generation.data_generation_id, 256) && typeof value.generation.manifest_hash === 'string'
-    && /^[a-f0-9]{64}$/.test(value.generation.manifest_hash)
-    && (value.generation.committed_at == null || instant(value.generation.committed_at) !== null), 'GENERATION_METADATA');
-  const missingFields = [], clockNormalizations = [];
-  value.matches.forEach((match, index) => {
-    check(object(match) && match.businessDate === date, 'MATCH_BUSINESS_DATE');
-    const id = match.id, sourceId = match.sourceMatchId;
-    check((text(id, 256) || text(sourceId, 256)) && (id == null || text(id, 256))
-      && (sourceId == null || text(sourceId, 256)), 'MATCH_IDENTITY');
-    const normalize = id => id.replace(/^sporttery_/, '');
-    check((id == null || text(normalize(id), 256)) && (sourceId == null || text(normalize(sourceId), 256)), 'MATCH_IDENTITY');
-    check(id == null || sourceId == null || normalize(id) === normalize(sourceId), 'MATCH_IDENTITY');
-    for (const field of ['kickoffTime', 'eventVersion', 'buyEndTime']) {
-      if (match[field] != null) {
-        const resolved=field==='buyEndTime'?sportteryDeadlineClock(match,match[field],{field}):{instant:match[field]};
-        check(instant(resolved.instant) !== null, 'MATCH_CLOCK');
-        if(resolved.normalization) clockNormalizations.push({index,...resolved.normalization});
-      }
-    }
-    if (match.eventVersion != null && match.kickoffTime != null)
-      check(instant(match.eventVersion) === instant(match.kickoffTime), 'MATCH_EVENT_CONFLICT');
-    for (const field of ['matchDate', 'kickoffDate']) {
-      if (match[field] != null) check(validDate(match[field]), 'MATCH_CALENDAR');
-    }
-    check(match.predictionMeta == null || object(match.predictionMeta), 'MATCH_CUTOFF');
-    const cutoffs = [['cutoffAt',match.cutoffAt],['cutoffTime',match.cutoffTime],['predictionMeta.cutoffTime',match.predictionMeta?.cutoffTime]]
-      .filter(([,value])=>value!=null).map(([field,value])=>{
-        const resolved=sportteryDeadlineClock(match,value,{field});
-        if(resolved.normalization) clockNormalizations.push({index,...resolved.normalization});
-        return resolved.instant;
-      });
-    check(cutoffs.every(value => instant(value) !== null), 'MATCH_CUTOFF');
-    if (match.cutoffAt != null && match.cutoffTime != null)
-      check(instant(sportteryDeadlineClock(match,match.cutoffAt,{field:'cutoffAt'}).instant)
-        === instant(sportteryDeadlineClock(match,match.cutoffTime,{field:'cutoffTime'}).instant), 'MATCH_CUTOFF');
-    const missing = [];
-    if (sourceId == null) missing.push('sourceMatchId');
-    if (match.kickoffTime == null) missing.push('kickoffTime');
-    if (!cutoffs.length && match.buyEndTime == null) missing.push('cutoff');
-    if (missing.length) missingFields.push({ index, fields: missing });
-  });
-  const artifactKeys = new Set();
-  for (const artifact of value.modelArtifactInventory) {
-    check(object(artifact) && text(artifact.key, 256) && text(artifact.version, 128)
-      && typeof artifact.sha256 === 'string' && /^[a-f0-9]{64}$/.test(artifact.sha256)
-      && Number.isSafeInteger(artifact.bytes) && artifact.bytes >= 0 && instant(artifact.generatedAt) !== null
-      && !artifactKeys.has(artifact.key), 'ARTIFACT_METADATA');
-    artifactKeys.add(artifact.key);
-  }
-  const modelKeys = new Set();
-  for (const packet of value.modelArtifacts) {
-    check(object(packet) && MODEL_ARTIFACT_KEYS.includes(packet.artifactKey) && !modelKeys.has(packet.artifactKey)
-      && text(packet.artifactVersion, 128) && typeof packet.payloadSha256 === 'string' && /^[a-f0-9]{64}$/.test(packet.payloadSha256)
-      && Number.isSafeInteger(packet.payloadBytes) && packet.payloadBytes > 0
-      && instant(packet.generatedAt) !== null && instant(packet.updatedAt) !== null
-      && instant(packet.generatedAt) <= instant(packet.updatedAt) && typeof packet.oversized === 'boolean', 'MODEL_ARTIFACT_PACKET');
-    if (packet.oversized) check(packet.payloadJson === null && packet.payloadBytes > MAX_MODEL_ARTIFACT_BYTES, 'MODEL_ARTIFACT_OVERSIZED');
-    else check(typeof packet.payloadJson === 'string' && packet.payloadBytes <= MAX_MODEL_ARTIFACT_BYTES
-      && Buffer.byteLength(packet.payloadJson) === packet.payloadBytes && hash(packet.payloadJson) === packet.payloadSha256,
-      'MODEL_ARTIFACT_PAYLOAD');
-    modelKeys.add(packet.artifactKey);
-  }
-  return { matches: value.matches.length, inventory: value.modelArtifactInventory.length, modelArtifacts: value.modelArtifacts.length, missingFields, clockNormalizations };
 }
 function validateTransport(transport, observedAt) {
   check(object(transport) && transport.hostKeyPinVerified === true

@@ -11,6 +11,7 @@ const {stableHash} = require('../src/services/webConsensusEvidence.cjs');
 const HASH = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const VERSION = 'prematch-v3-online-shadow-report-v1';
 const IMPLEMENTATION_FILES = ['scripts/runPrematchV3Shadow.cjs','scripts/readPrematchV3OnlineInputs.cjs',
+  'src/services/prematchV3OnlineResponse.cjs',
   'scripts/dynamicGoalStrengthModel.cjs','src/services/prematchV3Assessment.cjs','src/services/prematchV3Clock.cjs',
   'src/services/prematchTeamEvidenceV3.cjs','src/services/asianHandicapEvidenceV3.cjs',
   'src/services/prematchV3Learning.cjs','src/services/prematchV3FrozenRecord.cjs',

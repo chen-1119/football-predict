@@ -14,6 +14,25 @@ const { verifyRow } = require('../scripts/postgresPrivateModelArtifactStore.cjs'
 const { stableHash } = require('../src/services/webConsensusEvidence.cjs');
 const onlineReader = require('../scripts/readPrematchV3OnlineInputs.cjs');
 
+test('runtime model registry loads without the SSH reader or its transport module', () => {
+  const path = require('node:path');
+  const { spawnSync } = require('node:child_process');
+  const root = path.resolve(__dirname, '..');
+  const source = `const Module=require('node:module');
+    const forbidden=new Set(${JSON.stringify([require.resolve('../scripts/readPrematchV3OnlineInputs.cjs'), require.resolve('../scripts/releaseSshHostKeyPin.cjs')])});
+    const original=Module._load;
+    Module._load=function(request,parent,isMain){
+      if(forbidden.has(Module._resolveFilename(request,parent,isMain)))throw Error('SSH_TRANSPORT_REACHED_RUNTIME');
+      return original.apply(this,arguments);
+    };
+    const registry=require(${JSON.stringify(require.resolve('../src/services/prematchV3ModelRegistry.cjs'))});
+    if(typeof registry.readPrematchV3RegistryFromOnlineInput!=='function')throw Error('REGISTRY_API_MISSING');
+    process.stdout.write('runtime-contract-only');`;
+  const result = spawnSync(process.execPath, ['-e', source], {cwd: root, encoding: 'utf8', timeout: 10000});
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'runtime-contract-only');
+});
+
 const CREATED = '2026-09-15T10:00:00.000Z', AVAILABLE = '2026-09-15T10:00:01.000Z';
 const AS_OF = '2026-10-06T10:00:00.000Z';
 const FEATURE = 'home.roster.confirmed.attackReplacementGapPer90';
