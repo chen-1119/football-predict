@@ -3182,6 +3182,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
             </div>
 
             }
+            <details className="published-match-pick__basis recommendation-detail-secondary-evidence">
+              <summary>{language === 'zh' ? '查看比分与玩法依据' : 'View score and market evidence'}</summary>
             <div className="card recommendation-score-card">
               <section className="recommendation-overview-panel is-score">
                 <div className="recommendation-overview-head">
@@ -3306,9 +3308,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               </section>
             </div>}
 
+            </details>
       </section>
 
-      {dualStudy && <DualResearchV2 row={dualStudy} language={language} />}
+      {dualStudy && <details className="published-match-pick__basis"><summary>{language === 'zh' ? '查看双选研究依据' : 'View dual-choice study evidence'}</summary><DualResearchV2 row={dualStudy} language={language} /></details>}
 
       {/* 4. 单层详情导航 */}
       <div className="tabs-container detail-tabs-nav match-detail-v4__tabs" role="tablist" aria-label={language === 'zh' ? '详情导航' : 'Detail sections'}>
