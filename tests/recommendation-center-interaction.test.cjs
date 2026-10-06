@@ -168,7 +168,9 @@ test('current match-day concentration warning disappears for mixed or too-small 
   assert.equal(new Set(ui.data.current.map(row=>row.decision.tipCode)).size,1);
   let tree=ui.render(),warnings=byClass(tree,'rc-notice--concentration');
   assert.equal(warnings.length,1);
-  assert.match(words(warnings[0]),/同向提示：当前竞彩日已发布的 3 场方向均为/);
+  assert.match(words(warnings[0]),/原冻结HAD记录同向：当前竞彩日 3 场胜平负记录均为/);
+  assert.match(words(warnings[0]),/其中可能包含条件分支/);
+  assert.match(words(warnings[0]),/这不是当前主方向汇总/);
   assert.match(words(warnings[0]),/不能据此判断命中率/);
   ui.data.current[2].decision={...ui.data.current[2].decision,tipCode:'2'};
   tree=ui.render();assert.equal(byClass(tree,'rc-notice--concentration').length,0);

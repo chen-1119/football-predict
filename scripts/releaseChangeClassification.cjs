@@ -25,6 +25,13 @@ const FRONTEND_PATHS = Object.freeze([
   "src/components/predictions/DataAdoptionDetails.tsx", "src/components/predictions/DateScopeBar.tsx",
   "src/components/predictions/MatchSummaryRow.tsx", "src/components/predictions/PredictionsPageHeader.tsx",
   "src/components/predictions/RecommendationEvidenceFacts.tsx",
+  // Reviewed browser-only recommendation cards. Keep each exact path; neither
+  // sibling modules nor their shared service dependencies inherit permission.
+  "src/components/recommendations/PublishedMatchPick.tsx",
+  "src/components/recommendations/SelectionQualityNote.tsx",
+  "src/components/recommendations/RecommendationCenter.tsx",
+  "src/components/recommendations/published-match-pick.css",
+  "src/styles/recommendation-center.css",
   "src/components/review/ReviewEvidenceOverview.tsx", "src/components/review/review.css",
 ].sort());
 const frontendPaths = new Set(FRONTEND_PATHS);

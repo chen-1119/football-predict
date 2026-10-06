@@ -32,6 +32,11 @@ function verifyReleaseChangeClassification() {
       "src/services/policy.cjs": 'module.exports = { formal: false };',
       "src/pages/PredictionsList.tsx": 'export default () => <p>reference</p>;',
       "src/components/Navbar.tsx": 'export default () => <nav>fixtures</nav>;',
+      "src/components/recommendations/PublishedMatchPick.tsx": 'export function PublishedMatchPick(){ return <p>frozen reference</p>; }',
+      "src/components/recommendations/SelectionQualityNote.tsx": 'export function SelectionQualityNote(){ return <small>reference</small>; }',
+      "src/components/recommendations/RecommendationCenter.tsx": 'export default () => <section>reference center</section>;',
+      "src/components/recommendations/published-match-pick.css": '.published-match-pick { display: block; }',
+      "src/styles/recommendation-center.css": '.recommendation-center { display: block; }',
       "src/styles/tokens.css": ':root { --foreground: #fff; }',
       "public/data/runtime-config.json": '{"formal":false}',
       "public/data/sync-meta.json": '{"generation":"fixture"}',
@@ -101,6 +106,31 @@ function verifyReleaseChangeClassification() {
       assert.ok(result.activationRequirements.includes("audited-runtime-entrypoint-and-ui-dependency-boundary"));
       assert.deepEqual(result, classifyReleaseChanges({ baseline, candidate: ui }));
     });
+    const reviewedCards = [
+      "src/components/recommendations/PublishedMatchPick.tsx",
+      "src/components/recommendations/SelectionQualityNote.tsx",
+      "src/components/recommendations/RecommendationCenter.tsx",
+      "src/components/recommendations/published-match-pick.css",
+      "src/styles/recommendation-center.css",
+    ];
+    check("the five reviewed card paths are exact permissions, never sibling or shared-service wildcards", () => {
+      assert.equal(new Set(FRONTEND_PATHS).size, FRONTEND_PATHS.length);
+      for (const relative of reviewedCards) assert.ok(FRONTEND_PATHS.includes(relative));
+      for (const relative of [
+        "src/services/recommendationCenterView.ts", "src/services/publishedRecommendationStatus.cjs",
+        "src/components/recommendations/UnreviewedCard.tsx", "src/components/recommendations/SelectionQualityNote.cjs",
+        "src/components/recommendations/PublishedMatchPick.tsx.cjs", "src/styles/recommendation-center.cjs",
+      ]) assert.equal(FRONTEND_PATHS.includes(relative), false);
+    });
+    for (const relative of reviewedCards) check(`reviewed card source change is classified with complete authenticated binding: ${relative}`, () => {
+      const candidate = altered(root => write(root, relative, relative.endsWith('.css') ? '.card { color: #123; }' : 'export default () => <p>one frozen reference direction</p>;'));
+      const result = classifyReleaseChanges({ baseline, candidate });
+      assert.equal(result.classification, "frontend-only", JSON.stringify(result));
+      assert.equal(result.executionMode, "full");
+      assert.equal(result.fastPathActivated, false);
+      assert.deepEqual(result.skippedStages, []);
+      assert.deepEqual(result.blockers, []);
+    });
     check("missing baseline and legacy count-only metadata default full", () => {
       full(classifyReleaseChanges({ candidate: ui }));
       full(classifyReleaseChanges({ baseline: { ...baseline, authenticatedIdentity: { releaseSha256: hash("legacy"), entries: 900 } }, candidate: ui }));
@@ -124,6 +154,10 @@ function verifyReleaseChangeClassification() {
       ["unreviewed public image", "public/new-ui.png"], ["nested outputs", "src/outputs/inference.ts"],
       ["unknown root file", "new-policy.cjs"], ["shared app context", "src/context/AppContext.tsx"],
       ["database migration", "server/new-migration.sql"], ["deployment config", "deploy/new-policy.json"],
+      ["recommendation shared projection", "src/services/recommendationCenterView.ts"],
+      ["recommendation shared lifecycle", "src/services/publishedRecommendationStatus.cjs"],
+      ["unreviewed sibling card", "src/components/recommendations/UnreviewedCard.tsx"],
+      ["card CJS suffix alias", "src/components/recommendations/PublishedMatchPick.tsx.cjs"],
     ]) check(`${name} change cannot take frontend-only route`, () => {
       const candidate = altered(root => {
         write(root, "src/pages/PredictionsList.tsx", '<p>new UI</p>');

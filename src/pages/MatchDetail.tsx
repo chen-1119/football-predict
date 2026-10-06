@@ -1,4 +1,6 @@
 import { PrematchCollectionPanel } from '../components/predictions/PrematchCollectionPanel';
+import { acceptMatchDetail, detailResponseMatchesFields } from '../services/matchDetailIdentity.js';
+import type { DetailIdentityBinding } from '../services/matchDetailIdentity.js';
 import { useRecommendationCenter } from '../hooks/useRecommendationCenter';
 import { publishedMatchRecommendation, publishedPosteriorDisagreement, usesPublishedRecommendation } from '../services/publishedMatchRecommendation';
 import { MixedModelEstimateNote, PublishedMatchPick } from '../components/recommendations/PublishedMatchPick';
@@ -37,7 +39,7 @@ import {
   sameMatchEvent
 } from '../services/matchLifecycle';
 import { TeamBadge } from '../components/TeamBadge';
-import { RecommendationEvidenceFacts } from '../components/predictions/RecommendationEvidenceFacts';
+import { FrozenHadPosteriorNote, RecommendationEvidenceFacts } from '../components/predictions/RecommendationEvidenceFacts';
 import { CapturedMatchData, matchesSavedCaptureIdentity } from '../components/predictions/CapturedMatchData';
 import { CapturedReferenceAnalysisPanel } from '../components/predictions/CapturedReferenceAnalysisPanel';
 import type { SavedMatchCapture } from '../components/predictions/CapturedMatchData';
@@ -62,8 +64,9 @@ interface MatchDetailProps {
 
 type MatchDetailCacheEntry = {
   etag: string;
-  match: Match;
+  match: DetailMatch;
 };
+type DetailMatch = Match & { detailIdentity?: DetailIdentityBinding };
 
 type DetailRequestStatus = 'loading' | 'ready' | 'failed';
 
@@ -1209,7 +1212,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   const displayText = (value: string | null | undefined, fallback = '') => formatSourceNeutralText(value, language, fallback);
   const [activeTab, setActiveTab] = useState<DetailTab>(initialTab);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [fullMatch, setFullMatch] = useState<Match | null>(null);
+  const [fullMatch, setFullMatch] = useState<DetailMatch | null>(null);
   const [detailRequestState, setDetailRequestState] = useState<{
     matchId: string;
     status: DetailRequestStatus;
@@ -1356,7 +1359,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           }
           if (!response) continue;
           if (response.status === 304 && cached) {
+            if (!await acceptMatchDetail(matchId,cached.match)) {
+              matchDetailResponseCache.delete(requestUrl);
+              lastFailure = 'cached-identity-invalid';
+              continue;
+            }
             if (!cancelled) {
+              setNowMs(Date.now());
               setFullMatch(cached.match);
               setDetailRequestState({ matchId, status: 'ready' });
               markDetailNavigation(matchId, detailNavigationStartedAtRef.current, 'data', 'ready', `${detailRequest.source}-cache`);
@@ -1373,8 +1382,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
             }
           }
           const matchPayload = data?.match || data;
-          if (!cancelled && matchPayload?.id === matchId) {
-            const resolvedMatch = matchPayload as Match;
+          if (!cancelled && response.ok && await acceptMatchDetail(matchId,matchPayload)) {
+            if (cancelled || controller.signal.aborted) return;
+            const resolvedMatch = matchPayload as DetailMatch;
             const etag = response.headers.get('etag');
             if (etag) {
               matchDetailResponseCache.set(requestUrl, { etag, match: resolvedMatch });
@@ -1383,6 +1393,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 if (oldestKey) matchDetailResponseCache.delete(oldestKey);
               }
             }
+            setNowMs(Date.now());
             setFullMatch(resolvedMatch);
             setDetailRequestState({ matchId, status: 'ready' });
             markDetailNavigation(matchId, detailNavigationStartedAtRef.current, 'data', 'ready', detailRequest.source);
@@ -1410,11 +1421,15 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
   // 获取比赛详情
   const match = useMemo(() => {
-    const detailMatch = fullMatch?.id === matchId ? fullMatch : null;
+    const detailMatch = fullMatch && detailResponseMatchesFields(matchId,fullMatch,nowMs) ? fullMatch : null;
+    // A verified alias response is one atomic PG snapshot. Do not let a
+    // differently named context row replace it via the permissive lifecycle
+    // fallback or merge source clocks from a different observation.
+    if (detailMatch && detailMatch.id !== matchId) return resolveMatchLifecycle(detailMatch,nowMs);
     const contextMatch = matches.find((item) => item.id === matchId);
     return selectFreshestMatch(detailMatch, contextMatch, worldCupSeededMatch, nowMs);
   }, [fullMatch, matchId, matches, nowMs, worldCupSeededMatch]);
-  const hasAuthoritativeDetailMatch = fullMatch?.id === matchId;
+  const hasAuthoritativeDetailMatch = detailResponseMatchesFields(matchId,fullMatch,nowMs);
   const shellKickoffAt = Date.parse(match?.kickoffTime || '');
   const isPastKickoffAwaitingAuthoritativeDetail = Boolean(
     match
@@ -3182,6 +3197,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
             </div>
 
             }
+            <details className="published-match-pick__basis recommendation-detail-secondary-evidence">
+              <summary>{language === 'zh' ? '查看分析依据' : 'View analysis evidence'}</summary>
             <div className="card recommendation-score-card">
               <section className="recommendation-overview-panel is-score">
                 <div className="recommendation-overview-head">
@@ -3306,9 +3323,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               </section>
             </div>}
 
+            </details>
       </section>
 
-      {dualStudy && <DualResearchV2 row={dualStudy} language={language} />}
+      {dualStudy && <details className="published-match-pick__basis"><summary>{language === 'zh' ? '查看双选研究依据' : 'View dual-choice study evidence'}</summary><DualResearchV2 row={dualStudy} language={language} /></details>}
 
       {/* 4. 单层详情导航 */}
       <div className="tabs-container detail-tabs-nav match-detail-v4__tabs" role="tablist" aria-label={language === 'zh' ? '详情导航' : 'Detail sections'}>
@@ -3447,11 +3465,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   ? useUnified ? '已发布概率和时间来自同一记录；补充模型快照与最新采集资料分别标明来源，不作为该记录的采用证明。' : '下面的缺项与分析对应推荐生成时点；后续补到的伤停、阵容在上方单独展示，不会自动改写这里的历史依据。'
                   : useUnified ? 'Published probabilities and times share one record. Supplemental model snapshots and newly collected data are separate, not proof of adoption by that record.' : 'Gaps and analysis below reflect the decision time. Subsequently collected injuries and lineups are shown above and do not automatically rewrite this record.'}
               </p>
-              {posteriorDisagreement && <p className="match-detail-v4__model-disagreement" role="note" data-model-direction-disagreement="true">
-                {language === 'zh'
-                  ? `补充模型快照的研究后验偏向${({ '1': '主胜', X: '平局', '2': '客胜' } as const)[posteriorDisagreement.research]}，与已发布的${({ '1': '主胜', X: '平局', '2': '客胜' } as const)[posteriorDisagreement.published]}不同。两者时间及基础概率一致，但缺少后验内容绑定，不能证明发布时采用过该后验；公开方向仍以冻结记录为准。`
-                  : `The supplemental model's research posterior favors ${({ '1': 'home', X: 'draw', '2': 'away' } as const)[posteriorDisagreement.research]}, while the published direction is ${({ '1': 'home', X: 'draw', '2': 'away' } as const)[posteriorDisagreement.published]}. The times and base probabilities align, but no posterior content binding proves it was used at publication. The frozen record remains the public direction.`}
-              </p>}
+              {posteriorDisagreement && <FrozenHadPosteriorNote
+                decision={unifiedRow?.decision || null}
+                disagreement={posteriorDisagreement}
+                language={language}
+              />}
             </section>
 
             {hasUsableFiveHundredDetails && (

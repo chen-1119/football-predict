@@ -220,9 +220,41 @@ const verifyEvidenceHttp = async (reference, identity, postgresUrl = "", postgre
   const app = path.join(tempDir, postgresOnly ? "http-app-postgres-only" : postgresUrl ? "http-app-postgres" : "http-app");
   fs.mkdirSync(app);
   for (const dir of ["server", "scripts", "src"]) fs.cpSync(path.join(rootDir, dir), path.join(app, dir), {
-    recursive: true, filter: p => fs.statSync(p).isDirectory() || /\.(cjs|json|sql)$/.test(p),
+    recursive: true, filter: p => fs.statSync(p).isDirectory() || /\.(cjs|js|json|sql)$/.test(p),
   });
   fs.symlinkSync(path.join(rootDir, "node_modules"), path.join(app, "node_modules"), process.platform === "win32" ? "junction" : "dir");
+  // Shared plain JS is also a server dependency. Verify bytes in the actual
+  // isolated application, rather than letting a missing lazy import go green
+  // because this verifier historically requested only lists and evidence.
+  for (const file of ["server/matchDetailIdentity.cjs", "src/services/matchDetailIdentity.js",
+    "scripts/recommendationPlatform/inputCapture.cjs"]) {
+    equal(fs.readFileSync(path.join(app, file)), fs.readFileSync(path.join(rootDir, file)),
+      `isolated HTTP application preserves complete runtime dependency bytes: ${file}`);
+  }
+  const detailModuleProbe = spawnSync(process.execPath, ["-e", `
+    const assert = require('node:assert/strict'), path = require('node:path');
+    const app = process.argv[1], sourceMatchId = process.argv[2];
+    const shared = require(path.join(app, 'src/services/matchDetailIdentity.js'));
+    const server = require(path.join(app, 'server/matchDetailIdentity.cjs'));
+    const reader = require(path.join(app, 'server/postgresProjectionStore.cjs'));
+    const capture = require(path.join(app, 'scripts/recommendationPlatform/inputCapture.cjs'));
+    assert.equal(typeof reader.readPostgresMatchDetailById, 'function');
+    assert.equal(typeof server.bindMatchDetailAlias, 'function');
+    assert.equal(typeof capture.validInputCapture, 'function');
+    const requestedId = 'sporttery_' + sourceMatchId;
+    const raw = {id: 'fivehundred_' + sourceMatchId, sourceMatchId};
+    assert.equal(shared.detailAliasSource('arbitrary_' + sourceMatchId), null);
+    assert.equal(shared.detailResponseMatchesFields(requestedId, raw), false);
+    assert.equal(server.bindMatchDetailAlias({requestedId, candidates: [raw], decisions: [],
+      publication: null, observedAt: '2026-09-07T01:00:01.000Z'}), null);
+    console.log(JSON.stringify({ok: true, modulesLoadedFromIsolatedApplication: true,
+      missingFrozenAliasRejected: true, unboundResponseRejected: true}));
+  `, app, sourceMatchId], { cwd: app, windowsHide: true, encoding: "utf8", timeout: 10000,
+    env: { ...process.env, NODE_OPTIONS: "" } });
+  equal(detailModuleProbe.status, 0, `copied detail runtime modules load independently: ${detailModuleProbe.stderr || detailModuleProbe.error || ""}`);
+  equal(JSON.parse(detailModuleProbe.stdout), {ok: true, modulesLoadedFromIsolatedApplication: true,
+    missingFrozenAliasRejected: true, unboundResponseRejected: true},
+  "actual copied modules reject an alias without immutable event evidence; no PostgreSQL admission is claimed");
   fs.cpSync(publicDataDir, path.join(app, "public", "data"), { recursive: true });
   const { updateCandidateProspectiveLedger } = require("./candidateProspectiveLedger.cjs");
   const { candidateReadinessPreview } = require("./captureCandidateProspectiveDeadline.cjs");
@@ -320,6 +352,16 @@ const verifyEvidenceHttp = async (reference, identity, postgresUrl = "", postgre
     equal(verified.status, 200, "local test code exchanged normally");
     const history = await request("/api/matches/history?limit=10", { authorization: `Bearer ${verified.body.session.token}` });
     equal(history.status, 200, "authenticated history HTTP succeeds");
+    const session = { authorization: `Bearer ${verified.body.session.token}` };
+    for (const prefix of ["/api/v1/matches/", "/api/matches/"]) {
+      const exact = await request(prefix + `sporttery_${sourceMatchId}`, session);
+      equal(exact.status, 200, "isolated single-match HTTP preserves an exact stored ID");
+      equal((prefix.includes("/v1/") ? exact.body.match : exact.body)?.id, `sporttery_${sourceMatchId}`,
+        "single-match payload identity matches its exact request");
+      const alias = await request(prefix + `fivehundred_${sourceMatchId}`, session);
+      equal(alias.status, 404, "single-match HTTP refuses an alias without a valid frozen alias binding");
+      equal(alias.body.ok, false, "a rejected single-match alias does not return the unrelated stored row");
+    }
     const frozenRow = history.body[0]?.postMatchReview?.predictionReview?.rows?.find(row => row.marketType === "BEST");
     check(frozenRow?.frozenVersion, "actual history list compactor retains frozen version receipt");
     equal(frozenRow.frozenVersion.referenceHash, reference.contentHash, "history HTTP version receipt addresses original public record");
@@ -745,7 +787,7 @@ const main = async () => {
     observerProbe: { invocations: 10, cryptoVerifications: observerCryptoVerifications, durationMs: observerDurationMs },
     reusedObserverCryptoVerifications: reusedObserverVerifications,
     postgresScope: realPool ? "disposable local PostgreSQL with real migrations, driver, full/incremental writer, readers and primary-mode HTTP; query-capture regressions also retained" : "real writer/reader with query-capture transport; no live PostgreSQL server",
-    apiScope: realPool ? "isolated SQLite, hybrid PostgreSQL and PostgreSQL-only HTTP; native API and backtest forbid SQLite loading; real auth, exact frozen hash, no-store and disabled static dump" : "isolated real HTTP server with SQLite, admin auth, exact hash retrieval, no-store, input validation and disabled static dump; PostgreSQL transport remains a test double",
+    apiScope: realPool ? "isolated SQLite, hybrid PostgreSQL and PostgreSQL-only HTTP; native API and backtest forbid SQLite loading; exact single-match IDs and unbound alias refusal, real auth, exact frozen hash, no-store and disabled static dump" : "isolated real HTTP server with SQLite, exact single-match IDs and unbound alias refusal, admin auth, exact hash retrieval, no-store, input validation and disabled static dump; PostgreSQL transport remains a test double",
     publicReferenceScope: "current match head and independent revision-ledger source document; old-clock/empty/missing incremental paths" }, null, 2));
 };
 

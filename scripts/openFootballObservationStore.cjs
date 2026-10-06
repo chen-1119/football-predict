@@ -75,27 +75,29 @@ function verifyReceipt(row) {
     || canonicalClock(receipt.requestStartedAt) !== receipt.requestStartedAt
     || canonicalClock(receipt.firstObservedAt) !== receipt.firstObservedAt
     || receipt.requestStartedAt > receipt.receivedAt || receipt.firstObservedAt > receipt.receivedAt
-    || receipt.sourceUrl !== sourceUrl(receipt.season, receipt.league)
+    || (Object.hasOwn(receipt, "sourceCommit") && !/^[a-f0-9]{40}$/.test(receipt.sourceCommit))
+    || receipt.sourceUrl !== sourceUrl(receipt.season, receipt.league, receipt.sourceCommit || null)
     || receipt.entityMappingStatus !== "unverified" || receipt.officialSettlementAllowed !== false
     || receipt.upstreamPublishedAt !== null) throw new Error("Observation receipt integrity failed");
   return receipt;
 }
 
 const buildObservationReceipt = ({ sequence, url, league, season, contentHash, rawBytes, started, received,
-  firstObservedAt, previousReceiptHash, firstReceiptHash, candidateRows }) => ({
+  firstObservedAt, previousReceiptHash, firstReceiptHash, candidateRows, sourceCommit = null }) => ({
   version: VERSION, scope: "local-complete-response-only", sequence,
   sourceUrl: url, league, season, contentSha256: contentHash, bytes: rawBytes,
   requestStartedAt: started, receivedAt: received, firstObservedAt,
   previousReceiptHash, previousContentReceiptHash: firstReceiptHash, candidateRows,
   sourceVerified: false, entityMappingStatus: "unverified", productionEligible: false,
   upstreamPublishedAt: null, officialSettlementAllowed: false,
+  ...(sourceCommit ? { sourceCommit } : {}),
 });
 
-function recordSourceObservation({ storeDir, season, league, raw, requestStartedAt, receivedAt }) {
+function recordSourceObservation({ storeDir, season, league, raw, requestStartedAt, receivedAt, sourceCommit = null }) {
   const started = canonicalClock(requestStartedAt), received = canonicalClock(receivedAt);
   if (received < started) throw new Error("Response receipt precedes request");
-  const inspected = inspectSource(raw, { season, league, receivedAt: received });
-  const url = sourceUrl(season, league), contentHash = digest(raw);
+  const inspected = inspectSource(raw, { season, league, receivedAt: received, sourceCommit });
+  const url = sourceUrl(season, league, sourceCommit), contentHash = digest(raw);
   const db = openStore(storeDir);
   try {
     db.exec("BEGIN IMMEDIATE;");
@@ -122,7 +124,7 @@ function recordSourceObservation({ storeDir, season, league, raw, requestStarted
     }
     const receipt = buildObservationReceipt({ sequence, url, league, season, contentHash, rawBytes: raw.length,
       started, received, firstObservedAt, previousReceiptHash: previousRow?.receipt_hash || null,
-      firstReceiptHash, candidateRows: inspected.candidateRows });
+      firstReceiptHash, candidateRows: inspected.candidateRows, sourceCommit });
     const receiptHash = hashObject(receipt);
     if (!existing) db.prepare("INSERT INTO source_contents VALUES(?,?,?,?,?)")
       .run(url, contentHash, raw, received, receiptHash);
@@ -166,7 +168,7 @@ function createObservationAudit({ count, contents }) {
       const raw = Buffer.from(row.raw);
       if (!first || digest(raw) !== row.content_hash || first.bytes !== raw.length
         || first.hash !== row.first_receipt_hash || first.receivedAt !== row.first_received_at) throw new Error("Source content binding failed");
-      const inspected = inspectSource(raw, { season: first.season, league: first.league, receivedAt: first.receivedAt });
+      const inspected = inspectSource(raw, { season: first.season, league: first.league, receivedAt: first.receivedAt, sourceCommit: first.sourceCommit || null });
       if (inspected.candidateRows !== first.candidateRows) throw new Error("Source parse binding failed");
       verifiedContents.add(key); verifiedBytes += raw.length;
     }, finish() {

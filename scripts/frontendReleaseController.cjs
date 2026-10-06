@@ -11,7 +11,7 @@ const BUILD_ROOT = RELEASE + "/frontend-builds", DEPENDENCIES = RELEASE + "/fron
 const RUNTIME = RELEASE + "/frontend-runtime-binding.json", RUNTIME_PUBLIC = APP + "/.frontend-release-binding.json";
 const STATE = RELEASE + "/frontend-state.json";
 const HASH = /^[a-f0-9]{64}$/, ID = /^[a-f0-9]{24}$/;
-const MODULES = Object.freeze(["frontendReleaseController.cjs", "frontendReleaseAuthorization.cjs", "frontendReleaseTransaction.cjs",
+const MODULES = Object.freeze(["frontendReleaseController.cjs", "frontendPolicyRefresh.cjs", "frontendReleaseAttempt.cjs", "frontendReleaseAuthorization.cjs", "frontendReleaseTransaction.cjs",
   "frontendReleaseIdentity.cjs", "frontendInstalledRuntime.cjs", "frontendRuntimeBoundary.cjs", "frontendBuildSandbox.cjs",
   "frontendBuildEvidence.cjs", "releaseSourceBaseline.cjs", "releaseSigning.cjs", "releaseArchiveSourceInventory.cjs",
   "releaseChangeClassification.cjs", "releasePrebuiltDist.cjs"]);
@@ -97,7 +97,7 @@ function load() {
   const loaded = { authorization: m("frontendReleaseAuthorization"), transaction: m("frontendReleaseTransaction"),
     identity: m("frontendReleaseIdentity"), installed: m("frontendInstalledRuntime"), boundary: m("frontendRuntimeBoundary"),
     sandbox: m("frontendBuildSandbox"), build: m("frontendBuildEvidence"), baseline: m("releaseSourceBaseline"),
-    signing: m("releaseSigning"), archive: m("releaseArchiveSourceInventory"), dist: m("releasePrebuiltDist") };
+    signing: m("releaseSigning"), archive: m("releaseArchiveSourceInventory"), dist: m("releasePrebuiltDist"), policyRefresh: m("frontendPolicyRefresh"), attempt: m("frontendReleaseAttempt") };
   loaded.transaction.assertFrontendReleaseLock();
   return { ...loaded, policies: { authorizationSha256: digest(policies),
     runtimeBoundarySha256: policies.find(p => p.name === "frontendRuntimeBoundary.cjs").sha256,
@@ -241,7 +241,11 @@ async function publicArtifacts(base, actual) {
   }));
   if (firstError) throw firstError;
 }
-async function recoverWithReadOnlyChecks(m) {
+async function recoverWithReadOnlyChecks(m, recoverAttempts = true) {
+  if (fs.existsSync(RELEASE + "/recovery/current/frontend-policy-refresh.json")) {
+    const policy = await m.policyRefresh.recoverPolicyRefresh(), attempts = recoverAttempts ? m.attempt.recoverInterruptedFrontendReleaseAttempts() : null;
+    return { ...policy, attemptRecovery: attempts };
+  }
   if (fs.existsSync(RELEASE + "/recovery/current/accept-intent.json")) {
     read(RELEASE + "/recovery/current/accept-intent.json", 4096);
     const base = publicBase(); await health(base); activeServices();
@@ -249,7 +253,8 @@ async function recoverWithReadOnlyChecks(m) {
   }
   // No health prerequisite for rollback. The transaction itself validates all
   // intent/receipt identities and rejects an ambiguous or externally changed tree.
-  return m.transaction.recoverFrontendRelease();
+  const recovered = m.transaction.recoverFrontendRelease(), attempts = recoverAttempts ? m.attempt.recoverInterruptedFrontendReleaseAttempts() : null;
+  return { ...recovered, attemptRecovery: attempts };
 }
 async function acceptReadOnly(m, transaction, authorizationSha256) {
   const base = publicBase(), state = transaction.state || transaction.frontendState;
@@ -301,6 +306,7 @@ function assertCurrent(m, stateBytes, distManifest) {
 async function apply(sha256, sequence, work) {
   const startedAt = Date.now();
   const m = load(), request = authenticateRequest(m, sha256, sequence, work), a = request.manifest.frontendAuthorization;
+  m.attempt.verifyPreparedFrontendReleaseAttempt({ sha256, sequence, workDir: work });
   if (fs.existsSync(RELEASE + "/recovery/current")) fail("frontend-recovery-pending");
   await m.archive.verifyArchiveSourceEvidence(request.archive, request.manifest);
   const stateBytes = read(STATE, 8192), state = m.identity.parseFrontendReleaseState(stateBytes);
@@ -318,7 +324,7 @@ async function apply(sha256, sequence, work) {
   const capacity = fs.statfsSync(BUILD_ROOT, { bigint: true });
   if (capacity.bavail * capacity.bsize < 8n * 1024n ** 3n) fail("frontend-build-insufficient-disk-floor");
   const attemptRoot = RELEASE + "/frontend-authorizations"; directory(attemptRoot, true);
-  const attempt = attemptRoot + "/" + sha256; fs.mkdirSync(attempt, { mode: 0o700 }); syncDir(attemptRoot);
+  const attempt = attemptRoot + "/" + sha256 + "." + sequence; fs.mkdirSync(attempt, { mode: 0o700 }); syncDir(attemptRoot);
   retainFile(request.archive, attempt + "/original.tgz", sha256, 512 * 1024 * 1024);
   writeNew(attempt + "/manifest.json", request.bytes); writeNew(attempt + "/manifest.sig", request.signature);
   writeNew(attempt + "/request.json", json({ version: "frontend-source-build-attempt-v1", sha256, sequence,
@@ -384,7 +390,10 @@ async function apply(sha256, sequence, work) {
     // Even begin can throw after publishing current. Do not infer "no write"
     // merely because it did not return a transaction object.
     if (fs.existsSync(RELEASE + "/recovery/current")) {
-      try { await recoverWithReadOnlyChecks(m); } catch { error.recoveryPending = true; }
+      // This invocation's wrapper still owns its final status. Cold attempt
+      // sealing belongs to the separate locked --recover entry, after the
+      // active wrapper and build cgroups have actually become quiescent.
+      try { await recoverWithReadOnlyChecks(m, false); } catch { error.recoveryPending = true; }
     }
     throw error;
   } finally {
@@ -419,12 +428,14 @@ async function main(argv = process.argv.slice(2)) {
   if (argv[0] === "apply" && argv.length === 4 && /^[1-9][0-9]*$/.test(argv[2] || "")) return apply(argv[1], Number(argv[2]), argv[3]);
   if (argv[0] === "initialize" && argv.length === 3 && /^[1-9][0-9]*$/.test(argv[2] || "")) return initialize(argv[1], Number(argv[2]));
   if (argv[0] === "recover" && argv.length === 1) return recoverWithReadOnlyChecks(load());
+  if (argv[0] === "refresh-policies" && argv.length === 3 && HASH.test(argv[1]) && HASH.test(argv[2]))
+    return load().policyRefresh.refreshPolicies({ expectedBindingSha256: argv[1], expectedStateSha256: argv[2] });
   fail("usage-fixed-frontend-controller-apply-sha-sequence-work-or-initialize-sha-sequence-or-recover");
 }
 module.exports = { MODULES, INSTALL, APP, RELEASE, NODE, BUILD_ROOT, DEPENDENCIES,
   load, read, replace, writeNew, retainFile, directory, stage, cleanupStage, retained, extract,
   dependencyStore, copyDependencies, runtimePublic, acceptReadOnly, publicArtifacts, activeServices, recoverWithReadOnlyChecks,
-  health, publicBase, labels, json, hash, digest, exact, apply, initialize, main };
+  health, publicBase, labels, json, hash, digest, exact, run, installedProof, apply, initialize, main };
 if (require.main === module) main().then(result => console.log(JSON.stringify(result))).catch(error => {
   console.error(JSON.stringify({ ok: false, releaseKind: "frontend-only", error: error.message, recoveryPending: error.recoveryPending === true })); process.exitCode = 1;
 });

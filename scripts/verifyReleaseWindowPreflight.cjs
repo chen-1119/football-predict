@@ -139,6 +139,14 @@ function runCreatePrefix(source, options = {}) {
       } };
       if (name === "node:child_process") return { spawnSync: (command, args) => {
         if (args[0] === "/fixture/scripts/createFrontendReleaseBundle.cjs") { assert.equal(command, "/fixed/node"); calls.push("ui-source"); }
+        else if (args[0] === "scripts/verifyRequestJsonUtf8.cjs") {
+          assert.equal(command, "/fixed/node");
+          assert.deepEqual(Array.from(args), ["scripts/verifyRequestJsonUtf8.cjs"]);
+          calls.push("request-utf8");
+          return { status: options.requestUtf8Status ?? (options.requestUtf8Unavailable ? null : 0),
+            error: options.requestUtf8Unavailable ? { message: "fixture request UTF8 child unavailable" } : undefined,
+            stdout: options.requestUtf8Status ? "fixture request UTF8 rejection" : "" };
+        }
         else if (args[0] === "scripts/verifyFrontendEvidenceSemantics.cjs") {
           assert.equal(command, "/fixed/node"); calls.push("frontend-evidence");
           return { status: options.frontendEvidenceFails ? 1 : 0,
@@ -390,6 +398,48 @@ function verifyReleaseWindowPreflight() {
     assert.throws(() => evaluate(fixture.run(helper)));
   });
   const create = readSource("scripts/createReleaseBundle.cjs");
+  const wrapper = readSource("deploy/light-server/football-release");
+  const { BURN, validateSequenceBranches } = require("./releaseSequencePreflight.cjs");
+  const mutateWrapper = (before, after) => {
+    assert.equal(wrapper.split(before).length - 1, 1, "mutation must target one real wrapper fragment");
+    const changed = wrapper.replace(before, after); assert.notEqual(changed, wrapper); return changed;
+  };
+  const mutateFrontend = (before, after) => {
+    const { frontend } = validateSequenceBranches(wrapper);
+    assert.equal(frontend.split(before).length - 1, 1, "mutation must target one real frontend fragment");
+    const changed = wrapper.replace(frontend, frontend.replace(before, after)); assert.notEqual(changed, wrapper); return changed;
+  };
+  check("real frontend closing fi excludes the full logging continuation without losing nested failure handling", () => {
+    const { frontend, full } = validateSequenceBranches(wrapper);
+    assert.match(frontend, /\n  exit 0\nfi$/);
+    assert.match(frontend, /\n    exit "\$frontend_status"\n  fi/);
+    assert.doesNotMatch(frontend, /readonly LOG_PATH="\$LATEST_LOG_PATH"/);
+    assert.match(full, /readonly LOG_PATH="\$LATEST_LOG_PATH"/);
+    assert.ok(full.indexOf('readonly LOG_PATH="$LATEST_LOG_PATH"') < full.indexOf('readonly TRUSTED_SOURCE_DIR='));
+    assert.equal(frontend.split(BURN).length - 1, 1); assert.equal(full.split(BURN).length - 1, 1);
+    validateSequenceBranches(mutateWrapper('readonly LOG_PATH="$LATEST_LOG_PATH"', '# full-only fixture continuation\nreadonly LOG_PATH="$LATEST_LOG_PATH"'));
+  });
+  check("frontend success and failure must both exit before the real full continuation", () => {
+    for (const [before, after] of [['  exit 0\nfi', '  :\nfi'], ['    exit "$frontend_status"', '    :'],
+      ['  exit 0\nfi', '  exit 0\nelse\n  :\nfi'], ['  exit 0\nfi', '  exit 0\nelif true; then\n  :\nfi']]) {
+      const changed = mutateFrontend(before, after);
+      assert.throws(() => validateSequenceBranches(changed));
+    }
+  });
+  check("sequence consumption cannot move before dispatch or repeat in either real branch", () => {
+    const { frontend, full } = validateSequenceBranches(wrapper);
+    assert.throws(() => validateSequenceBranches(wrapper.replace(frontend, BURN + '\n' + frontend)));
+    assert.throws(() => validateSequenceBranches(wrapper.replace(frontend, frontend.replace(BURN, BURN + '\n' + BURN))));
+    assert.throws(() => validateSequenceBranches(wrapper.replace(full, full.replace(BURN, BURN + '\n' + BURN))));
+    const noSignedSequence = mutateWrapper('readonly MANIFEST_SEQUENCE="$manifest_sequence"', 'readonly OTHER_SEQUENCE="$manifest_sequence"');
+    assert.throws(() => validateSequenceBranches(noSignedSequence));
+  });
+  check("missing top-level dispatch closure or full continuation fails the source gate", () => {
+    const noClosure = mutateFrontend('  exit 0\nfi', '  exit 0\n  fi');
+    const noFull = mutateWrapper('readonly TRUSTED_SOURCE_DIR=', 'readonly OTHER_SOURCE_DIR=');
+    assert.throws(() => validateSequenceBranches(noClosure));
+    assert.throws(() => validateSequenceBranches(noFull));
+  });
   check("actual deploy prefix requests upload stage and blocks clone or upload after a rejected observation", () => {
     const deploy = readSource("scripts/deployReleaseBundle.cjs");
     const start = deploy.indexOf("  // Reject a closed window before the archive scan, local clone, or uploads.");
@@ -411,7 +461,7 @@ function verifyReleaseWindowPreflight() {
   });
   check("actual online create prefix runs worker, window, archive and frontend evidence before preSign, sequence reservation and build", () => {
     const result = runCreatePrefix(create); assert.equal(result.ok, true, result.error);
-    assert.deepEqual(result.calls, ["sequence-preflight", "worker", "window", "archive", "frontend-evidence", "preSign", "reserve", "build"]);
+    assert.deepEqual(result.calls, ["sequence-preflight", "worker", "window", "archive", "frontend-evidence", "request-utf8", "preSign", "reserve", "build"]);
     for (const options of [{ windowOpen: false }, { windowThrows: true }]) {
       const rejected = runCreatePrefix(create, options); assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "worker", "window"]);
     }
@@ -429,15 +479,23 @@ function verifyReleaseWindowPreflight() {
       assert.match(rejected.error, options.workerThrows ? /worker observation unavailable/ : /worker-latest-official-cycle-failed/);
     }
   });
+  check("the required UTF8 verifier rejects failure or missing child before preSign, reservation and build", () => {
+    for (const options of [{ requestUtf8Status: 1 }, { requestUtf8Unavailable: true }]) {
+      const rejected = runCreatePrefix(create, options);
+      assert.equal(rejected.ok, false);
+      assert.deepEqual(rejected.calls, ["sequence-preflight", "worker", "window", "archive", "frontend-evidence", "request-utf8"]);
+      assert.match(rejected.error, /Request JSON UTF-8 preflight failed/);
+    }
+  });
   check("native policy rejects unaccepted bootstrap before network, reservation or build", () => {
     const rejected = runCreatePrefix(create, { nativePolicy: true, nativeRejected: true });
     assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "native-policy"]);
     const accepted = runCreatePrefix(create, { nativePolicy: true }); assert.equal(accepted.ok, true, accepted.error);
-    assert.deepEqual(accepted.calls, ["sequence-preflight", "native-policy", "worker", "window", "archive", "frontend-evidence", "preSign", "reserve", "build"]);
+    assert.deepEqual(accepted.calls, ["sequence-preflight", "native-policy", "worker", "window", "archive", "frontend-evidence", "request-utf8", "preSign", "reserve", "build"]);
   });
   check("actual offline create prefix makes no live calls and explicitly reports no window authority", () => {
     const result = runCreatePrefix(create, { offline: true, windowThrows: true }); assert.equal(result.ok, true, result.error);
-    assert.deepEqual(result.calls, ["sequence-preflight", "frontend-evidence", "preSign", "reserve", "build"]);
+    assert.deepEqual(result.calls, ["sequence-preflight", "frontend-evidence", "request-utf8", "preSign", "reserve", "build"]);
     assert.equal(result.logs[0].windowChecked, false); assert.equal(result.logs[0].readyToCutover, false);
   });
   check("actual UI create dispatch exits before live gates, full verification and local build", () => {

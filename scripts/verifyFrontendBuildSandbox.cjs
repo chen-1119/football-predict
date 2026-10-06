@@ -3,10 +3,17 @@ const assert = require("node:assert/strict"), fs = require("node:fs"), path = re
 const sandbox = require("./frontendBuildSandbox.cjs"), build = require("./frontendBuildEvidence.cjs");
 const { inspectPrebuiltDist } = require("./releasePrebuiltDist.cjs");
 function verify({ linuxFixtureRoot = null } = {}) {
-  const checks = [], executions = [], cleanup = [];
+  const checks = [], executions = [], cleanup = [], resourceObservations = [];
   const check = (name, fn) => { fn(); checks.push({ name, ok: true }); };
   const args = { directory: "/run/football-frontend-sandbox-" + "a".repeat(24), sandbox: "/var/lib/football-release/frontend-builds/" + "b".repeat(24) + "/sandbox-" + "a".repeat(24) + "/rootfs", unit: "football-frontend-build-" + "a".repeat(24) + "-1.service", commandIndex: 0, timeoutMs: 1000 };
   check("fixed reviewed commands agree with the ordinary experimental builder", () => assert.deepEqual(sandbox.COMMANDS, build.COMMANDS));
+  check("reviewed reclaim ceiling is 896M while hard memory, swap, isolation and remaining deadlines are fixed", () => {
+    const result = sandbox.unitArguments({ ...args, timeoutMs: 300000 });
+    for (const value of ["MemoryHigh=896M", "MemoryMax=1G", "MemorySwapMax=0", "RuntimeMaxSec=300s", "TimeoutStartSec=300s", "OOMPolicy=stop"])
+      assert.equal(result.filter(p => p === "--property=" + value).length, 1, value);
+    assert.ok(!result.some(p => p === "--property=MemoryHigh=768M"));
+    assert.equal(fs.readFileSync(require.resolve("./frontendReleaseController.cjs"), "utf8").match(/timeoutMs: 300000/g).length, 1);
+  });
   check("native compatibility closure is fixed to librt, never candidate addon ldd", () => {
     assert.deepEqual(sandbox.NATIVE_COMPAT_LIBRARIES, ["librt.so.1"]); assert.ok(Object.isFrozen(sandbox.NATIVE_COMPAT_LIBRARIES));
   });
@@ -99,12 +106,14 @@ function verify({ linuxFixtureRoot = null } = {}) {
     try {
       check("real Linux units deny source/dependency/extra-cache writes, IP sockets, host paths and reap exited descendants", () => {
         const compiler = "const fs=require('fs'),net=require('net'),cp=require('child_process');" +
+          "const cg=fs.readFileSync('/proc/self/cgroup','utf8').trim().split('\\n').find(l=>l.startsWith('0::'));if(!cg)throw Error('cgroup v2 absent');" +
+          "const cgpath='/sys/fs/cgroup'+cg.slice(3),resource={path:cg.slice(3)};for(const n of ['memory.high','memory.max','memory.swap.max','memory.current','memory.events','memory.pressure'])resource[n]=fs.readFileSync(cgpath+'/'+n,'utf8').trim();" +
           "if(require('os').homedir()!=='/build-home')throw Error('unexpected home');" +
           "const denied=[];for(const p of ['src/App.tsx','node_modules/dependency.cjs','node_modules/.tmp/extra','/tmp/escape','/build-home/escape']){try{fs.writeFileSync(p,'bad');throw Error('write allowed:'+p)}catch(e){if(!['EACCES','EROFS'].includes(e.code))throw e;denied.push(p)}}" +
           "for(const p of ['/etc/football-release','/var/lib/football-predict','/opt/football-predict','/run/dbus/system_bus_socket']){if(fs.existsSync(p))throw Error('host path exposed:'+p)}" +
           "const child=cp.spawn(process.execPath,['-e','setInterval(()=>{},100)'],{detached:true,stdio:'ignore'});child.unref();" +
           "const server=net.createServer();server.once('error',e=>{if(!['EAFNOSUPPORT','EPERM','EACCES'].includes(e.code))throw e;" +
-          "fs.writeFileSync('node_modules/.tmp/tsconfig.app.tsbuildinfo',JSON.stringify({uid:process.getuid(),child:child.pid,denied,network:e.code}));});server.listen(0,'127.0.0.1');";
+          "fs.writeFileSync('node_modules/.tmp/tsconfig.app.tsbuildinfo',JSON.stringify({uid:process.getuid(),child:child.pid,denied,network:e.code,resource}));});server.listen(0,'127.0.0.1');";
         const bundler = "const fs=require('fs');const c=JSON.parse(fs.readFileSync('node_modules/.tmp/tsconfig.app.tsbuildinfo'));" +
           "fs.mkdirSync('dist/assets',{recursive:true});fs.mkdirSync('dist/nested',{recursive:true});" +
           "fs.writeFileSync('dist/nested/remove.json','delete me');const fd=fs.openSync('dist/nested/remove.json','r+');" +
@@ -118,6 +127,9 @@ function verify({ linuxFixtureRoot = null } = {}) {
         assert.equal(result.rootfsRemoved, true); assert.equal(result.runs.length, 3);
         for (const r of result.runs) { assert.ok(r.ok); assert.ok(r.dynamicUid >= 61184); assert.ok(r.cleanup.quiescent); assert.ok(sandbox.cgroupEmpty(r.unit)); }
         const data = JSON.parse(fs.readFileSync(path.join(f.root, "dist/assets/index-bbbbbbbb.js"), "utf8"));
+        assert.equal(data.resource["memory.high"], String(896 * 1024 * 1024)); assert.equal(data.resource["memory.max"], String(1024 * 1024 * 1024));
+        assert.equal(data.resource["memory.swap.max"], "0"); assert.match(data.resource["memory.events"], /^high \d+$/m);
+        resourceObservations.push({ unit: result.runs[0].unit, evidenceHash: result.evidenceHash, actualCgroup: data.resource, scope: "private hostile fixture unit, not production Vite performance" });
         assert.equal(data.denied.length, 5); assert.ok(data.network); assert.equal(data.fchown,"EPERM"); assert.ok(!fs.existsSync("/proc/" + data.child));
         assert.equal(fs.readFileSync(path.join(f.root, "src/App.tsx"), "utf8"), "fixture original");
         assert.equal(fs.readFileSync(path.join(f.root, "dist/index.html"), "utf8"), "new fixture stripped");
@@ -150,7 +162,7 @@ function verify({ linuxFixtureRoot = null } = {}) {
       }
     }
   }
-  return { ok: true, version: sandbox.VERSION, checks, executions, cleanup, productionWrites: 0, providerRequests: 0,
+  return { ok: true, version: sandbox.VERSION, checks, executions, cleanup, resourceObservations, productionWrites: 0, providerRequests: 0,
     scope: linuxFixtureRoot ? "real Linux DynamicUser/rootfs/cgroup hostile fixtures, not a production frontend build" : "portable policy/output tests only; no Linux isolation claim" };
 }
 module.exports = { verify };

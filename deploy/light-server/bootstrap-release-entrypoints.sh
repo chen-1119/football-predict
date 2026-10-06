@@ -17,7 +17,7 @@ readonly SOURCE_BASELINE_SOURCE_DIR="${SCRIPT_DIR}/../../scripts"
 readonly SOURCE_BASELINE_INSTALL_DIR="/usr/local/libexec/football-release-source-baseline"
 readonly SOURCE_BASELINE_MODULES=(releaseSourceBaseline.cjs releaseSigning.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs frontendReleaseAuthorization.cjs)
 readonly FRONTEND_INSTALL_DIR="/usr/local/libexec/football-release-frontend"
-readonly FRONTEND_MODULES=(frontendReleaseController.cjs frontendReleaseAuthorization.cjs frontendReleaseTransaction.cjs frontendInstalledRuntime.cjs frontendRuntimeBoundary.cjs frontendBuildSandbox.cjs frontendBuildEvidence.cjs frontendBuildDependencies.cjs releaseSourceBaseline.cjs releaseSigning.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs)
+readonly FRONTEND_MODULES=(frontendReleaseController.cjs frontendPolicyRefresh.cjs frontendReleaseAttempt.cjs frontendReleaseAuthorization.cjs frontendReleaseTransaction.cjs frontendInstalledRuntime.cjs frontendRuntimeBoundary.cjs frontendBuildSandbox.cjs frontendBuildEvidence.cjs frontendBuildDependencies.cjs releaseSourceBaseline.cjs releaseSigning.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs)
 PUBLIC_KEY_SOURCE="${1:-${FOOTBALL_RELEASE_PUBLIC_KEY:-}}"
 PUBLIC_BASE_URL="${2:-${FOOTBALL_PUBLIC_BASE_URL:-http://127.0.0.1:8788}}"
 UPLOAD_OWNER="${3:-${FOOTBALL_RELEASE_UPLOAD_USER:-ubuntu}}"
@@ -119,6 +119,88 @@ if [ -n "$INITIAL_SEQUENCE_INPUT" ]; then
   target_highest_sequence="$INITIAL_SEQUENCE_INPUT"
 fi
 
+# Existing accepted runtime maintenance must preserve configuration before the
+# first write. Different provisioning arguments require a separate reviewed
+# configuration operation; a failed maintenance audit cannot undo them later.
+if [ -e /var/lib/football-release/frontend-runtime-binding.json ] || [ -L /var/lib/football-release/frontend-runtime-binding.json ]; then
+  [ "$target_highest_sequence" = "$current_highest_sequence" ] || die "frontend policy maintenance must preserve the consumed sequence"
+  [ "$(sha256sum "$PUBLIC_KEY_SOURCE" | awk '{print $1}')" = "$(sha256sum /etc/football-release/signing-public.pem | awk '{print $1}')" ] \
+    || die "frontend policy maintenance must preserve signing trust"
+  for entry in "upload-owner:$UPLOAD_OWNER" "public-base-url:$PUBLIC_BASE_URL" "release-export-live-sqlite:always" "expected-site:$EXPECTED_SITE" "expected-channel:$EXPECTED_CHANNEL"; do
+    name="${entry%%:*}"; expected="${entry#*:}"
+    [ "$(printf '%s\n' "$expected" | sha256sum | awk '{print $1}')" = "$(sha256sum "/etc/football-release/$name" | awk '{print $1}')" ] \
+      || die "frontend policy maintenance must preserve ${name}"
+  done
+fi
+
+# A bootstrap is an independently reviewed root operation, never part of a
+# candidate release. Retain durable old/new policy pins before refreshing a
+# binding; a source package cannot manufacture these records through APP.
+audit_frontend_policies() {
+  env -i PATH="/opt/node-v22.22.1/bin:/usr/sbin:/usr/bin:/sbin:/bin" LANG=C.UTF-8 \
+    /opt/node-v22.22.1/bin/node - "$1" "${2:-}" "${BASH_SOURCE[0]}" <<'NODE'
+const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto");
+const [mode, requestedId, bootstrap] = process.argv.slice(2);
+const root = "/var/lib/football-release/frontend-policy-bootstrap", install = "/usr/local/libexec/football-release-frontend";
+const version = "frontend-policy-bootstrap-v1", sha = b => crypto.createHash("sha256").update(b).digest("hex"), json = v => Buffer.from(JSON.stringify(v) + "\n");
+const fail = reason => { throw new Error(reason); };
+function directory(name) { for (let p = name; ; p = path.dirname(p)) { const s = fs.lstatSync(p); if (!s.isDirectory() || s.isSymbolicLink() || s.uid !== 0 || (s.mode & 0o022) || fs.realpathSync(p) !== p) fail("bootstrap-audit-unsafe-directory"); if (p === "/") break; } }
+function read(name, optional = false) { let s; try { s = fs.lstatSync(name); } catch(e) { if (optional && e.code === "ENOENT") return null; throw e; } directory(path.dirname(name)); if (!s.isFile() || s.isSymbolicLink() || s.uid !== 0 || s.nlink !== 1 || (s.mode & 0o022) || s.size > 16 * 1024 * 1024) fail("bootstrap-audit-unsafe-file"); const fd = fs.openSync(name, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW); try { const bytes = fs.readFileSync(fd), after = fs.fstatSync(fd); if (s.dev !== after.dev || s.ino !== after.ino || s.size !== after.size || s.mtimeMs !== after.mtimeMs || s.ctimeMs !== after.ctimeMs || bytes.length !== s.size) fail("bootstrap-audit-read-drift"); return bytes; } finally { fs.closeSync(fd); } }
+function sync(name) { const fd = fs.openSync(name, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); } }
+function write(name, value) { const fd = fs.openSync(name, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600); try { fs.writeFileSync(fd, json(value)); fs.fsyncSync(fd); } finally { fs.closeSync(fd); } sync(path.dirname(name)); }
+function snapshot(protectedOnly = false) {
+  const controller = read(install + "/frontendReleaseController.cjs", true); let modulePins = [], policies = null;
+  if (controller && !protectedOnly) { const match = /const MODULES = Object\.freeze\(\[([\s\S]*?)\]\);/.exec(controller.toString()); if (!match) fail("bootstrap-audit-module-list-unavailable"); const tokens = match[1].match(/"[A-Za-z]+\.cjs"/g); if (!tokens || tokens.length < 10 || tokens.length > 32) fail("bootstrap-audit-module-count"); const names = tokens.map(t => JSON.parse(t)); if (new Set(names).size !== names.length) fail("bootstrap-audit-duplicate-module"); modulePins = names.map(name => ({ name, sha256: sha(read(install + "/" + name)) })); policies = { authorizationSha256: sha(JSON.stringify(modulePins)), runtimeBoundarySha256: modulePins.find(p => p.name === "frontendRuntimeBoundary.cjs").sha256, sandboxSha256: sha(JSON.stringify(modulePins.filter(p => ["frontendBuildSandbox.cjs", "frontendBuildEvidence.cjs", "releasePrebuiltDist.cjs"].includes(p.name)))) }; }
+  const paths = ["/var/lib/football-release/frontend-runtime-binding.json", "/opt/football-predict/.frontend-release-binding.json", "/var/lib/football-release/frontend-state.json", "/opt/football-predict/.frontend-release-state.json", "/opt/football-predict/.frontend-release-acceptance.json", "/opt/football-predict/.release-bundle-sha256", "/opt/football-predict/.release-live-complete", "/var/lib/football-release/highest-accepted-sequence", "/etc/football-release/signing-public.pem", "/etc/football-release/upload-owner", "/etc/football-release/public-base-url", "/etc/football-release/release-export-live-sqlite", "/etc/football-release/expected-site", "/etc/football-release/expected-channel", "/etc/football-predict/env", "/etc/sudoers.d/football-automation"];
+  const protectedFiles = paths.map(filename => ({ path: filename, sha256: (() => { const bytes = read(filename, true); return bytes === null ? null : sha(bytes); })() }));
+  return { modulePins, policies, protectedFiles };
+}
+function sources() {
+  const base = path.dirname(path.resolve(bootstrap)), scripts = path.resolve(base, "../../scripts"), server = path.resolve(base, "../../server");
+  const text = read(scripts + "/frontendReleaseController.cjs").toString(), match = /const MODULES = Object\.freeze\(\[([\s\S]*?)\]\);/.exec(text);
+  if (!match) fail("bootstrap-audit-reviewed-module-list");
+  const names = match[1].match(/"[A-Za-z]+\.cjs"/g).map(t => JSON.parse(t));
+  const modulePins = names.map(name => ({ name, sha256: sha(read((name === "frontendReleaseIdentity.cjs" ? server : scripts) + "/" + name)) }));
+  const extra = [path.resolve(bootstrap), scripts + "/frontendBuildDependencies.cjs", base + "/football-release", base + "/football-release-recovery.cjs", base + "/football-relay-promote", base + "/football-automation.sudoers"];
+  return { bootstrapSha256: sha(read(path.resolve(bootstrap))), modulePins, extraPins: extra.map(filename => ({ name: path.basename(filename), sha256: sha(read(filename)) })) };
+}
+directory("/var/lib/football-release");
+if (mode === "before") {
+  if (!fs.existsSync(root)) { fs.mkdirSync(root, { mode: 0o700 }); sync(path.dirname(root)); }
+  directory(root); if ((fs.statSync(root).mode & 0o777) !== 0o700) fail("bootstrap-audit-private-root-required");
+  const approved = sources(), pendingBytes = read(root + "/pending.json", true);
+  if (pendingBytes) {
+    const pending = JSON.parse(pendingBytes); if (pending.version !== version || !/^[a-f0-9]{24}$/.test(pending.id || "") || !pendingBytes.equals(json(pending))) fail("bootstrap-audit-pending-contract");
+    const folder = root + "/" + pending.id; directory(folder);
+    const priorSource = read(folder + "/source.json"), prior = JSON.parse(read(folder + "/before.json"));
+    if (sha(priorSource) !== pending.sourceSha256 || !priorSource.equals(json(approved)) || JSON.stringify(prior.protectedFiles) !== JSON.stringify(snapshot(true).protectedFiles)) fail("bootstrap-audit-resume-source-or-baseline-drift");
+    process.stdout.write(pending.id); process.exit(0);
+  }
+  const id = crypto.randomBytes(12).toString("hex"), folder = root + "/" + id;
+  fs.mkdirSync(folder, { mode: 0o700 }); sync(root);
+  write(folder + "/before.json", snapshot()); write(folder + "/source.json", approved);
+  write(root + "/pending.json", { version, id, sourceSha256: sha(json(approved)) });
+  process.stdout.write(id);
+} else if (mode === "after" && /^[a-f0-9]{24}$/.test(requestedId)) {
+  directory(root); const folder = root + "/" + requestedId; directory(folder);
+  const before = JSON.parse(read(folder + "/before.json")), after = snapshot();
+  const source = JSON.parse(read(folder + "/source.json"));
+  if (!json(source).equals(json(sources())) || JSON.stringify(after.modulePins) !== JSON.stringify(source.modulePins)) fail("bootstrap-audit-source-drift");
+  if (before.protectedFiles.find(r => r.path === "/var/lib/football-release/frontend-runtime-binding.json").sha256 !== null && JSON.stringify(before.protectedFiles) !== JSON.stringify(after.protectedFiles)) fail("bootstrap-audit-protected-baseline-changed");
+  const complete = { version, id: requestedId, bootstrapSha256: source.bootstrapSha256, before, after };
+  const existingComplete = read(folder + "/complete.json", true); if (existingComplete ? !existingComplete.equals(json(complete)) : false) fail("bootstrap-audit-complete-conflict");
+  if (!existingComplete) write(folder + "/complete.json", complete);
+  const temporary = root + "/.current-" + requestedId, nextPointer = { version, id: requestedId, recordSha256: sha(json(complete)) };
+  const existingTemporary = read(temporary, true); if (existingTemporary ? !existingTemporary.equals(json(nextPointer)) : false) fail("bootstrap-audit-pointer-temp-conflict");
+  if (!existingTemporary) write(temporary, nextPointer);
+  read(root + "/current.json", true); fs.renameSync(temporary, root + "/current.json"); sync(root);
+  const pending = JSON.parse(read(root + "/pending.json")); if (pending.version !== version || pending.id !== requestedId || pending.sourceSha256 !== sha(json(source))) fail("bootstrap-audit-pending-final-conflict");
+  fs.unlinkSync(root + "/pending.json"); sync(root);
+} else fail("bootstrap-audit-mode-invalid");
+NODE
+}
+policy_audit_id="$(audit_frontend_policies before)"
+
 install -o root -g root -m 0644 "$PUBLIC_KEY_SOURCE" /etc/football-release/signing-public.pem
 printf '%s\n' "$UPLOAD_OWNER" | install -o root -g root -m 0644 /dev/stdin /etc/football-release/upload-owner
 printf '%s\n' "$PUBLIC_BASE_URL" | install -o root -g root -m 0644 /dev/stdin /etc/football-release/public-base-url
@@ -143,7 +225,7 @@ install -d -o "$UPLOAD_OWNER" -g "$UPLOAD_GROUP" -m 0750 /var/lib/football-relea
 install -d -o root -g root -m 0700 /var/lib/football-release/work
 install -d -o root -g root -m 0700 /var/lib/football-release/recovery
 install -d -o root -g root -m 0700 /var/lib/football-release/source-baselines
-install -d -o root -g root -m 0700 /var/lib/football-release/frontend-builds /var/lib/football-release/frontend-dependencies /var/lib/football-release/frontend-authorizations /opt/.football-frontend-transactions
+install -d -o root -g root -m 0700 /var/lib/football-release/frontend-builds /var/lib/football-release/frontend-dependencies /var/lib/football-release/frontend-authorizations /var/lib/football-release/frontend-attempts /opt/.football-frontend-transactions
 install -d -o root -g "$UPLOAD_GROUP" -m 0750 /var/lib/football-release/status /var/lib/football-release/logs
 install -d -o "$UPLOAD_OWNER" -g "$UPLOAD_GROUP" -m 0750 /var/lib/football-relay/incoming
 install -d -o root -g root -m 0700 /var/lib/football-relay/work
@@ -192,6 +274,8 @@ NODE
 fi
 install -o root -g root -m 0755 "${SCRIPT_DIR}/football-release" /usr/local/sbin/football-release
 install -o root -g root -m 0755 "${SCRIPT_DIR}/football-relay-promote" /usr/local/sbin/football-relay-promote
+
+audit_frontend_policies after "$policy_audit_id"
 
 KEY_ID="$(openssl pkey -pubin -in /etc/football-release/signing-public.pem -outform DER 2>/dev/null | sha256sum | awk '{print $1}')"
 printf 'release entrypoints installed; keyId=%s site=%s channel=%s highestAcceptedSequence=%s\n' \

@@ -2,7 +2,8 @@ import type { SingleRow } from '../../services/recommendationCenterView';
 import { publicationLifecycle, publicationLifecycleLabel, primaryMarketLabel, coherentProbabilityNote, primarySelectionSummary, handicapExtensionText, quoteSourceLabel, outcomeCategoryLabel, outcomeResearchReasonLabel, outcomeResearchFavoriteValueWarning } from '../../services/recommendationCenterView';
 import { publishedPickLabel, publishedResultLabel, publishedResultProjection, settlementResultLabel } from '../../services/publishedMatchRecommendation';
 import './published-match-pick.css';
-import { SelectionQualityNote, selectionReferenceLabel, SupplementaryResearchNote, PublishedHadDistribution, StrategyAssessmentNote } from './SelectionQualityNote';
+import { SelectionQualityNote, SupplementaryResearchNote, PublishedHadDistribution, PublishedHadDirection, PublishedScoreDirection, PublishedPrimaryDirection, StrategyAssessmentNote } from './SelectionQualityNote';
+import { selectionReferenceLabel } from '../../services/publishedRecommendationStatus.cjs';
 
 type Props = { row: SingleRow | null; language: 'zh'|'en'; loading?: boolean; failed?: boolean; compact?: boolean; now?: number };
 const time = (value:string,language:'zh'|'en') => new Intl.DateTimeFormat(language==='zh'?'zh-CN':'en-GB',{
@@ -15,7 +16,7 @@ export function MixedModelEstimateNote({language}:{language:'zh'|'en'}){
     : 'Mixed model estimate · uncalibrated. The base model includes market probabilities and team/score inputs; inputs actually used for this record require a verifiable receipt. Odds-implied probabilities are not independent predictions; hand-set weights and heuristic risk adjustments do not establish calibration or future hit rates.'}</span>;
 }
 
-export function PublishedMatchPick({row,language,loading=false,failed=false,compact=false,now=Date.now()}:Props){
+export function PublishedMatchPick({row,language,loading=false,failed=false,compact=false,now=Number.NaN}:Props){
   const zh=language==='zh';
   if(!row)return <div className="published-match-pick is-empty" role="status"><strong>{loading?(zh?'推荐加载中…':'Loading published pick…'):failed?(zh?'推荐暂未读取，请重试':'Published pick unavailable; retry'):(zh?'暂无已发布推荐':'No published pick')}</strong><small>{zh?'与今日推荐同步，发布后自动显示':'Synced with Today; appears after publication'}</small></div>;
   const d=row.decision,s=primarySelectionSummary(d),h=s.handicap,extension=h?handicapExtensionText(h,language):null;
@@ -31,8 +32,12 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
   const coherent=d.primaryPickPolicyVersion==='coherent-market-primary-v1'?d.coherentPrimary:null;
   const directions=coherent?.anchorMarket==='HHAD'?[hhadCard,hadCard]:[hadCard,hhadCard];
   return <div className={`published-match-pick${compact?' is-compact':''}`} data-decision-id={d.decisionId} data-record-hash={d.recordHash}>
+    <PublishedPrimaryDirection decision={d} language={language} now={now} quality={row.selectionQuality} failed={failed}/>
+    <details className="published-match-pick__basis"><summary>{zh?'查看依据':'View evidence'}</summary><div className="published-match-pick__basis-content">
     <StrategyAssessmentNote assessment={row.strategyAssessment} language={language}/>
-    {row.strategyAssessment&&<small>{zh?'原冻结方向 · 供复盘与版本对照':'Original frozen directions · review and version comparison'}</small>}
+    <PublishedHadDirection decision={d} language={language}/>
+    <PublishedScoreDirection decision={d} scoreDistribution={row.scoreDistribution} language={language}/>
+    <small>{zh?'原冻结方向 · 供复盘与版本对照':'Original frozen directions · review and version comparison'}</small>
     <div className="published-match-pick__directions">
       {coherent?.hhadCode?<>{directions[0]}<details className="published-match-pick__probability-basis"><summary>{zh?'冻结条件分支 · 非独立推荐':'Frozen conditional branch · not an independent pick'}</summary>{directions[1]}<small>{probabilityNote}</small></details></>:directions}
     </div>
@@ -66,5 +71,6 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
       </div>
       <details><summary>{zh?'查看统一推荐版本':'Published record version'}</summary><code>{d.decisionId}</code></details>
     </>}
+    </div></details>
   </div>;
 }

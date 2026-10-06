@@ -12,6 +12,7 @@ const { readStorageMode, retiredSqliteStatus } = require("./storageMode.cjs");
 const storageMode = readStorageMode();
 const { publicationRefreshBlocked, nativePublicationReadError, publicationTransitionHealth } = require("./publicationRefreshPolicy.cjs");
 const { sendStaticFileResponse } = require("./staticFileResponse.cjs");
+const { readRequestJson } = require("./readRequestJson.cjs");
 const { readFrontendReleaseIdentity } = require("./frontendReleaseIdentity.cjs");
 const { compactApiFootballDiagnostics } = require("../src/services/apiFootballDiagnostics.cjs");
 const {
@@ -57,6 +58,7 @@ const {
   readPostgresHistoryMatchesForList,
   readPostgresHistoryMatchesPage,
   readPostgresMatchById,
+  readPostgresMatchDetailById,
   readPostgresOddsHistoryRows,
   readPostgresPredictionSnapshotRows,
   readPostgresPublicReferenceEvidence,
@@ -2658,18 +2660,6 @@ const handleEventStream = (req, res) => {
     removeSseClient(res);
   });
 };
-
-const readRequestJson = (req, maxBytes = 1024 * 1024) => new Promise((resolve, reject) => {
-  let body = "";
-  req.on("data", (chunk) => {
-    body += chunk;
-    if (body.length > maxBytes) {
-      req.destroy(new Error("request body too large"));
-    }
-  });
-  req.on("end", () => resolve(body ? safeJsonParse(body, {}) : {}));
-  req.on("error", reject);
-});
 
 const isAuthorized = (req, url) => {
   const remote = req.socket.remoteAddress || "";
@@ -6179,6 +6169,21 @@ const readMatchById = async (matchId, options = {}) => {
   const historyMatch = Array.isArray(history) ? history.find((match) => match.id === decodedId) || null : null;
   mergeCandidate(historyMatch);
   return resolved ? enrichMatchHistoricalTraining(resolved) : null;
+};
+
+const readMatchDetailById = async (matchId, options = {}) => {
+  const decodedId = decodeURIComponent(matchId || '');
+  if (!shouldPreferPostgresRead()) {
+    const match = await readMatchById(decodedId,options);
+    return match?.id === decodedId ? match : null;
+  }
+  const basePublication = options.basePublication || resolveBasePublication();
+  const meta = readStablePublicationMetadata(basePublication,'sync-meta.json',null);
+  const postgresStatus = await getCachedPostgresReadStatus(meta,basePublication.identity || null);
+  requireNativePostgresReadStatus(postgresStatus);
+  if (!postgresFreshEnough(postgresStatus,'historyMatches',1)) return null;
+  const match = await readPostgresMatchDetailById(postgresPool,decodedId,{publicationIdentity:basePublication.identity || null});
+  return match ? enrichMatchHistoricalTraining(match) : null;
 };
 
 const readOddsHistoryPage = async (url) => {
@@ -11344,7 +11349,7 @@ const buildV1MatchPayload = async (matchId) => {
 
   const promise = (async () => {
     const [match, sources] = await Promise.all([
-      readMatchById(decodedId, { basePublication }),
+      readMatchDetailById(decodedId, { basePublication }),
       getSourceHealth().catch(() => null)
     ]);
     if (!match) return null;
@@ -11856,7 +11861,7 @@ const handleApi = async (req, res, url) => {
   const matchDetailRoute = url.pathname.match(/^\/api\/matches\/([^/]+)$/);
   if (matchDetailRoute) {
     const [match, globalRiskTier] = await Promise.all([
-      readMatchById(matchDetailRoute[1]),
+      readMatchDetailById(matchDetailRoute[1]),
       readGlobalRecommendationRiskTier(),
     ]);
     return match

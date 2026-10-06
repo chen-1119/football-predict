@@ -16,9 +16,10 @@ const PROFILES = Object.freeze({
     trees: [],
   }),
   "scripts/verifyFrontendEvidenceSemantics.cjs": Object.freeze({
-    // Re-audited 2026-10-06: mixed-model honesty check added; the executed
-    // dependencies and complete source membership scope remain identical.
-    auditedSha256: "092305d3dd792799f25363bfd53b84c629adfd76dd7c5e2408285543a2edb0e0",
+    // Re-audited 2026-10-06: direct shared-status imports and component-only
+    // exports are bound explicitly; executed dependencies and complete source
+    // membership scope remain identical.
+    auditedSha256: "a73664ccbdc7629db6d11967cbcb5ca57580493b438cab0c586aa61343ff52c0",
     files: ["server/index.cjs", "src/services/publishedRecommendationStatus.cjs"],
     // Entire src tree, including membership, nested paths, CSS and TS/TSX.
     // TS/TSX is only scanned. The no-import status helper is the sole executed
