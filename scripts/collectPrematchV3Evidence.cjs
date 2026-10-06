@@ -116,6 +116,32 @@ function reviewedXgMapping(binding,receipt,asOf){
   mappingScope:'explicit-current-event-and-provider-identity;not-external-source-admission'};
  return {...body,contentHash:stableHash(body)};
 }
+function prepareXgReview({bindings,items,startedAt,now}){
+ return Object.fromEntries(['home','away'].map(side=>{
+  const binding=bindings.find(value=>value.side===side),matched=[],rejected=[];
+  if(!binding)return [side,{binding:null,items:[],rejected,reviewCompletedAt:null}];
+  // Complete raw semantic replay and the explicit provider identity check
+  // before observing the review-completion clock. This is separate from the
+  // physical HTTP receipt clocks and the later snapshot as-of clock.
+  for(const item of items){
+   if(!xgAdapter.verifyObservedXgReceipt(item.receipt,item.bytes)){
+    rejected.push({sourceReceiptHash:item.receipt.contentHash||null,reason:'xg-raw-replay-or-current-run-clock-invalid'});continue;
+   }
+   if(['home','away'].some(providerSide=>item.receipt.facts[providerSide]?.providerTeamId===binding.providerTeamId
+    &&item.receipt.facts[providerSide]?.nameAsDisplayed===binding.providerTeamName))matched.push(item);
+  }
+  const reviewCompletedAt=now();
+  check(clock(reviewCompletedAt)!==null&&clock(reviewCompletedAt)>=clock(startedAt),'XG_REVIEW_CLOCK');
+  const prepared=[];
+  for(const item of matched){
+   if(!sourceWindow(item.receipt,startedAt,reviewCompletedAt)){
+    rejected.push({sourceReceiptHash:item.receipt.contentHash||null,reason:'xg-raw-replay-or-current-run-clock-invalid'});continue;
+   }
+   prepared.push({...item,reviewedProviderMapping:reviewedXgMapping(binding,item.receipt,reviewCompletedAt)});
+  }
+  return [side,{binding,items:prepared,rejected,reviewCompletedAt}];
+ }));
+}
 function validateHistoryEvidence(history,{input,inputBytes,rawBytes,asOf}){
  const module=require('./readPrematchV3TeamHistory.cjs');
  const {contentHash,transport,targets,targetReadSha256,targetReadRemoteSha256,formalEligible,sourceAdmission,...payload}=history.value;
@@ -222,8 +248,11 @@ async function collectEvidence({input,inputBytes,rawBytes,outputDir,history=null
   ah={...ah,reusedAccessStatusOnly:false,capturesFetchedThisRun:ah.captures?.length||0};}
  catch(error){ah={version:ahAdapter.VERSION,productionWrites:0,formalEligible:false,fixtures:[],captures:[],asianHandicapObservations:[],
   summary:{targets:input.matches.length,eligibleV3Observations:0},status:'failed',reason:error.code||'AH_PUBLIC_COLLECTION_FAILED'};}
+ const xgReviews=targetXgBindings.map(bindings=>prepareXgReview({bindings,items:xgCapture.items,startedAt,now}));
  const asOf=now();
  check(clock(asOf)!==null&&clock(asOf)>=clock(startedAt)&&validKnowledgeWindow(input,asOf),'FINISHED_CLOCK');
+ check(xgReviews.every(review=>Object.values(review).every(value=>value.reviewCompletedAt===null
+  ||clock(value.reviewCompletedAt)<=clock(asOf))),'XG_REVIEW_AFTER_SNAPSHOT');
  const historyAdapter=historyEvidence?require('./prematchHistoryCollectionAdapter.cjs'):null;
  const modelRead=require('../src/services/prematchV3ModelRegistry.cjs').readPrematchV3RegistryFromOnlineInput(input,{asOf});
  const options={asOf,baseline:modelRead.baseline,parameters:modelRead.parameters,modelRegistry:{asOf:modelRead.asOf,
@@ -244,19 +273,11 @@ async function collectEvidence({input,inputBytes,rawBytes,outputDir,history=null
   const historyAdaptations=historyAdapter?Object.fromEntries(['home','away'].map(side=>[side,
    historyAdapter.adaptLedgerTeamHistory({history:historyEvidence,input,event:baseEvent,side,asOf})])):{};
   const xgAdaptations=Object.fromEntries(['home','away'].map(side=>{
-   const binding=targetXgBindings[index].find(binding=>binding.side===side),items=[];
-   const rejected=[];
-   if(binding)for(const item of xgCapture.items){
-    if(!sourceWindow(item.receipt,startedAt,asOf)||!xgAdapter.verifyObservedXgReceipt(item.receipt,item.bytes)){
-     rejected.push({sourceReceiptHash:item.receipt.contentHash||null,reason:'xg-raw-replay-or-current-run-clock-invalid'});continue;
-    }
-    if(!['home','away'].some(providerSide=>item.receipt.facts[providerSide]?.providerTeamId===binding.providerTeamId
-     &&item.receipt.facts[providerSide]?.nameAsDisplayed===binding.providerTeamName))continue;
-    items.push({...item,reviewedProviderMapping:reviewedXgMapping(binding,item.receipt,asOf)});
-   }
+   const {binding,items,rejected,reviewCompletedAt}=xgReviews[index][side];
    const adapted=binding?xgAdapter.combineObservedXgReceipts({items,event,side,asOf})
     : {status:'unavailable',reason:'reviewed-current-event-provider-identity-missing',sampleCount:0,teamObservations:[],formalEligible:false};
    return [side,{...adapted,rejected:[...(adapted.rejected||[]),...rejected],
+    reviewCompletedAt,
     providerMappings:items.map(item=>item.reviewedProviderMapping),durationAdmission:'provider-regulation-scope-reference;not-formal-result-admission'}];
   }));
   const teamObservations=[...(adapted.status==='captured'?adapted.teamObservations:[]),
@@ -364,7 +385,7 @@ async function run({input,output,history=null,ahStatus=null}){
  return {output:destination,calculatedAt:saved.calculatedAt,contentHash:saved.contentHash,summary:saved.summary,productionWrites:0,formalEligible:false};
 }
 module.exports={VERSION,FRESH_NS,CAMPAIGN_BINDINGS,parseArgs,bindingFor,validKnowledgeWindow,sourceWindow,receiptFiles,
- XG_CAMPAIGN_BINDINGS,xgBindingsFor,xgReceiptFiles,reviewedXgMapping,validateHistoryEvidence,validateAhAccessStatus,
+ XG_CAMPAIGN_BINDINGS,xgBindingsFor,xgReceiptFiles,reviewedXgMapping,prepareXgReview,validateHistoryEvidence,validateAhAccessStatus,
  collectEvidence,privateOutputPath,readBoundFile,run};
 if(require.main===module)(async()=>console.log(JSON.stringify(await run(parseArgs(process.argv.slice(2))))))().catch(error=>{
  console.error(/^V3_COLLECT_[A-Z0-9_]+$/.test(error.message)?error.message:'V3_COLLECT_FAILED');process.exitCode=1;});

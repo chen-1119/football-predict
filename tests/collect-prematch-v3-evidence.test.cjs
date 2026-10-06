@@ -186,6 +186,29 @@ test('duplicate prior xG matches are one sample and closed current events never 
   assert.equal(closed.summary.eventSidesWithObservedXg,0);assert.equal(closed.formalEligible,false);
  }
 });
+test('xG review clocks are observed after raw semantic replay and before the final snapshot clock',async()=>{
+ const item=xgPacket(),bound=online([xgCurrentMatches()[0]]),verified=xgAdapter.verifyObservedXgReceipt;
+ let replayCount=0,clockCalls=0;const stages=[];
+ xgAdapter.verifyObservedXgReceipt=(...args)=>{const value=verified(...args);replayCount++;return value;};
+ const now=()=>{const at=`2026-10-06T07:00:00.${String(clockCalls*3).padStart(3,'0')}Z`;
+  stages.push({at,replayCount});clockCalls++;return at;};
+ try{
+  const result=await collector.collectEvidence(bound,xgDependencies([item],{now}).deps);
+  assert.equal(stages[0].replayCount,0);assert.ok(stages[1].replayCount>0);
+  assert.equal(stages.length,4);assert.equal(result.calculatedAt,stages[3].at);
+  const home=result.events[0].xgAdaptations.home,mapping=home.providerMappings[0];
+  assert.equal(home.reviewCompletedAt,stages[1].at);assert.equal(mapping.reviewedAt,stages[1].at);
+  assert.ok(stages[1].at<result.calculatedAt);assert.ok(stages[2].replayCount>stages[1].replayCount);
+  const observation=home.teamObservations[0];assert.equal(observation.identityMappingReviewedAt,stages[1].at);
+  assert.equal(observation.providerObservedAt,received);assert.equal(observation.receivedAt,received);
+  assert.equal(observation.data.rows[0].receivedAt,received);assert.equal(result.formalEligible,false);
+ }finally{xgAdapter.verifyObservedXgReceipt=verified;}
+});
+test('a backward final clock cannot turn a completed xG review into an earlier eligible snapshot',async()=>{
+ const clocks=[start,'2026-10-06T07:00:00.003Z','2026-10-06T07:00:00.004Z',finished];let index=0;
+ await assert.rejects(collector.collectEvidence(online([xgCurrentMatches()[0]]),
+  xgDependencies([xgPacket()],{now:()=>clocks[index++]}).deps),/XG_REVIEW_AFTER_SNAPSHOT/);
+});
 test('public or production paths are never valid research output destinations',()=>{
  for(const output of ['public/data/external-signals.json','src/new.json','outputs/prematch-v3-test/../../public/data/new.json'])
   assert.throws(()=>collector.privateOutputPath(output),/PRIVATE_OUTPUT_REQUIRED/);
