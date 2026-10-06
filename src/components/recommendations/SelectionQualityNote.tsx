@@ -2,7 +2,74 @@ import type { Decision, PublishedScores, SelectionQuality, SupplementaryResearch
 import { publishedDetailPresentation } from '../../services/publishedDetailPresentation';
 
 import { selectionPriceStatus, selectionReferenceLabel } from '../../services/publishedRecommendationStatus.cjs';
+import { publicationLifecycle, publicationLifecycleLabel } from '../../services/publishedRecommendationStatus.cjs';
 export { selectionPriceStatus, selectionReferenceLabel };
+/** Display only the verified projection's frozen anchor, never recompute a
+ * direction from either market's odds or marginal ranking in the UI. */
+function primaryDirection(d:Decision,language:'zh'|'en',selectedMarket?:'HAD'|'HHAD'){
+ const zh=language==='zh',codes=['1','X','2'] as const;
+ const vector=(p:Decision['probabilities']|undefined)=>p&&codes.every(code=>Number.isFinite(p[code])&&p[code]>=0&&p[code]<=1)
+  &&Math.abs(codes.reduce((sum,code)=>sum+p[code],0)-1)<=1e-6;
+ const price=(value:unknown)=>typeof value==='number'&&Number.isFinite(value)&&value>1;
+ const boundClock=(value:string)=>{
+  const quoted=Date.parse(value),published=Date.parse(d.publishedAt),cutoff=Math.min(Date.parse(d.cutoffTime),Date.parse(d.kickoffTime));
+  return Number.isFinite(quoted)&&Number.isFinite(published)&&Number.isFinite(cutoff)&&quoted<=published&&quoted<cutoff;
+ };
+ const c=d.primaryPickPolicyVersion==='coherent-market-primary-v1'?d.coherentPrimary:null;
+ if(!vector(d.probabilities)||!codes.includes(d.tipCode)||!price(d.odds)||!Number.isFinite(d.modelProbability)
+  ||Math.abs(d.modelProbability-d.probabilities[d.tipCode])>1e-6)return null;
+ if(d.primaryPickPolicyVersion==='coherent-market-primary-v1'&&(!c||c.version!=='coherent-market-primary-v1'||c.hadCode!==d.tipCode
+  ||!['HAD','HHAD'].includes(c.anchorMarket)||!codes.includes(c.anchorCode)||!Number.isFinite(c.anchorProbability)))return null;
+ const market=selectedMarket??c?.anchorMarket??'HAD';
+ if(market==='HHAD'){
+  const h=d.handicapAnalysis,code=c?c.hhadCode:d.primaryPickPolicyVersion==='independent-market-primary-v1'?h?.overallTipCode:h?.tipCode;
+  const probabilities=h?.overallProbabilities??(c?undefined:h?.probabilities);
+  if(!h||!code||!codes.includes(code)||!Number.isSafeInteger(h.handicapLine)||h.handicapLine===0||!vector(probabilities)
+   ||(!selectedMarket&&c&&(c.anchorCode!==code||Math.abs(c.anchorProbability-probabilities![code])>1e-6))||h.marketReference?.source!=='sporttery:HHAD'
+   ||!codes.every(item=>price(h.marketReference?.odds?.[item]))||!boundClock(h.marketReference.observedAt))return null;
+  const line=h.handicapLine,signed=`${line>0?'+':''}${line}`;
+  const lineLabel=zh?`主队${line<0?'让':'受让'}${Math.abs(line)}球（${signed}）`:`Home handicap ${signed}`;
+  return {market:'HHAD' as const,label:zh?'让球':'Handicap',direction:`${lineLabel} · ${zh?({'1':'让胜',X:'让平','2':'让负'}[code]):({'1':'Handicap home',X:'Handicap draw','2':'Handicap away'}[code])}`,
+   meaning:line===-1&&code==='2'?(zh?'主队不胜':'Home does not win'):null,quoteObservedAt:h.marketReference.observedAt};
+ }
+ if(c&&((!selectedMarket&&(c.anchorMarket!=='HAD'||c.anchorCode!==d.tipCode||Math.abs(c.anchorProbability-d.modelProbability)>1e-6))
+  ||!codes.every(code=>price(d.quoteOdds?.[code]))||Math.abs(d.quoteOdds![d.tipCode]-d.odds)>1e-6))return null;
+ if(!boundClock(d.quoteObservedAt))return null;
+ return {market:'HAD' as const,label:zh?'胜平负':'1X2',direction:zh?({'1':'主胜',X:'平局','2':'客胜'}[d.tipCode]):({'1':'Home',X:'Draw','2':'Away'}[d.tipCode]),meaning:null,quoteObservedAt:d.quoteObservedAt};
+}
+/** Shared by recommendation center, fixture list and match detail. */
+export function PublishedPrimaryDirection({decision,language,now,quality,failed=false,selectedMarket}:{decision:Decision;language:'zh'|'en';now:number;quality?:SelectionQuality|null;failed?:boolean;selectedMarket?:'HAD'|'HHAD'}){
+ const zh=language==='zh',primary=primaryDirection(decision,language,selectedMarket),knownClock=Number.isFinite(now);
+ const lifecycle=publicationLifecycle(primary?{...decision,quoteObservedAt:primary.quoteObservedAt}:decision,now),quoteStale=lifecycle==='quote-stale';
+ const heading=selectedMarket?(decision.primaryPickPolicyVersion==='coherent-market-primary-v1'&&decision.coherentPrimary?.anchorMarket!==selectedMarket?(zh?'原冻结条件分支':'Frozen conditional branch'):(zh?'原冻结记录':'Frozen record')):lifecycle==='open'?(zh?'参考主方向':'Reference primary'):(zh?'原冻结主方向':'Frozen primary');
+ return <div className="published-match-pick__summary" data-formal-eligible="false" aria-label={zh?'方向摘要':'Direction summary'}>
+  <div className="published-match-pick__direction" data-direction-summary="frozen-primary" data-primary-market={primary?.market??'unavailable'} data-direction-role={selectedMarket?'record':'primary'}>
+   <small>{primary?`${heading} · ${primary.label}`:(zh?'方向待更新':'Direction pending')}</small>
+   <strong>{!primary?(zh?'观望 · 待更新':'Watch · awaiting data'):!knownClock?(zh?'观望 · 时间待核':'Watch · clock pending'):quoteStale?(zh?'观望 · SP待更新':'Watch · SP refresh pending'):primary.direction}</strong>
+   {primary?.meaning&&knownClock&&!quoteStale&&<small className="published-match-pick__meaning">{primary.meaning}</small>}
+  </div>
+  <small className="published-match-pick__summary-status" data-selection-status={quality?.status??'reference'}>{zh?'参考 · 未校准':'Reference · uncalibrated'}{!knownClock?(zh?' · 时间待核':' · Clock pending'):lifecycle!=='open'?` · ${publicationLifecycleLabel(lifecycle,language)}`:''}{failed?(zh?' · 更新失败':' · Update failed'):''}</small>
+ </div>;
+}
+/** Short directions use the same bound values as the expanded evidence. */
+export function PublishedHadDirection({decision,language}:{decision:Decision;language:'zh'|'en'}){
+ const zh=language==='zh',codes=['1','X','2'] as const,labels=zh?{'1':'主胜',X:'平局','2':'客胜'}:{'1':'Home',X:'Draw','2':'Away'};
+ const valid=codes.every(code=>Number.isFinite(decision.probabilities[code])&&decision.probabilities[code]>=0&&decision.probabilities[code]<=1)
+  &&Math.abs(codes.reduce((sum,code)=>sum+decision.probabilities[code],0)-1)<=1e-6;
+ const leaders=valid?codes.filter(code=>decision.probabilities[code]===Math.max(...codes.map(item=>decision.probabilities[item]))):[];
+ return <div className="published-match-pick__direction" data-direction-summary="had-model-tendency">
+  <small>{zh?'胜平负倾向':'1X2 tendency'}</small>
+  <strong>{leaders.length?leaders.map(code=>labels[code]).join(' / '):(zh?'待更新':'Awaiting data')}</strong>
+ </div>;
+}
+export function PublishedScoreDirection({decision,scoreDistribution,language}:{decision:Decision;scoreDistribution?:PublishedScores|null;language:'zh'|'en'}){
+ const zh=language==='zh',presentation=publishedDetailPresentation(decision,[],scoreDistribution??null);
+ const score=presentation?.scoreSource==='published-matrix'?presentation.globalTopScores[0]:null;
+ return <div className="published-match-pick__direction" data-direction-summary="score-first">
+  <small>{zh?'比分首选 · 参考':'Score first choice · reference'}</small>
+  <strong>{score?.label??(zh?'待更新':'Awaiting data')}</strong>
+ </div>;
+}
 export function StrategyAssessmentNote({assessment,language}:{assessment?:StrategyAssessment|null;language:'zh'|'en'}){
  if(!assessment)return null;const zh=language==='zh';
  const reasons:Record<string,string>=zh?{
