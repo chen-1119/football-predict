@@ -47,19 +47,32 @@ async function verifyFrontendReleaseEntrypoints() {
     const directory = path.join(temp, "case-" + ++count); fs.mkdirSync(directory);
     const f = { directory, mode, trace: path.join(directory, "trace"), lock: path.join(directory, "lock"), sequence: path.join(directory, "sequence"),
       statuses: path.join(directory, "status"), recovery: path.join(directory, "recovery-current"), work: path.join(directory, "work"),
+      attempts: path.join(directory, "attempts"), bootstrapPending: path.join(directory, "bootstrap-pending.json"),
       node: path.join(directory, "fixed-node"), helper: path.join(directory, "fixed-controller"), legacy: path.join(directory, "fixed-legacy.cjs"),
       sha: "a".repeat(64), seq: 712 };
-    fs.mkdirSync(f.statuses); fs.mkdirSync(f.work); fs.mkdirSync(f.helper); write(f.sequence, "711\n");
+    fs.mkdirSync(f.statuses); fs.mkdirSync(f.work); fs.mkdirSync(f.helper); fs.mkdirSync(f.attempts); write(f.sequence, "711\n");
     f.status = path.join(f.statuses, f.sha + ".status");
     f.uploads = ["bundle", "sha", "manifest", "signature"].map(name => path.join(directory, "upload-" + name));
     for (const file of f.uploads) write(file, "fixture upload");
     const clean = '[[ "$(env)" != *INHERITED_SECRET_CANARY=* && "$(env)" != *NODE_OPTIONS=* && "$(env)" != *NODE_PATH=* ]] || exit 91';
     const fixedController = shellPath(path.join(f.helper, "frontendReleaseController.cjs"));
+    const fixedAttempt = shellPath(path.join(f.helper, "frontendReleaseAttempt.cjs"));
+    f.attemptDirectory = path.join(f.attempts, f.sha + ".712");
+    f.attemptLog = path.join(f.attemptDirectory, "output.log");
     const fakeNode = [
       "#!/bin/bash", "set -euo pipefail", clean, '[[ -e /dev/fd/9 ]] || exit 92',
       "printf 'inherited-fd9\\n' >&9",
       process.platform === "linux" ? "if /usr/bin/flock -n " + quote(shellPath(f.lock)) + " true; then exit 93; fi" : ":",
-      "if [[ \"$1\" == " + quote(fixedController) + " ]]; then",
+      "if [[ \"$1\" == " + quote(fixedAttempt) + " ]]; then",
+      '  case "$2" in',
+      '    prepare) [[ "$#" == 5 && "$3" == ' + quote(f.sha) + ' && "$4" == 712 && "$5" == ' + quote(shellPath(f.work)) + " ]] || exit 94",
+      "      printf 'attempt:prepare\\n' >>" + quote(shellPath(f.trace)),
+      mode === "attempt-prepare-fail" ? "      exit 25 ;;" : "      mkdir " + quote(shellPath(f.attemptDirectory)) + "; : >" + quote(shellPath(f.attemptLog)) + " ;;",
+      '    status) [[ "$#" == 6 && "$3" == ' + quote(f.sha) + ' && "$4" == 712 ]] || exit 94',
+      "      printf 'status=%s\\nok=%s\\nbundleSha256=%s\\nreleaseKind=frontend-only\\nreleaseSequence=712\\nexitCode=%s\\n' \"$5\" \"$([[ $5 == complete ]] && echo 1 || echo 0)\" \"$3\" \"$6\" >" + quote(shellPath(f.status)),
+      "      printf 'status=%s\\n' \"$5\" >>" + quote(shellPath(f.trace)) + " ;;",
+      '    *) exit 98 ;;', '  esac', '  exit 0',
+      "elif [[ \"$1\" == " + quote(fixedController) + " ]]; then",
       '  case "$2" in',
       '    apply) [[ "$#" == 5 && "$3" == ' + quote(f.sha) + ' && "$4" == 712 && "$5" == ' + quote(shellPath(f.work)) + " ]] || exit 94 ;;",
       '    initialize) [[ "$#" == 4 && "$3" == ' + quote(f.sha) + ' && "$4" == 712 ]] || exit 95',
@@ -79,6 +92,7 @@ async function verifyFrontendReleaseEntrypoints() {
       "set -Eeuo pipefail", "umask 077",
       "TRACE=" + quote(shellPath(f.trace)), "LOCK_FILE=" + quote(shellPath(f.lock)), "HIGHEST_SEQUENCE_FILE=" + quote(shellPath(f.sequence)),
       "STATUS_DIR=" + quote(shellPath(f.statuses)), "RECOVERY_CURRENT=" + quote(shellPath(f.recovery)), "work_dir=" + quote(shellPath(f.work)),
+      "FRONTEND_ATTEMPT_ROOT=" + quote(shellPath(f.attempts)), "FRONTEND_POLICY_BOOTSTRAP_PENDING=" + quote(shellPath(f.bootstrapPending)),
       "NODE_BIN=" + quote(shellPath(f.node)), "FRONTEND_HELPER_DIR=" + quote(shellPath(f.helper)), "RECOVERY_HELPER=" + quote(shellPath(f.legacy)),
       "BUNDLE_SHA=" + quote(f.sha), "MANIFEST_SEQUENCE=712", "HIGHEST_ACCEPTED_SEQUENCE=711", "MANIFEST_KIND=" + quote(kind),
       "TRUSTED_KEY_ID=fixture-key", "STARTED_AT=2026-09-08T00:00:00Z", "UPLOAD_GROUP=fixture", "status_finalized=0",
@@ -100,7 +114,7 @@ async function verifyFrontendReleaseEntrypoints() {
     ].join("\n").replaceAll("¤", "$");
   }
   const uiStart = wrapper.indexOf('if [ "$MANIFEST_KIND" = "frontend-only" ]; then', wrapper.indexOf("\nPY\n"));
-  const ui = section(wrapper, 'if [ "$MANIFEST_KIND" = "frontend-only" ]; then', '\nreadonly TRUSTED_SOURCE_DIR=', uiStart);
+  const ui = section(wrapper, 'if [ "$MANIFEST_KIND" = "frontend-only" ]; then', '\n# A rejected signature, sequence, or archive', uiStart);
   const recovery = section(wrapper, 'if [ "¤{1:-}" = "--recover" ]; then'.replace("¤", "$"), '\n[ "$#" -eq 1 ] || die "usage: football-release --check|--recover|');
   const tail = section(wrapper, 'if [ "$release_status" -ne 0 ]; then', "\nexit 0", ui.end).source + "\nexit 0";
   const bootstrapModules = /readonly FRONTEND_MODULES=\(([^)]+)\)/.exec(bootstrap)?.[1].split(/\s+/);
@@ -137,16 +151,27 @@ async function verifyFrontendReleaseEntrypoints() {
     });
     await check("UI success consumes once on inherited fd9 and exits before old full extraction or candidate execution", () => {
       const f = fixture(), result = runBash(f, prelude(f) + "\nacquire_release_lock\n" + ui.source + '\nprintf "FULL-FALLBACK\\n" >>"$TRACE"\n');
-      assert.equal(result.status, 0, result.stderr); assert.deepEqual(result.trace, ["locked-fd9", "sequence-consumed", "controller:apply", "status=complete"]);
-      assert.equal(fs.readFileSync(f.sequence, "utf8"), "712\n"); assert.equal(fs.readFileSync(f.lock, "utf8"), "inherited-fd9\n");
+      assert.equal(result.status, 0, result.stderr); assert.deepEqual(result.trace, ["locked-fd9", "attempt:prepare", "sequence-consumed", "status=running", "controller:apply", "status=complete"]);
+      assert.equal(fs.readFileSync(f.sequence, "utf8"), "712\n"); assert.equal(fs.readFileSync(f.lock, "utf8"), "inherited-fd9\n".repeat(4));
       assert.ok(f.uploads.every(file => !fs.existsSync(file))); assert.ok(ui.end < wrapper.indexOf('bash "$RELEASE_SCRIPT_PATH" "$TRUSTED_SOURCE_DIR"'));
       const status = fs.readFileSync(f.status, "utf8"); assert.match(status, /^releaseKind=frontend-only$/m); assert.match(status, /^releaseSequence=712$/m); assert.match(status, /^ok=1$/m);
     });
     await check("UI failure preserves controller exit status with no full fallback or second build and consumes once", () => {
       const f = fixture("controller-fail"), result = runBash(f, prelude(f) + "\nacquire_release_lock\n" + ui.source + '\nprintf "FULL-FALLBACK\\n" >>"$TRACE"\n');
-      assert.equal(result.status, 23, result.stderr); assert.deepEqual(result.trace, ["locked-fd9", "sequence-consumed", "controller:apply", "status=failed"]);
+      assert.equal(result.status, 23, result.stderr); assert.deepEqual(result.trace, ["locked-fd9", "attempt:prepare", "sequence-consumed", "status=running", "controller:apply", "status=failed"]);
       const status = fs.readFileSync(f.status, "utf8"); assert.match(status, /^exitCode=23$/m); assert.match(status, /^releaseKind=frontend-only$/m); assert.match(status, /^releaseSequence=712$/m);
-      assert.ok(f.uploads.every(file => fs.existsSync(file))); assert.match(result.stdout, /no full fallback/);
+      assert.ok(f.uploads.every(file => fs.existsSync(file))); assert.match(fs.readFileSync(f.attemptLog, "utf8"), /no full fallback/);
+    });
+    await check("failed signed attempt preparation preserves the old status before sequence consumption or controller execution", () => {
+      const f = fixture("attempt-prepare-fail"), previous = "status=failed\noriginal failure proof\n"; write(f.status, previous);
+      const result = runBash(f, prelude(f) + "\nacquire_release_lock\n" + ui.source);
+      assert.equal(result.status, 25, result.stderr); assert.deepEqual(result.trace, ["locked-fd9", "attempt:prepare"]); assert.equal(fs.readFileSync(f.status, "utf8"), previous); assert.equal(fs.readFileSync(f.sequence, "utf8"), "711\n"); assert.equal(fs.existsSync(f.attemptLog), false);
+    });
+    await check("durable policy bootstrap pending blocks normal release lock continuation but permits cold recovery", () => {
+      const f = fixture(); write(f.bootstrapPending, "{}\n");
+      const blocked = runBash(f, prelude(f) + "\nacquire_release_lock\nprintf 'EXECUTION\\n' >>\"$TRACE\"\n");
+      assert.notEqual(blocked.status, 0); assert.deepEqual(blocked.trace, ["locked-fd9"]); assert.equal(fs.readFileSync(f.sequence, "utf8"), "711\n");
+      const recovered = runBash(f, prelude(f) + "\n" + recovery.source, ["--recover"]); assert.equal(recovered.status, 0, recovered.stderr); assert.deepEqual(recovered.trace, ["locked-fd9", "runtime-check", "locked-fd9", "legacy-recovery"]); assert.equal(fs.readFileSync(f.bootstrapPending, "utf8"), "{}\n");
     });
     await check("pending recovery blocks UI before consuming a sequence and full kind still reaches its untouched old continuation", () => {
       const f = fixture(); fs.mkdirSync(f.recovery);
@@ -174,7 +199,7 @@ async function verifyFrontendReleaseEntrypoints() {
       assert.equal(result.status, 17); assert.deepEqual(result.trace, ["locked-fd9", "status=failed"]); assert.equal(fs.readFileSync(f.sequence, "utf8"), "711\n");
     });
     await check("frontend recovery markers execute only the fixed controller using the same fd9 and never legacy fallback", () => {
-      for (const marker of ["frontend-transaction.json", "phase.json"]) {
+      for (const marker of ["frontend-transaction.json", "phase.json", "frontend-policy-refresh.json"]) {
         const f = fixture("controller-fail"); fs.mkdirSync(f.recovery); write(path.join(f.recovery, marker), "{}");
         const result = runBash(f, prelude(f) + "\n" + recovery.source + '\nprintf "RECOVERY-FALLBACK\\n" >>"$TRACE"\n', ["--recover"]);
         assert.equal(result.status, 23, result.stderr); assert.deepEqual(result.trace, ["runtime-check", "locked-fd9", "controller-guard", "controller:recover"]);
@@ -188,6 +213,11 @@ async function verifyFrontendReleaseEntrypoints() {
         assert.equal(result.status, 0, result.stderr); assert.deepEqual(result.trace, ["runtime-check", "locked-fd9", "legacy-recovery"]);
       }
       assert.doesNotMatch(fs.readFileSync(path.join(root, "deploy/light-server/football-release-recovery.cjs"), "utf8"), /phase\.json|frontend-transaction\.json/);
+    });
+    await check("a started attempt without a transaction journal reaches the fixed frontend cold recovery", () => {
+      const f = fixture(); fs.mkdirSync(f.attemptDirectory); write(path.join(f.attemptDirectory, "running.status"), "fixture running\n");
+      const result = runBash(f, prelude(f) + "\n" + recovery.source, ["--recover"]);
+      assert.equal(result.status, 0, result.stderr); assert.deepEqual(result.trace, ["runtime-check", "locked-fd9", "controller-guard", "controller:recover"]);
     });
     await verifyBootstrap();
     const sourcesUnchanged = sourceHashes.every(row => hash(fs.readFileSync(path.join(root, row.name))) === row.sha256); assert.equal(sourcesUnchanged, true);
