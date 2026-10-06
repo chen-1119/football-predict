@@ -1,4 +1,5 @@
 import type { Decision, PublishedScores, SelectionQuality, SupplementaryResearch, SingleRow, StrategyAssessment } from '../../services/recommendationCenterView';
+import { quoteSourceLabel } from '../../services/recommendationCenterView';
 import { publishedDetailPresentation } from '../../services/publishedDetailPresentation';
 
 import { selectionPriceStatus, selectionReferenceLabel } from '../../services/publishedRecommendationStatus.cjs';
@@ -24,18 +25,38 @@ function primaryDirection(d:Decision,language:'zh'|'en',selectedMarket?:'HAD'|'H
  if(market==='HHAD'){
   const h=d.handicapAnalysis,code=c?c.hhadCode:d.primaryPickPolicyVersion==='independent-market-primary-v1'?h?.overallTipCode:h?.tipCode;
   const probabilities=h?.overallProbabilities??(c?undefined:h?.probabilities);
-  if(!h||!code||!codes.includes(code)||!Number.isSafeInteger(h.handicapLine)||h.handicapLine===0||!vector(probabilities)
+  if(!h||h.market!=='HHAD'||!code||!codes.includes(code)||!Number.isSafeInteger(h.handicapLine)||h.handicapLine===0||!vector(probabilities)
    ||(!selectedMarket&&c&&(c.anchorCode!==code||Math.abs(c.anchorProbability-probabilities![code])>1e-6))||h.marketReference?.source!=='sporttery:HHAD'
    ||!codes.every(item=>price(h.marketReference?.odds?.[item]))||!boundClock(h.marketReference.observedAt))return null;
   const line=h.handicapLine,signed=`${line>0?'+':''}${line}`;
   const lineLabel=zh?`主队${line<0?'让':'受让'}${Math.abs(line)}球（${signed}）`:`Home handicap ${signed}`;
   return {market:'HHAD' as const,label:zh?'让球':'Handicap',direction:`${lineLabel} · ${zh?({'1':'让胜',X:'让平','2':'让负'}[code]):({'1':'Handicap home',X:'Handicap draw','2':'Handicap away'}[code])}`,
-   meaning:line===-1&&code==='2'?(zh?'主队不胜':'Home does not win'):null,quoteObservedAt:h.marketReference.observedAt};
+   meaning:line===-1&&code==='2'?(zh?'主队不胜':'Home does not win'):null,quoteObservedAt:h.marketReference.observedAt,
+   tipCode:code,handicapLine:line,odds:h.marketReference.odds![code],quoteSource:h.marketReference.source};
  }
  if(c&&((!selectedMarket&&(c.anchorMarket!=='HAD'||c.anchorCode!==d.tipCode||Math.abs(c.anchorProbability-d.modelProbability)>1e-6))
   ||!codes.every(code=>price(d.quoteOdds?.[code]))||Math.abs(d.quoteOdds![d.tipCode]-d.odds)>1e-6))return null;
  if(!boundClock(d.quoteObservedAt))return null;
- return {market:'HAD' as const,label:zh?'胜平负':'1X2',direction:zh?({'1':'主胜',X:'平局','2':'客胜'}[d.tipCode]):({'1':'Home',X:'Draw','2':'Away'}[d.tipCode]),meaning:null,quoteObservedAt:d.quoteObservedAt};
+ return {market:'HAD' as const,label:zh?'胜平负':'1X2',direction:zh?({'1':'主胜',X:'平局','2':'客胜'}[d.tipCode]):({'1':'Home',X:'Draw','2':'Away'}[d.tipCode]),meaning:null,quoteObservedAt:d.quoteObservedAt,
+  tipCode:d.tipCode,handicapLine:0,odds:d.odds,quoteSource:d.quoteSource};
+}
+/** The fixture list's SP column belongs to the same frozen primary as its
+ * direction. Missing HHAD evidence never borrows the HAD branch's price. */
+export function PublishedPrimaryPrice({decision,language,now}:{decision:Decision|null;language:'zh'|'en';now:number}){
+ const zh=language==='zh',primary=decision?primaryDirection(decision,language):null,knownClock=Number.isFinite(now);
+ const identityBound=Boolean(decision?.decisionId&&/^[a-f0-9]{64}$/.test(decision.recordHash)
+  &&Number.isFinite(Date.parse(decision.eventVersion))&&Date.parse(decision.eventVersion)===Date.parse(decision.kickoffTime));
+ const available=primary&&identityBound&&knownClock&&decision&&now>=Date.parse(decision.publishedAt)&&now>=Date.parse(primary.quoteObservedAt)?primary:null;
+ const lifecycle=available&&decision?publicationLifecycle({...decision,quoteObservedAt:available.quoteObservedAt},now):null;
+ const frozenLabel=available?.market==='HHAD'?(zh?'发布时让球 SP':'Published handicap SP'):(zh?'发布时胜平负 SP':'Published 1X2 SP');
+ const quoted=available?new Intl.DateTimeFormat(zh?'zh-CN':'en-GB',{timeZone:'Asia/Shanghai',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(available.quoteObservedAt)):null;
+ return <span data-primary-price-market={available?.market??'unavailable'} data-primary-price-code={available?.tipCode}
+  data-primary-price-line={available?.handicapLine} data-decision-id={decision?.decisionId} data-record-hash={decision?.recordHash}>
+  <strong className="compact-sp">{available?available.odds.toFixed(2):'—'}</strong>
+  <small className="compact-sp-note">{available?frozenLabel:zh?'冻结 SP 待核':'Frozen SP unverified'}</small>
+  {available&&<small className="compact-sp-note">{quoteSourceLabel(available,language)} · <time dateTime={available.quoteObservedAt}>{quoted}</time>{zh?' 北京':''}</small>}
+  {lifecycle&&lifecycle!=='open'&&<small className="compact-sp-note">{publicationLifecycleLabel(lifecycle,language)}</small>}
+ </span>;
 }
 /** Shared by recommendation center, fixture list and match detail. */
 export function PublishedPrimaryDirection({decision,language,now,quality,failed=false,selectedMarket}:{decision:Decision;language:'zh'|'en';now:number;quality?:SelectionQuality|null;failed?:boolean;selectedMarket?:'HAD'|'HHAD'}){
