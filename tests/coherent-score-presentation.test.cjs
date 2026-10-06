@@ -92,7 +92,8 @@ test('compact cards put global Top 3 inside closed evidence and retain collapsed
  const r=row(),markup=render(PublishedMatchPick,{row:r,language:'zh',compact:true,now:NOW});
  const evidenceAt=markup.indexOf('<details class="published-match-pick__basis">');assert(evidenceAt>0);
  assert.equal(globalScoreRows(markup.slice(0,evidenceAt)).length,0);
- assert.match(markup.slice(0,evidenceAt),/比分首选 · 参考/);
+ assert.doesNotMatch(markup.slice(0,evidenceAt),/比分首选 · 参考/);
+ assert.match(markup.slice(evidenceAt),/比分首选 · 参考/);
  const research=markup.slice(markup.indexOf('class="supplementary-research-note"')),detailsAt=research.indexOf('<details');
  assertGlobalScores(research.slice(0,detailsAt),expectedTopScores(r));assert.match(research,/<details><summary>查看冻结同向比分与原研究结算<\/summary>/);
  assert.doesNotMatch(research.slice(0,detailsAt),/data-score-reference="aligned"/);
