@@ -126,7 +126,7 @@ function verifyFrontendInstalledRuntime() {
   };
   try {
     mkdir(baselineRoot);
-    for (const directory of ["server", "scripts", "src", "deploy/light-server", "cloudflare/sync-trigger/src"])
+    for (const directory of ["server", "scripts", "src", "collectors", "deploy/light-server", "cloudflare/sync-trigger/src"])
       copy(path.join(repository, directory), path.join(baselineRoot, directory));
     for (const file of ["package.json", "package-lock.json"]) write(path.join(baselineRoot, file), fs.readFileSync(path.join(repository, file)));
     fs.cpSync(baselineRoot, fixture.at(runtime.APP), { recursive: true });
