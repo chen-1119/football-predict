@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const cp = require('node:child_process');
 const { strictInstant } = require('../src/services/strictInstant.cjs');
 const { epochNanoseconds } = require('../src/services/prematchV3Clock.cjs');
+const { sportteryDeadlineClock } = require('../src/services/sportteryDeadlineClock.cjs');
 const { validateReleaseSshHostKeyPin, buildPinnedSshBaseOptions } = require('./releaseSshHostKeyPin.cjs');
 const MAX_BYTES = 12 * 1024 * 1024;
 const MAX_MODEL_ARTIFACT_BYTES = 4 * 1024 * 1024;
@@ -78,7 +79,7 @@ function validateResponse(value, date) {
   check(text(value.generation.data_generation_id, 256) && typeof value.generation.manifest_hash === 'string'
     && /^[a-f0-9]{64}$/.test(value.generation.manifest_hash)
     && (value.generation.committed_at == null || instant(value.generation.committed_at) !== null), 'GENERATION_METADATA');
-  const missingFields = [];
+  const missingFields = [], clockNormalizations = [];
   value.matches.forEach((match, index) => {
     check(object(match) && match.businessDate === date, 'MATCH_BUSINESS_DATE');
     const id = match.id, sourceId = match.sourceMatchId;
@@ -88,7 +89,11 @@ function validateResponse(value, date) {
     check((id == null || text(normalize(id), 256)) && (sourceId == null || text(normalize(sourceId), 256)), 'MATCH_IDENTITY');
     check(id == null || sourceId == null || normalize(id) === normalize(sourceId), 'MATCH_IDENTITY');
     for (const field of ['kickoffTime', 'eventVersion', 'buyEndTime']) {
-      if (match[field] != null) check(instant(match[field]) !== null, 'MATCH_CLOCK');
+      if (match[field] != null) {
+        const resolved=field==='buyEndTime'?sportteryDeadlineClock(match,match[field],{field}):{instant:match[field]};
+        check(instant(resolved.instant) !== null, 'MATCH_CLOCK');
+        if(resolved.normalization) clockNormalizations.push({index,...resolved.normalization});
+      }
     }
     if (match.eventVersion != null && match.kickoffTime != null)
       check(instant(match.eventVersion) === instant(match.kickoffTime), 'MATCH_EVENT_CONFLICT');
@@ -96,10 +101,16 @@ function validateResponse(value, date) {
       if (match[field] != null) check(validDate(match[field]), 'MATCH_CALENDAR');
     }
     check(match.predictionMeta == null || object(match.predictionMeta), 'MATCH_CUTOFF');
-    const cutoffs = [match.cutoffAt, match.cutoffTime, match.predictionMeta?.cutoffTime].filter(value => value != null);
+    const cutoffs = [['cutoffAt',match.cutoffAt],['cutoffTime',match.cutoffTime],['predictionMeta.cutoffTime',match.predictionMeta?.cutoffTime]]
+      .filter(([,value])=>value!=null).map(([field,value])=>{
+        const resolved=sportteryDeadlineClock(match,value,{field});
+        if(resolved.normalization) clockNormalizations.push({index,...resolved.normalization});
+        return resolved.instant;
+      });
     check(cutoffs.every(value => instant(value) !== null), 'MATCH_CUTOFF');
     if (match.cutoffAt != null && match.cutoffTime != null)
-      check(instant(match.cutoffAt) === instant(match.cutoffTime), 'MATCH_CUTOFF');
+      check(instant(sportteryDeadlineClock(match,match.cutoffAt,{field:'cutoffAt'}).instant)
+        === instant(sportteryDeadlineClock(match,match.cutoffTime,{field:'cutoffTime'}).instant), 'MATCH_CUTOFF');
     const missing = [];
     if (sourceId == null) missing.push('sourceMatchId');
     if (match.kickoffTime == null) missing.push('kickoffTime');
@@ -127,7 +138,7 @@ function validateResponse(value, date) {
       'MODEL_ARTIFACT_PAYLOAD');
     modelKeys.add(packet.artifactKey);
   }
-  return { matches: value.matches.length, inventory: value.modelArtifactInventory.length, modelArtifacts: value.modelArtifacts.length, missingFields };
+  return { matches: value.matches.length, inventory: value.modelArtifactInventory.length, modelArtifacts: value.modelArtifacts.length, missingFields, clockNormalizations };
 }
 function validateTransport(transport, observedAt) {
   check(object(transport) && transport.hostKeyPinVerified === true
@@ -188,7 +199,7 @@ function readInputs({date, output}, env = process.env, execute = cp.execFileSync
     fs.writeFileSync(destination, JSON.stringify({...value, transport}, null, 2) + '\n', {flag:'wx', mode:0o600});
   } catch { throw Error('V3_READER_OUTPUT_COMMIT_FAILED'); }
   return {output:destination, observedAt:value.observedAt, matches:validation.matches, inventory:validation.inventory, modelArtifacts:validation.modelArtifacts,
-    missingFields:validation.missingFields, productionWrites:0, remoteResponseSha256:transport.remoteResponseSha256};
+    missingFields:validation.missingFields, clockNormalizations:validation.clockNormalizations, productionWrites:0, remoteResponseSha256:transport.remoteResponseSha256};
 }
 if (require.main === module) {
   try { console.log(JSON.stringify(readInputs(parseArgs(process.argv.slice(2))))); }

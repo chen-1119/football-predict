@@ -3,6 +3,25 @@ import { publishedDetailPresentation } from '../../services/publishedDetailPrese
 
 import { selectionPriceStatus, selectionReferenceLabel } from '../../services/publishedRecommendationStatus.cjs';
 export { selectionPriceStatus, selectionReferenceLabel };
+/** Short directions use the same bound values as the expanded evidence. */
+export function PublishedHadDirection({decision,language}:{decision:Decision;language:'zh'|'en'}){
+ const zh=language==='zh',codes=['1','X','2'] as const,labels=zh?{'1':'主胜',X:'平局','2':'客胜'}:{'1':'Home',X:'Draw','2':'Away'};
+ const valid=codes.every(code=>Number.isFinite(decision.probabilities[code])&&decision.probabilities[code]>=0&&decision.probabilities[code]<=1)
+  &&Math.abs(codes.reduce((sum,code)=>sum+decision.probabilities[code],0)-1)<=1e-6;
+ const leaders=valid?codes.filter(code=>decision.probabilities[code]===Math.max(...codes.map(item=>decision.probabilities[item]))):[];
+ return <div className="published-match-pick__direction" data-direction-summary="had-model-tendency">
+  <small>{zh?'胜平负倾向':'1X2 tendency'}</small>
+  <strong>{leaders.length?leaders.map(code=>labels[code]).join(' / '):(zh?'待更新':'Awaiting data')}</strong>
+ </div>;
+}
+export function PublishedScoreDirection({decision,scoreDistribution,language}:{decision:Decision;scoreDistribution?:PublishedScores|null;language:'zh'|'en'}){
+ const zh=language==='zh',presentation=publishedDetailPresentation(decision,[],scoreDistribution??null);
+ const score=presentation?.scoreSource==='published-matrix'?presentation.globalTopScores[0]:null;
+ return <div className="published-match-pick__direction" data-direction-summary="score-first">
+  <small>{zh?'比分首选 · 参考':'Score first choice · reference'}</small>
+  <strong>{score?.label??(zh?'待更新':'Awaiting data')}</strong>
+ </div>;
+}
 export function StrategyAssessmentNote({assessment,language}:{assessment?:StrategyAssessment|null;language:'zh'|'en'}){
  if(!assessment)return null;const zh=language==='zh';
  const reasons:Record<string,string>=zh?{

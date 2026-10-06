@@ -15,7 +15,7 @@ const IMPLEMENTATION_FILES = ['scripts/runPrematchV3Shadow.cjs','scripts/readPre
   'src/services/prematchTeamEvidenceV3.cjs','src/services/asianHandicapEvidenceV3.cjs',
   'src/services/prematchV3Learning.cjs','src/services/prematchV3FrozenRecord.cjs',
   'src/services/prematchV3ModelRegistry.cjs','src/services/formNeedPressure.cjs','src/services/prospectiveForecastInput.cjs',
-  'src/services/strictInstant.cjs','src/services/webConsensusEvidence.cjs','src/services/goalDistribution.cjs',
+  'src/services/strictInstant.cjs','src/services/sportteryDeadlineClock.cjs','src/services/webConsensusEvidence.cjs','src/services/goalDistribution.cjs',
   'src/services/matchLifecycle.cjs','scripts/historicalAsOfFeatureBuilder.cjs',
   'scripts/modelLearningRegistry.cjs','scripts/releaseSshHostKeyPin.cjs'];
 function check(value, code) {if (!value) throw Error(`V3_SHADOW_${code}`);}

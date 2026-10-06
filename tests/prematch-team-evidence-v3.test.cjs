@@ -11,6 +11,27 @@ const event = { sourceMatchId: 'fixture-v3', eventVersion: '2026-10-06T14:00:00.
 const source = { provider: 'fixture-provider', endpoint: '/team-facts', receiptHash: 'a'.repeat(64), rawPayloadHash: 'b'.repeat(64) };
 const metrics = { attack: 'provider-observed-attack-contribution-per90', defense: 'provider-observed-defense-contribution-per90' };
 const clone = value => JSON.parse(JSON.stringify(value));
+
+test('first-seen collector clocks and withdrawal meaning stay explicit; missing publication is never backdated',()=>{
+ const observed='2026-10-06T09:00:00.123456Z';
+ const row=observation('injuries',{availabilityMeaning:'withdrawn-from-call-up;medical-cause-unknown',
+  players:[{playerId:'synthetic-player',availability:'out'}]},
+  {clockBasis:'collector-response-body-completed',providerObservedAt:observed,receivedAt:observed,sourcePublishedAt:null});
+ const snapshot=buildPrematchTeamSnapshot({event,asOf,observations:[row]});
+ assert.equal(snapshot.observations[0].clockBasis,'collector-response-body-completed');
+ assert.equal(snapshot.observations[0].sourcePublishedAt,null);
+ assert.equal(snapshot.observations[0].data.availabilityMeaning,'withdrawn-from-call-up;medical-cause-unknown');
+ assert.equal(snapshot.sides.home.injuries.features.knownUnavailablePlayers,1);
+ assert.equal(snapshot.sides.home.injuries.features.knownUnavailableAttackGapPer90,null);
+ assert.equal(verifyPrematchTeamSnapshot(snapshot),true);
+ for(const changed of [{sourcePublishedAt:'2026-10-06T09:00:00.123457Z'},
+   {sourcePublishedAt:'2026-10-06 09:00:00'},
+   {receivedAt:'2026-10-06T09:00:00.123457Z'}]) {
+  const rejected=buildPrematchTeamSnapshot({event,asOf,observations:[{...row,...changed}]});
+  assert.equal(rejected.observations.length,0);
+  assert.equal(rejected.sides.home.injuries.features.knownUnavailablePlayers,null);
+ }
+});
 function observation(family, data, overrides = {}) {
   return { family, side: 'home', sourceMatchId: event.sourceMatchId, eventVersion: event.eventVersion,
     teamId: event.homeTeamId, source, providerObservedAt: '2026-10-06T09:00:00.000Z', receivedAt: '2026-10-06T09:01:00.000Z', data, ...overrides };
@@ -27,6 +48,28 @@ function priorRow(family, overrides = {}) {
     source, status: 'FINISHED', providerObservedAt: '2026-10-01T14:00:00.000Z', receivedAt: '2026-10-01T14:01:00.000Z',
     ...(family === 'history' ? { goalsFor: 2, goalsAgainst: 1 } : { observed: true, observedXgFor: 1.7, observedXgAgainst: .8 }), ...overrides };
 }
+test('mapping review knowledge cannot be backdated to raw receipt time, including nanoseconds and nested rows',()=>{
+  const received='2026-10-06T09:01:00.000000000Z',reviewed='2026-10-06T09:01:00.000000001Z';
+  const mapping={identityMappingHash:'c'.repeat(64),identityMappingReviewedAt:reviewed};
+  const row=observation('xg',{rows:[priorRow('xg',{
+    providerObservedAt:received,receivedAt:received,clockBasis:'collector-response-body-completed',sourcePublishedAt:null,...mapping})]},
+    {providerObservedAt:received,receivedAt:received,clockBasis:'collector-response-body-completed',sourcePublishedAt:null,...mapping});
+  const premature=buildPrematchTeamSnapshot({event,asOf:received,observations:[row]});
+  assert.equal(premature.observations.length,0);
+  assert.equal(premature.features['home.xg.sampleCount'],null);
+  const usable=buildPrematchTeamSnapshot({event,asOf:reviewed,observations:[row]});
+  assert.equal(usable.features['home.xg.sampleCount'],1);
+  assert.equal(usable.observations[0].receivedAt,received);
+  assert.equal(usable.observations[0].identityMappingReviewedAt,reviewed);
+  assert.equal(usable.observations[0].data.rows[0].identityMappingHash,mapping.identityMappingHash);
+  assert.equal(verifyPrematchTeamSnapshot(usable),true);
+  const futureNested=clone(row); delete futureNested.identityMappingHash; delete futureNested.identityMappingReviewedAt;
+  assert.equal(buildPrematchTeamSnapshot({event,asOf:received,observations:[futureNested]}).features['home.xg.sampleCount'],null);
+  for(const invalid of [{identityMappingReviewedAt:'2026-10-06 09:01:00'},
+    {identityMappingHash:null},{identityMappingReviewedAt:'2026-10-06T09:00:59Z'}]){
+    assert.equal(buildPrematchTeamSnapshot({event,asOf:reviewed,observations:[{...row,...invalid}]}).features['home.xg.sampleCount'],null);
+  }
+});
 function snapshot(observations = [], overrides = {}) { return buildPrematchTeamSnapshot({ event, asOf, observations, ...overrides }); }
 function rehash(value) { const { contentHash, ...body } = value; return { ...body, contentHash: stableHash(body) }; }
 function parameters(overrides = {}) {

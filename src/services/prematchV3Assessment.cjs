@@ -2,6 +2,7 @@
 const {stableHash} = require('./webConsensusEvidence.cjs');
 const {strictInstant} = require('./strictInstant.cjs');
 const {epochNanoseconds: clock} = require('./prematchV3Clock.cjs');
+const {sportteryDeadlineClock} = require('./sportteryDeadlineClock.cjs');
 const team = require('./prematchTeamEvidenceV3.cjs');
 const asian = require('./asianHandicapEvidenceV3.cjs');
 const {scoreMatrix} = require('./goalDistribution.cjs');
@@ -14,11 +15,11 @@ const stamp = body => ({...body, contentHash: stableHash(body)});
 function eventFromMatch(match = {}) {
   // The legacy buyEndTime contract explicitly uses Beijing local time.
   // No other unzoned clock is inferred, and an absent sale deadline stays null.
-  const buy = typeof match.buyEndTime === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(match.buyEndTime)
-    ? match.buyEndTime.replace(' ', 'T') + '+08:00' : match.buyEndTime;
-  const supplied = [buy,match.cutoffAt,match.cutoffTime,match.predictionMeta?.cutoffTime].filter(v => v != null && v !== '');
+  const rawDeadlines=[['buyEndTime',match.buyEndTime],['cutoffAt',match.cutoffAt],['cutoffTime',match.cutoffTime],['predictionMeta.cutoffTime',match.predictionMeta?.cutoffTime]];
+  const supplied = rawDeadlines.filter(([,v])=>v!=null&&v!=='').map(([field,v])=>sportteryDeadlineClock(match,v,{field}).instant);
   const valid = supplied.length && supplied.every(v => strictInstant(v))
-    && !(match.cutoffAt!=null && match.cutoffTime!=null && clock(match.cutoffAt)!==clock(match.cutoffTime));
+    && !(match.cutoffAt!=null && match.cutoffTime!=null
+      && clock(sportteryDeadlineClock(match,match.cutoffAt,{field:'cutoffAt'}).instant)!==clock(sportteryDeadlineClock(match,match.cutoffTime,{field:'cutoffTime'}).instant));
   const cutoffAt = valid ? supplied.reduce((a,b) => clock(a) <= clock(b) ? a : b) : null;
   return {sourceMatchId: id(match.sourceMatchId || match.id)?.replace(/^sporttery_/, '') || null,
     eventVersion: strictInstant(match.eventVersion || match.kickoffTime), kickoffTime: strictInstant(match.kickoffTime),

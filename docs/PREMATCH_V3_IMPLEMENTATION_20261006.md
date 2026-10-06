@@ -59,6 +59,8 @@ AH 观测包含 `market:'AH'`、`source`、`company`、双方 ID、事件版本�
 
 ```powershell
 node scripts/readPrematchV3OnlineInputs.cjs --date 2026-10-06 --output <新的输入文件>
+node scripts/readPrematchV3TeamHistory.cjs --input <上述输入文件> --output <新的线上历史文件>
+node scripts/collectPrematchV3Evidence.cjs --input <上述输入文件> --history <上述历史文件> --output <新的私有采集报告>
 node scripts/runPrematchV3Shadow.cjs --input <上述输入文件> --output <新的报告文件>
 node scripts/runPrematchV3Learning.cjs --input <新的V3冻结研究请求文件> --output <新的训练报告文件>
 ```
@@ -83,3 +85,17 @@ node scripts/runPrematchV3Learning.cjs --input <新的V3冻结研究请求文件
 原有兼容测试为 **93 / 94**：`published-forecasts.test.cjs` 的 `exact tie is not broken arbitrarily` 失败。已在原固定提交 `1dd00ad3dc737dd80ba5956834028c6dc7ad7e89` 单独复现相同失败（37 / 38），是已有并列方向策略与旧测试的分歧，本分支没有更改该旧方向选择规则。不能把兼容测试写成全通过。
 
 全仓 lint 原有 22 errors / 4 warnings 未记为通过。本分支尚未执行签名发布，未训练真实 V3 参数，也没有正式准入或新命中率结论。不能将本地构建或影子读取称为部署成功。
+
+## 后续采集与方向摘要修复
+
+本次继续使用新取得的线上输入。`sportteryDeadlineClock.cjs` 仅将已明确绑定 Sporttery 比赛的 `buyEndTime` 北京时间文本，以及完全相同的截止别名，转换为带 `+08:00` 的派生知识时钟。原始响应字节保持不变，非法日期和其他无时区时钟仍拒绝。凌晨场次仍采用前一日 22:00 销售截止，不能推迟至开球。
+
+`readPrematchV3TeamHistory.cjs` 在固定 SSH pin 下以有界只读事务新读取线上结果头及唯一历史投影，核对事件、球队、比分、结果修订和观察时间。每队最多 12 条、120 天窗口；同一比赛出现在两队记录中只算一场。历史样本不完整，因此不能用“最新已知记录”推断最近一次比赛结束、休息天数、球员负荷或旅行。
+
+`prematchTeamCollectionAdapter.cjs` 通过普通 HTTPS 实际读取 KFA 当前男子国家队征召页和 FA 本期名单/更新页，保存原 HTML 后再重放解析。征召不是确认首发，退出征召不是已确认医疗诊断；名字记录不伪造成球员 ID。采集器第一次收到页面的时间与来源发布时刻分开保存，后者不明时保持 null。
+
+`prematchAsianHandicapCollectionAdapter.cjs` 保存公开入口和实际请求的页面字节及阻断原因。500 亚洲盘口首个详情页遭遇安全验证后，其余同主机详情不继续请求。既有失败可通过 `--ah-status <原始失败回执>` 进入 6 小时退避；这仅复用访问状态，不更新时间、不读取旧报价，也不计为本轮成功采集。无需把 500 数据放进竞彩网官方 intake。
+
+推荐组件默认只显示胜平负倾向、带正负让球数的原冻结让球方向、比分首选和简短参考状态；概率、SP、Top 3、模型来源及风险解释移入默认关闭的“查看依据”。不改任何概率、冻结方向、比分矩阵或命中率分母。摘要中的胜平负是原模型无条件倾向，仍含市场输入，不能称为正式推荐或赔率独立预测。
+
+Chrome 本地构建预览消费北京时间 15:30 新读回的真实线上推荐中心数据：390px 手机视口无横向溢出，全部 10 个依据面板默认关闭；首个面板展开后仍保留原概率、SP、Top 3 和研究结算解释。桌面视口也无横向溢出。这是本地新代码视觉验收，尚非线上新 UI。

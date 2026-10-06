@@ -58,6 +58,13 @@ function sourceFor(value) {
     sourceVerification: 'unverified',
   };
 }
+function mappingKnowledgeFor(value) {
+  const supplied = value.identityMappingHash != null || value.identityMappingReviewedAt != null;
+  const identityMappingHash = HASH.test(value.identityMappingHash || '') ? value.identityMappingHash : null;
+  const identityMappingReviewedAt = iso(value.identityMappingReviewedAt);
+  return { identityMappingHash, identityMappingReviewedAt,
+    identityMappingClockInvalid: value.identityMappingClockInvalid === true || (supplied && (!identityMappingHash || !identityMappingReviewedAt)) };
+}
 function eventFor(value) {
   const event = object(value) ? value : {};
   return {
@@ -93,6 +100,9 @@ function historyRowFor(value, family) {
   const body = {
     sourceMatchId: id(row.sourceMatchId), eventVersion: iso(row.eventVersion), teamId: id(row.teamId),
     providerObservedAt: iso(row.providerObservedAt), receivedAt: iso(row.receivedAt), source: sourceFor(row.source),
+    clockBasis:text(row.clockBasis) || 'provider-observation-unverified',sourcePublishedAt:iso(row.sourcePublishedAt),
+    sourcePublicationClockInvalid:row.sourcePublicationClockInvalid===true || (row.sourcePublishedAt!=null&&!iso(row.sourcePublishedAt)),
+    ...mappingKnowledgeFor(row),
     status: text(row.status),
     ...(family === 'history' ? { goalsFor: integer(row.goalsFor, 0, 30), goalsAgainst: integer(row.goalsAgainst, 0, 30) }
       : { observed: row.observed === true, observedXgFor: number(row.observedXgFor, 0, 20), observedXgAgainst: number(row.observedXgAgainst, 0, 20) }),
@@ -103,6 +113,7 @@ function dataFor(family, value) {
   const data = object(value) ? value : {};
   if (family === 'roster' || family === 'injuries') return {
     ...(family === 'roster' ? { status: text(data.status) } : {}),
+    ...(family === 'injuries' ? {availabilityMeaning:text(data.availabilityMeaning)} : {}),
     contributionMetric: { attack: text(data.contributionMetric?.attack), defense: text(data.contributionMetric?.defense) },
     players: Array.isArray(data.players) ? data.players.map(playerFor).sort((a, b) => String(a.playerId).localeCompare(String(b.playerId))) : [],
   };
@@ -120,6 +131,10 @@ function observationFor(value) {
     family, side: SIDES.includes(observation.side) ? observation.side : null,
     sourceMatchId: id(observation.sourceMatchId), eventVersion: iso(observation.eventVersion), teamId: id(observation.teamId),
     source: sourceFor(observation.source), providerObservedAt: iso(observation.providerObservedAt), receivedAt: iso(observation.receivedAt),
+    clockBasis:text(observation.clockBasis) || 'provider-observation-unverified',
+    sourcePublishedAt:iso(observation.sourcePublishedAt),
+    sourcePublicationClockInvalid:observation.sourcePublicationClockInvalid===true || (observation.sourcePublishedAt!=null&&!iso(observation.sourcePublishedAt)),
+    ...mappingKnowledgeFor(observation),
     data: family ? dataFor(family, observation.data) : null,
   };
   return { ...body, rowHash: stableHash(body) };
@@ -131,6 +146,12 @@ function observationIssues(observation, event, asOf) {
   if (!observation.teamId || observation.teamId !== event[`${observation.side}TeamId`]) issues.push('observation-team-mismatch');
   if (!observation.source.provider) issues.push('observation-source-missing');
   if (!observation.providerObservedAt || !observation.receivedAt) issues.push('observation-clock-incomplete');
+  if (observation.sourcePublicationClockInvalid) issues.push('source-publication-clock-invalid');
+  if (observation.identityMappingClockInvalid) issues.push('identity-mapping-clock-invalid');
+  if (observation.identityMappingReviewedAt && (!notAfter(observation.receivedAt, observation.identityMappingReviewedAt)
+    || !notAfter(observation.identityMappingReviewedAt, asOf))) issues.push('identity-mapping-not-known-at-as-of');
+  if (observation.sourcePublishedAt && observation.providerObservedAt && !notAfter(observation.sourcePublishedAt, observation.providerObservedAt)) issues.push('source-publication-after-observation');
+  if (observation.clockBasis === 'collector-response-body-completed' && !sameClock(observation.providerObservedAt,observation.receivedAt)) issues.push('collector-body-clock-not-bound-to-receipt');
   if (observation.providerObservedAt && observation.receivedAt && !notAfter(observation.providerObservedAt, observation.receivedAt)) issues.push('provider-time-after-receipt');
   if (asOf && observation.receivedAt && !notAfter(observation.receivedAt, asOf)) issues.push('observation-not-known-at-as-of');
   if (asOf && observation.providerObservedAt && !notAfter(observation.providerObservedAt, asOf)) issues.push('provider-observation-in-future');
@@ -224,6 +245,10 @@ function priorRowsResult(observations, family, event, asOf) {
     seen.add(key);
     const clocksValid = row.eventVersion && row.providerObservedAt && row.receivedAt
       && strictlyBefore(row.eventVersion, row.providerObservedAt)
+      && !row.sourcePublicationClockInvalid && (!row.sourcePublishedAt || notAfter(row.sourcePublishedAt,row.providerObservedAt))
+      && !row.identityMappingClockInvalid && (!row.identityMappingReviewedAt || (notAfter(row.receivedAt,row.identityMappingReviewedAt)
+        && notAfter(row.identityMappingReviewedAt,asOf)
+        && (!observation.identityMappingReviewedAt || notAfter(row.identityMappingReviewedAt,observation.identityMappingReviewedAt))))
       && notAfter(row.providerObservedAt, row.receivedAt)
       && notAfter(row.receivedAt, observation.receivedAt)
       && notAfter(row.receivedAt, asOf);
@@ -268,7 +293,7 @@ function bodyFor(event, asOf, observations, rejected) {
     version: VERSION, featureSchemaHash: FEATURE_SCHEMA_HASH, event, asOf,
     status: blockers.length ? 'blocked' : 'shadow-ready', blockers,
     sourceVerification: 'unverified', formalEligible: false,
-    knowledgePolicy: 'providerObservedAt <= receivedAt <= asOf < cutoffAt <= eventVersion; no external source signature or admission is asserted',
+    knowledgePolicy: 'providerObservedAt (clockBasis retained) <= receivedAt <= asOf < cutoffAt <= eventVersion; sourcePublishedAt remains unknown unless supplied and checked; separate identityMappingReviewedAt must be known at asOf without changing raw response clocks; no external source signature or admission is asserted',
     observations, rejected, sides,
     features: flattenPrematchTeamFeatures({ sides }),
   };

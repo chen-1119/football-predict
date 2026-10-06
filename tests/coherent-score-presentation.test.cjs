@@ -57,7 +57,7 @@ function assertGlobalScores(markup,expected){
  });
 }
 function assertHadDistribution(markup,decision){
- const section=markup.match(/<section\b[^>]*data-had-distribution="unconditional"[^>]*>([\s\S]*?)<\/section>/);assert(section,'the complete HAD distribution must be visible');
+ const section=markup.match(/<section\b[^>]*data-had-distribution="unconditional"[^>]*>([\s\S]*?)<\/section>/);assert(section,'the complete HAD distribution must remain available in the evidence');
  for(const [code,label] of [['1','主胜'],['X','平局'],['2','客胜']]){
   const item=section[1].match(new RegExp(`<span[^>]*data-had-code="${code}"[^>]*>([\\s\\S]*?)<\\/span>`));assert(item);assert.equal(plain(item[1]),`${label} ${(decision.probabilities[code]*100).toFixed(1)}%`);
  }
@@ -88,8 +88,11 @@ test('global Top 3 preserves unconditional rank and treats France 1-1 as compati
  assert.equal(JSON.stringify(r),before);assert.equal(JSON.stringify(settlement),frozenBefore);
 });
 
-test('compact cards keep global Top 3 visible and collapse aligned scenarios and original research settlement',()=>{
+test('compact cards put global Top 3 inside closed evidence and retain collapsed original research settlement',()=>{
  const r=row(),markup=render(PublishedMatchPick,{row:r,language:'zh',compact:true,now:NOW});
+ const evidenceAt=markup.indexOf('<details class="published-match-pick__basis">');assert(evidenceAt>0);
+ assert.equal(globalScoreRows(markup.slice(0,evidenceAt)).length,0);
+ assert.match(markup.slice(0,evidenceAt),/比分首选 · 参考/);
  const research=markup.slice(markup.indexOf('class="supplementary-research-note"')),detailsAt=research.indexOf('<details');
  assertGlobalScores(research.slice(0,detailsAt),expectedTopScores(r));assert.match(research,/<details><summary>查看冻结同向比分与原研究结算<\/summary>/);
  assert.doesNotMatch(research.slice(0,detailsAt),/data-score-reference="aligned"/);

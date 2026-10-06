@@ -2,7 +2,7 @@ import type { SingleRow } from '../../services/recommendationCenterView';
 import { publicationLifecycle, publicationLifecycleLabel, primaryMarketLabel, coherentProbabilityNote, primarySelectionSummary, handicapExtensionText, quoteSourceLabel, outcomeCategoryLabel, outcomeResearchReasonLabel, outcomeResearchFavoriteValueWarning } from '../../services/recommendationCenterView';
 import { publishedPickLabel, publishedResultLabel, publishedResultProjection, settlementResultLabel } from '../../services/publishedMatchRecommendation';
 import './published-match-pick.css';
-import { SelectionQualityNote, selectionReferenceLabel, SupplementaryResearchNote, PublishedHadDistribution, StrategyAssessmentNote } from './SelectionQualityNote';
+import { SelectionQualityNote, selectionReferenceLabel, SupplementaryResearchNote, PublishedHadDistribution, PublishedHadDirection, PublishedScoreDirection, StrategyAssessmentNote } from './SelectionQualityNote';
 
 type Props = { row: SingleRow | null; language: 'zh'|'en'; loading?: boolean; failed?: boolean; compact?: boolean; now?: number };
 const time = (value:string,language:'zh'|'en') => new Intl.DateTimeFormat(language==='zh'?'zh-CN':'en-GB',{
@@ -31,8 +31,18 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
   const coherent=d.primaryPickPolicyVersion==='coherent-market-primary-v1'?d.coherentPrimary:null;
   const directions=coherent?.anchorMarket==='HHAD'?[hhadCard,hadCard]:[hadCard,hhadCard];
   return <div className={`published-match-pick${compact?' is-compact':''}`} data-decision-id={d.decisionId} data-record-hash={d.recordHash}>
+    <div className="published-match-pick__summary" aria-label={zh?'方向摘要':'Direction summary'}>
+      <PublishedHadDirection decision={d} language={language}/>
+      <div className="published-match-pick__direction" data-direction-summary="frozen-handicap">
+        <small>{zh?'原冻结 · ':'Frozen · '}{h?.status==='pass'?(zh?'让球不追':'Pass handicap'):d.primaryPickPolicyVersion?primaryMarketLabel(d,'HHAD',zh):(zh?'让球延伸':'Handicap extension')}</small>
+        <strong>{extension?.title??(zh?'待更新':'Awaiting data')}</strong>
+      </div>
+      <PublishedScoreDirection decision={d} scoreDistribution={row.scoreDistribution} language={language}/>
+    </div>
+    <small className="published-match-pick__summary-status" data-selection-status={row.selectionQuality?.status??'reference'}>{zh?'参考 · 未校准':'Reference · uncalibrated'}{lifecycle!=='open'?` · ${publicationLifecycleLabel(lifecycle,language)}`:''}{failed?(zh?' · 更新失败':' · Update failed'):''}</small>
+    <details className="published-match-pick__basis"><summary>{zh?'查看依据':'View evidence'}</summary><div className="published-match-pick__basis-content">
     <StrategyAssessmentNote assessment={row.strategyAssessment} language={language}/>
-    {row.strategyAssessment&&<small>{zh?'原冻结方向 · 供复盘与版本对照':'Original frozen directions · review and version comparison'}</small>}
+    <small>{zh?'原冻结方向 · 供复盘与版本对照':'Original frozen directions · review and version comparison'}</small>
     <div className="published-match-pick__directions">
       {coherent?.hhadCode?<>{directions[0]}<details className="published-match-pick__probability-basis"><summary>{zh?'冻结条件分支 · 非独立推荐':'Frozen conditional branch · not an independent pick'}</summary>{directions[1]}<small>{probabilityNote}</small></details></>:directions}
     </div>
@@ -66,5 +76,6 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
       </div>
       <details><summary>{zh?'查看统一推荐版本':'Published record version'}</summary><code>{d.decisionId}</code></details>
     </>}
+    </div></details>
   </div>;
 }
