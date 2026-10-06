@@ -10,7 +10,7 @@ import {
 } from '../../services/predictionPresentation';
 import { formatSourceNeutralText } from './sourceNeutralText';
 import '../../styles/recommendation-evidence.css';
-import type { Decision } from '../../services/recommendationCenterView';
+import type { Decision, Outcome } from '../../services/recommendationCenterView';
 import { publishedPickLabel } from '../../services/publishedMatchRecommendation';
 import { publishedDetailPresentation } from '../../services/publishedDetailPresentation';
 
@@ -28,6 +28,27 @@ interface RecommendationEvidenceFactsProps {
 const joinClassNames = (...names: Array<string | false | null | undefined>) => (
   names.filter(Boolean).join(' ')
 );
+
+const isFrozenHadConditionalBranch = (decision: Decision | null) => (
+  decision?.primaryPickPolicyVersion === 'coherent-market-primary-v1'
+  && decision.coherentPrimary?.anchorMarket === 'HHAD'
+);
+
+export function FrozenHadPosteriorNote({ decision, disagreement, language }: {
+  decision: Decision | null;
+  disagreement: { published: Outcome; research: Outcome };
+  language: 'zh' | 'en';
+}) {
+  if (!decision) return null;
+  const conditionalBranch = isFrozenHadConditionalBranch(decision);
+  const published = publishedPickLabel(disagreement.published, language);
+  const research = publishedPickLabel(disagreement.research, language);
+  return <p className="match-detail-v4__model-disagreement" role="note" data-model-direction-disagreement="true">
+    {language === 'zh'
+      ? `补充模型快照的研究后验偏向${research}，与原冻结胜平负${conditionalBranch ? '条件分支' : '选择'}${published}不同。两者时间及基础概率一致，但缺少后验内容绑定，不能证明发布时采用过该后验；${conditionalBranch ? '原冻结记录及其历史结算保留，两者均不作为当前正式推荐。' : '原冻结记录的发布方向及历史结算保持不变。'}`
+      : `The supplemental model's research posterior favors ${research}, while the original frozen 1X2 ${conditionalBranch ? 'conditional branch' : 'selection'} is ${published}. The times and base probabilities align, but no posterior content binding proves it was used at publication. ${conditionalBranch ? 'The frozen record and its historical settlement are retained; neither is a current formal recommendation.' : 'The original published 1X2 selection and its historical settlement remain unchanged.'}`}
+  </p>;
+}
 
 type FreshnessClockKind = 'observed-at' | 'source-updated-at' | 'as-of' | 'unavailable';
 
@@ -81,10 +102,17 @@ export function RecommendationEvidenceFacts({
 }: RecommendationEvidenceFactsProps) {
   if (publishedDecision !== undefined) {
     const view = publishedDetailPresentation(publishedDecision);
+    const conditionalBranch = isFrozenHadConditionalBranch(publishedDecision);
     return <section className={joinClassNames('recommendation-evidence-facts', className)} data-testid="published-recommendation-evidence" data-decision-id={view?.decisionId} data-record-hash={view?.recordHash}>
-      <h3>{language === 'zh' ? '已发布胜平负记录' : 'Published 1X2 record'}</h3>
+      <details className="published-match-pick__basis" data-frozen-record-evidence="HAD"><summary>{language === 'zh' ? '查看原冻结胜平负记录' : 'View original frozen 1X2 record'}</summary>
+      <h3>{language === 'zh' ? '原冻结胜平负记录' : 'Original frozen 1X2 record'}</h3>
       {view ? <>
-        <strong>{publishedPickLabel(view.tipCode, language)} · {(view.modelProbability * 100).toFixed(1)}%</strong>
+        <strong data-frozen-had-role={conditionalBranch ? 'conditional-branch' : 'selection'}>{conditionalBranch
+          ? (language === 'zh' ? '冻结条件分支：' : 'Frozen conditional branch: ')
+          : (language === 'zh' ? '冻结选择：' : 'Frozen selection: ')}{publishedPickLabel(view.tipCode, language)} · {language === 'zh' ? '无条件概率' : 'Unconditional probability'} {(view.modelProbability * 100).toFixed(1)}%</strong>
+        <p>{conditionalBranch
+          ? (language === 'zh' ? '主方向成立时的一个分支，非独立推荐；原记录保留供复盘与版本对照。' : 'One branch if the primary lands, not an independent recommendation; the original record is retained for review and version comparison.')
+          : (language === 'zh' ? '原记录保留供复盘与版本对照。' : 'The original record is retained for review and version comparison.')}</p>
         <dl className="recommendation-evidence-facts__grid">
           {(['home', 'draw', 'away'] as const).map((key, index) => <div key={key} data-outcome={['1', 'X', '2'][index]}><dt>{(language === 'zh' ? ['主胜', '平局', '客胜'] : ['Home', 'Draw', 'Away'])[index]}</dt><dd>{view.probabilities[key].toFixed(1)}%</dd></div>)}
         </dl>
@@ -94,6 +122,7 @@ export function RecommendationEvidenceFacts({
         <small>{language === 'zh' ? '参考／影子模型概率，尚未验证为真实命中率。以下补充资料不构成本条发布记录的采用凭证。' : 'Reference/shadow model probabilities are not validated hit rates. Supplemental data does not prove adoption by this publication.'}</small>
       </> : <p>{language === 'zh' ? '暂无已发布推荐，等待统一记录；不使用旧模型方向或概率补位。' : 'No published recommendation yet; legacy model directions and probabilities are not substituted.'}</p>}
       {supplementaryModel && <details><summary>{language === 'zh' ? '补充模型快照的数据记录（未绑定本次发布）' : 'Supplemental model data (not bound to this publication)'}</summary><p>{language === 'zh' ? '下列时点、绑定和采用情况仅属于原模型快照，不代表上方已发布方向使用了这些输入。' : 'The times, bindings and adoption below belong only to the original model snapshot, not the published pick above.'}</p><DataAdoptionDetails match={match} language={language} /></details>}
+      </details>
     </section>;
   }
   const breakdown = getPublishedRecommendationEvidenceBreakdown(match, prediction);

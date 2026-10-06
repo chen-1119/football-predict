@@ -127,6 +127,30 @@ function verifyFrontendRuntimeBoundary() {
         rejected(candidate);
       });
     });
+    for (const relative of [
+      "src/components/recommendations/PublishedMatchPick.tsx",
+      "src/components/recommendations/SelectionQualityNote.tsx",
+      "src/components/recommendations/RecommendationCenter.tsx",
+      "src/components/recommendations/published-match-pick.css",
+      "src/styles/recommendation-center.css",
+    ]) {
+      check(`newly reviewed browser card stays outside the runtime closure: ${relative}`, () => {
+        assert.equal(observed.files.some(row => row.path === relative), false);
+        changed(relative, text => `${text}\n/* browser-only fixture change */\n`, candidate => {
+          const result = compareFrontendRuntimeBoundary({ baseline, candidate });
+          assert.equal(result.ok, true, JSON.stringify(result.blockers));
+          assert.equal(result.fastPathActivated, false);
+          assert.equal(result.externalRuntimeAttestationRequired, true);
+        });
+      });
+      check(`a server import of the reviewed browser card still rejects: ${relative}`, () => {
+        changed("server/index.cjs", text => `${text}\nrequire('../${relative}');\n`, candidate => {
+          const result = inspectFrontendRuntimeBoundary(candidate);
+          assert.ok(result.blockers.some(reason => reason.includes("runtime-ui-boundary-overlap")), JSON.stringify(result.blockers));
+          unreviewed(candidate);
+        });
+      });
+    }
     check("literal dynamic import and static export edges cannot hide UI overlap", () => {
       changed("server/index.cjs", text => `${text}\nimport('../src/components/Navbar.tsx');\n`, rejected);
       changed("server/index.cjs", text => `${text}\nexport * from '../src/components/Navbar.tsx';\n`, rejected);
