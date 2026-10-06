@@ -3183,7 +3183,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
             }
             <details className="published-match-pick__basis recommendation-detail-secondary-evidence">
-              <summary>{language === 'zh' ? '查看比分与玩法依据' : 'View score and market evidence'}</summary>
+              <summary>{language === 'zh' ? '查看分析依据' : 'View analysis evidence'}</summary>
             <div className="card recommendation-score-card">
               <section className="recommendation-overview-panel is-score">
                 <div className="recommendation-overview-head">
