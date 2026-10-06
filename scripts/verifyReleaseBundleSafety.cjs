@@ -458,6 +458,7 @@ const requiredReleaseEntries = [
   "scripts/nativeReleasePostgresTransport.cjs",
   "scripts/validateNativeReleasePolicy.cjs",
   "scripts/verifyNativeReleasePipeline.cjs",
+  "scripts/verifyNativeReleaseFailureCleanup.cjs",
   "scripts/verifyNativeReleaseDataPlane.cjs",
   "scripts/verifyNativeReleaseGenerationCopy.cjs",
   "scripts/verifyNativeReleaseDatabaseSession.cjs",

@@ -23,6 +23,11 @@ native_exit() {
     # rename before APP was exchanged. It never restores SQLite/model data.
     "$NODE_HOME/bin/node" /usr/local/libexec/football-release-recovery.cjs || exit 1
   fi
+  # A successful fixed recovery leaves no build process or recovery consumer
+  # using this disposable candidate copy. Preserve it on every stop/recovery
+  # or quiescence failure; remove only the existing guarded BUILD_DIR.
+  assert_build_user_quiescent || { log "native failure: build user is not quiescent; build tree retained"; exit 1; }
+  cleanup_build_tree || { log "native failure: isolated build tree could not be cleaned; failure retained"; exit 1; }
   release_stage_observe finish error
   [ "$status" -ne 0 ] || status=1
   exit "$status"
