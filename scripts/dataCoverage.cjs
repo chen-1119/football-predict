@@ -20,7 +20,7 @@ const TEXT=Object.freeze({
   'model-event-conflict':'模型与当前比赛时间不一致，暂未入选',
   'model-match-conflict':'模型与当前比赛身份不一致，暂未入选',
   'no-unique-first-direction':'方向没有明确领先，暂未入选',
-  'official-had-quote-unavailable':'赛前 SP 尚未取得或已过期，暂未入选',
+  'official-had-quote-unavailable':'胜平负报价未通过发布核验，暂未入选',
   'publication-identity-missing':'本轮数据发布尚未完成，暂未入选',
   'input-evidence-unavailable':'模型输入证据不足，仅供参考',
   'input-arithmetic-unverified':'模型输入计算尚未核验，仅供参考',
@@ -95,7 +95,7 @@ function buildDataCoverage({targetRows,singles=[],now,lanes={}}={}){
     const stableSourceId=sourceId(row.sourceMatchId||row.id);
     const storedMatchId=String(row.id??'').trim();
     const reasonText=reasonCode==='official-had-quote-unavailable' && hasCollectedHhadQuote(row,now)
-      ? '普通胜平负 SP 缺失；让球盘有采集记录，但当前没有可发布的独立让球推荐'
+      ? '胜平负报价未通过发布核验；让球盘有采集记录，但当前没有可发布的独立让球推荐'
       : TEXT[reasonCode];
     missing.push({matchId:storedMatchId&&sourceId(storedMatchId)?storedMatchId:(stableSourceId?`sporttery_${stableSourceId}`:null),sourceMatchId:stableSourceId||null,
       homeTeamName:String(row.homeTeamName||''),awayTeamName:String(row.awayTeamName||''),reasonCode,reasonText});
