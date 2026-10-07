@@ -67,6 +67,36 @@ function independentObjective(artifact, parameters = artifact.parameters) {
   return total / (2 * artifact.trainingRows.length) + artifact.config.regularization
     * [...parameters.attack, ...parameters.defense].reduce((sum, x) => sum + x * x, 0) / (2 * artifact.entities.length);
 }
+function fixedMathSnapshot(sourceText, foreign = false) {
+  const filename = require.resolve('../scripts/zeroMarketResearchBaseline.cjs'), RealDate = Date;
+  let fixedNow = Date.parse('2026-01-02T00:00:00.000Z');
+  class FixedResearchDate extends RealDate {
+    constructor(...args) { super(...(args.length ? args : [fixedNow])); }
+    static now() { return fixedNow; }
+  }
+  const sandbox = { module: { exports: {} }, require: createRequire(filename), Date: FixedResearchDate, structuredClone };
+  vm.runInNewContext(sourceText, sandbox, { filename });
+  const baseline = sandbox.module.exports, sample = input();
+  sample.source.observedAt = '2026-01-01T00:00:00.000Z';
+  sample.source.formatKnownAt = '2026-01-01T00:00:01.000Z';
+  sample.approval.reviewedAt = '2026-01-01T00:00:02.000Z';
+  sample.rows.forEach(row => { row.knownAt = '2026-01-01T00:00:03.000Z'; });
+  sample.approval.approvedInputHash = baseline.researchInputHash(sample);
+  const foreignJson = value => vm.runInNewContext('JSON.parse(text)', { text: JSON.stringify(value) });
+  const fitted = baseline.fitZeroMarketResearch(foreign ? foreignJson(sample) : sample);
+  assert.equal(fitted.status, 'research-fitted');
+  assert.equal(baseline.verifyResearchArtifact(fitted.artifact), true);
+  fixedNow += 1000;
+  const request = eventRequest(fitted.artifact, { eventVersion: '2026-01-03T00:00:00.000Z',
+    cutoffAt: '2026-01-02T22:00:00.000Z', sourceNominalDate: '2026-01-03',
+    observedAt: '2026-01-02T00:00:00.100Z', knownAt: '2026-01-02T00:00:00.900Z' });
+  request.approval.reviewedAt = '2026-01-02T00:00:00.500Z';
+  const predicted = baseline.forecastZeroMarketResearch(foreign ? foreignJson(request) : request);
+  assert.equal(predicted.status, 'research-frozen');
+  return { artifactHash: fitted.artifact.contentHash, parametersHash: fitted.artifact.parametersHash,
+    forecastHash: predicted.forecast.contentHash, predictionHash: predicted.forecast.predictionHash,
+    gridHash: baseline.hash(predicted.forecast.grid) };
+}
 
 test('explicit metadata default is blocked even when labels and entities look complete', () => {
   for (const change of [v => delete v.approval, v => { v.approval.approved = false; },
@@ -286,6 +316,31 @@ test('array subclasses and native prototype overrides fail before untrusted meth
   const overridden = vm.runInNewContext('const value = JSON.parse(text); Array.prototype.some = function some() { throw Error("must-not-dispatch"); }; value', { text: JSON.stringify(input()) });
   assert.equal(m.fitZeroMarketResearch(overridden).status, 'blocked');
 });
+test('prototype constructor accessors are rejected without dispatch at all research boundaries', () => {
+  let dispatches = 0;
+  const prototype = Object.create(null);
+  Object.defineProperty(prototype, 'constructor', { configurable: true, get() { dispatches++; throw Error('must-not-dispatch'); } });
+  const request = input(); Object.setPrototypeOf(request, prototype);
+  assert.equal(m.fitZeroMarketResearch(request).status, 'blocked');
+  const nested = input(); Object.setPrototypeOf(nested.rows[0], prototype);
+  assert.equal(m.inspectResearchAdmission(nested).status, 'blocked');
+  const artifact = fit(); Object.setPrototypeOf(artifact.parameters, prototype);
+  assert.equal(m.verifyResearchArtifact(artifact), false);
+  const forecast = eventRequest(fit()); Object.setPrototypeOf(forecast.event, prototype);
+  assert.equal(m.forecastZeroMarketResearch(forecast).status, 'blocked');
+  assert.equal(dispatches, 0);
+});
+test('foreign array constructor and callable source accessors cannot dispatch or spoof native admission', () => {
+  let dispatches = 0;
+  const rows = vm.runInNewContext('const value=JSON.parse(text); Object.defineProperty(Object.prototype,"constructor", {get(){dispatch(); throw Error("must-not-dispatch");}}); value',
+    { text: JSON.stringify(input().rows), dispatch: () => { dispatches++; } });
+  const request = input(); request.rows = rows;
+  assert.equal(m.fitZeroMarketResearch(request).status, 'blocked');
+  const spoofed = vm.runInNewContext('const value=JSON.parse(text); Array.prototype.some=function some(){dispatch(); throw Error("must-not-dispatch");}; Object.defineProperty(Array.prototype.some,"toString", {get(){dispatch(); throw Error("must-not-inspect-input-source");}}); value',
+    { text: JSON.stringify(input()), dispatch: () => { dispatches++; } });
+  assert.equal(m.fitZeroMarketResearch(spoofed).status, 'blocked');
+  assert.equal(dispatches, 0);
+});
 test('array own keys must be contiguous indices even when a hole is offset by a named property', () => {
   const v = input(); delete v.rows[0]; v.rows.extra = v.rows[1];
   assert.equal(Object.keys(v.rows).length, v.rows.length, 'adversary preserves naive count');
@@ -300,6 +355,17 @@ test('genuine cross-realm native arrays remain admitted and complete determinist
   const fitted = m.fitZeroMarketResearch(v); assert.equal(fitted.status, 'research-fitted');
   const crossArtifact = vm.runInNewContext('JSON.parse(text)', { text: JSON.stringify(fitted.artifact) });
   assert.equal(m.verifyResearchArtifact(crossArtifact), true);
+});
+test('host and foreign native JSON preserve the original fixed-clock fit and forecast hashes', () => {
+  const source = fs.readFileSync(require.resolve('../scripts/zeroMarketResearchBaseline.cjs'), 'utf8');
+  // Pinned from the pre-inspector implementation using these synthetic labels and exact clocks.
+  const expected = { artifactHash: '04d93fd13826e22112019bf8d109e9c92ae46fb59f8395d122d51dcf81704fd3',
+    parametersHash: '5b21f54cc39d2669f9a7b8933ff8f1b221a2afd0a75b9eeb88609e14316dc8dd',
+    forecastHash: '951d13d8d715948db5aa5ffc892d5b099c7b664552c8ac00dffc6fef3ea834ff',
+    predictionHash: '06d11207047484787194085be32cd724bbaae360bf68339628f33aaee7834b27',
+    gridHash: 'b974a063079e53a07f6a5271549cbad167d9d9033f775ee4607e5c9e18a51932' };
+  assert.deepEqual(fixedMathSnapshot(source), expected);
+  assert.deepEqual(fixedMathSnapshot(source, true), expected);
 });
 test('box-constrained optimum retains feasible intercept progress and satisfies independent local direction checks', () => {
   const v = input(); v.config = { iterations: 2000, maxAbsGoalEffect: 0.2 };

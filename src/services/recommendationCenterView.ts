@@ -153,6 +153,21 @@ export interface DayCoverageData {
   coverageRatio:number|null;updatedAt:string;missingTotal:number;hasMore:boolean;
   missing:Array<{matchId:string|null;sourceMatchId:string|null;homeTeamName:string;awayTeamName:string;reasonCode:string;reasonText:string}>;
 }
+export interface PrdPaperDirection {
+  version:'prd-paper-direction-view-v1';id:string;recordHash:string;contentHash:string;businessDate:string;
+  sourceMatchId:string;eventVersion:string;homeTeamId:string;awayTeamId:string;homeTeamName:string;awayTeamName:string;
+  decidedAt:string;createdAt:string;cutoffAt:string;forecastAsOf:string;decisionPriceAsOf:string|null;modelHash:string;forecastHash:string;
+  paperArtifactHash:string;acknowledgementHash:string;paperCommitObservedAt:string;
+  formalEligible:false;productionEligible:false;primary:null;companion:null;modelValidation:'uncalibrated';
+  selectionStatus:'paper-primary'|'watch-ev-tie'|'watch-no-eligible-option';
+  paperPrimary:null|{market:'HAD'|'HHAD';tipCode:Outcome;handicapLine:number;probability:number;sp:number;marketProbability:number;edge:number;expectedValue:number;quoteReceivedAt:string;quoteRequestedAt:string;quoteHash:string};
+  reasons:string[];
+}
+export interface PrdPaperDirectionsData {
+  version:'prd-paper-pipeline-view-v1';businessDate:string;updatedAt:string;status:'awaiting-inputs'|'blocked'|'paper-recorded';
+  records:PrdPaperDirection[];blockedCount:number;truncated:boolean;formalEligible:false;formalStrategyChanged:false;
+  requestedStrategy:'prd-paper-recommendation-v1';activeFormalStrategy:null;legacyReferenceStrategy:'coherent-market-primary-v1';reasons:string[];
+}
 export interface RecommendationCenterData {
   version:'recommendation-center-v1';updatedAt:string;businessDate:string;inputAsOf:string|null;resultAsOf:string|null;
   lanes:Partial<Record<'publish'|'combos'|'settlement'|'view',Lane>>;
@@ -161,6 +176,7 @@ export interface RecommendationCenterData {
   review:{singles:SingleRow[];combos:ComboRow[];limit:number;statistics:{single:Summary;supplementary?:SupplementarySummary;qualifiedSingle?:Summary;handicap?:Summary;handicapBreakdown?:HandicapBreakdown;two:Summary;three:Summary};qualityReport?:ModelQualityReport;handicapCalibration?:HandicapCalibrationProfile;definition:string};
   excludedCorruptRecords:number;modelValidation:'unvalidated';
   coverage?:DayCoverageData;
+  prdPaper?:PrdPaperDirectionsData;
 }
 type Obj=Record<string,unknown>;
 const object=(v:unknown):Obj=>{if(!v||typeof v!=='object'||Array.isArray(v))throw new Error('Invalid recommendation response');return v as Obj;};
@@ -172,6 +188,72 @@ const date=(v:unknown)=>{const s=text(v);if(!/^\d{4}-\d{2}-\d{2}$/.test(s)||new 
 const list=(v:unknown):unknown[]=>{if(!Array.isArray(v))throw new Error('Missing array');return v;};
 const outcome=(v:unknown):Outcome=>{if(v!=='1'&&v!=='X'&&v!=='2')throw new Error('Invalid outcome');return v;};
 const state=(v:unknown):ResultState=>{if(!['PENDING','WON','LOST','VOID','DISPUTED'].includes(String(v)))throw new Error('Invalid result');return v as ResultState;};
+const paperText=(value:unknown,max=160):string=>{const s=text(value);if(s!==s.trim()||s.length>max||s.split('').some(c=>c.charCodeAt(0)<=31||c.charCodeAt(0)===127))throw new Error('Invalid PRD paper text');return s;};
+const paperHex=(value:unknown):string=>{const s=paperText(value,64);if(!/^[a-f0-9]{64}$/.test(s))throw new Error('Invalid PRD paper hash');return s;};
+const paperKeys=(value:Obj,keys:string[])=>{if(Object.keys(value).length!==keys.length||keys.some(k=>!Object.hasOwn(value,k)))throw new Error('Unsupported PRD paper schema');};
+// Same strict calendar and nanosecond comparison as prematchV3Clock.cjs;
+// signed clock bytes are retained, never rounded through Date.toISOString().
+const paperClock=(value:unknown):{text:string;ns:bigint}=>{
+ const s=paperText(value,64),m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(Z|[+-]\d{2}:\d{2})$/.exec(s);
+ if(!m)throw new Error('Invalid PRD paper clock');
+ const [y,mo,d,h,mi,se]=[m[1],m[2],m[3],m[4],m[5],m[6]||'0'].map(Number),leap=y%4===0&&(y%100!==0||y%400===0),days=[31,leap?29:28,31,30,31,30,31,31,30,31,30,31];
+ if(y<1||mo<1||mo>12||d<1||d>days[mo-1]||h>23||mi>59||se>59||(m[8]!=='Z'&&(Number(m[8].slice(1,3))>23||Number(m[8].slice(4,6))>59)))throw new Error('Invalid PRD paper clock');
+ const whole=s.replace(/\.\d{1,9}(?=Z|[+-]\d{2}:\d{2}$)/,''),milliseconds=Date.parse(whole);
+ if(!Number.isFinite(milliseconds))throw new Error('Invalid PRD paper clock');
+ return {text:s,ns:BigInt(milliseconds)*1000000n+BigInt((m[7]||'').padEnd(9,'0')||'0')};
+};
+// Public-body consistency only: this digest does not authenticate a collector,
+// a model, or a PostgreSQL acknowledgement. Those checks belong to the server.
+export function prdPaperPublicHash(value:unknown):string{
+ let nodes=0;const stable=(v:unknown,depth:number):unknown=>{
+  if(++nodes>512||depth>8)throw new Error('PRD paper hash exceeds budget');
+  if(v===null||typeof v==='boolean'||typeof v==='string')return v;
+  if(typeof v==='number'){if(!Number.isFinite(v))throw new Error('Invalid PRD paper hash number');return v;}
+  if(Array.isArray(v))return v.map(item=>stable(item,depth+1));
+  const o=object(v);return Object.fromEntries(Object.keys(o).sort().map(k=>[k,stable(o[k],depth+1)]));
+ };
+ const body=JSON.stringify(stable(value,0));if(body.length>16384)throw new Error('PRD paper hash exceeds budget');
+ const encoded=encodeURIComponent(body),bytes:number[]=[];
+ for(let i=0;i<encoded.length;i++){if(encoded[i]==='%'){bytes.push(parseInt(encoded.slice(i+1,i+3),16));i+=2;}else bytes.push(encoded.charCodeAt(i));}
+ const bitLength=bytes.length*8;bytes.push(0x80);while(bytes.length%64!==56)bytes.push(0);bytes.push(0,0,0,0,(bitLength>>>24)&255,(bitLength>>>16)&255,(bitLength>>>8)&255,bitLength&255);
+ const k=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2],h=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+ const rotate=(n:number,b:number)=>(n>>>b)|(n<<(32-b));
+ for(let offset=0;offset<bytes.length;offset+=64){const w:number[]=[];for(let i=0;i<16;i++){const p=offset+i*4;w[i]=((bytes[p]<<24)|(bytes[p+1]<<16)|(bytes[p+2]<<8)|bytes[p+3])>>>0;}for(let i=16;i<64;i++){const a=w[i-15],b=w[i-2];w[i]=(w[i-16]+(rotate(a,7)^rotate(a,18)^(a>>>3))+w[i-7]+(rotate(b,17)^rotate(b,19)^(b>>>10)))>>>0;}
+  let [a,b,c,d,e,f,g,z]=h;for(let i=0;i<64;i++){const t1=(z+(rotate(e,6)^rotate(e,11)^rotate(e,25))+((e&f)^((~e)&g))+k[i]+w[i])>>>0,t2=((rotate(a,2)^rotate(a,13)^rotate(a,22))+((a&b)^(a&c)^(b&c)))>>>0;z=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}[a,b,c,d,e,f,g,z].forEach((n,i)=>{h[i]=(h[i]+n)>>>0;});
+ }
+ return h.map(n=>n.toString(16).padStart(8,'0')).join('');
+}
+const paperTeamId=(name:string):string=>{let h=2166136261;for(const character of name.split('')){h^=character.charCodeAt(0);h=Math.imul(h,16777619);}return `team_${(h>>>0).toString(36)}`;};
+export function parsePrdPaperDirections(value:unknown,businessDate:string,centerUpdatedAt:string):PrdPaperDirectionsData{
+ const p=object(value);paperKeys(p,['version','businessDate','updatedAt','status','records','blockedCount','truncated','formalEligible','formalStrategyChanged','requestedStrategy','activeFormalStrategy','legacyReferenceStrategy','reasons']);
+ if(p.version!=='prd-paper-pipeline-view-v1'||p.formalEligible!==false||p.formalStrategyChanged!==false||p.requestedStrategy!=='prd-paper-recommendation-v1'||p.activeFormalStrategy!==null||p.legacyReferenceStrategy!=='coherent-market-primary-v1'||!['awaiting-inputs','blocked','paper-recorded'].includes(String(p.status))||typeof p.truncated!=='boolean')throw new Error('Unsupported PRD paper pipeline');
+ const day=date(p.businessDate),updated=paperClock(p.updatedAt),centerClock=paperClock(centerUpdatedAt),reasons=list(p.reasons).map(v=>paperText(v)),rawRecords=list(p.records),blockedCount=count(p.blockedCount);
+ if(day!==businessDate||updated.ns>centerClock.ns||rawRecords.length>32||reasons.length>32||(p.status==='paper-recorded'&&rawRecords.length===0)||(p.status==='awaiting-inputs'&&rawRecords.length!==0)||(p.status==='blocked'&&!reasons.length))throw new Error('Invalid PRD paper pipeline state');
+ const records=rawRecords.map(value=>{
+  const r=object(value);paperKeys(r,['version','id','recordHash','contentHash','businessDate','sourceMatchId','eventVersion','homeTeamId','awayTeamId','homeTeamName','awayTeamName','decidedAt','createdAt','cutoffAt','forecastAsOf','decisionPriceAsOf','modelHash','forecastHash','paperArtifactHash','acknowledgementHash','paperCommitObservedAt','formalEligible','productionEligible','primary','companion','modelValidation','selectionStatus','paperPrimary','reasons']);
+  const id=paperText(r.id,74),recordHash=paperHex(r.recordHash),contentHash=paperHex(r.contentHash),sourceMatchId=paperText(r.sourceMatchId,20),recordDay=date(r.businessDate),homeTeamName=paperText(r.homeTeamName),awayTeamName=paperText(r.awayTeamName),homeTeamId=paperText(r.homeTeamId,64),awayTeamId=paperText(r.awayTeamId,64);
+  if(r.version!=='prd-paper-direction-view-v1'||!/^prd_paper_[a-f0-9]{64}$/.test(id)||!/^[1-9]\d{0,19}$/.test(sourceMatchId)||recordDay!==day||homeTeamId!==paperTeamId(homeTeamName)||awayTeamId!==paperTeamId(awayTeamName)||homeTeamId===awayTeamId||r.formalEligible!==false||r.productionEligible!==false||r.primary!==null||r.companion!==null||r.modelValidation!=='uncalibrated'||!['paper-primary','watch-ev-tie','watch-no-eligible-option'].includes(String(r.selectionStatus)))throw new Error('Invalid PRD paper direction');
+  const event=paperClock(r.eventVersion),decided=paperClock(r.decidedAt),created=paperClock(r.createdAt),cutoff=paperClock(r.cutoffAt),forecast=paperClock(r.forecastAsOf),commit=paperClock(r.paperCommitObservedAt),price=r.decisionPriceAsOf===null?null:paperClock(r.decisionPriceAsOf),recordReasons=list(r.reasons).map(v=>paperText(v));
+  if(forecast.ns>decided.ns||decided.ns>created.ns||created.ns>commit.ns||commit.ns>updated.ns||commit.ns-decided.ns>30000000000n||commit.ns>=cutoff.ns||cutoff.ns>event.ns||(price&&price.ns>decided.ns)||!recordReasons.length||recordReasons.length>32)throw new Error('Invalid PRD paper knowledge clock');
+  const modelHash=paperHex(r.modelHash),forecastHash=paperHex(r.forecastHash),paperArtifactHash=paperHex(r.paperArtifactHash),acknowledgementHash=paperHex(r.acknowledgementHash);
+  let paperPrimary:PrdPaperDirection['paperPrimary']=null;
+  if(r.paperPrimary!==null){const q=object(r.paperPrimary);paperKeys(q,['market','tipCode','handicapLine','probability','sp','marketProbability','edge','expectedValue','quoteReceivedAt','quoteRequestedAt','quoteHash']);
+   const market=q.market,tipCode=outcome(q.tipCode),handicapLine=number(q.handicapLine),probability=number(q.probability),sp=number(q.sp),marketProbability=number(q.marketProbability),edge=number(q.edge),expectedValue=number(q.expectedValue),received=paperClock(q.quoteReceivedAt),requested=paperClock(q.quoteRequestedAt),quoteHash=paperHex(q.quoteHash);
+   if(!['HAD','HHAD'].includes(String(market))||!Number.isSafeInteger(handicapLine)||(market==='HAD'?handicapLine!==0:handicapLine===0||Math.abs(handicapLine)>5)||probability<0||probability>1||marketProbability<=0||marketProbability>=1||sp<=1||!/^\d+(?:\.\d{1,4})?$/.test(String(sp))||Math.abs(edge-(probability-marketProbability))>1e-12||Math.abs(expectedValue-(probability*sp-1))>1e-12||!(probability*sp>1.05&&edge>0.05)||requested.ns>received.ns||received.ns>decided.ns||created.ns-requested.ns>900000000000n||!price||price.ns<received.ns)throw new Error('Invalid PRD paper market, SP or price clock');
+   paperPrimary={market:market as 'HAD'|'HHAD',tipCode,handicapLine,probability,sp,marketProbability,edge,expectedValue,quoteReceivedAt:received.text,quoteRequestedAt:requested.text,quoteHash};
+  }
+  if((r.selectionStatus==='paper-primary')!==Boolean(paperPrimary))throw new Error('Invalid PRD paper selection state');
+  const {contentHash:ignoredHash,...body}=r;void ignoredHash;if(prdPaperPublicHash(body)!==contentHash)throw new Error('Invalid PRD paper public seal');
+  return {version:'prd-paper-direction-view-v1' as const,id,recordHash,contentHash,businessDate:recordDay,sourceMatchId,eventVersion:event.text,homeTeamId,awayTeamId,homeTeamName,awayTeamName,decidedAt:decided.text,createdAt:created.text,cutoffAt:cutoff.text,forecastAsOf:forecast.text,decisionPriceAsOf:price?.text??null,modelHash,forecastHash,paperArtifactHash,acknowledgementHash,paperCommitObservedAt:commit.text,formalEligible:false as const,productionEligible:false as const,primary:null,companion:null,modelValidation:'uncalibrated' as const,selectionStatus:r.selectionStatus as PrdPaperDirection['selectionStatus'],paperPrimary,reasons:recordReasons};
+ });
+ if(new Set(records.map(r=>r.id)).size!==records.length||new Set(records.map(r=>`${r.sourceMatchId}:${r.eventVersion}`)).size!==records.length)throw new Error('Duplicate PRD paper event');
+ return {version:'prd-paper-pipeline-view-v1',businessDate:day,updatedAt:updated.text,status:p.status as PrdPaperDirectionsData['status'],records,blockedCount,truncated:p.truncated,formalEligible:false,formalStrategyChanged:false,requestedStrategy:'prd-paper-recommendation-v1',activeFormalStrategy:null,legacyReferenceStrategy:'coherent-market-primary-v1',reasons};
+}
+export function prdPaperQuoteIsCurrent(record:PrdPaperDirection,now:number):boolean{
+ try{if(!Number.isSafeInteger(now)||!record.paperPrimary)return false;const instant=BigInt(now)*1000000n,requested=paperClock(record.paperPrimary.quoteRequestedAt).ns,received=paperClock(record.paperPrimary.quoteReceivedAt).ns;
+  return instant>=paperClock(record.paperCommitObservedAt).ns&&instant>=received&&instant<paperClock(record.cutoffAt).ns&&instant-requested<=900000000000n&&instant-received<=900000000000n;
+ }catch{return false;}
+}
 const frozenQuoteOdds=(value:unknown):Record<Outcome,number>|undefined=>{
   if(value==null)return undefined;
   const raw=object(value),prices={'1':number(raw['1']),X:number(raw.X),'2':number(raw['2'])};
@@ -705,6 +787,7 @@ export function parseRecommendationCenter(response:unknown):RecommendationCenter
   const parsedLanes:RecommendationCenterData['lanes']={};
   for(const k of ['publish','combos','settlement','view'] as const){if(lanes[k]==null)continue;const l=object(lanes[k]);if(l.status!=='ok'&&l.status!=='error')throw new Error('Invalid lane status');parsedLanes[k]={status:l.status,lastAttemptAt:stamp(l.lastAttemptAt),lastSuccessAt:l.lastSuccessAt==null?undefined:stamp(l.lastSuccessAt),errorCode:l.errorCode==null?null:text(l.errorCode),inputAsOf:l.inputAsOf==null?undefined:stamp(l.inputAsOf),candidateCount:l.candidateCount==null?undefined:count(l.candidateCount),eligibleCount:l.eligibleCount==null?undefined:count(l.eligibleCount),bindingFailures:l.bindingFailures==null?undefined:count(l.bindingFailures),referenceCount:l.referenceCount==null?undefined:count(l.referenceCount),watchCount:l.watchCount==null?undefined:count(l.watchCount)};}
   const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),todayDualResearch:x.todayDualResearch==null?[]:list(x.todayDualResearch).map(dualResearchV2),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),qualityReport:review.qualityReport==null?undefined:modelQuality(review.qualityReport),statistics:{single:summary(stats.single),supplementary:stats.supplementary==null?undefined:supplementarySummary(stats.supplementary),qualifiedSingle:stats.qualifiedSingle==null?undefined:summary(stats.qualifiedSingle),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated',coverage:x.coverage==null?undefined:dayCoverage(x.coverage)};
+  if(Object.hasOwn(x,'prdPaper'))result.prdPaper=parsePrdPaperDirections(x.prdPaper,result.businessDate,result.updatedAt);
   if(result.coverage&&result.coverage.businessDate!==result.businessDate)throw new Error('Day coverage date mismatch');
   if(new Set(result.current.map(r=>r.decision.decisionId)).size!==result.current.length)throw new Error('Duplicate current decision');
   if(result.todayDualResearch?.some(r=>r.businessDate!==result.businessDate)

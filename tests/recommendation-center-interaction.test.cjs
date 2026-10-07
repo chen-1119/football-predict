@@ -36,6 +36,7 @@ async function harness({missingInputEvidence=false,reviewFailure=false,withHandi
     if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
     if(id==='./DayCoverage')return {DayCoverage:()=>null};
     if(id==='./MarketComparison')return {MarketComparison:()=>null};
+    if(id==='./PrdPaperDirections')return {PrdPaperDirections:()=>null};
     if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
     if(id==='../../hooks/useRecommendationReviewPage')return {useRecommendationReviewPage:reviewPage};
     if(id==='../FollowButton')return {FollowButton:()=>null};

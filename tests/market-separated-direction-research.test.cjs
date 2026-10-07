@@ -332,3 +332,30 @@ test('genuine parsed cross-realm JSON is accepted while array prototype method o
     { text: JSON.stringify(request) });
   assert.equal(research.assessMarketSeparatedDirectionResearch(modified).status, 'blocked');
 });
+test('foreign native JSON keeps the same fixed-clock assessment and frozen mathematical hashes', async () => {
+  const request = await fixture(), before = hash(request);
+  const foreign = vm.runInNewContext('JSON.parse(text)', { text: JSON.stringify(request) });
+  const fixed = atModule(Date.now()), hostOut = fixed.assessMarketSeparatedDirectionResearch(request);
+  const foreignOut = fixed.assessMarketSeparatedDirectionResearch(foreign);
+  assert.equal(hostOut.status, 'research-market-assessment');
+  assert.equal(foreignOut.status, 'research-market-assessment');
+  assert.equal(hash(hostOut), hash(foreignOut));
+  assert.equal(hash(request), before); assert.equal(hash(foreign), before);
+  assert.equal(foreignOut.artifactHash, request.artifact.contentHash);
+  assert.equal(foreignOut.predictionHash, request.forecast.predictionHash);
+  assert.equal(fixed.verifyZeroMarketFrozenForecast(foreign.forecast, foreign.artifact), true);
+});
+test('prototype constructor and callable source getters are rejected without input dispatch', async () => {
+  const request = await fixture(); let dispatches = 0;
+  const prototype = Object.create(null);
+  Object.defineProperty(prototype, 'constructor', { get() { dispatches++; throw Error('must-not-dispatch'); } });
+  const artifact = copy(request.artifact); Object.setPrototypeOf(artifact, prototype);
+  assert.equal(research.verifyZeroMarketFrozenForecast(request.forecast, artifact), false);
+  const event = copy(request); Object.setPrototypeOf(event.forecast.event, prototype);
+  assert.equal(research.assessMarketSeparatedDirectionResearch(event).status, 'blocked');
+  const spoofed = vm.runInNewContext('const value=JSON.parse(text); Array.prototype.some=function some(){dispatch(); throw Error("must-not-dispatch");}; Object.defineProperty(Array.prototype.some,"toString", {get(){dispatch(); throw Error("must-not-inspect-input-source");}}); value',
+    { text: JSON.stringify(request), dispatch: () => { dispatches++; } });
+  assert.equal(research.verifyZeroMarketFrozenForecast(spoofed.forecast, spoofed.artifact), false);
+  assert.equal(research.assessMarketSeparatedDirectionResearch(spoofed).status, 'blocked');
+  assert.equal(dispatches, 0);
+});

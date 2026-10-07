@@ -17,6 +17,20 @@ check('signed live HAD source, publication, deadline and frozen replay pass befo
     'tests/recommendation-live-official-had.test.cjs','tests/recommendation-signed-had-publication.test.cjs',
     'tests/recommendation-quote-publication-latency.test.cjs'])assert.ok(factory.includes('"'+file+'"'));
 });
+check('prospective PRD paper model, signed prices, immutable commit and public projection pass before signing',()=>{
+  const report=require('./verifyPrdPaperPipeline.cjs').run();
+  assert.equal(report.ok,true);assert.ok(report.tests>=129);assert.equal(report.skipped,0);
+  assert.equal(report.productionWrites,0);assert.equal(report.modelPromotionAllowed,false);
+  const factory=read('scripts/createReleaseBundle.cjs'),safety=read('scripts/verifyReleaseBundleSafety.cjs');
+  for(const file of ['scripts/zeroMarketResearchBaseline.cjs','src/services/marketSeparatedDirectionResearch.cjs',
+    'tests/zero-market-research-baseline.test.cjs','tests/market-separated-direction-research.test.cjs',
+    'scripts/verifyPrdPaperPipeline.cjs','scripts/recommendationPlatform/prdPaperRuntime.cjs',
+    'scripts/recommendationPlatform/prdPaperRepository.cjs','src/services/prdPaperRecommendation.cjs',
+    'src/components/recommendations/PrdPaperDirections.tsx','tests/prd-paper-recommendation.test.cjs',
+    'tests/prd-paper-repository.test.cjs','tests/prd-paper-runtime.test.cjs','tests/prd-paper-directions-view.test.cjs']){
+    assert.ok(factory.includes('"'+file+'"'));assert.ok(safety.includes('"'+file+'"'));
+  }
+});
 check('official club facts remain bounded literal research without training or feature admission before signing',()=>{
   const child=require('node:child_process').spawnSync(process.execPath,['--test','--test-reporter=tap','tests/official-club-research-evidence.test.cjs'],
     {cwd:root,encoding:'utf8',windowsHide:true,timeout:10000,maxBuffer:1024*1024});

@@ -13,6 +13,7 @@ import type { SelectionQuality, ComboRow, SingleRow, SupplementarySummary } from
 import { DayCoverage } from './DayCoverage';
 import { DualResearchV2 } from './DualResearchV2';
 import { MarketComparison } from './MarketComparison';
+import { PrdPaperDirections } from './PrdPaperDirections';
 import { publishedResultProjection, settlementResultLabel } from '../../services/publishedMatchRecommendation';
 import { useRecommendationReviewPage } from '../../hooks/useRecommendationReviewPage';
 import type { ReviewFilters, ReviewMarket, ReviewState, ReviewedSingleRow, ReviewedComboRow } from '../../services/recommendationReviewPage';
@@ -262,6 +263,8 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
   const activeInputs=tab==='single'?data?.inputAsOf:data?.lanes.combos?.inputAsOf??data?.inputAsOf;
   return <section className="recommendation-center" aria-labelledby="rc-title">
     <header className="rc-heading"><div><span className="rc-eyebrow">{zh?'比赛日 '+(data?.businessDate||'—'):'MATCH DAY '+(data?.businessDate||'—')}</span><h1 id="rc-title">{review?(zh?'赛后复盘':'Result Review'):(zh?'今日推荐':'Today’s Recommendations')}</h1><p>{review?(zh?'查看真实赛果，复盘每一次选择。':'Review every selection against actual results.'):(zh?'先看比赛与方向，再看选择依据。':'Start with the match and pick, then explore the evidence.')}</p></div><button type="button" className="rc-refresh" onClick={()=>{refresh();if(review)reviewPage.refresh();}} disabled={loading||reviewPage.loading} aria-label={zh?'刷新推荐与复盘':'Refresh recommendations and review'}><RefreshCw size={16} aria-hidden="true"/>{loading||reviewPage.loading?(zh?'更新中':'Updating'):(zh?'刷新':'Refresh')}</button></header>
+    {!review&&tab==='single'&&<PrdPaperDirections data={data?.prdPaper} language={language} now={now} loading={loading} failed={failed||authorizationRequired}/>}
+    {!review&&<h2 className="rc-legacy-heading" data-legacy-strategy="coherent-market-primary-v1">{zh?'旧策略冻结记录':'Frozen records from the previous strategy'}</h2>}
     <div className="rc-meta"><span className="rc-reference-label">{zh?'参考推荐 · 模型验证中':'Reference picks · Model unvalidated'}</span><span>{zh?'行情更新':'Inputs updated'} {format(activeInputs,language)}</span><span>{zh?'赛果核对':'Results checked'} {format(data?.resultAsOf,language)}</span></div>
     <div className="rc-tabs" role="group" aria-label={zh?'推荐类型':'Recommendation type'}>{(['single','two','three'] as const).map(t=><button key={t} type="button" aria-pressed={tab===t} onClick={()=>setTab(t)}>{t==='single'?(zh?'单场推荐':'Singles'):t==='two'?(zh?'2串1':'2-leg combo'):(zh?'3串1':'3-leg combo')}{t!=='single'&&<small>SP≥{t==='two'?'2.50':'5.00'}</small>}</button>)}</div>
     {!review&&tab==='single'&&<DayCoverage coverage={data?.coverage} businessDate={data?.businessDate||''} qualifiedOnly={qualifiedOnly} onQualifiedOnlyChange={setQualifiedOnly} onSelectMatch={onSelectMatch} language={language}/>}

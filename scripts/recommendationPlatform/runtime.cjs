@@ -75,6 +75,21 @@ async function bindCurrentDecisions(repo, decisions, clock) {
 /** Each action commits independently. Never call all lanes inside one outer DB transaction. */
 function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_DUAL_RESEARCH==='1',dualResearchV2Enabled=process.env.ENABLE_DUAL_RESEARCH_V2!=='0'}={}){
   const clock=ports.clock || Date.now;
+  async function prdPaper(){
+    if(!ports.prdPaperPool)return {enabled:false};
+    const attemptAt=clock(),policy=require('./prdPaperRuntime.cjs');
+    let value,error=null;
+    // Run independently after the old publication transaction has released its
+    // client. The production worker reserves a listener client in this pool.
+    try{value=await policy.runPrdPaperCycle({pool:ports.prdPaperPool,trustRegistry:ports.prdPaperTrustRegistry});}
+    catch(e){error=policy.errorCode(e);value={enabled:true,status:'blocked',attempted:0,created:0,acknowledged:0,blockedCount:0,truncated:false,reasons:[error],formalEligible:false};}
+    try{await ports.transaction('prd-paper',async repo=>{
+      const old=await repo.lane('prd-paper');
+      if(old?.lastAttemptAt && time(old.lastAttemptAt)>attemptAt)return;
+      const at=clock();await repo.saveLane('prd-paper',{...(old||{}),...value,paperStatus:value.status,status:error?'error':'ok',lastAttemptAt:new Date(attemptAt).toISOString(),lastSuccessAt:error?old?.lastSuccessAt:new Date(at).toISOString(),errorCode:error});
+    });}catch{error=error||'PRD_PAPER_STATUS_UNAVAILABLE';}
+    return {ok:error===null,...value,...(error?{errorCode:error}:{})};
+  }
   async function stage(lane,action){
     const attemptAt=clock();
     try{return await ports.transaction(lane,async repo=>{
@@ -280,9 +295,16 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     }));
     const overlap=previews.length===2?previews[0].decisionIds.filter(id=>previews[1].decisionIds.includes(id)):[];
     const coverage=buildDataCoverage({targetRows,singles:selected,now,lanes});
+    let prdPaperView;
+    if(ports.prdPaperPool){
+      let projection=null,readFailed=false;
+      try{projection=await repo.prdPaperProjection(day(now),{asOf:new Date(now).toISOString()});}catch{readFailed=true;await repo.issue('view',{reason:'prd-paper-projection-unavailable'});}
+      prdPaperView=require('./prdPaperRuntime.cjs').pipelineView({businessDate:day(now),updatedAt:new Date(now).toISOString(),lane:lanes['prd-paper'],projection,readFailed});
+    }
     const center={version:'recommendation-center-v1',policyVersion:VERSION,updatedAt:new Date(now).toISOString(),businessDate:day(now),
       inputAsOf:[lanes.publish?.inputAsOf,lanes.combos?.inputAsOf].filter(v=>Number.isFinite(time(v))).sort((a,b)=>time(b)-time(a))[0]||null,resultAsOf:lanes.settlement?.lastSuccessAt||null,lanes,
       current:selected,previews,todayCombos:today,todayDualResearch,overlapDecisionIds:overlap,coverage,
+      ...(prdPaperView?{prdPaper:prdPaperView}:{}),
       review:{singles:singles.slice(0,100),combos:combos.slice(0,100),limit:100,qualityReport:buildQualityReport(singles,{asOf:now}),
         statistics:{single:summary(singles,true),supplementary:supplementarySummary(singles),qualifiedSingle:summary(singles.filter(r=>r.selectionQuality.qualified),true),handicap:handicapSummary(singles),handicapBreakdown:handicapBreakdown(singles),marketBaseline:marketBaseline(singles),daily:dailySummary(singles,combos),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},handicapCalibration,
         definition:'latest-published-decision-before-cutoff-per-event; combos-use-exact-bound-versions'},
@@ -290,8 +312,8 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     await repo.saveView(center);
     return {centerUpdatedAt:center.updatedAt,quarantined:quarantined.length};
   });}
-  return {publish,research,researchV2,combos,settle,view,
-    async publishingCycle(){const publication=await publish();const dualResearch=publication.ok?await research(publication.value.decisionIds):{ok:false,skipped:'publication-failed'};const dualResearchV2=await researchV2();const combinations=await combos();const projection=await view();return {publication,dualResearch,dualResearchV2,combinations,projection};},
+  return {publish,research,researchV2,prdPaper,combos,settle,view,
+    async publishingCycle(){const publication=await publish();const dualResearch=publication.ok?await research(publication.value.decisionIds):{ok:false,skipped:'publication-failed'};const dualResearchV2=await researchV2();const paper=await prdPaper();const combinations=await combos();const projection=await view();return {publication,dualResearch,dualResearchV2,...(ports.prdPaperPool?{prdPaper:paper}:{}),combinations,projection};},
     async settlementCycle(){const settlement=await settle();const projection=await view();return {settlement,projection};}
   };
 }
