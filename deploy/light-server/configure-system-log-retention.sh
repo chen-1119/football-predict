@@ -16,7 +16,7 @@ SystemMaxUse=512M
 SystemKeepFree=5G
 SystemMaxFileSize=64M
 RuntimeMaxUse=128M
-MaxRetentionSec=7day
+MaxRetentionSec=14day
 EOF
 cat > /etc/logrotate.d/rsyslog <<'EOF'
 /var/log/syslog
@@ -28,8 +28,8 @@ cat > /etc/logrotate.d/rsyslog <<'EOF'
 {
     daily
     maxsize 50M
-    rotate 7
-    maxage 7
+    rotate 14
+    maxage 14
     missingok
     notifempty
     compress
@@ -59,5 +59,5 @@ systemctl daemon-reload
 systemctl restart logrotate.timer
 systemctl restart systemd-journald
 journalctl --rotate
-journalctl --vacuum-size=512M --vacuum-time=7d
+journalctl --vacuum-size=512M --vacuum-time=14d
 printf 'Log retention configuration backup: %s\n' "$backup"

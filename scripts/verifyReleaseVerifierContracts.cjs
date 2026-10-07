@@ -25,6 +25,19 @@ check('official club facts remain bounded literal research without training or f
   const factory=read('scripts/createReleaseBundle.cjs');
   for(const file of ['scripts/officialClubResearchEvidence.cjs','tests/official-club-research-evidence.test.cjs'])assert.ok(factory.includes('"'+file+'"'));
 });
+check('time bounded backups, logs and managed recovery pass before signing', () => {
+  for (const entry of ['verifyPostgresBackupRetention.cjs', 'verifyScheduledStorageRetention.cjs']) {
+    const child = require('node:child_process').spawnSync(process.execPath, [path.join(__dirname, entry)],
+      { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 60000, maxBuffer: 1024 * 1024 });
+    assert.equal(child.status, 0, child.stderr || child.stdout);
+    const proof = JSON.parse(child.stdout); assert.equal(proof.ok, true);
+    if (entry === 'verifyPostgresBackupRetention.cjs') {
+      assert.equal(proof.scope.productionBackupInvoked, false); assert.equal(proof.scope.pg, 0);
+    } else {
+      assert.equal(proof.scope.productionPathsTouched, false); assert.equal(proof.scope.postgresAccess, false);
+    }
+  }
+});
 check('actual root deployment configuration gate passes before signing', () => {
   const child = require('node:child_process').spawnSync(process.execPath, ['scripts/verifyDeploymentConfig.cjs'],
     { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 60000, maxBuffer: 2 * 1024 * 1024 });
@@ -632,7 +645,7 @@ for (const [entry, script, minimum] of [
     assert.equal(report.productionWrites, 0);
     if (systemdOnly) {
       assert.equal(report.verifier, 'frontend-installed-systemd-contracts-v1');
-      assert.equal(report.checks, 5);
+      assert.equal(report.checks, 7);
       assert.equal(report.verificationScope, 'systemd-vm-contracts-only');
       assert.equal(report.platform, 'win32');
       assert.equal(report.linuxFilesystemProof, false);

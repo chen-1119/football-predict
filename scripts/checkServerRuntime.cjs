@@ -21,8 +21,12 @@ const cleanupTimeoutMs = Math.max(1000, Number(process.env.RUNTIME_MONITOR_CLEAN
 const sqliteRepairTimeoutMs = Math.max(30000, Number(process.env.RUNTIME_MONITOR_SQLITE_REPAIR_TIMEOUT_MS || 180000));
 const sqliteRepairLockWaitMs = Math.max(0, Number(process.env.RUNTIME_MONITOR_SQLITE_REPAIR_LOCK_WAIT_MS || 0));
 const minFallbackRunwaySeconds = Math.max(0, Number(process.env.RUNTIME_MONITOR_MIN_FALLBACK_RUNWAY_SECONDS || 600));
-const diskWarnPercent = Math.max(1, Number(process.env.RUNTIME_MONITOR_DISK_WARN_PERCENT || 85));
-const diskFailPercent = Math.max(diskWarnPercent + 1, Number(process.env.RUNTIME_MONITOR_DISK_FAIL_PERCENT || 95));
+const diskWarnPercent = Number(process.env.RUNTIME_MONITOR_DISK_WARN_PERCENT ?? 80);
+const diskFailPercent = Number(process.env.RUNTIME_MONITOR_DISK_FAIL_PERCENT ?? 95);
+if (!Number.isInteger(diskWarnPercent) || !Number.isInteger(diskFailPercent)
+    || diskWarnPercent < 1 || diskWarnPercent >= diskFailPercent || diskFailPercent > 100) {
+  throw new Error("disk thresholds require integer 1 <= warn < fail <= 100");
+}
 const sqliteWarnBytes = Math.max(64 * 1024 * 1024, Number(process.env.RUNTIME_MONITOR_SQLITE_WARN_BYTES || 1024 * 1024 * 1024));
 const sqliteFailBytes = Math.max(sqliteWarnBytes + 1, Number(process.env.RUNTIME_MONITOR_SQLITE_FAIL_BYTES || 2 * 1024 * 1024 * 1024));
 const sqliteFreeRatioWarn = Math.min(0.95, Math.max(0.1, Number(process.env.RUNTIME_MONITOR_SQLITE_FREE_RATIO_WARN || 0.35)));
