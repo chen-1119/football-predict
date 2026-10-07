@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "research:markets:read": "node scripts/readMarketSeparatedRegression.cjs",
+    "research:markets:regress": "node scripts/marketSeparatedRegression.cjs",
+    "test:prd-research": "node --test tests/market-separated-reader.test.cjs tests/market-separated-regression.test.cjs tests/market-separated-direction-research.test.cjs tests/prematch-team-knowledge-audit.test.cjs tests/zero-market-research-baseline.test.cjs",
     "research:prematch-v3:read": "node scripts/readPrematchV3OnlineInputs.cjs",
     "research:prematch-v3:read-team-history": "node scripts/readPrematchV3TeamHistory.cjs",
     "research:prematch-v3:collect": "node scripts/collectPrematchV3Evidence.cjs",
