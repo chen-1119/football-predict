@@ -282,5 +282,60 @@ function validOfficialHadAudit(audit, capturedAt) {
     return true;
   } catch { return false; }
 }
+/** Identity-only replay of a complete collector-signed current endpoint. A
+ * valid event need not have an open HAD pool. This grants no sale, model or
+ * provider admission and never borrows a quote or a frozen decision. */
+function identityEndpointClockKnown(endpoint,at) {
+  const requested=epochNanoseconds(endpoint?.requestedAt),received=epochNanoseconds(endpoint?.receivedAt);
+  const provider=endpoint?.providerObservedAt==null?null:epochNanoseconds(endpoint.providerObservedAt);
+  const age=BigInt(MAX_AGE_MS)*1000000n;
+  return at!==null&&requested!==null&&received!==null&&requested<=received&&received<=at
+    &&at-requested<=age&&at-received<=age
+    &&(endpoint?.providerObservedAt==null||(provider!==null&&provider<=received));
+}
+function verifySignedCurrentEndpointIdentity(endpoint,{asOf,trustRegistry}={}) {
+  try {
+    const at=epochNanoseconds(asOf),now=at===null?NaN:Number(at/1000000n);
+    return Boolean(trustRegistry&&typeof trustRegistry==='object'&&!Array.isArray(trustRegistry)
+      &&Number.isSafeInteger(now)&&identityEndpointClockKnown(endpoint,at)&&verifiedCurrent(endpoint,now,trustRegistry));
+  }catch{return false;}
+}
+function verifySignedCurrentEventIdentity(match, endpoint, {asOf, trustRegistry} = {}) {
+  try {
+    // No implicit filesystem/environment trust in this pure entry point.
+    if (!trustRegistry || typeof trustRegistry !== 'object' || Array.isArray(trustRegistry)) return null;
+    const at = epochNanoseconds(asOf);
+    if (at === null) return null;
+    const now = Number(at / 1000000n), identity = inputIdentity(match);
+    if (!Number.isSafeInteger(now) || !identity || !identityEndpointClockKnown(endpoint,at)) return null;
+    const verified = verifiedCurrent(endpoint, now, trustRegistry);
+    if (!verified) return null;
+    const rows = verified.records.filter(r => String(r.row.matchId) === identity.sourceMatchId);
+    if (rows.length !== 1 || !sameOfficialEvent(identity, rows[0])) return null;
+    // Only Sporttery's identified buyEndTime (or its exact copied alias) may
+    // supply a local-zone deadline. Explicit prediction deadlines may differ.
+    const fields = [['buyEndTime',match.buyEndTime],['cutoffAt',match.cutoffAt],['cutoffTime',match.cutoffTime],
+      ['predictionMeta.cutoffTime',match.predictionMeta?.cutoffTime]];
+    for (const [field,value] of fields.filter(([,v]) => v != null && v !== '')) {
+      const local = typeof value === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value);
+      if (local && field !== 'buyEndTime' && value !== match.buyEndTime) return null;
+      if (clock(value) === null) return null;
+    }
+    if (match.cutoffAt != null && match.cutoffTime != null && clock(match.cutoffAt) !== clock(match.cutoffTime)) return null;
+    const cutoff = saleDeadline(match, rows[0]), event = epochNanoseconds(match.eventVersion);
+    if (!Number.isFinite(cutoff) || event === null || BigInt(cutoff)*1000000n > event
+      || at >= BigInt(cutoff)*1000000n || epochNanoseconds(endpoint.receivedAt) >= BigInt(cutoff)*1000000n) return null;
+    const body = {version:'signed-current-event-identity-v1',source:'sporttery:current:collector-signed',
+      sourceVerification:'trusted-collector-signature-and-canonical-payload-rehash;not-provider-signature',
+      identity,asOf,saleCutoff:new Date(cutoff).toISOString(),requestedAt:endpoint.requestedAt,
+      receivedAt:endpoint.receivedAt,providerObservedAt:endpoint.providerObservedAt ?? null,
+      sourceCycleId:endpoint.sourceCycleId,endpointHash:sha256CollectorJson(compactEndpoint(endpoint)),
+      payloadHash:sha256CollectorJson(endpoint.payload),rowHash:sha256CollectorJson(rows[0].row),
+      collectorCommitmentHash:sha256CollectorJson(endpoint.collectorAttestation.commitment),
+      formalEligible:false,productionEligible:false};
+    return {...body,contentHash:sha256CollectorJson(body)};
+  } catch { return null; }
+}
 module.exports = {VERSION, LEGACY_VERSION, SOURCE, SOURCE_VERIFICATION, MAX_AGE_MS, MAX_SOURCE_BYTES, MAX_RECEIPT_BYTES, MAX_ROWS,
+  verifySignedCurrentEventIdentity,verifySignedCurrentEndpointIdentity,
   REASONS, ENDPOINT_REASONS, joinOfficialHad, signedLiveHadQuoteForMatch, validSignedLiveHadReceipt, validOfficialHadAudit};

@@ -10,7 +10,7 @@ const team = require('./prematchTeamEvidenceV3.cjs');
 const learning = require('./prematchV3Learning.cjs');
 const { stableHash } = require('./webConsensusEvidence.cjs');
 const { epochNanoseconds } = require('./prematchV3Clock.cjs');
-const { validateResponse: validateOnlineResponse, MAX_MODEL_ARTIFACT_BYTES } = require('./prematchV3OnlineResponse.cjs');
+const { validateResponse: validateOnlineResponse, MAX_MODEL_ARTIFACT_BYTES,IDENTITY_VERSION } = require('./prematchV3OnlineResponse.cjs');
 
 const VERSION = 'prematch-v3-private-model-read-v1';
 const KEYS = Object.freeze({ baseline: 'prematch-v3-baseline', parameters: 'prematch-v3-parameters' });
@@ -195,16 +195,17 @@ async function loadPrematchV3ModelRegistry(options = {}) {
   return result;
 }
 
-function readPrematchV3RegistryFromOnlineInput(value, { asOf } = {}) {
+function readPrematchV3RegistryFromOnlineInput(value, { asOf,trustRegistry } = {}) {
   const result = { version: VERSION, asOf, storage: 'postgres', shadowOnly: true,
     formalEligible: false, productionEligible: false, baseline: null, parameters: null, status: 'blocked', blockers: [], receipts: [],
     inputObservedAt: value?.observedAt || null,
     evidenceScope: 'fixed-model-packets-from-recorded-online-read;caller-must-verify-immutable-raw-binding;not-model-promotion' };
   const at = clock(asOf), observed = clock(value?.observedAt);
-  if (at === null || observed === null || at < observed) {
+  if (at === null || observed === null || at < observed || (value?.version===IDENTITY_VERSION
+    &&(clock(value.identitySource?.inputCapturedAt)===null||clock(value.identitySource.inputCapturedAt)>at))) {
     result.blockers = ['registry:online-read-as-of-invalid']; return result;
   }
-  try { validateOnlineResponse(value, value.businessDate); }
+  try { validateOnlineResponse(value, value.businessDate,{trustRegistry}); }
   catch { result.blockers = ['registry:online-input-contract-invalid']; return result; }
   for (const namespace of Object.keys(KEYS)) {
     const packet = value.modelArtifacts.find(packet => packet.artifactKey === KEYS[namespace]);

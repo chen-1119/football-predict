@@ -7,7 +7,7 @@ const {eventFromMatch}=require('../src/services/prematchV3Assessment.cjs');
 const VERSION='prematch-v3-ledger-history-facts-v1';
 // Callers must bind this receipt to its original pinned raw bytes before use.
 // This adapter cannot authenticate the external provider from a PG JSON hash.
-function adaptLedgerTeamHistory({history,input,event,side,asOf}={}){
+function adaptLedgerTeamHistory({history,input,event,side,asOf,identityOptions={}}={}){
  const blocked=reason=>({status:'blocked',reason,teamObservations:[],formalEligible:false});
  try{
   if(!history||!input||!event||!['home','away'].includes(side))return blocked('history-binding-incomplete');
@@ -20,7 +20,7 @@ function adaptLedgerTeamHistory({history,input,event,side,asOf}={}){
    ||!event.sourceMatchId||event.homeTeamId===event.awayTeamId)return blocked('history-event-clock-ineligible');
   const target=input.matches.find(m=>m.sourceMatchId===event.sourceMatchId);
   if(!target||clock(target.eventVersion)!==kickoff||target.homeTeamId!==event.homeTeamId||target.awayTeamId!==event.awayTeamId)return blocked('history-target-event-mismatch');
-  const targetEvent=eventFromMatch(target);
+  const targetEvent=eventFromMatch(target,identityOptions);
   if(clock(targetEvent.cutoffAt)!==cutoff||clock(targetEvent.kickoffTime)!==kickoff||targetEvent.status!=='SCHEDULED'
     ||targetEvent.isOnSale===false||['CLOSED','STOPPED','SUSPENDED'].includes(String(targetEvent.saleStatus||'').toUpperCase())
     ||target.resultDisposition==='VOID')return blocked('history-target-sale-or-cutoff-ineligible');

@@ -56,6 +56,26 @@ function payload() {
     modelArtifactInventory: modelArtifacts.map(row => ({ key: row.artifactKey, version: row.artifactVersion,
       generatedAt: row.generatedAt, sha256: row.payloadSha256, bytes: row.payloadBytes })) };
 }
+function identityPayload(){
+  const {snapshot}=require('./fixtures/signed-live-had.cjs'),{derivedTeamId}=require('../scripts/storedResultTeamIdentity.cjs');
+  const m={id:'fivehundred_123',sourceMatchId:'123',businessDate:'2026-10-06',matchNo:'周二001',
+    homeTeamName:'Synthetic Home',awayTeamName:'Synthetic Away',homeTeamId:derivedTeamId('Synthetic Home'),awayTeamId:derivedTeamId('Synthetic Away'),
+    kickoffTime:'2026-10-06T15:00:00.000Z',eventVersion:'2026-10-06T15:00:00.000Z',buyEndTime:'2026-10-06 22:00:00',
+    sourceCycleId:'synthetic-full',sourceObservedAt:'2026-10-06T09:59:58.000Z',sourceReceivedAt:'2026-10-06T09:59:58.000Z',status:'SCHEDULED'};
+  const source=snapshot([m],{receivedAt:Date.parse(m.sourceReceivedAt),requestedAt:Date.parse(m.sourceReceivedAt)-1000,
+    mutate:e=>{e.payload={success:true,value:{matchInfoList:[{businessDate:m.businessDate,subMatchList:[{matchId:123,
+      homeTeamAllName:m.homeTeamName,awayTeamAllName:m.awayTeamName,matchDate:'2026-10-06',matchTime:'23:00:00',matchNumStr:m.matchNo,matchStatus:'Define',oddsList:[]}]}]}};}});
+  const identity=require('../src/services/prematchV3InputIdentity.cjs'),rawValue={version:reader.IDENTITY_VERSION,readOnly:'on',productionWrites:0,
+    businessDate:m.businessDate,observedAt:'2026-10-06T10:00:00.000Z',generation:{data_generation_id:'synthetic-v3',manifest_hash:'a'.repeat(64),
+      committed_at:'2026-10-06T09:59:59.000Z',data_publication_mode:'active-generation',data_generation_source_cycle_id:m.sourceCycleId},
+    matches:[m],matchRows:[{dataset:'current',match_id:m.id,source_match_id:m.sourceMatchId,kickoff_time:'2026-10-06 15:00:00+00'}],modelArtifacts:[],modelArtifactInventory:[],
+    identitySource:{version:'prematch-v3-online-identity-source-v1',sourcePath:identity.CURRENT_SNAPSHOT_NAMESPACE,endpoint:source.snapshot.endpoints[0],
+      inputCapturedAt:'2026-10-06T10:00:00.000000001Z',collectorTrustRegistryHash:require('../src/services/collectorAttestation.cjs').sha256CollectorJson(source.registry)}};
+  const raw=Buffer.from(JSON.stringify(rawValue)),transport={hostKeyPinVerified:true,hostKeyFingerprint:'SHA256:'+'a'.repeat(43),
+    startedAt:'2026-10-06T09:59:59Z',finishedAt:'2026-10-06T10:00:01Z',remoteResponseSha256:hash(raw),remoteResponseFile:'synthetic-v3.remote-response.json',bytes:raw.length};
+  Object.assign(transport,reader.validateTransport(transport,rawValue.observedAt));
+  return {input:{...reader.admitIdentityResponse(rawValue,source.registry),transport},raw,trustRegistry:source.registry};
+}
 function writeOnline(files, value = payload()) {
   const raw = Buffer.from(JSON.stringify(value));
   const transport = { hostKeyPinVerified: true, hostKeyFingerprint: `SHA256:${'a'.repeat(43)}`,
@@ -97,6 +117,21 @@ test('child CLI consumes both fixed-key packets and actually produces a sourced 
   assert.equal(frozen.baseRatesEvidence.marketIncluded, false); assert.deepEqual(frozen.baseRates, row.assessment.baseline.baseRates);
   assert.deepEqual(fs.readFileSync(files.input), inputBefore); assert.deepEqual(fs.readFileSync(files.raw), rawBefore);
   assert.deepEqual(fs.readdirSync(files.directory).sort(), [path.basename(files.input), path.basename(files.raw), path.basename(files.output)].sort());
+});
+test('pure v3 shadow report carries exact original identity with external trust and no legacy probability fallback',()=>{
+  const {input,raw,trustRegistry}=identityPayload(),before=JSON.stringify(input);
+  assert.equal(reader.verifyOnlineRead(input,{date:input.businessDate,rawResponse:raw,trustRegistry}),true);
+  const options={asOf:'2026-10-06T10:00:00.000000002Z',implementationHashes:{synthetic:'a'.repeat(64)},gitHead:'synthetic',trustRegistry};
+  const report=runner.buildReport(input,options),row=report.rows[0];
+  assert.equal(row.assessment.event.cutoffAt,'2026-10-06T22:00:00+08:00');
+  assert.equal(row.assessment.blockers.includes('input-identity-admission-invalid'),false);
+  assert.equal(report.summary.modelRegistryReadStatus,'missing');assert.equal(report.summary.calculatedTeamCandidates,0);
+  assert.equal(report.summary.newFrozenLearningRecords,0);assert.equal(row.frozenLearningRecord,null);
+  assert.equal(report.formalEligible,false);assert.equal(JSON.stringify(input),before);
+  assert.throws(()=>runner.buildReport(input,{...options,trustRegistry:undefined}),/V3_READER_MATCH_IDENTITY/);
+  assert.throws(()=>runner.buildReport(input,{...options,asOf:'2026-10-06T10:00:00.000Z'}),/V3_SHADOW_CALCULATION_CLOCK/);
+  const bad=clone(input);bad.identityAdmissions[0].currentEventIdentity.identity.homeTeamId='different';
+  assert.throws(()=>runner.buildReport(bad,options),/V3_READER_MATCH_IDENTITY/);
 });
 
 test('missing parameters can bootstrap a base-feature freeze, but source JSON cannot fill a missing fixed-key namespace', t => {

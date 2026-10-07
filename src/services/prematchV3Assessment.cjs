@@ -12,14 +12,23 @@ const object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const id = v => typeof v === 'string' && v.trim() ? v.trim() : Number.isSafeInteger(v) && v >= 0 ? String(v) : null;
 const finite = v => typeof v === 'number' && Number.isFinite(v);
 const stamp = body => ({...body, contentHash: stableHash(body)});
-function eventFromMatch(match = {}) {
+function eventFromMatch(match = {}, options = {}) {
   // The legacy buyEndTime contract explicitly uses Beijing local time.
   // No other unzoned clock is inferred, and an absent sale deadline stays null.
   const rawDeadlines=[['buyEndTime',match.buyEndTime],['cutoffAt',match.cutoffAt],['cutoffTime',match.cutoffTime],['predictionMeta.cutoffTime',match.predictionMeta?.cutoffTime]];
-  const supplied = rawDeadlines.filter(([,v])=>v!=null&&v!=='').map(([field,v])=>sportteryDeadlineClock(match,v,{field}).instant);
+  const suppliedIdentity=options.identityAdmission!=null;
+  const identity=require('./prematchV3InputIdentity.cjs');
+  const identityValid=suppliedIdentity&&identity.verifyPrematchV3AssessmentIdentity(options.identityAdmission,
+    {...options.identityContext,match});
+  const resolve=(value,field)=>suppliedIdentity
+    ?identityValid?identity.resolveIdentityDeadline(match,value,{field,identityAdmission:options.identityAdmission,
+      identityContext:options.identityContext}):{instant:null}
+    :sportteryDeadlineClock(match,value,{field});
+  const supplied = rawDeadlines.filter(([,v])=>v!=null&&v!=='').map(([field,v])=>resolve(v,field).instant);
+  if(identityValid)supplied.push(options.identityAdmission.cutoffAt);
   const valid = supplied.length && supplied.every(v => strictInstant(v))
     && !(match.cutoffAt!=null && match.cutoffTime!=null
-      && clock(sportteryDeadlineClock(match,match.cutoffAt,{field:'cutoffAt'}).instant)!==clock(sportteryDeadlineClock(match,match.cutoffTime,{field:'cutoffTime'}).instant));
+      && clock(resolve(match.cutoffAt,'cutoffAt').instant)!==clock(resolve(match.cutoffTime,'cutoffTime').instant));
   const cutoffAt = valid ? supplied.reduce((a,b) => clock(a) <= clock(b) ? a : b) : null;
   return {sourceMatchId: id(match.sourceMatchId || match.id)?.replace(/^sporttery_/, '') || null,
     eventVersion: strictInstant(match.eventVersion || match.kickoffTime), kickoffTime: strictInstant(match.kickoffTime),
@@ -59,7 +68,11 @@ function outcomeProjection(rates, homeLine) {
     scoreDistribution:{complete:true,tailMass:Math.max(0,1-mass),rows}, formalEligible:false};
 }
 function buildPrematchV3Assessment(match = {}, options = {}) {
-  const event = eventFromMatch(match), asOf = strictInstant(options.asOf), at = clock(asOf), blockers = [];
+  const event = eventFromMatch(match,options), asOf = strictInstant(options.asOf), at = clock(asOf), blockers = [];
+  if(options.identityAdmission!=null&&!require('./prematchV3InputIdentity.cjs').verifyPrematchV3AssessmentIdentity(
+    options.identityAdmission,{...options.identityContext,match}))blockers.push('input-identity-admission-invalid');
+  if(options.identityAdmission!=null&&(at===null||clock(options.identityAdmission.inputCapturedAt)===null
+    ||clock(options.identityAdmission.inputCapturedAt)>at))blockers.push('input-identity-not-known-at-as-of');
   const cutoff = clock(event.cutoffAt), kickoff = clock(event.kickoffTime);
   if (at === null || cutoff === null || kickoff === null || clock(event.eventVersion) !== kickoff || cutoff > kickoff
     || at >= cutoff || at >= kickoff || !event.sourceMatchId || !event.homeTeamId || !event.awayTeamId
@@ -80,7 +93,8 @@ function buildPrematchV3Assessment(match = {}, options = {}) {
   // may carry facts and mappings, but cannot fill a missing private namespace.
   const baselinePacket = options.baseline || null;
   let baseline = {status:'blocked',formalEligible:false,baseRates:null,baseRatesEvidence:null,blockers:['zero-market-trained-baseline-missing']};
-  if (baselinePacket?.artifact && !blockers.includes('event-or-sale-clock-ineligible') && !blockers.includes('model-registry-clock-or-storage-invalid')) {
+  if (baselinePacket?.artifact && !blockers.includes('event-or-sale-clock-ineligible') && !blockers.includes('model-registry-clock-or-storage-invalid')
+    &&!blockers.includes('input-identity-admission-invalid')&&!blockers.includes('input-identity-not-known-at-as-of')) {
     const {forecastDynamicGoalStrengthV3} = require('../../scripts/dynamicGoalStrengthModel.cjs');
     baseline = forecastDynamicGoalStrengthV3({artifact:baselinePacket.artifact,event,asOf,createdAt:baselinePacket.createdAt,availableAt:baselinePacket.availableAt});
   }

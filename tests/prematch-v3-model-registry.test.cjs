@@ -294,3 +294,31 @@ test('pure online registry rejects duplicate, foreign, bad hash, malformed JSON 
   const beforeObserve = registry.readPrematchV3RegistryFromOnlineInput(onlineInput([packet]), { asOf: '2026-10-06T09:59:59.999999998Z' });
   assert.deepEqual(beforeObserve.blockers, ['registry:online-read-as-of-invalid']);
 });
+test('v3 online model registry replays an external collector registry and waits until actual identity capture',()=>{
+  const {snapshot}=require('./fixtures/signed-live-had.cjs'),{derivedTeamId}=require('../scripts/storedResultTeamIdentity.cjs');
+  const asOf='2026-10-06T10:00:00.000Z',m={id:'fivehundred_123',sourceMatchId:'123',businessDate:'2026-10-06',matchNo:'周二001',
+    homeTeamName:'Synthetic Home',awayTeamName:'Synthetic Away',homeTeamId:derivedTeamId('Synthetic Home'),awayTeamId:derivedTeamId('Synthetic Away'),
+    kickoffTime:'2026-10-06T15:00:00.000Z',eventVersion:'2026-10-06T15:00:00.000Z',buyEndTime:'2026-10-06 22:00:00',
+    sourceCycleId:'synthetic-full',sourceObservedAt:'2026-10-06T09:59:58.000Z',sourceReceivedAt:'2026-10-06T09:59:58.000Z',status:'SCHEDULED'};
+  const source=snapshot([m],{receivedAt:Date.parse(m.sourceReceivedAt),requestedAt:Date.parse(m.sourceReceivedAt)-1000,
+    mutate:e=>{e.payload={success:true,value:{matchInfoList:[{businessDate:m.businessDate,subMatchList:[{matchId:123,
+      homeTeamAllName:m.homeTeamName,awayTeamAllName:m.awayTeamName,matchDate:'2026-10-06',matchTime:'23:00:00',matchNumStr:m.matchNo,matchStatus:'Define',oddsList:[]}]}]}};}});
+  const identity=require('../src/services/prematchV3InputIdentity.cjs'),raw={version:onlineReader.IDENTITY_VERSION,readOnly:'on',productionWrites:0,
+    businessDate:m.businessDate,observedAt:asOf,generation:{data_generation_id:'synthetic-v3',manifest_hash:'a'.repeat(64),
+      committed_at:'2026-10-06T09:59:59.000Z',data_publication_mode:'active-generation',data_generation_source_cycle_id:m.sourceCycleId},
+    matches:[m],matchRows:[{dataset:'current',match_id:m.id,source_match_id:m.sourceMatchId,kickoff_time:'2026-10-06 15:00:00+00'}],
+    modelArtifactInventory:[],modelArtifacts:[onlinePacket('baseline',baseline()),onlinePacket('parameters',parameters())],identitySource:{
+      version:'prematch-v3-online-identity-source-v1',sourcePath:identity.CURRENT_SNAPSHOT_NAMESPACE,endpoint:source.snapshot.endpoints[0],
+      inputCapturedAt:'2026-10-06T10:00:00.000000001Z',collectorTrustRegistryHash:require('../src/services/collectorAttestation.cjs').sha256CollectorJson(source.registry)}};
+  const input=onlineReader.admitIdentityResponse(raw,source.registry),before=JSON.stringify(input);
+  const ok=registry.readPrematchV3RegistryFromOnlineInput(input,{asOf:'2026-10-06T10:00:00.000000002Z',trustRegistry:source.registry});
+  assert.equal(ok.status,'shadow-ready',JSON.stringify(ok.blockers));assert.equal(ok.formalEligible,false);
+  const noTrust=registry.readPrematchV3RegistryFromOnlineInput(input,{asOf:'2026-10-06T10:00:00.000000002Z'});
+  assert.deepEqual(noTrust.blockers,['registry:online-input-contract-invalid']);
+  const tooEarly=registry.readPrematchV3RegistryFromOnlineInput(input,{asOf,trustRegistry:source.registry});
+  assert.deepEqual(tooEarly.blockers,['registry:online-read-as-of-invalid']);assert.equal(tooEarly.baseline,null);
+  const bad=structuredClone(input);bad.identityAdmissions[0].row.source_match_id='124';
+  assert.deepEqual(registry.readPrematchV3RegistryFromOnlineInput(bad,{asOf:'2026-10-06T10:00:00.000000002Z',trustRegistry:source.registry}).blockers,
+    ['registry:online-input-contract-invalid']);
+  assert.equal(JSON.stringify(input),before);
+});

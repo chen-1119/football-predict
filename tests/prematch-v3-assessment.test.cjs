@@ -90,7 +90,7 @@ test('untrusted source JSON cannot fill missing private model namespaces or bypa
  assert.ok(future.blockers.includes('model-registry-clock-or-storage-invalid'));assert.equal(future.comparisons.teamOnly,null);
 });
 test('online coverage report is not a win-rate or training result and cannot backdate calculation',()=>{
- const input={businessDate:match.businessDate,observedAt:'2026-10-06T09:59:59.999999999Z',generation:{id:'test'},
+ const input={version:'prematch-v3-online-readonly-v2',businessDate:match.businessDate,observedAt:'2026-10-06T09:59:59.999999999Z',generation:{id:'test'},
   readOnly:'on',productionWrites:0,matches:[match],modelArtifactInventory:[],transport:{remoteResponseSha256:'b'.repeat(64)}};
  const report=buildReport(input,{asOf:at,gitHead:'synthetic',implementationHashes:{}});
  assert.equal(report.summary.matches,1);assert.equal(report.summary.marketReferences,1);assert.equal(report.summary.formalRecommendations,0);
