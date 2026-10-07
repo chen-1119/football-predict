@@ -7,6 +7,24 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('signed live HAD source, publication, deadline and frozen replay pass before signing',()=>{
+  const report=require('./verifySignedLiveHadPublication.cjs').run();
+  assert.equal(report.ok,true);assert.ok(report.tests>=100);assert.equal(report.skipped,0);assert.equal(report.productionWrites,0);
+  const factory=read('scripts/createReleaseBundle.cjs');
+  assert.ok(factory.indexOf('const signedHadPublication = spawnSync')<factory.indexOf('const outDir ='));
+  for(const file of ['scripts/verifySignedLiveHadPublication.cjs','scripts/recommendationPlatform/liveOfficialHad.cjs',
+    'scripts/recommendationPlatform/quotePublicationLatency.cjs','tests/fixtures/signed-live-had.cjs',
+    'tests/recommendation-live-official-had.test.cjs','tests/recommendation-signed-had-publication.test.cjs',
+    'tests/recommendation-quote-publication-latency.test.cjs'])assert.ok(factory.includes('"'+file+'"'));
+});
+check('official club facts remain bounded literal research without training or feature admission before signing',()=>{
+  const child=require('node:child_process').spawnSync(process.execPath,['--test','--test-reporter=tap','tests/official-club-research-evidence.test.cjs'],
+    {cwd:root,encoding:'utf8',windowsHide:true,timeout:10000,maxBuffer:1024*1024});
+  assert.equal(child.status,0,child.stderr||child.stdout);
+  assert.match(child.stdout,/^# tests 27$/m);assert.match(child.stdout,/^# pass 27$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  const factory=read('scripts/createReleaseBundle.cjs');
+  for(const file of ['scripts/officialClubResearchEvidence.cjs','tests/official-club-research-evidence.test.cjs'])assert.ok(factory.includes('"'+file+'"'));
+});
 check('actual root deployment configuration gate passes before signing', () => {
   const child = require('node:child_process').spawnSync(process.execPath, ['scripts/verifyDeploymentConfig.cjs'],
     { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 60000, maxBuffer: 2 * 1024 * 1024 });

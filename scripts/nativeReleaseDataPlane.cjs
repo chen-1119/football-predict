@@ -180,7 +180,10 @@ async function copyGenerationAsService(identity, destination) {
   const gid = Number(spawnSync("/usr/bin/id", ["-g", "football"], { encoding: "utf8" }).stdout.trim()); assert.ok(Number.isSafeInteger(gid) && gid > 0);
   const temporary = fs.mkdtempSync("/var/lib/football-native-copy-"); fs.chownSync(temporary, 0, gid); fs.chmodSync(temporary, 0o770);
   const target = path.join(temporary, "store");
-  const source = `const {copyNativeReleaseGeneration}=require(${JSON.stringify(path.join(__dirname, "nativeReleaseGenerationCopy.cjs"))});process.setgroups([]);process.setgid('football');process.setuid('football');console.log(JSON.stringify(copyNativeReleaseGeneration(${JSON.stringify({ sourceStoreDir: STORE, targetStoreDir: target, identity })})));`;
+  // One parent-issued deadline includes child dispatch and lock contention.
+  // The outer 240s cap and signed release window horizon stay unchanged.
+  const deadline = require("./nativeReleaseGenerationCopy.cjs").createNativeCopyDeadline();
+  const source = `const {copyNativeReleaseGeneration}=require(${JSON.stringify(path.join(__dirname, "nativeReleaseGenerationCopy.cjs"))});process.setgroups([]);process.setgid('football');process.setuid('football');console.log(JSON.stringify(copyNativeReleaseGeneration(${JSON.stringify({ sourceStoreDir: STORE, targetStoreDir: target, identity, deadline })})));`;
   const child = spawnSync("/opt/node-v22.22.1/bin/node", ["--max-old-space-size=192", "-e", source], {
     env: { PATH: "/usr/bin:/bin", NODE_PATH: "/opt/football-predict/node_modules" }, encoding: "utf8", timeout: 240000, maxBuffer: 16384,
   });

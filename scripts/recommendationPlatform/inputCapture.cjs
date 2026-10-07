@@ -8,6 +8,15 @@ const boundedText=v=>typeof v==='string'&&v.length>0&&Buffer.byteLength(v,'utf8'
 // Capture metadata is a replay aid, not a new source, signature verifier or
 // model-admission credential. Original quote/model validation still applies.
 function validInputCapture(capture,publishedAt){
+  // V1 frozen records retain exactly their original validator. V2 extends the
+  // capture with a bounded signed-HAD audit; metadata is never admission proof.
+  if(capture?.version==='current-input-capture-v2'){
+    try{if(Buffer.byteLength(JSON.stringify(capture),'utf8')>32768)return false;}catch{return false;}
+    if(!exactKeys(capture,['version','startedAt','capturedAt','currentHash','marketSignalHash','joinedInputHash','officialHandicap','officialHad']))return false;
+    const {officialHad,...base}=capture;
+    return validInputCapture({...base,version:'current-input-capture-v1'},publishedAt)
+      &&require('./liveOfficialHad.cjs').validOfficialHadAudit(officialHad,capture.capturedAt);
+  }
   try{if(Buffer.byteLength(JSON.stringify(capture),'utf8')>16384)return false;}catch{return false;}
   if(!exactKeys(capture,['version','startedAt','capturedAt','currentHash','marketSignalHash','joinedInputHash','officialHandicap'])
     ||capture.version!=='current-input-capture-v1'

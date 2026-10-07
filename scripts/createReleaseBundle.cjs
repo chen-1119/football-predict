@@ -98,6 +98,17 @@ if (requestJsonUtf8.status !== 0) {
     requestJsonUtf8.error?.message || requestJsonUtf8.stderr || requestJsonUtf8.stdout
   ).slice(-2000)}`);
 }
+// A fresh signed quote may only refresh an exact-event ephemeral input. Run
+// signature/sales/deadline/model/frozen replay contracts before reserving a
+// sequence, signing a bundle or starting a remote transaction.
+const signedHadPublication = spawnSync(process.execPath, ["scripts/verifySignedLiveHadPublication.cjs"], {
+  cwd: rootDir, encoding: "utf8", windowsHide: true, timeout: 40_000, maxBuffer: 2 * 1024 * 1024,
+});
+if (signedHadPublication.status !== 0) {
+  throw new Error(`Signed HAD publication preflight failed: ${String(
+    signedHadPublication.error?.message || signedHadPublication.stderr || signedHadPublication.stdout
+  ).slice(-4000)}`);
+}
 // Catch production-only verification dependencies and stale exact contracts
 // locally, before reserving/signing a sequence or starting a remote transaction.
 // The bounded source-boundary fixture owns a 300-second budget. Its outer
@@ -416,6 +427,15 @@ const blockedEntries = entries.filter((entry) => {
 });
 const requiredEntries = [
   "package.json",
+  "scripts/verifySignedLiveHadPublication.cjs",
+  "scripts/officialClubResearchEvidence.cjs",
+  "tests/official-club-research-evidence.test.cjs",
+  "scripts/recommendationPlatform/liveOfficialHad.cjs",
+  "scripts/recommendationPlatform/quotePublicationLatency.cjs",
+  "tests/fixtures/signed-live-had.cjs",
+  "tests/recommendation-live-official-had.test.cjs",
+  "tests/recommendation-signed-had-publication.test.cjs",
+  "tests/recommendation-quote-publication-latency.test.cjs",
   "scripts/data/football-data-discipline.json",
   "scripts/footballDataDiscipline.cjs",
   "scripts/verifyFootballDataDiscipline.cjs",
