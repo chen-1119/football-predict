@@ -18,8 +18,8 @@ const eventKey = row => JSON.stringify([String(row.sourceMatchId || row.id || ''
 
 /** Freeze a single compatible pair from the prospective score distribution.
  * Legacy policy replay remains available for archived records only. */
-function makeDecision(match, { now, publication, handicapCalibration=null, primaryPolicy=PRIMARY_POLICY,inputCapture=null }) {
-  const result = evaluateForecast(match, { now, publication });
+function makeDecision(match, { now, publication, handicapCalibration=null, primaryPolicy=PRIMARY_POLICY,inputCapture=null,trustRegistry }) {
+  const result = evaluateForecast(match, { now, publication, trustRegistry });
   if (!result.eligible) return { decision: null, reason: result.reason };
   const capture=require('./inputCapture.cjs').captureBinding(inputCapture,new Date(now).toISOString());
   let candidate = result.candidate;
@@ -74,7 +74,7 @@ function makeDecision(match, { now, publication, handicapCalibration=null, prima
       quoteSource: candidate.quoteSource, quoteObservedAt: candidate.quoteObservedAt } };
   return { decision: immutable({ ...body, recordHash: hash(body) }), reason: null };
 }
-function validDecision(row) {
+function validDecision(row, options=null) {
   if (!row || row.version !== VERSION || row.policyVersion !== VERSION || row.market !== 'HAD' || row.handicapLine !== 0 || row.modelValidation !== 'unvalidated') return false;
   const { recordHash, ...body } = row;
   if (hash(body) !== recordHash || row.decisionId !== `decision_${hash([VERSION, row.sourceMatchId, row.eventVersion, row.market, row.inputHash])}` || row.id !== row.decisionId) return false;
@@ -115,6 +115,21 @@ function validDecision(row) {
     if (!bound || row.sourceVerification !== 'warehouse-jczq-extraction'
       || time(row.quoteObservedAt) !== time(bound.at)
       || ['1','X','2'].some((c,i) => row.quoteOdds?.[c] !== bound.odds[['odds1','oddsX','odds2'][i]])) return false;
+  }
+  if (/^sporttery:had:signed-live(?:$|:)/i.test(row.quoteSource || '') || row.quoteProvenance?.version === 'signed-live-had-receipt-v1') {
+    const bound = require('./liveOfficialHad.cjs').signedLiveHadQuoteForMatch({
+      ...row, id:row.matchId, officialHadQuoteReceipt:row.quoteProvenance,
+      odds: {odds1:row.quoteOdds?.['1'], oddsX:row.quoteOdds?.X, odds2:row.quoteOdds?.['2']},
+      oddsSource:row.quoteSource, oddsReceivedAt:row.quoteObservedAt,
+    }, time(row.publishedAt), time(row.cutoffTime), {trustRegistry:options?.trustRegistry});
+    if (!bound || row.quoteSource !== 'sporttery:HAD:signed-live'
+      || row.sourceVerification !== 'trusted-collector-signed-live-had'
+      || time(row.quoteObservedAt) !== time(bound.at)
+      || ['1','X','2'].some((c,i) => row.quoteOdds?.[c] !== bound.odds[['odds1','oddsX','odds2'][i]])) return false;
+    const direction=require('../../src/services/hadDirectionSelection.cjs').selectHadDirection(row.probabilities,row.quoteOdds);
+    if(!direction || row.hadInputHash!==hash({id:row.matchId,eventVersion:row.eventVersion,p:row.probabilities,
+      odds:row.quoteOdds,quoteAt:time(row.quoteObservedAt),modelAt:time(row.modelGeneratedAt),
+      directionPolicyVersion:direction.version,quoteReceiptHash:bound.receipt.receiptHash}))return false;
   }
   const p = row.probabilities;
   if (!p || !['1','X','2'].includes(row.tipCode) || !['1','X','2'].every(c => typeof p[c] === 'number' && Number.isFinite(p[c]) && p[c] >= 0 && p[c] <= 1)) return false;

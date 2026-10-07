@@ -42,7 +42,7 @@ function dataPublishable(meta, publication, now) {
     && meta?.publication?.manifestHash === publication.manifestHash
     && meta?.publication?.generationId === publication.generationId;
 }
-function evaluateForecast(match, { now, publication } = {}) {
+function evaluateForecast(match, { now, publication, trustRegistry } = {}) {
   match = require('./prospectiveForecastInput.cjs').forecastInputFor(match);
   const fail = reason => ({ eligible: false, reason, candidate: null });
   if (!Number.isFinite(now)) return fail('clock-invalid');
@@ -76,12 +76,19 @@ function evaluateForecast(match, { now, publication } = {}) {
   // the direction policy freezes its tie rule separately from admission.
   const had = match.externalSignals?.bookmakerOdds?.had;
   const copiedQuote = require('./warehouseLotterySp.cjs').warehouseQuoteForMatch(match, now, deadline);
+  const signedQuote = require('../../scripts/recommendationPlatform/liveOfficialHad.cjs')
+    .signedLiveHadQuoteForMatch(match, now, deadline, { trustRegistry });
   const candidates = [
     { odds: match.odds, source: match.oddsSource, at: match.oddsReceivedAt || match.oddsUpdatedAt, id: match.sourceMatchId, event: match.eventVersion },
     { odds: had, source: had?.source, at: had?.receivedAt || had?.updatedAt, id: had?.sourceMatchId, event: had?.eventVersion },
     ...(copiedQuote ? [copiedQuote] : []),
+    ...(signedQuote ? [signedQuote] : []),
   ].map(q => ({ ...q, atMs: time(q.at), values: [q.odds?.odds1, q.odds?.oddsX, q.odds?.odds2].map(numeric) }))
-    .filter(q => (/^sporttery:had(?:$|:)/i.test(text(q.source)) || Boolean(copiedQuote && q.receipt === copiedQuote.receipt)) && q.values.every(v => v !== null && v > 1)
+    // The signed live source never falls back to a bare label when its receipt
+    // is absent or invalid. Historical source-label inputs retain their policy.
+    .filter(q => ((/^sporttery:had(?:$|:)/i.test(text(q.source)) && !/^sporttery:had:signed-live(?:$|:)/i.test(text(q.source)))
+      || Boolean(copiedQuote && q.receipt === copiedQuote.receipt)
+      || Boolean(signedQuote && q.receipt === signedQuote.receipt)) && q.values.every(v => v !== null && v > 1)
       && Number.isFinite(q.atMs) && q.atMs <= now && q.atMs < deadline && now - q.atMs <= 15 * 60000
       && (!q.id || sourceId(q.id) === sourceId(match.sourceMatchId || match.id)) && (!q.event || iso(q.event) === eventVersion))
     .sort((a, b) => b.atMs - a.atMs || Number(Boolean(a.receipt)) - Number(Boolean(b.receipt)));
@@ -103,7 +110,7 @@ function evaluateForecast(match, { now, publication } = {}) {
     marketProbabilities: market, modelProbability: p[tipCode], modelMarketGap: p[tipCode] - market[tipCode],
     modelExpectedValue: p[tipCode] * odds[tipCode] - 1, directionPolicyVersion: directionSelection.version,
     directionSelection, modelValidation: 'unvalidated',
-    sourceVerification: q.receipt ? 'warehouse-jczq-extraction' : 'source-label-and-publication-binding',
+    sourceVerification: q.sourceVerification || (q.receipt ? 'warehouse-jczq-extraction' : 'source-label-and-publication-binding'),
     ...(q.receipt ? { quoteProvenance: structuredClone(q.receipt) } : {}),
     modelGeneratedAt: new Date(modelAt).toISOString(), quoteSource: q.source, quoteObservedAt: new Date(q.atMs).toISOString(), quoteOdds: odds,
     publication: { generationId: publication.generationId, manifestHash: publication.manifestHash },
@@ -120,7 +127,7 @@ function buildRecord(candidate, now) {
   const freeze = value => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; };
   return freeze(result);
 }
-function verifyRecord(record) {
+function verifyRecord(record, options=null) {
   if (!record || record.policyVersion !== POLICY || record.statisticsTrack !== TRACK || record.publicationStatus !== 'PUBLISHED'
     || record.market !== 'HAD' || record.handicapLine !== 0 || record.modelValidation !== 'unvalidated' || record.immutable !== true) return false;
   const { recordHash, ...payload } = record;
@@ -136,6 +143,18 @@ function verifyRecord(record) {
       || !validHadDirectionSelection(record.directionSelection, p, record.quoteOdds)
       || record.directionSelection.tipCode !== record.tipCode) return false;
   } else if (!CODES.every(c => c === record.tipCode || p[record.tipCode] - p[c] > 1e-9)) return false;
+  if(/^sporttery:had:signed-live(?:$|:)/i.test(text(record.quoteSource)) || record.quoteProvenance?.version==='signed-live-had-receipt-v1'){
+    const bound=require('../../scripts/recommendationPlatform/liveOfficialHad.cjs').signedLiveHadQuoteForMatch({
+      ...record,id:record.matchId,officialHadQuoteReceipt:record.quoteProvenance,
+      odds:{odds1:record.quoteOdds['1'],oddsX:record.quoteOdds.X,odds2:record.quoteOdds['2']},
+      oddsSource:record.quoteSource,oddsReceivedAt:record.quoteObservedAt,
+    },time(record.publishedAt),time(record.cutoffTime),{trustRegistry:options?.trustRegistry});
+    if(!bound || record.quoteSource!=='sporttery:HAD:signed-live' || record.sourceVerification!=='trusted-collector-signed-live-had'
+      || CODES.some((c,i)=>record.quoteOdds[c]!==bound.odds[['odds1','oddsX','odds2'][i]])
+      || record.inputHash!==hash({id:record.matchId,eventVersion:record.eventVersion,p:record.probabilities,odds:record.quoteOdds,
+        quoteAt:time(record.quoteObservedAt),modelAt:time(record.modelGeneratedAt),directionPolicyVersion:record.directionPolicyVersion,
+        quoteReceiptHash:bound.receipt.receiptHash}))return false;
+  }
   const published = time(record.publishedAt);
   return Boolean(recordHash === hash(payload)
     && published < time(record.cutoffTime) && published < time(record.kickoffTime)

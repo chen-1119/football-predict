@@ -22,7 +22,7 @@ function completedInputClock(inputs,startedAt,clock){
   const now=clock(),known=inputs.inputKnowledgeAt===undefined?startedAt:time(inputs.inputKnowledgeAt);
   if(!Number.isSafeInteger(now)||now<startedAt||!Number.isFinite(known)||known<startedAt||known>now
     ||(inputs.inputKnowledgeAt!==undefined&&inputs.inputKnowledgeAt!==new Date(known).toISOString())
-    ||(inputs.inputCapture&&(inputs.inputCapture.version!=='current-input-capture-v1'
+    ||(inputs.inputCapture&&(!['current-input-capture-v1','current-input-capture-v2'].includes(inputs.inputCapture.version)
       ||time(inputs.inputCapture.startedAt)!==startedAt||time(inputs.inputCapture.capturedAt)!==known)))
     throw Object.assign(new Error('Input capture clock invalid'),{code:'INPUT_CAPTURE_CLOCK_INVALID'});
   return now;
@@ -36,8 +36,8 @@ async function assessInputs(repo,publication,now,clock){
   const [historical,rawHeads]=await Promise.all([repo.latest(),repo.resultHeads()]);
   now=completedInputClock(inputs,startedAt,clock);
   const calibrationHeads=new Map(rawHeads.filter(e=>validResultEvent(e)&&resultAllowsCalibration(e)).map(e=>[e.eventKey,e]));
-  const handicapCalibration=buildHandicapCalibration(historical.filter(validDecision),calibrationHeads,day(now),{asOf:now});
-  const assessed=evaluateCurrent(inputs.current,{now,publication,handicapCalibration,inputCapture:inputs.inputCapture});
+  const handicapCalibration=buildHandicapCalibration(historical.filter(d=>validDecision(d,{trustRegistry:repo.trustRegistry})),calibrationHeads,day(now),{asOf:now});
+  const assessed=evaluateCurrent(inputs.current,{now,publication,handicapCalibration,inputCapture:inputs.inputCapture,trustRegistry:repo.trustRegistry});
   // A full model publication is not a quote clock. An older generation may
   // supply a still-valid prospective model ONLY with a fresh, independently
   // acquired exact-event receipt in this transaction. Model/cutoff policy is
@@ -63,7 +63,7 @@ async function bindCurrentDecisions(repo, decisions, clock) {
     const item=await repo.savepoint(async()=>{
       requireBeforeCutoff([d],clock());
       const stored=byId.get(d.decisionId)||await repo.insertDecision(d);
-      if(!validDecision(stored)||stored.decisionId!==d.decisionId||stored.inputHash!==d.inputHash)
+      if(!validDecision(stored,{trustRegistry:repo.trustRegistry})||stored.decisionId!==d.decisionId||stored.inputHash!==d.inputHash)
         throw Object.assign(new Error('Decision read-back mismatch'),{code:'DECISION_BINDING_INVALID'});
       return stored;
     });
@@ -96,7 +96,9 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     const accepted=bound.accepted;issues.push(...bound.issues);
     for(const issue of issues)await repo.issue('publish',issue);
     requireBeforeCutoff(accepted,clock());
-    return {publication,decisionIds:accepted.map(d=>d.decisionId),inputAsOf,...(inputCapture?{inputCapture}:{}),basePublicationAsOf:publication.committedAt,issues:issues.length,attempted,handicapCalibration:{profileHash:handicapCalibration.profileHash,sampleRows:handicapCalibration.sampleRows,activeGroups:Object.values(handicapCalibration.groups).filter(g=>g.active).length}};
+    return {publication,decisionIds:accepted.map(d=>d.decisionId),inputAsOf,...(inputCapture?{inputCapture}:{}),
+      quotePublicationLatency:require('./quotePublicationLatency.cjs').summarizeQuotePublicationLatency(accepted),
+      basePublicationAsOf:publication.committedAt,issues:issues.length,attempted,handicapCalibration:{profileHash:handicapCalibration.profileHash,sampleRows:handicapCalibration.sampleRows,activeGroups:Object.values(handicapCalibration.groups).filter(g=>g.active).length}};
   });}
   // Research has its own transaction. A missing migration, late cutoff, or
   // invalid research row cannot roll back the published single lane.

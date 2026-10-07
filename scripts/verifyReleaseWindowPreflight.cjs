@@ -147,6 +147,14 @@ function runCreatePrefix(source, options = {}) {
             error: options.requestUtf8Unavailable ? { message: "fixture request UTF8 child unavailable" } : undefined,
             stdout: options.requestUtf8Status ? "fixture request UTF8 rejection" : "" };
         }
+        else if (args[0] === "scripts/verifySignedLiveHadPublication.cjs") {
+          assert.equal(command, "/fixed/node");
+          assert.deepEqual(Array.from(args), ["scripts/verifySignedLiveHadPublication.cjs"]);
+          calls.push("signed-had");
+          return {status:options.signedHadStatus ?? (options.signedHadUnavailable ? null : 0),
+            error:options.signedHadUnavailable ? {message:"fixture signed HAD child unavailable"} : undefined,
+            stdout:options.signedHadStatus ? "fixture signed HAD rejection" : ""};
+        }
         else if (args[0] === "scripts/verifyFrontendEvidenceSemantics.cjs") {
           assert.equal(command, "/fixed/node"); calls.push("frontend-evidence");
           return { status: options.frontendEvidenceFails ? 1 : 0,
@@ -461,7 +469,7 @@ function verifyReleaseWindowPreflight() {
   });
   check("actual online create prefix runs worker, window, archive and frontend evidence before preSign, sequence reservation and build", () => {
     const result = runCreatePrefix(create); assert.equal(result.ok, true, result.error);
-    assert.deepEqual(result.calls, ["sequence-preflight", "worker", "window", "archive", "frontend-evidence", "request-utf8", "preSign", "reserve", "build"]);
+    assert.deepEqual(result.calls, ["sequence-preflight", "worker", "window", "archive", "frontend-evidence", "request-utf8", "signed-had", "preSign", "reserve", "build"]);
     for (const options of [{ windowOpen: false }, { windowThrows: true }]) {
       const rejected = runCreatePrefix(create, options); assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "worker", "window"]);
     }
@@ -487,15 +495,22 @@ function verifyReleaseWindowPreflight() {
       assert.match(rejected.error, /Request JSON UTF-8 preflight failed/);
     }
   });
+  check("the signed HAD contract rejects failure or missing child before preSign, reservation and build",()=>{
+    for(const options of [{signedHadStatus:1},{signedHadUnavailable:true}]){
+      const rejected=runCreatePrefix(create,options);assert.equal(rejected.ok,false);
+      assert.deepEqual(rejected.calls,["sequence-preflight","worker","window","archive","frontend-evidence","request-utf8","signed-had"]);
+      assert.match(rejected.error,/Signed HAD publication preflight failed/);
+    }
+  });
   check("native policy rejects unaccepted bootstrap before network, reservation or build", () => {
     const rejected = runCreatePrefix(create, { nativePolicy: true, nativeRejected: true });
     assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "native-policy"]);
     const accepted = runCreatePrefix(create, { nativePolicy: true }); assert.equal(accepted.ok, true, accepted.error);
-    assert.deepEqual(accepted.calls, ["sequence-preflight", "native-policy", "worker", "window", "archive", "frontend-evidence", "request-utf8", "preSign", "reserve", "build"]);
+    assert.deepEqual(accepted.calls, ["sequence-preflight", "native-policy", "worker", "window", "archive", "frontend-evidence", "request-utf8", "signed-had", "preSign", "reserve", "build"]);
   });
   check("actual offline create prefix makes no live calls and explicitly reports no window authority", () => {
     const result = runCreatePrefix(create, { offline: true, windowThrows: true }); assert.equal(result.ok, true, result.error);
-    assert.deepEqual(result.calls, ["sequence-preflight", "frontend-evidence", "request-utf8", "preSign", "reserve", "build"]);
+    assert.deepEqual(result.calls, ["sequence-preflight", "frontend-evidence", "request-utf8", "signed-had", "preSign", "reserve", "build"]);
     assert.equal(result.logs[0].windowChecked, false); assert.equal(result.logs[0].readyToCutover, false);
   });
   check("actual UI create dispatch exits before live gates, full verification and local build", () => {
