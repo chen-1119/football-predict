@@ -590,6 +590,28 @@ const buildPayload = () => ({
 const main = async () => {
   if (apply) await applyCleanup();
   const payload = buildPayload();
+  if (apply) {
+    // A bounded latest receipt supplements the time/size-limited service journal.
+    assertStoreRoot();
+    const target = path.join(storeDir, "cleanup-status.json");
+    const existing = lstatSafe(target);
+    if (existing && (!existing.isFile() || existing.isSymbolicLink() || existing.nlink !== 1)) {
+      throw new Error("unsafe cleanup status receipt");
+    }
+    const temporary = path.join(storeDir, `.cleanup-status-${crypto.randomUUID()}.tmp`);
+    const fd = fs.openSync(temporary, "wx", 0o640);
+    try {
+      fs.writeFileSync(fd, `${JSON.stringify(payload)}\n`);
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    fs.renameSync(temporary, target);
+    if (process.platform !== "win32") {
+      const directory = fs.openSync(storeDir, "r");
+      try { fs.fsyncSync(directory); } finally { fs.closeSync(directory); }
+    }
+  }
   console.log(JSON.stringify(payload, null, 2));
   if (!payload.ok) process.exitCode = 1;
 };

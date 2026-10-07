@@ -186,8 +186,12 @@ MANAGED_CONFIG_PATHS=(
   /etc/nginx/sites-available/football-predict
   /etc/nginx/sites-enabled/default
   /etc/nginx/sites-enabled/football-predict
+  /etc/systemd/system/football-postgres-backup.service
+  /etc/systemd/system/football-postgres-backup.timer
+  /usr/local/sbin/football-postgres-backup-v2
+  /etc/systemd/journald.conf.d/football-retention.conf
 )
-MANAGED_TIMERS=(football-cleanup.timer football-monitor.timer football-daily-prematch.timer football-featured-combo.timer)
+MANAGED_TIMERS=(football-cleanup.timer football-monitor.timer football-daily-prematch.timer football-featured-combo.timer football-postgres-backup.timer)
 MANAGED_STATE_UNITS=(
   football-predict.service football-sync-worker.service nginx.service
   football-market-collector.service football-featured-combo.service
@@ -1592,6 +1596,7 @@ restore_managed_config_after_rollback() {
   done <"$manifest"
   sync -f /etc/systemd/system
   systemctl daemon-reload || return 1
+  systemctl try-restart systemd-journald.service || return 1
   if command -v nginx >/dev/null 2>&1; then
     nginx -t || return 1
     if systemctl cat nginx >/dev/null 2>&1 && systemctl is-active --quiet nginx; then
@@ -2992,7 +2997,7 @@ quiesce_managed_timers_for_config_change() {
 
 quiesce_managed_maintenance_for_sqlite_snapshot() {
   local unit state status
-  for unit in "${MANAGED_TIMERS[@]}" football-cleanup.service football-monitor.service football-daily-prematch.service; do
+  for unit in "${MANAGED_TIMERS[@]}" football-cleanup.service football-monitor.service football-daily-prematch.service football-postgres-backup.service; do
     if state="$(systemctl is-active "$unit" 2>/dev/null)"; then status=0; else status=$?; fi
     case "$state" in
       active|activating|deactivating|reloading)
@@ -3003,7 +3008,7 @@ quiesce_managed_maintenance_for_sqlite_snapshot() {
       *) return 1 ;;
     esac
   done
-  for unit in "${MANAGED_TIMERS[@]}" football-cleanup.service football-monitor.service football-daily-prematch.service; do
+  for unit in "${MANAGED_TIMERS[@]}" football-cleanup.service football-monitor.service football-daily-prematch.service football-postgres-backup.service; do
     if state="$(systemctl is-active "$unit" 2>/dev/null)"; then status=0; else status=$?; fi
     case "$state" in
       inactive|failed) [ "$status" -eq 3 ] || return 1 ;;
@@ -3027,11 +3032,13 @@ install_systemd_units() {
   if [ -f "${deploy_root}/football-sync-worker.service" ] && [ ! -L "${deploy_root}/football-sync-worker.service" ]; then
     install_managed_file "${deploy_root}/football-sync-worker.service" /etc/systemd/system/football-sync-worker.service || return 1
   fi
-  for unit in football-cleanup.service football-cleanup.timer football-monitor.service football-monitor.timer; do
+  for unit in football-cleanup.service football-cleanup.timer football-monitor.service football-monitor.timer football-postgres-backup.service football-postgres-backup.timer; do
     if [ -f "${deploy_root}/${unit}" ] && [ ! -L "${deploy_root}/${unit}" ]; then
       install_managed_file "${deploy_root}/${unit}" "/etc/systemd/system/${unit}" || return 1
     fi
   done
+  install_managed_file "${deploy_root}/football-postgres-backup.sh" /usr/local/sbin/football-postgres-backup-v2 || return 1
+  install_managed_file "${deploy_root}/football-journald-retention.conf" /etc/systemd/journald.conf.d/football-retention.conf || return 1
 }
 
 install_nginx_config() {
@@ -7802,6 +7809,7 @@ install_systemd_units "$NEXT_DIR" \
 install_nginx_config "$NEXT_DIR" \
   || abort_before_swap "trusted pre-swap nginx config reload failed"
 systemctl daemon-reload || abort_before_swap "pre-swap systemd daemon reload failed"
+systemctl try-restart systemd-journald.service || abort_before_swap "managed journal retention reload failed"
 write_recovery_phase "host-config-applied" \
   || abort_before_swap "recovery phase update failed after pre-swap host config"
 wait_for_health "http://${HOST}:${PORT}" "post-preswap-nginx-reload" 90 2 service \
