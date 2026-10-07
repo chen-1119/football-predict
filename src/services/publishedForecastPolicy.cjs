@@ -143,12 +143,12 @@ function verifyRecord(record, options=null) {
       || !validHadDirectionSelection(record.directionSelection, p, record.quoteOdds)
       || record.directionSelection.tipCode !== record.tipCode) return false;
   } else if (!CODES.every(c => c === record.tipCode || p[record.tipCode] - p[c] > 1e-9)) return false;
-  if(/^sporttery:had:signed-live(?:$|:)/i.test(text(record.quoteSource)) || record.quoteProvenance?.version==='signed-live-had-receipt-v1'){
+  if(/^sporttery:had:signed-live(?:$|:)/i.test(text(record.quoteSource)) || ['signed-live-had-receipt-v1','signed-live-had-receipt-v2'].includes(record.quoteProvenance?.version)){
     const bound=require('../../scripts/recommendationPlatform/liveOfficialHad.cjs').signedLiveHadQuoteForMatch({
       ...record,id:record.matchId,officialHadQuoteReceipt:record.quoteProvenance,
       odds:{odds1:record.quoteOdds['1'],oddsX:record.quoteOdds.X,odds2:record.quoteOdds['2']},
       oddsSource:record.quoteSource,oddsReceivedAt:record.quoteObservedAt,
-    },time(record.publishedAt),time(record.cutoffTime),{trustRegistry:options?.trustRegistry});
+    },time(record.publishedAt),time(record.cutoffTime),{trustRegistry:options?.trustRegistry,allowLegacyReplay:true});
     if(!bound || record.quoteSource!=='sporttery:HAD:signed-live' || record.sourceVerification!=='trusted-collector-signed-live-had'
       || CODES.some((c,i)=>record.quoteOdds[c]!==bound.odds[['odds1','oddsX','odds2'][i]])
       || record.inputHash!==hash({id:record.matchId,eventVersion:record.eventVersion,p:record.probabilities,odds:record.quoteOdds,

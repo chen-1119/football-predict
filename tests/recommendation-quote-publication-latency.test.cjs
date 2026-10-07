@@ -18,3 +18,10 @@ test('empty, bare-label, future, missing and regressing clocks do not invent mea
   const report=summarizeQuotePublicationLatency([bare,future,missing,reversed]);
   assert.equal(report.measuredRows,0);assert.equal(report.minMs,null);assert.equal(report.maxMs,null);assert.equal(report.p95Ms,null);
 });
+test('versioned V1 and V2 accepted receipts both retain latency clocks without treating unknown versions as measurements',()=>{
+  const old=decision(1,1000),fresh=decision(2,2000),unknown=decision(3,3000);
+  fresh.quoteProvenance.version='signed-live-had-receipt-v2';unknown.quoteProvenance.version='signed-live-had-receipt-v3';
+  const report=summarizeQuotePublicationLatency([old,fresh,unknown]);
+  assert.equal(report.measuredRows,2);assert.equal(report.rows[0].sourceMatchId,'1');assert.equal(report.rows[1].sourceMatchId,'2');
+  assert.equal(report.rows[1].publicationLagMs,2000);assert.equal(report.maxMs,2000);
+});

@@ -7,7 +7,8 @@ const { verifyCollectorAttestation, loadCollectorTrustRegistry, sha256CollectorJ
   extractionFromSportteryPool } = require('../../src/services/collectorAttestation.cjs');
 const { expectedCollectorCommitment, officialFastEndpointUrl } = require('../../server/relayCollectorEvidence.cjs');
 
-const VERSION = 'signed-live-had-receipt-v1';
+const VERSION = 'signed-live-had-receipt-v2';
+const LEGACY_VERSION = 'signed-live-had-receipt-v1';
 const SOURCE = 'sporttery:HAD:signed-live';
 const SOURCE_VERIFICATION = 'trusted-collector-signed-live-had';
 const MAX_AGE_MS = 15 * 60000, MAX_SOURCE_BYTES = 4 * 1024 * 1024, MAX_RECEIPT_BYTES = 256 * 1024, MAX_ROWS = 512;
@@ -109,6 +110,13 @@ function saleOpen(row, pool) {
   const permits = ['bettingAllup', 'allUp', 'intAllUp', 'cbtAllUp'].filter(k => pool[k] !== undefined);
   return permits.length > 0 && permits.every(k => numberFlag(pool[k]));
 }
+// Official fixed-odds consumer jc_szsc_gz.js selects the CBT namespace.
+// INT and single-game flags do not veto or grant the fixed all-up product.
+// The V1 function above remains exact for previously frozen receipt replay.
+function fixedAllupSaleOpen(row, pool) {
+  return row.matchStatus === 'Selling' && numberFlag(row.sellStatus) && pool.poolStatus === 'Selling'
+    && numberFlag(pool.cbtValue) && numberFlag(pool.cbtAllUp);
+}
 function saleDeadline(input, record) {
   const event = ms(input.eventVersion || input.kickoffTime), midnight = Date.parse(input.businessDate + 'T00:00:00+08:00');
   const dow = new Date(midnight + 8 * 3600000).getUTCDay();
@@ -124,7 +132,7 @@ function saleDeadline(input, record) {
   if (values.some(v => !Number.isFinite(v)) || !Number.isFinite(midnight)) return NaN;
   return Math.min(...values, midnight + ([0, 6].includes(dow) ? 23 : 22) * 3600000);
 }
-function assessEvent(input, verified, now) {
+function assessEvent(input, verified, now, receiptVersion = VERSION) {
   const identity = inputIdentity(input);
   if (!identity || identity.businessDate !== day(now)) return {reason: 'event-identity-conflict'};
   const records = verified.records.filter(r => String(r.row.matchId) === identity.sourceMatchId);
@@ -133,7 +141,8 @@ function assessEvent(input, verified, now) {
   if (!sameOfficialEvent(identity, record)) return {reason: 'event-identity-conflict'};
   const sales = (Array.isArray(record.row.poolList) ? record.row.poolList : []).filter(p => p?.poolCode === 'HAD');
   if (sales.length !== 1) return {reason: 'had-pool-unavailable'};
-  if (!saleOpen(record.row, sales[0])) return {reason: 'event-not-selling'};
+  const sale = receiptVersion === LEGACY_VERSION ? saleOpen : fixedAllupSaleOpen;
+  if (!sale(record.row, sales[0])) return {reason: 'event-not-selling'};
   const pools = (Array.isArray(record.row.oddsList) ? record.row.oddsList : []).filter(p => p?.poolCode === 'HAD');
   if (pools.length !== 1) return {reason: 'had-pool-unavailable'};
   const pool = pools[0], quoteOdds = {odds1: Number(pool.h), oddsX: Number(pool.d), odds2: Number(pool.a)};
@@ -165,14 +174,14 @@ function validSignedLiveHadReceipt(receipt, {match, now, cutoffTime, trustRegist
   try {
     if (!Number.isSafeInteger(now) || !bounded(receipt, MAX_RECEIPT_BYTES) || !exactKeys(receipt, ['version', 'source', 'market',
       'sourceVerification', 'identity', 'quoteOdds', 'requestedAt', 'observedAt', 'sourceCycleId', 'saleCutoff',
-      'marketExtraction', 'rowHash', 'endpoint', 'receiptHash']) || receipt.version !== VERSION || receipt.source !== SOURCE
+      'marketExtraction', 'rowHash', 'endpoint', 'receiptHash']) || ![LEGACY_VERSION, VERSION].includes(receipt.version) || receipt.source !== SOURCE
       || receipt.market !== 'HAD' || receipt.sourceVerification !== SOURCE_VERIFICATION || !hex(receipt.receiptHash)) return false;
     const {receiptHash, ...body} = receipt;
     if (sha256CollectorJson(body) !== receiptHash) return false;
     const registry = registryFor(trustRegistry), verified = verifiedCurrent(receipt.endpoint, now, registry);
     if (!verified) return false;
     verified.registry = registry;
-    const assessed = assessEvent(match, verified, now);
+    const assessed = assessEvent(match, verified, now, receipt.version);
     if (assessed.reason || sha256CollectorJson(assessed.identity) !== sha256CollectorJson(receipt.identity)
       || sha256CollectorJson(assessed.quoteOdds) !== sha256CollectorJson(receipt.quoteOdds)
       || sha256CollectorJson(assessed.extraction) !== sha256CollectorJson(receipt.marketExtraction)
@@ -184,8 +193,11 @@ function validSignedLiveHadReceipt(receipt, {match, now, cutoffTime, trustRegist
       && ms(receipt.observedAt) < Math.min(deadline, assessed.cutoff);
   } catch { return false; }
 }
-function signedLiveHadQuoteForMatch(match, now, cutoffMs, {trustRegistry} = {}) {
+function signedLiveHadQuoteForMatch(match, now, cutoffMs, {trustRegistry, allowLegacyReplay = false} = {}) {
   const receipt = match?.officialHadQuoteReceipt;
+  // V1 keeps its original validator for frozen history. Fresh candidates must
+  // use the fixed CBT contract, including when an authentic V1 receipt exists.
+  if (receipt?.version !== VERSION && !(allowLegacyReplay === true && receipt?.version === LEGACY_VERSION)) return null;
   if (!validSignedLiveHadReceipt(receipt, {match, now, cutoffTime: cutoffMs, trustRegistry})) return null;
   return {odds: structuredClone(receipt.quoteOdds), source: SOURCE, at: receipt.observedAt,
     id: receipt.identity.sourceMatchId, event: receipt.identity.eventVersion,
@@ -270,5 +282,5 @@ function validOfficialHadAudit(audit, capturedAt) {
     return true;
   } catch { return false; }
 }
-module.exports = {VERSION, SOURCE, SOURCE_VERIFICATION, MAX_AGE_MS, MAX_SOURCE_BYTES, MAX_RECEIPT_BYTES, MAX_ROWS,
+module.exports = {VERSION, LEGACY_VERSION, SOURCE, SOURCE_VERIFICATION, MAX_AGE_MS, MAX_SOURCE_BYTES, MAX_RECEIPT_BYTES, MAX_ROWS,
   REASONS, ENDPOINT_REASONS, joinOfficialHad, signedLiveHadQuoteForMatch, validSignedLiveHadReceipt, validOfficialHadAudit};
