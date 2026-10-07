@@ -5,7 +5,7 @@ function summarizeQuotePublicationLatency(decisions){
   const rows=[];
   for(const d of decisions){
     const p=d?.quoteProvenance;
-    if(d?.quoteSource!=='sporttery:HAD:signed-live'||p?.version!=='signed-live-had-receipt-v1')continue;
+    if(d?.quoteSource!=='sporttery:HAD:signed-live'||!['signed-live-had-receipt-v1','signed-live-had-receipt-v2'].includes(p?.version))continue;
     const requested=Date.parse(p.requestedAt),received=Date.parse(p.observedAt),published=Date.parse(d.publishedAt);
     if(![requested,received,published].every(Number.isSafeInteger)||requested>received||received>published)continue;
     rows.push({sourceMatchId:d.sourceMatchId,eventVersion:d.eventVersion,decisionId:d.decisionId,
