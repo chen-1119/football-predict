@@ -116,12 +116,12 @@ function validDecision(row, options=null) {
       || time(row.quoteObservedAt) !== time(bound.at)
       || ['1','X','2'].some((c,i) => row.quoteOdds?.[c] !== bound.odds[['odds1','oddsX','odds2'][i]])) return false;
   }
-  if (/^sporttery:had:signed-live(?:$|:)/i.test(row.quoteSource || '') || row.quoteProvenance?.version === 'signed-live-had-receipt-v1') {
+  if (/^sporttery:had:signed-live(?:$|:)/i.test(row.quoteSource || '') || ['signed-live-had-receipt-v1', 'signed-live-had-receipt-v2'].includes(row.quoteProvenance?.version)) {
     const bound = require('./liveOfficialHad.cjs').signedLiveHadQuoteForMatch({
       ...row, id:row.matchId, officialHadQuoteReceipt:row.quoteProvenance,
       odds: {odds1:row.quoteOdds?.['1'], oddsX:row.quoteOdds?.X, odds2:row.quoteOdds?.['2']},
       oddsSource:row.quoteSource, oddsReceivedAt:row.quoteObservedAt,
-    }, time(row.publishedAt), time(row.cutoffTime), {trustRegistry:options?.trustRegistry});
+    }, time(row.publishedAt), time(row.cutoffTime), {trustRegistry:options?.trustRegistry, allowLegacyReplay:true});
     if (!bound || row.quoteSource !== 'sporttery:HAD:signed-live'
       || row.sourceVerification !== 'trusted-collector-signed-live-had'
       || time(row.quoteObservedAt) !== time(bound.at)

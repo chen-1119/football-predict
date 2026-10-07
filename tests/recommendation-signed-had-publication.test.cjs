@@ -23,6 +23,7 @@ test('actual Repository to normal runtime publishes signed fresh HAD with a stil
   });
   const result=await createRuntime(ports).publish();assert.equal(result.ok,true);assert.equal(result.value.decisionIds.length,1);
   const d=ports.state.decisions[0];assert.ok(validDecision(d,{trustRegistry:c.registry}));
+  assert.equal(d.quoteProvenance.version,'signed-live-had-receipt-v2');
   assert.equal(d.quoteObservedAt,stamp(NOW-1000));assert.equal(d.modelGeneratedAt,stamp(NOW-30*60000));
   assert.equal(d.publication.generationId,'generation-test');assert.equal(d.sourceVerification,'trusted-collector-signed-live-had');
   assert.equal(d.inputCapture.version,'current-input-capture-v2');assert.ok(validInputCapture(d.inputCapture,d.publishedAt));
@@ -61,4 +62,35 @@ test('replay verifies source bytes and binds the signed receipt to the actual HA
   assert.ok(verifyRecord(record,{trustRegistry:c.registry}));const bad=structuredClone(record);
   bad.quoteProvenance.identity.homeTeamId='other';const {receiptHash:rh,...rp}=bad.quoteProvenance;bad.quoteProvenance.receiptHash=hash(rp);
   const {recordHash:rr,...rb}=bad;bad.recordHash=hash(rb);assert.equal(verifyRecord(bad,{trustRegistry:c.registry}),false);
+});
+test('unchanged E503 synthetic V1 decisions and forecast records still replay under the original receipt contract',()=>{
+  const fixture=require('./fixtures/signed-live-had-v1-frozen.json'),before=hash(fixture);
+  for(const item of fixture.cases){
+    assert.ok(validDecision(item.decision,{trustRegistry:item.registry}));
+    assert.ok(verifyRecord(item.record,{trustRegistry:item.registry}));
+    assert.equal(item.decision.quoteProvenance.version,'signed-live-had-receipt-v1');
+  }
+  assert.equal(hash(fixture),before);
+});
+test('receipt V2 requires full verification even when a caller rewrites the quote source label',async()=>{
+  const c=await capture(),context={now:NOW,publication:publication(NOW),inputCapture:c.inputs.inputCapture,trustRegistry:c.registry};
+  const d=makeDecision(c.inputs.current[0],context).decision;
+  const relabeled=structuredClone(d);relabeled.quoteSource='untrusted:HAD';
+  const {recordHash,...body}=relabeled;relabeled.recordHash=hash(body);
+  assert.equal(validDecision(relabeled,{trustRegistry:c.registry}),false);
+  const candidate=evaluateForecast(c.inputs.current[0],context).candidate,record=buildRecord(candidate,NOW),r=structuredClone(record);
+  r.quoteSource='untrusted:HAD';const {recordHash:rhash,...rbody}=r;r.recordHash=hash(rbody);
+  assert.equal(verifyRecord(r,{trustRegistry:c.registry}),false);
+});
+test('normal runtime cannot republish an authentic V1 receipt as a new current decision',async()=>{
+  for(const item of require('./fixtures/signed-live-had-v1-frozen.json').cases){
+    const before=hash(item),ports=memoryPorts(),transaction=ports.transaction;ports.now=item.now;
+    ports.transaction=(lane,action)=>transaction(lane,repo=>{
+      repo.currentInputs=async()=>({current:[item.input],markets:[],receiptHashes:new Set([item.input.officialHadQuoteReceipt.receiptHash])});
+      repo.trustRegistry=item.registry;repo.publication=async()=>publication(item.now-30*60000);return action(repo);
+    });
+    const result=await createRuntime(ports).publish();
+    assert.equal(result.ok,false);assert.equal(result.errorCode,'SOURCE_STALE');assert.equal(ports.state.decisions.length,0);
+    assert.equal(hash(item),before);
+  }
 });

@@ -14,7 +14,7 @@ function snapshot(rows,{receivedAt=NOW-1000,requestedAt=receivedAt-500,mutate=()
   const payload={success:true,value:{matchInfoList:[{businessDate:'2026-09-17',subMatchList:rows.map(m=>({matchId:Number(m.sourceMatchId),businessDate:m.businessDate,
     matchDate:'2026-09-17',matchTime:'23:00:00',matchNumStr:m.matchNo,homeTeamAllName:m.homeTeamName,awayTeamAllName:m.awayTeamName,
     matchStatus:'Selling',sellStatus:1,oddsList:[{poolCode:'HAD',h:1.8,d:3.5,a:4.5,goalLine:''}],
-    poolList:[{poolCode:'HAD',poolStatus:'Selling',bettingAllup:1}]}))}]} };
+    poolList:[{poolCode:'HAD',poolStatus:'Selling',cbtValue:1,cbtAllUp:1,cbtSingle:0,intValue:2,intAllUp:0,intSingle:0}]}))}]} };
   const entry={method:'current',page:null,ok:true,url:SPORTTERY_CURRENT_URL,requestedAt:stamp(requestedAt),receivedAt:stamp(receivedAt),sourceCycleId:'synthetic-current-cycle',payload,
     sourceRequest:{method:'GET',url:SPORTTERY_CURRENT_URL,page:null,role:'current'},httpStatus:200,contentType:'application/json',rawSha256:'b'.repeat(64),rawBytes:500,headersSha256:'a'.repeat(64)};
   mutate(entry);entry.canonicalPayloadSha256=sha256CollectorJson(entry.payload);

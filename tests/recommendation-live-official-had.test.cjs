@@ -26,7 +26,8 @@ function raw() {
     homeTeamAllName: m.homeTeamName, awayTeamAllName: m.awayTeamName, matchStatus: 'Selling', sellStatus: '1',
     oddsList: [{poolCode: 'HAD', h: 1.8, d: 3.5, a: 4.5, updateDate: '2026-10-07', updateTime: '10:30:00'},
       {poolCode: 'HHAD', h: 3.2, d: 3.5, a: 1.8, goalLine: '-1'}],
-    poolList: [{poolCode: 'HAD', poolStatus: 'Selling', intAllUp: 1, cbtAllUp: 1}]};
+    poolList: [{poolCode: 'HAD', poolStatus: 'Selling', cbtValue: 1, cbtAllUp: 1, cbtSingle: 0,
+      intValue: 2, intAllUp: 0, intSingle: 0}]};
 }
 function resign(e, extractions) {
   e.canonicalPayloadSha256 = sha256CollectorJson(e.payload);
@@ -69,6 +70,7 @@ test('single signed current role refreshes HAD without calculator, model or froz
   assert.ok(validOfficialHadAudit(result.audit, stamp(NOW)));
   assert.equal(quote(result.input).sourceVerification, 'trusted-collector-signed-live-had');
   assert.equal(result.input.officialHadQuoteReceipt.identity.teamIdentityBasis, 'syncData-name-derived-team-id-v1');
+  assert.equal(result.input.officialHadQuoteReceipt.version, 'signed-live-had-receipt-v2');
 });
 test('receipt independently replays exact signed payload and extraction membership', () => {
   const {input} = joined(), receipt = clone(input.officialHadQuoteReceipt);
@@ -176,12 +178,115 @@ test('Define/OddsIn with SP is an authoritative negative sale observation, never
   assert.equal(result.input.isOnSale, false); assert.equal(result.input.saleStatus, 'SUSPENDED');
   assert.equal(result.audit.reasonCounts['event-not-selling'], 1); assert.equal(result.receiptHashes.size, 0);
 });
-test('pool suspended, missing or false allup flags do not infer Selling', () => {
+test('pool suspended, missing or false fixed CBT allup flags do not infer Selling', () => {
   for (const mutate of [r => r.sellStatus = '', r => r.poolList[0].poolStatus = 'OddsIn',
-    r => r.poolList[0].intAllUp = 0, r => {delete r.poolList[0].intAllUp; delete r.poolList[0].cbtAllUp;}]) {
+    r => r.poolList[0].cbtAllUp = 0, r => {delete r.poolList[0].cbtAllUp;},
+    r => r.poolList[0].cbtValue = 0, r => {delete r.poolList[0].cbtValue;}]) {
     const result = joined(source(), snapshot(NOW, mutate));
     assert.equal(result.input.isOnSale, false); assert.equal(result.receiptHashes.size, 0);
   }
+});
+test('six current official field shapes admit fixed allup with INT off and preserve each model and parent', () => {
+  // Synthetic names, IDs and signatures with only the six observed sale shapes.
+  const parents = Array.from({length: 6}, (_, index) => {
+    const m = source(), id = String(2041823 + index);
+    m.id = `sporttery_${id}`; m.sourceMatchId = id; m.matchNo = `周三00${index + 1}`;
+    m.homeTeamName += index; m.awayTeamName += index;
+    m.homeTeamId = derivedTeamId(m.homeTeamName); m.awayTeamId = derivedTeamId(m.awayTeamName);
+    return {...m, prospectiveForecastInput: clone(m)};
+  });
+  const original = clone(parents), s = snapshot(NOW, () => {}, e => {
+    e.payload.value.matchInfoList[0].subMatchList = parents.map((m, index) => ({...raw(),
+      matchId: Number(m.sourceMatchId), matchNumStr: m.matchNo, homeTeamAllName: m.homeTeamName,
+      awayTeamAllName: m.awayTeamName, poolList: [{...raw().poolList[0], cbtSingle: index === 1 ? 1 : 0}]}));
+  });
+  const audit = {}, joined = joinOfficialHad(parents, s, {now: NOW, trustRegistry: pair.registry, audit});
+  assert.deepEqual(parents, original); assert.equal(audit.reasonCounts['had-applied'], 6); assert.equal(joined.receiptHashes.size, 6);
+  for (const [index, parent] of joined.current.entries()) {
+    assert.deepEqual(parent.probabilityModel, original[index].probabilityModel);
+    assert.deepEqual(parent.prospectiveForecastInput.probabilityModel, original[index].prospectiveForecastInput.probabilityModel);
+    assert.equal(parent.prospectiveForecastInput.officialHadQuoteReceipt.version, 'signed-live-had-receipt-v2');
+    assert.ok(quote(parent.prospectiveForecastInput));
+  }
+});
+test('fixed CBT permits support canonical numeric/string one without INT or single gate substitution', () => {
+  for (const value of [1, '1']) {
+    const result = joined(source(), snapshot(NOW, r => {r.poolList[0].cbtValue = value; r.poolList[0].cbtAllUp = value;
+      r.poolList[0].intAllUp = 0; r.poolList[0].intSingle = 1; r.poolList[0].cbtSingle = 0;}));
+    assert.ok(quote(result.input));
+  }
+  for (const value of [0, '0', true, false, '01', 2, null]) {
+    for (const key of ['cbtValue', 'cbtAllUp']) {
+      const result = joined(source(), snapshot(NOW, r => {r.poolList[0][key] = value;}));
+      assert.equal(result.receiptHashes.size, 0); assert.equal(result.audit.reasonCounts['event-not-selling'], 1);
+    }
+  }
+});
+test('single open, INT open and legacy aliases do not supply a missing or stopped fixed allup permit', () => {
+  for (const mutate of [p => {p.cbtAllUp = 0; p.cbtSingle = 1;},
+    p => {p.cbtValue = 0; p.cbtSingle = 1; p.intValue = 1; p.intAllUp = 1;},
+    p => {delete p.cbtAllUp; p.bettingAllup = 1; p.allUp = 1; p.intAllUp = 1;},
+    p => {delete p.cbtValue; p.bettingAllup = 1; p.allUp = 1;},
+    p => {p.cbtAllUp = 0; p.bettingAllup = 1; p.allUp = 1; p.intAllUp = 1;}]) {
+    const result = joined(source(), snapshot(NOW, r => mutate(r.poolList[0])));
+    assert.equal(result.receiptHashes.size, 0); assert.equal(result.input.isOnSale, false);
+  }
+});
+test('V1 exact accepted frozen receipts retain their original contract without requiring new CBT fields', () => {
+  const frozen = require('./fixtures/signed-live-had-v1-frozen.json');
+  assert.equal(frozen.synthetic, true);
+  for (const fixture of frozen.cases) {
+    const original = clone(fixture), input = fixture.input, receipt = input.officialHadQuoteReceipt;
+    assert.equal(receipt.version, 'signed-live-had-receipt-v1');
+    assert.ok(validSignedLiveHadReceipt(receipt, {match: input, now: fixture.now,
+      cutoffTime: Date.parse(fixture.decision.cutoffTime), trustRegistry: fixture.registry}));
+    assert.deepEqual(fixture, original);
+  }
+});
+test('authentic V1 CBT zero, false and missing values are replay-only and never fresh candidates', () => {
+  const {evaluateForecast} = require('../src/services/publishedForecastPolicy.cjs');
+  const {makeDecision} = require('../scripts/recommendationPlatform/decision.cjs');
+  const publication = {generationId: 'synthetic-generation', manifestHash: 'a'.repeat(64)};
+  for (const value of [0, false, undefined]) {
+    // Synthetic legacy signed shape: the original V1 contract ignored cbtValue.
+    const {input} = joined(), receipt = clone(input.officialHadQuoteReceipt);
+    receipt.version = 'signed-live-had-receipt-v1';
+    const row = receipt.endpoint.payload.value.matchInfoList[0].subMatchList[0];
+    row.poolList[0].intAllUp = 1;
+    if (value === undefined) delete row.poolList[0].cbtValue; else row.poolList[0].cbtValue = value;
+    resign(receipt.endpoint); receipt.rowHash = sha256CollectorJson(row);
+    const legacy = {...input, officialHadQuoteReceipt: rehash(receipt)}, before = clone(legacy);
+    assert.ok(validSignedLiveHadReceipt(legacy.officialHadQuoteReceipt, {match: legacy, now: NOW,
+      cutoffTime: deadline, trustRegistry: pair.registry}));
+    assert.ok(signedLiveHadQuoteForMatch(legacy, NOW, deadline, {trustRegistry: pair.registry, allowLegacyReplay: true}));
+    assert.equal(quote(legacy), null);
+    assert.equal(signedLiveHadQuoteForMatch(legacy, NOW, deadline, {trustRegistry: pair.registry, allowLegacyReplay: 'true'}), null);
+    assert.equal(evaluateForecast(legacy, {now: NOW, publication, trustRegistry: pair.registry}).reason, 'official-had-quote-unavailable');
+    const assessed = makeDecision(legacy, {now: NOW, publication, trustRegistry: pair.registry});
+    assert.equal(assessed.decision, null); assert.equal(assessed.reason, 'official-had-quote-unavailable');
+    assert.deepEqual(legacy, before);
+  }
+});
+test('all normal accepted V1 shapes are frozen replay only even when their original model and price are fresh', () => {
+  const frozen = require('./fixtures/signed-live-had-v1-frozen.json');
+  for (const fixture of frozen.cases) {
+    const input = fixture.input, cutoff = Date.parse(fixture.decision.cutoffTime);
+    assert.equal(signedLiveHadQuoteForMatch(input, fixture.now, cutoff, {trustRegistry: fixture.registry}), null);
+    assert.ok(signedLiveHadQuoteForMatch(input, fixture.now, cutoff, {trustRegistry: fixture.registry, allowLegacyReplay: true}));
+    assert.equal(require('../src/services/publishedForecastPolicy.cjs').evaluateForecast(input,
+      {now: fixture.now, publication: fixture.publication, trustRegistry: fixture.registry}).reason, 'official-had-quote-unavailable');
+    assert.equal(require('../scripts/recommendationPlatform/decision.cjs').makeDecision(input,
+      {now: fixture.now, publication: fixture.publication, trustRegistry: fixture.registry}).decision, null);
+  }
+});
+test('real-shape V2 cannot be downgraded to V1 by ordinary rehash or by unsigned INT payload alteration', () => {
+  const {input} = joined(), v2 = input.officialHadQuoteReceipt;
+  const downgraded = rehash({...clone(v2), version: 'signed-live-had-receipt-v1'});
+  assert.equal(quote({...input, officialHadQuoteReceipt: downgraded}), null); // V1 requires the signed INT flag to be one.
+  const changed = clone(downgraded); changed.endpoint.payload.value.matchInfoList[0].subMatchList[0].poolList[0].intAllUp = 1;
+  assert.equal(quote({...input, officialHadQuoteReceipt: rehash(changed)}), null); // Full signed payload was altered.
+  const unknown = rehash({...clone(v2), version: 'signed-live-had-receipt-v3'});
+  assert.equal(quote({...input, officialHadQuoteReceipt: unknown}), null);
 });
 test('null prospective input, locked or terminal parents never borrow a model from a frozen display record', () => {
   for (const patch of [{prospectiveForecastInput: null}, {status: 'LIVE'}, {status: 'FINISHED'},
