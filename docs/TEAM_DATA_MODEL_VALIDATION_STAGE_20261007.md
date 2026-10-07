@@ -56,3 +56,32 @@ automatically a confirmed match absence.
 The existing learner's small research fit minimum is not formal promotion.
 Formal model/sample/window gates stay unchanged; two/three-leg recommendations
 remain subject to their existing quality gates.
+
+## October 7 follow-up research
+
+A new pinned production read at 12:05 Beijing verified the six current event
+identities. The actual shadow runner found six market references, zero admitted
+zero-market baselines, zero trained parameter artifacts and zero known team
+feature families. It produced no frozen learning records or formal directions.
+Its blockers include missing source contracts, goal rates, trained parameters
+and Asian-handicap timelines. This is a new online-input validation, not a fit
+or an accuracy result.
+
+A separate bounded public acquisition pinned OpenFootball's South America
+repository and its CC0 license. The 2026 Brazil file contains 380 scheduled
+rows, of which 277 have past score labels. Across the ten current Brazil teams,
+27–28 such labels per team represent 277 team appearances but only 216 distinct
+target-related events. The latest score label is September 20, so complete
+recent coverage is not established. One explicit postponed row is isolated.
+The five current Brazil fixtures have no score and cannot be settled early.
+
+Follow-up acquisition of the official Football.TXT specification proves that
+ordinary scores map to its FT field: 261 of these labels include HT and 16 do
+not; none contains an AET/PEN result requiring separate FT extraction. This is
+format semantics, not independent official 90-minute-result verification.
+Canonical ordered-team admission, actual end times and historical availability
+clocks remain missing. The new receipt time cannot supply those fields.
+In the pinned European repository
+tree, Finland 2026 was not found; older seasons were not substituted. Private
+raw files, line spans, hashes, source commits and coverage receipts remain
+outside Git. No records were written to the production dataset or model registry.
