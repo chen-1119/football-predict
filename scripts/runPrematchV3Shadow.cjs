@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const cp = require('node:child_process');
-const {verifyOnlineRead,MAX_BYTES} = require('./readPrematchV3OnlineInputs.cjs');
+const {verifyOnlineRead,MAX_BYTES,IDENTITY_VERSION,loadTrustedRegistry,identityOptionsFor} = require('./readPrematchV3OnlineInputs.cjs');
 const {buildPrematchV3Assessment} = require('../src/services/prematchV3Assessment.cjs');
 const {freezePrematchV3Record} = require('../src/services/prematchV3FrozenRecord.cjs');
 const {epochNanoseconds:clock} = require('../src/services/prematchV3Clock.cjs');
@@ -12,6 +12,9 @@ const HASH = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const VERSION = 'prematch-v3-online-shadow-report-v1';
 const IMPLEMENTATION_FILES = ['scripts/runPrematchV3Shadow.cjs','scripts/readPrematchV3OnlineInputs.cjs',
   'src/services/prematchV3OnlineResponse.cjs',
+  'src/services/prematchV3InputIdentity.cjs','src/services/collectorAttestation.cjs',
+  'scripts/recommendationPlatform/liveOfficialHad.cjs','scripts/storedResultTeamIdentity.cjs',
+  'server/relayCollectorEvidence.cjs','scripts/sportteryEndpointContract.cjs',
   'scripts/dynamicGoalStrengthModel.cjs','src/services/prematchV3Assessment.cjs','src/services/prematchV3Clock.cjs',
   'src/services/prematchTeamEvidenceV3.cjs','src/services/asianHandicapEvidenceV3.cjs',
   'src/services/prematchV3Learning.cjs','src/services/prematchV3FrozenRecord.cjs',
@@ -29,16 +32,19 @@ function parseArgs(args) {
   check(result['--input'] && result['--output'],'ARGS');
   return {input:result['--input'],output:result['--output']};
 }
-function buildReport(input, {asOf,implementationHashes,gitHead}) {
-  check(clock(asOf)!==null && clock(input.observedAt)!==null && clock(asOf)>=clock(input.observedAt),'CALCULATION_CLOCK');
-  const modelRead = require('../src/services/prematchV3ModelRegistry.cjs').readPrematchV3RegistryFromOnlineInput(input,{asOf});
+function buildReport(input, {asOf,implementationHashes,gitHead,trustRegistry}) {
+  check(clock(asOf)!==null && clock(input.observedAt)!==null && clock(asOf)>=clock(input.observedAt)
+    &&(input.version!==IDENTITY_VERSION||(clock(input.identitySource?.inputCapturedAt)!==null
+      &&clock(asOf)>=clock(input.identitySource.inputCapturedAt))),'CALCULATION_CLOCK');
+  const modelRead = require('../src/services/prematchV3ModelRegistry.cjs').readPrematchV3RegistryFromOnlineInput(input,{asOf,trustRegistry});
   const assessmentOptions={asOf,baseline:modelRead.baseline,parameters:modelRead.parameters,
     modelRegistry:{asOf:modelRead.asOf,status:modelRead.status,storage:modelRead.storage,
       blockers:modelRead.blockers,receipts:modelRead.receipts}};
-  const rows = input.matches.map(match => {
-    const assessment=buildPrematchV3Assessment(match,assessmentOptions);
+  const rows = input.matches.map((match,index) => {
+    const options={...assessmentOptions,...identityOptionsFor(input,index,trustRegistry)};
+    const assessment=buildPrematchV3Assessment(match,options);
     return {id:match.id,sourceMatchId:match.sourceMatchId,homeTeamName:match.homeTeamName,awayTeamName:match.awayTeamName,
-      assessment, frozenLearningRecord:freezePrematchV3Record(assessment,{match,options:assessmentOptions})};
+      assessment, frozenLearningRecord:freezePrematchV3Record(assessment,{match,options})};
   });
   const known = family => rows.filter(row => ['home','away'].every(side => Object.entries(row.assessment.teamSnapshot.features)
     .some(([key,value]) => key.startsWith(`${side}.${family}.`) && typeof value==='number'))).length;
@@ -73,11 +79,12 @@ function run({input,output}) {
   const rawPath=path.join(path.dirname(inputPath),value.transport?.remoteResponseFile || '');
   check(path.dirname(rawPath)===path.dirname(inputPath) && rawPath!==inputPath && fs.statSync(rawPath).size<=MAX_BYTES,'RAW_INPUT_BOUND');
   const raw=fs.readFileSync(rawPath);
-  check(verifyOnlineRead(value,{date:value.businessDate,rawResponse:raw}),'ONLINE_READ_BINDING');
+  const trustRegistry=value.version===IDENTITY_VERSION?loadTrustedRegistry():undefined;
+  check(verifyOnlineRead(value,{date:value.businessDate,rawResponse:raw,trustRegistry}),'ONLINE_READ_BINDING');
   const repo=path.resolve(__dirname,'..');
   const implementationHashes=Object.fromEntries(IMPLEMENTATION_FILES.map(file=>[file,HASH(fs.readFileSync(path.join(repo,file)))]));
   const gitHead=cp.execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8',windowsHide:true,timeout:10000}).trim();
-  const report=buildReport(value,{asOf:new Date().toISOString(),implementationHashes,gitHead});
+  const report=buildReport(value,{asOf:new Date().toISOString(),implementationHashes,gitHead,trustRegistry});
   const implementationAfter=Object.fromEntries(IMPLEMENTATION_FILES.map(file=>[file,HASH(fs.readFileSync(path.join(repo,file)))]));
   check(stableHash(implementationAfter)===stableHash(implementationHashes),'IMPLEMENTATION_CHANGED_DURING_RUN');
   check(HASH(fs.readFileSync(inputPath))===HASH(inputBytes) && HASH(fs.readFileSync(rawPath))===HASH(raw),'INPUT_CHANGED');

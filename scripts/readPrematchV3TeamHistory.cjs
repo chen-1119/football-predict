@@ -134,7 +134,9 @@ function readHistory({input,output},{env=process.env,execute=cp.execFileSync}={}
  const rawInputPath=path.join(path.dirname(inputPath),companion);
  check(fs.statSync(rawInputPath).size<=MAX_INPUT_RAW_BYTES,'INPUT_RAW_BOUND');
  const rawInput=fs.readFileSync(rawInputPath);
- check(verifyOnlineRead(online,{date:online.businessDate,rawResponse:rawInput}),'INPUT_BINDING');
+ const trustRegistry=online.version===require('./readPrematchV3OnlineInputs.cjs').IDENTITY_VERSION
+  ?require('./readPrematchV3OnlineInputs.cjs').loadTrustedRegistry(env):undefined;
+ check(verifyOnlineRead(online,{date:online.businessDate,rawResponse:rawInput,trustRegistry}),'INPUT_BINDING');
  const targets=targetsFor(online);
  check(!fs.existsSync(destination)&&!fs.existsSync(rawPath)&&fs.statSync(path.dirname(destination)).isDirectory(),'NEW_OUTPUT_REQUIRED');
  const host=env.RELEASE_DEPLOY_HOST,user=env.RELEASE_DEPLOY_USER;

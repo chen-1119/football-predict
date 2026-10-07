@@ -37,15 +37,56 @@ function fixture(t){
  const env={RELEASE_DEPLOY_HOST:'synthetic.invalid',RELEASE_DEPLOY_USER:'synthetic_user',RELEASE_DEPLOY_KEY:path.join(directory,'fake-private-key'),
   RELEASE_DEPLOY_KNOWN_HOSTS:knownHosts,RELEASE_DEPLOY_HOST_KEY_SHA256:fingerprintSshKeyBlob(blob)};
  const input=path.join(directory,'target.json'),output=path.join(directory,'history.json');
- reader.readInputs({date:'2026-10-06',output:input},env,()=>Buffer.from(JSON.stringify({version:reader.VERSION,readOnly:'on',productionWrites:0,
+ // Explicit immutable legacy-v2 replay pair. Current main reads require a
+ // signed v3 context; an old mock response cannot simulate a new v3 read.
+ const legacy={version:reader.VERSION,readOnly:'on',productionWrites:0,
   businessDate:'2026-10-06',observedAt:new Date().toISOString(),generation:{data_generation_id:'synthetic-target',manifest_hash:'b'.repeat(64)},
-  matches:[identities()],modelArtifactInventory:[],modelArtifacts:[]})));
+  matches:[identities()],modelArtifactInventory:[],modelArtifacts:[]};
+ const raw=Buffer.from(JSON.stringify(legacy)),rawFile=input+'.remote-response.json';
+ const transport={hostKeyPinVerified:true,hostKeyFingerprint:env.RELEASE_DEPLOY_HOST_KEY_SHA256,
+  startedAt:legacy.observedAt,finishedAt:legacy.observedAt,remoteResponseSha256:digest(raw),remoteResponseFile:path.basename(rawFile),bytes:raw.length};
+ Object.assign(transport,reader.validateTransport(transport,legacy.observedAt));
+ fs.writeFileSync(rawFile,raw,{flag:'wx'});fs.writeFileSync(input,JSON.stringify({...legacy,transport}),{flag:'wx'});
  return {directory,env,input,output};
 }
 function freshPayload(changes={}){
  const end=new Date(),start=new Date(end.getTime()-history.LOOKBACK_DAYS*86400000);
  return payload({observedAt:end.toISOString(),windowStartAt:start.toISOString(),windowEndAt:end.toISOString(),...changes});
 }
+function writeIdentityTarget(f){
+ const {snapshot}=require('./fixtures/signed-live-had.cjs'),{derivedTeamId}=require('../scripts/storedResultTeamIdentity.cjs');
+ const time=Date.now(),at=n=>new Date(n).toISOString(),businessDate=at(time+32*3600000).slice(0,10),kickoff=businessDate+'T15:00:00.000Z';
+ const m={id:'fivehundred_123',sourceMatchId:'123',businessDate,matchNo:'synthetic001',homeTeamName:'Synthetic Home',awayTeamName:'Synthetic Away',
+  homeTeamId:derivedTeamId('Synthetic Home'),awayTeamId:derivedTeamId('Synthetic Away'),kickoffTime:kickoff,eventVersion:kickoff,
+  buyEndTime:businessDate+' 22:00:00',sourceCycleId:'synthetic-full',sourceObservedAt:at(time-4000),sourceReceivedAt:at(time-4000),status:'SCHEDULED'};
+ const source=snapshot([m],{receivedAt:time-4000,requestedAt:time-5000,
+  mutate:e=>{e.payload={success:true,value:{matchInfoList:[{businessDate,subMatchList:[{matchId:123,
+   homeTeamAllName:m.homeTeamName,awayTeamAllName:m.awayTeamName,matchDate:businessDate,matchTime:'23:00:00',matchNumStr:m.matchNo,matchStatus:'Define',oddsList:[]}]}]}};}});
+ const identity=require('../src/services/prematchV3InputIdentity.cjs'),rawValue={version:reader.IDENTITY_VERSION,readOnly:'on',productionWrites:0,businessDate,
+  observedAt:at(time-2000),generation:{data_generation_id:'synthetic-v3',manifest_hash:'a'.repeat(64),committed_at:at(time-3000),
+   data_publication_mode:'active-generation',data_generation_source_cycle_id:m.sourceCycleId},matches:[m],
+  matchRows:[{dataset:'current',match_id:m.id,source_match_id:m.sourceMatchId,kickoff_time:kickoff.replace('T',' ').replace('Z','+00')}],
+  modelArtifactInventory:[],modelArtifacts:[],identitySource:{version:'prematch-v3-online-identity-source-v1',sourcePath:identity.CURRENT_SNAPSHOT_NAMESPACE,
+   endpoint:source.snapshot.endpoints[0],inputCapturedAt:at(time-1000),collectorTrustRegistryHash:require('../src/services/collectorAttestation.cjs').sha256CollectorJson(source.registry)}};
+ const input=path.join(f.directory,'target-v3.json'),rawFile=input+'.remote-response.json',raw=Buffer.from(JSON.stringify(rawValue));
+ const transport={hostKeyPinVerified:true,hostKeyFingerprint:f.env.RELEASE_DEPLOY_HOST_KEY_SHA256,startedAt:at(time-6000),finishedAt:at(time),
+  remoteResponseSha256:digest(raw),remoteResponseFile:path.basename(rawFile),bytes:raw.length};
+ Object.assign(transport,reader.validateTransport(transport,rawValue.observedAt));
+ const value={...reader.admitIdentityResponse(rawValue,source.registry),transport};
+ fs.writeFileSync(rawFile,raw,{flag:'wx'});fs.writeFileSync(input,JSON.stringify(value),{flag:'wx'});
+ const registryPath=path.join(f.directory,'synthetic-registry.json');fs.writeFileSync(registryPath,JSON.stringify(source.registry),{flag:'wx'});
+ return {input,env:{...f.env,SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH:registryPath},value};
+}
+test('team-history reader uses the explicit external registry to replay a v3 target and cannot self-trust captured keys',t=>{
+ const f=fixture(t),v3=writeIdentityTarget(f),output=path.join(f.directory,'history-v3.json');
+ const before=fs.readFileSync(v3.input);
+ const result=history.readHistory({input:v3.input,output},{env:v3.env,execute:()=>Buffer.from(JSON.stringify(freshPayload({rows:[]})))});
+ assert.equal(result.rows,0);assert.equal(result.teams,2);assert.deepEqual(fs.readFileSync(v3.input),before);
+ const forged=JSON.parse(fs.readFileSync(v3.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH));forged.keys[0].enabled=false;
+ fs.writeFileSync(v3.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH,JSON.stringify(forged));
+ assert.throws(()=>history.readHistory({input:v3.input,output:path.join(f.directory,'bad-history.json')},{env:v3.env,
+  execute:()=>assert.fail('must reject before transport')}),/INPUT_BINDING/);
+});
 
 test('target identity requires exact IDs and names, rejects conflicts and enforces 32 matches / 64 teams',()=>{
  assert.deepEqual(history.targetsFor({matches:[identities()]}),targets);

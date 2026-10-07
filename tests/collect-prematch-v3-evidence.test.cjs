@@ -319,3 +319,60 @@ test('rehashing a substituted PG history payload cannot bypass the original remo
  await assert.rejects(collector.collectEvidence({...bound,history},mock.deps),/HISTORY_PAYLOAD_BINDING/);
  assert.equal(mock.calls(),0);
 });
+function identityBoundOnline(capturedAt=start){
+ const {snapshot}=require('./fixtures/signed-live-had.cjs'),{derivedTeamId}=require('../scripts/storedResultTeamIdentity.cjs');
+ const m={id:'fivehundred_123',sourceMatchId:'123',businessDate:'2026-10-06',matchNo:'周二001',
+  homeTeamName:'Synthetic Home',awayTeamName:'Synthetic Away',homeTeamId:derivedTeamId('Synthetic Home'),awayTeamId:derivedTeamId('Synthetic Away'),
+  kickoffTime:'2026-10-06T15:00:00.000Z',eventVersion:'2026-10-06T15:00:00.000Z',buyEndTime:'2026-10-06 22:00:00',
+  predictionMeta:{cutoffTime:'2026-10-06T15:00:00.000Z'},sourceCycleId:'synthetic-full',
+  sourceObservedAt:'2026-10-06T06:59:58.000Z',sourceReceivedAt:'2026-10-06T06:59:58.000Z',status:'SCHEDULED'};
+ const source=snapshot([m],{receivedAt:Date.parse(m.sourceReceivedAt),requestedAt:Date.parse(m.sourceReceivedAt)-1000,
+  mutate:e=>{e.payload={success:true,value:{matchInfoList:[{businessDate:m.businessDate,subMatchList:[{matchId:123,
+   homeTeamAllName:m.homeTeamName,awayTeamAllName:m.awayTeamName,matchDate:'2026-10-06',matchTime:'23:00:00',matchNumStr:m.matchNo,matchStatus:'Define',oddsList:[]}]}]}};}});
+ const identity=require('../src/services/prematchV3InputIdentity.cjs'),raw={version:reader.IDENTITY_VERSION,readOnly:'on',productionWrites:0,
+  businessDate:m.businessDate,observedAt:'2026-10-06T06:59:59.999Z',generation:{data_generation_id:'synthetic-v3',manifest_hash:'a'.repeat(64),
+   committed_at:'2026-10-06T06:59:59.000Z',data_publication_mode:'active-generation',data_generation_source_cycle_id:m.sourceCycleId},
+  matches:[m],matchRows:[{dataset:'current',match_id:m.id,source_match_id:m.sourceMatchId,kickoff_time:'2026-10-06 15:00:00+00'}],
+  modelArtifacts:[],modelArtifactInventory:[],identitySource:{version:'prematch-v3-online-identity-source-v1',sourcePath:identity.CURRENT_SNAPSHOT_NAMESPACE,
+   endpoint:source.snapshot.endpoints[0],inputCapturedAt:capturedAt,collectorTrustRegistryHash:require('../src/services/collectorAttestation.cjs').sha256CollectorJson(source.registry)}};
+ const rawBytes=Buffer.from(JSON.stringify(raw)),transport={hostKeyPinVerified:true,hostKeyFingerprint:'SHA256:'+'a'.repeat(43),
+  startedAt:'2026-10-06T06:59:59Z',finishedAt:capturedAt,remoteResponseSha256:sha(rawBytes),remoteResponseFile:'synthetic-v3.remote-response.json',bytes:rawBytes.length};
+ Object.assign(transport,reader.validateTransport(transport,raw.observedAt));
+ const input={...reader.admitIdentityResponse(raw,source.registry),transport};
+ return {input,inputBytes:Buffer.from(JSON.stringify(input)),rawBytes,outputDir:'C:/synthetic-private',trustRegistry:source.registry};
+}
+test('v3 collector carries cryptographically replayed original identity into detached research facts without inventing provider mappings',async()=>{
+ const bound=identityBoundOnline(),before=sha(bound.inputBytes),mock=dependencies({bindings:[],xgBindings:[],trustRegistry:bound.trustRegistry});
+ const result=await collector.collectEvidence(bound,mock.deps),event=result.events[0];
+ assert.equal(event.event.cutoffAt,'2026-10-06T22:00:00+08:00');assert.equal(event.assessment.event.cutoffAt,event.event.cutoffAt);
+ assert.equal(event.assessment.blockers.includes('input-identity-admission-invalid'),false);
+ assert.equal(event.assessment.blockers.includes('input-identity-not-known-at-as-of'),false);
+ assert.equal(event.sourceContract.teamObservations.length,0);assert.equal(event.binding,null);assert.equal(mock.calls(),0);
+ assert.equal(result.summary.formalRecommendations,0);assert.equal(result.formalEligible,false);assert.equal(sha(bound.inputBytes),before);
+ const options=reader.identityOptionsFor(bound.input,0,bound.trustRegistry);
+ const fakeBinding={provider:'KFA',sourceMatchId:'123',eventVersion:bound.input.matches[0].eventVersion,side:'home',
+  homeTeamId:bound.input.matches[0].homeTeamId,awayTeamId:bound.input.matches[0].awayTeamId,
+  homeTeamName:bound.input.matches[0].homeTeamName,awayTeamName:bound.input.matches[0].awayTeamName};
+ assert.equal(collector.bindingFor(bound.input.matches[0],[fakeBinding],options).sourceMatchId,'123');
+ const bad=structuredClone(bound);bad.input.identityAdmissions[0].cutoffAt='2026-10-06T15:00:00Z';bad.inputBytes=Buffer.from(JSON.stringify(bad.input));
+ await assert.rejects(collector.collectEvidence(bad,mock.deps),/ONLINE_INPUT_BINDING/);
+});
+test('v3 collection cannot start one nanosecond before actual input capture even when PG read is already known',async()=>{
+ const bound=identityBoundOnline('2026-10-06T07:00:00.000000001Z'),mock=dependencies({bindings:[],xgBindings:[],trustRegistry:bound.trustRegistry});
+ assert.equal(collector.validKnowledgeWindow(bound.input,start),false);
+ await assert.rejects(collector.collectEvidence(bound,mock.deps),/ONLINE_INPUT_NOT_FRESH/);assert.equal(mock.calls(),0);
+});
+test('v3 bound ledger-history adapter uses the original verified target identity and keeps partial history as research',async()=>{
+ const bound=identityBoundOnline(),history=historyFor(bound),mock=dependencies({bindings:[],xgBindings:[],trustRegistry:bound.trustRegistry});
+ const result=await collector.collectEvidence({...bound,history},mock.deps),event=result.events[0];
+ assert.equal(event.historyAdaptations.home.status,'captured',JSON.stringify(event.historyAdaptations.home));
+ assert.equal(event.assessment.teamSnapshot.features['home.history.sampleCount'],1);
+ assert.equal(event.assessment.teamSnapshot.features['home.fatigue.restDays'],null);
+ assert.equal(event.historyAdaptations.home.completeTeamHistory,false);assert.equal(result.formalEligible,false);
+ const adapter=require('../scripts/prematchHistoryCollectionAdapter.cjs');
+ const withoutContext=adapter.adaptLedgerTeamHistory({history:history.value,input:bound.input,event:event.event,side:'home',asOf:finished});
+ assert.equal(withoutContext.status,'blocked');assert.equal(withoutContext.teamObservations.length,0);
+ const invalidOptions=reader.identityOptionsFor(bound.input,0,bound.trustRegistry);invalidOptions.identityAdmission={...invalidOptions.identityAdmission,identityAccepted:true};
+ const invalid=adapter.adaptLedgerTeamHistory({history:history.value,input:bound.input,event:event.event,side:'home',asOf:finished,identityOptions:invalidOptions});
+ assert.equal(invalid.status,'blocked');assert.equal(invalid.teamObservations.length,0);
+});

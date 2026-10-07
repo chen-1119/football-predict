@@ -9,6 +9,12 @@ const crypto = require('node:crypto');
 const { VERSION, MAX_BYTES, MAX_MODEL_ARTIFACT_BYTES, MAX_MATCHES, MAX_INVENTORY, CLOCK_SKEW_MS, validDate, parseArgs, query,
   validateResponse, validateTransport, verifyOnlineRead, readInputs } = require('../scripts/readPrematchV3OnlineInputs.cjs');
 const { fingerprintSshKeyBlob } = require('../scripts/releaseSshHostKeyPin.cjs');
+const attestation=require('../src/services/collectorAttestation.cjs');
+const {derivedTeamId}=require('../scripts/storedResultTeamIdentity.cjs');
+const identity=require('../src/services/prematchV3InputIdentity.cjs');
+const online=require('../src/services/prematchV3OnlineResponse.cjs');
+const assessment=require('../src/services/prematchV3Assessment.cjs');
+const pair=attestation.createCollectorKeyPair({keyId:'synthetic-identity-only',independenceDomain:'synthetic-current-identity'});
 const date = '2026-10-06';
 const digest = raw => crypto.createHash('sha256').update(raw).digest('hex');
 const payload = (changes = {}) => ({ version: VERSION, readOnly: 'on', productionWrites: 0,
@@ -26,7 +32,10 @@ function fixture(t) {
   t.after(() => { for (const name of fs.readdirSync(directory)) fs.unlinkSync(path.join(directory, name)); fs.rmdirSync(directory); });
   const blob = Buffer.from('synthetic-ed25519-host-key-for-reader-boundaries-only').toString('base64');
   const knownHosts = path.join(directory, 'synthetic.known_hosts'); fs.writeFileSync(knownHosts, `synthetic.invalid ssh-ed25519 ${blob}\n`);
-  return { directory, output: path.join(directory, 'synthetic.json'), env: { RELEASE_DEPLOY_HOST: 'synthetic.invalid', RELEASE_DEPLOY_USER: 'synthetic_user',
+  const registryPath=path.join(directory,'synthetic-public-trust.json');fs.writeFileSync(registryPath,JSON.stringify(pair.registry));
+  const liveDate=new Date(Date.now()+32*3600000).toISOString().slice(0,10);
+  return { directory,liveDate, output: path.join(directory, 'synthetic.json'), env: { SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH:registryPath,
+    RELEASE_DEPLOY_HOST: 'synthetic.invalid', RELEASE_DEPLOY_USER: 'synthetic_user',
     RELEASE_DEPLOY_KEY: path.join(directory, 'synthetic-not-a-real-private-key'), RELEASE_DEPLOY_KNOWN_HOSTS: knownHosts,
     RELEASE_DEPLOY_HOST_KEY_SHA256: fingerprintSshKeyBlob(blob) } };
 }
@@ -135,12 +144,12 @@ test('mock execution uses pinned SSH, scrubbed remote environment, bounded pipes
     assert.equal(options.maxBuffer, MAX_BYTES); assert.equal(options.timeout, 45000); assert.equal(options.windowsHide, true);
     assert.deepEqual(options.stdio, ['pipe', 'pipe', 'pipe']); assert.match(options.input, /runuser/);
     assert.match(options.input, /READ ONLY/); assert.doesNotMatch(options.input, /PGPASSWORD|dotenv|collectors|syncData/);
-    return Buffer.from(JSON.stringify(payload({ observedAt: new Date().toISOString() })));
+    return Buffer.from(JSON.stringify(identityPayload({asOf:new Date().toISOString(),businessDate:f.liveDate}).raw));
   };
-  const result = readInputs({ date, output: f.output }, f.env, execute);
+  const result = readInputs({ date:f.liveDate, output: f.output }, f.env, execute);
   assert.equal(result.productionWrites, 0); assert.equal(calls, 1);
   const raw = fs.readFileSync(`${f.output}.remote-response.json`), value = JSON.parse(fs.readFileSync(f.output, 'utf8'));
-  assert.equal(verifyOnlineRead(value, { date, rawResponse: raw }), true);
+  assert.equal(verifyOnlineRead(value, { date:f.liveDate, rawResponse: raw,trustRegistry:pair.registry }), true);
   assert.equal(result.remoteResponseSha256, digest(raw));
   assert.throws(() => readInputs({ date, output: f.output }, f.env, execute), /V3_READER_NEW_OUTPUT_REQUIRED/);
   assert.equal(calls, 1); assert.equal(fs.readFileSync(`${f.output}.remote-response.json`).equals(raw), true);
@@ -153,8 +162,8 @@ test('existing raw companion also blocks another read and existing bytes are ret
 });
 test('a raced destination is never overwritten; the successfully written raw receipt stays immutable', t => {
   const f = fixture(t), marker = 'synthetic-existing-report';
-  const execute = () => { fs.writeFileSync(f.output, marker); return Buffer.from(JSON.stringify(payload({ observedAt: new Date().toISOString() }))); };
-  assert.throws(() => readInputs({ date, output: f.output }, f.env, execute), /V3_READER_OUTPUT_COMMIT_FAILED/);
+  const execute = () => { fs.writeFileSync(f.output, marker); return Buffer.from(JSON.stringify(identityPayload({asOf:new Date().toISOString(),businessDate:f.liveDate}).raw)); };
+  assert.throws(() => readInputs({ date:f.liveDate, output: f.output }, f.env, execute), /V3_READER_OUTPUT_COMMIT_FAILED/);
   assert.equal(fs.readFileSync(f.output, 'utf8'), marker);
   assert.equal(fs.existsSync(`${f.output}.remote-response.json`), true);
 });
@@ -185,4 +194,158 @@ test('direct read API rejects calendar and SSH argument injection before invokin
     { RELEASE_DEPLOY_KEY: '' }, { RELEASE_DEPLOY_HOST: 'synthetic.invalid\nother' }]) {
     assert.throws(() => readInputs({ date, output: f.output }, { ...f.env, ...changes }, noExecute), /V3_READER_SSH_CONFIG/);
   }
+});
+
+// Synthetic signed current endpoint: contains a not-yet-open fixture and no
+// HAD pool. It is never a provider sample, price prediction or model fit.
+function identityPayload({asOf='2026-10-08T10:00:00.000Z',businessDate='2026-10-08',prefix='sporttery'}={}) {
+  const at=Date.parse(asOf),kickoff=new Date(Date.parse(businessDate+'T00:00:00Z')+16*3600000).toISOString();
+  const receivedAt=new Date(at-2000).toISOString(),requestedAt=new Date(at-3000).toISOString();
+  const match={id:`${prefix}_123`,sourceMatchId:'123',businessDate,matchNo:'周四001',
+    homeTeamName:'Synthetic Home',awayTeamName:'Synthetic Away',homeTeamId:derivedTeamId('Synthetic Home'),awayTeamId:derivedTeamId('Synthetic Away'),
+    kickoffTime:kickoff,eventVersion:kickoff,buyEndTime:businessDate+' 22:00:00',predictionMeta:{cutoffTime:kickoff},
+    sourceCycleId:'sporttery-full-sync:synthetic',sourceObservedAt:receivedAt,sourceReceivedAt:receivedAt,status:'SCHEDULED'};
+  const bj=new Date(Date.parse(kickoff)+8*3600000).toISOString();
+  const row={matchId:123,homeTeamAllName:match.homeTeamName,awayTeamAllName:match.awayTeamName,
+    matchDate:bj.slice(0,10),matchTime:bj.slice(11,19),matchNumStr:match.matchNo,matchStatus:'Define',oddsList:[]};
+  const sourcePayload={success:true,value:{matchInfoList:[{businessDate,subMatchList:[row]}]}};
+  const url='https://webapi.sporttery.cn/gateway/uniform/football/getMatchListV1.qry?clientCode=3001';
+  const endpoint={method:'current',page:null,ok:true,url,requestedAt,receivedAt,sourceCycleId:'sporttery-fast:synthetic',
+    sourceRequest:{url,method:'GET',page:null,role:'current'},providerObservedAt:null,httpStatus:200,httpDate:null,httpEtag:null,
+    contentType:'application/json',headersSha256:'a'.repeat(64),rawSha256:'b'.repeat(64),rawBytes:Buffer.byteLength(JSON.stringify(sourcePayload)),
+    canonicalPayloadSha256:attestation.sha256CollectorJson(sourcePayload),payload:sourcePayload};
+  const commitment=attestation.buildCollectorCommitment({provider:'sporttery',endpoint:{url,method:'GET',page:null,role:'current'},
+    collectorCycleId:endpoint.sourceCycleId,requestedAt,receivedAt,providerObservedAt:null,response:endpoint,payload:sourcePayload});
+  endpoint.collectorAttestation=attestation.signCollectorCommitment(commitment,pair);
+  const generation={data_generation_id:'g-synthetic',manifest_hash:'c'.repeat(64),committed_at:new Date(at-1000).toISOString(),
+    data_publication_mode:'active-generation',data_generation_source_cycle_id:match.sourceCycleId};
+  const pgRow={dataset:'current',match_id:match.id,source_match_id:match.sourceMatchId,kickoff_time:kickoff.replace('T',' ').replace('Z','+00')};
+  const raw={version:online.IDENTITY_VERSION,readOnly:'on',productionWrites:0,businessDate,observedAt:asOf,generation,
+    matches:[match],matchRows:[pgRow],modelArtifactInventory:[],modelArtifacts:[],identitySource:{
+      version:'prematch-v3-online-identity-source-v1',sourcePath:identity.CURRENT_SNAPSHOT_NAMESPACE,endpoint,inputCapturedAt:asOf,collectorTrustRegistryHash:attestation.sha256CollectorJson(pair.registry)}};
+  return {raw,match,row:pgRow,endpoint,publication:identity.publicationFromMeta(generation),pgObservedAt:asOf,inputCapturedAt:asOf,trustRegistry:pair.registry};
+}
+function admitted(f) {return require('../scripts/readPrematchV3OnlineInputs.cjs').admitIdentityResponse(f.raw,pair.registry);}
+function copy(v){return JSON.parse(JSON.stringify(v));}
+test('v3 exact canonical event admits both known IDs without a HAD sale or frozen decision; originals do not change',()=>{
+  for(const prefix of ['sporttery','fivehundred']) {
+    const f=identityPayload({prefix}),before=JSON.stringify(f.raw),value=admitted(f),proof=value.identityAdmissions[0];
+    assert.equal(online.validateResponse(value,f.raw.businessDate,{trustRegistry:pair.registry}).matches,1);
+    assert.equal(identity.verifyPrematchV3InputIdentity(proof,f),true);
+    assert.equal(proof.cutoffAt,'2026-10-08T14:00:00.000Z');
+    assert.notEqual(proof.currentEventIdentity.sourceCycleId,proof.publication.sourceCycleId);
+    assert.equal(proof.formalEligible,false);assert.equal(JSON.stringify(f.raw),before);
+    const event=assessment.eventFromMatch(f.match,{identityAdmission:proof,identityContext:f});
+    assert.equal(require('../src/services/prematchV3Clock.cjs').epochNanoseconds(event.cutoffAt),require('../src/services/prematchV3Clock.cjs').epochNanoseconds('2026-10-08T14:00:00.000Z'));
+    assert.equal(event.sourceMatchId,'123');
+  }
+});
+test('v3 rejects unknown prefixes, same suffix with wrong row/event/team/order/no/business day and ns drift',()=>{
+  const f=identityPayload({prefix:'fivehundred'});
+  for(const mutate of [v=>{v.match.id='other_123';v.row.match_id=v.match.id;},v=>{v.row.source_match_id='124';},
+    v=>{v.row.match_id='sporttery_124';},v=>{v.row.kickoff_time='2026-10-08 16:00:00.000000001+00';},
+    v=>{v.match.homeTeamId=v.match.awayTeamId;},v=>{[v.match.homeTeamName,v.match.awayTeamName]=[v.match.awayTeamName,v.match.homeTeamName];
+      [v.match.homeTeamId,v.match.awayTeamId]=[v.match.awayTeamId,v.match.homeTeamId];},v=>{v.match.matchNo='周四002';},
+    v=>{v.match.matchNumStr='周四002';},v=>{v.match.businessDate='2026-10-07';},v=>{v.match.eventVersion='2026-10-08T16:00:00.000000001Z';}]) {
+    const bad=copy(f);mutate(bad);assert.equal(identity.createPrematchV3InputIdentity(bad),null);
+  }
+});
+test('current identity cryptographically rejects forged payload/signature/role/url/cycle and caller boolean trust',()=>{
+  const f=identityPayload();
+  for(const mutate of [v=>{v.endpoint.payload.value.matchInfoList[0].subMatchList[0].homeTeamAllName='Forged';},
+    v=>{v.endpoint.collectorAttestation.signature='A'.repeat(88);},v=>{v.endpoint.sourceRequest.role='calculator';},
+    v=>{v.endpoint.url='https://example.invalid/current';},v=>{v.endpoint.sourceCycleId='different';},
+    v=>{v.endpoint.receivedAt='2026-10-08T10:00:00.001Z';},v=>{v.trustRegistry=true;},v=>{v.trustRegistry={identityAccepted:true};}]) {
+    const bad=copy(f);mutate(bad);assert.equal(identity.createPrematchV3InputIdentity(bad),null);
+  }
+});
+test('PG active generation and actual source knowledge must bind; cannot restamp or normalize future ns',()=>{
+  const f=identityPayload();
+  for(const mutate of [v=>{v.publication.mode='previous';},v=>{v.publication.sourceCycleId='other';},
+    v=>{v.publication.manifestHash='wrong';},v=>{v.publication.committedAt='2026-10-08T10:00:00.000000001Z';},
+    v=>{v.pgObservedAt='2026-10-08T10:00:00.000000001Z';},v=>{v.match.sourceReceivedAt='2026-10-08T10:00:00.000000001Z';},
+    v=>{v.match.sourceObservedAt='2026-10-08T09:59:58.000000001Z';},v=>{v.endpoint.requestedAt='2026-10-08T09:40:00.000Z';}]) {
+    const bad=copy(f);mutate(bad);assert.equal(identity.createPrematchV3InputIdentity(bad),null);
+  }
+});
+test('identity endpoint rejects correctly re-signed requested/received/provider clocks later by one nanosecond',()=>{
+  for(const mutate of [v=>{v.endpoint.receivedAt='2026-10-08T10:00:00.000000001Z';},
+    v=>{v.endpoint.requestedAt='2026-10-08T09:59:58.000000001Z';},
+    v=>{v.endpoint.providerObservedAt='2026-10-08T09:59:58.000000001Z';}]) {
+    const bad=identityPayload();mutate(bad);
+    bad.endpoint.collectorAttestation=attestation.signCollectorCommitment(attestation.buildCollectorCommitment({provider:'sporttery',
+      endpoint:bad.endpoint.sourceRequest,collectorCycleId:bad.endpoint.sourceCycleId,requestedAt:bad.endpoint.requestedAt,
+      receivedAt:bad.endpoint.receivedAt,providerObservedAt:bad.endpoint.providerObservedAt,response:bad.endpoint,payload:bad.endpoint.payload}),pair);
+    assert.equal(require('../scripts/recommendationPlatform/liveOfficialHad.cjs').verifySignedCurrentEndpointIdentity(
+      bad.endpoint,{asOf:bad.inputCapturedAt,trustRegistry:pair.registry}),false);
+    assert.equal(identity.createPrematchV3InputIdentity(bad),null);
+  }
+});
+test('only signed current binds local buyEndTime; earliest sale wins and late/unknown cutoffs stay blocked',()=>{
+  const f=identityPayload({prefix:'fivehundred'}),value=admitted(f),proof=value.identityAdmissions[0];
+  assert.equal(assessment.eventFromMatch(f.match).cutoffAt,null);
+  assert.equal(identity.resolveIdentityDeadline(f.match,f.match.buyEndTime,{identityAdmission:proof,identityContext:f}).instant,'2026-10-08T22:00:00+08:00');
+  for(const mutate of [v=>{v.match.cutoffAt='2026-10-08 21:00:00';},
+    v=>{v.match.cutoffAt='2026-10-08T12:00:00Z';v.match.cutoffTime='2026-10-08T12:00:00.000000001Z';},
+    v=>{v.inputCapturedAt='2026-10-08T14:00:00.000Z';},v=>{v.match.buyEndTime='2026-02-31 22:00:00';}]) {
+    const bad=copy(f);mutate(bad);assert.equal(identity.createPrematchV3InputIdentity(bad),null);
+  }
+  const invalid=assessment.buildPrematchV3Assessment(f.match,{asOf:f.inputCapturedAt,identityAdmission:{...proof,identityAccepted:true},identityContext:f});
+  assert.ok(invalid.blockers.includes('input-identity-admission-invalid'));assert.equal(invalid.primary,null);
+  const beforeKnown=assessment.buildPrematchV3Assessment(f.match,{asOf:'2026-10-08T09:59:59.999999999Z',identityAdmission:proof,identityContext:f});
+  assert.ok(beforeKnown.blockers.includes('input-identity-not-known-at-as-of'));assert.equal(beforeKnown.baseline.baseRates,null);
+});
+test('v3 raw and identity sidecars replay fully against external trust; missing/tampered/foreign proofs fail closed',()=>{
+  const f=identityPayload(),value=admitted(f),raw=Buffer.from(JSON.stringify(f.raw));
+  const tr={...transport(raw),startedAt:'2026-10-08T09:59:59.000Z',finishedAt:'2026-10-08T10:00:01.000Z'};
+  Object.assign(tr,validateTransport(tr,f.raw.observedAt));const saved={...value,transport:tr};
+  assert.equal(verifyOnlineRead(saved,{date:f.raw.businessDate,rawResponse:raw,trustRegistry:pair.registry}),true);
+  assert.equal(verifyOnlineRead({...saved,identityAdmissions:[]},{date:f.raw.businessDate,rawResponse:raw,trustRegistry:pair.registry}),false);
+  assert.equal(verifyOnlineRead(saved,{date:f.raw.businessDate,rawResponse:Buffer.from(JSON.stringify({...f.raw,matches:[]})),trustRegistry:pair.registry}),false);
+  assert.equal(verifyOnlineRead(saved,{date:f.raw.businessDate,rawResponse:raw,trustRegistry:{version:'forged',keys:[]}}),false);
+  for(const mutate of [v=>{delete v.identityAdmissions;},v=>{v.identityAdmissions[0].cutoffAt='2026-10-08T15:00:00Z';},
+    v=>{v.matchRows[0].source_match_id='124';},v=>{v.identitySource.collectorTrustRegistryHash='0'.repeat(64);},
+    v=>{v.identitySource.inputCapturedAt='2026-10-08T09:59:59Z';}]) {
+    const bad=copy(value);mutate(bad);assert.throws(()=>online.validateResponse(bad,f.raw.businessDate,{trustRegistry:pair.registry}),/^Error: V3_READER_/);
+  }
+});
+test('v3 empty input is not positive identity evidence and still validates actual current endpoint signature',()=>{
+  const f=identityPayload();f.raw.matches=[];f.raw.matchRows=[];
+  assert.equal(admitted(f).identityAdmissions.length,0);
+  f.raw.identitySource.endpoint.collectorAttestation.signature='A'.repeat(88);
+  assert.throws(()=>admitted(f),/V3_READER_IDENTITY_SOURCE_SIGNATURE/);
+});
+test('v3 refuses duplicated canonical events and source namespaces even with otherwise valid sealed sidecars',()=>{
+  const f=identityPayload(),value=admitted(f),duplicate=copy(value);
+  duplicate.matches.push(copy(duplicate.matches[0]));duplicate.matchRows.push(copy(duplicate.matchRows[0]));duplicate.identityAdmissions.push(copy(duplicate.identityAdmissions[0]));
+  assert.throws(()=>online.validateResponse(duplicate,f.raw.businessDate,{trustRegistry:pair.registry}),/V3_READER_MATCH_EVENT_AMBIGUOUS/);
+  const pathChanged=copy(value);pathChanged.identitySource.sourcePath='/tmp/untrusted-current.json';
+  assert.throws(()=>online.validateResponse(pathChanged,f.raw.businessDate,{trustRegistry:pair.registry}),/V3_READER_IDENTITY_SIDECARS/);
+});
+test('new reader requires v3 and exact raw sidecar transport; old v2 remains a legacy replay, not a new admitted read',t=>{
+  const f=fixture(t);
+  assert.throws(()=>readInputs({date,output:f.output},f.env,()=>Buffer.from(JSON.stringify(payload({observedAt:new Date().toISOString()})))),/V3_READER_IDENTITY_RESPONSE_REQUIRED/);
+  assert.equal(fs.existsSync(f.output),false);
+  assert.match(query(date),/prematch-v3-online-readonly-v3/);
+  assert.match(query(date),/'matchRows'/);assert.match(query(date),/data_generation_source_cycle_id/);
+});
+test('detached V3 research facts reuse the original PG identity sidecar, while any other field change fails',()=>{
+  const f=identityPayload({prefix:'fivehundred'}),value=admitted(f),before=JSON.stringify(value);
+  const options=require('../scripts/readPrematchV3OnlineInputs.cjs').identityOptionsFor(value,0,pair.registry);
+  const derived={...f.match,externalSignals:{prematchV3:{version:assessment.SOURCE_VERSION,teamObservations:[],asianHandicapObservations:[]}}};
+  const proof=options.identityAdmission,context={...options.identityContext,match:derived};
+  assert.equal(identity.verifyPrematchV3InputIdentity(proof,context),false,'the original sidecar is not restamped');
+  assert.equal(identity.verifyPrematchV3AssessmentIdentity(proof,context),true);
+  assert.equal(assessment.eventFromMatch(derived,options).cutoffAt,'2026-10-08T22:00:00+08:00');
+  const result=assessment.buildPrematchV3Assessment(derived,{...options,asOf:f.inputCapturedAt});
+  assert.equal(result.blockers.includes('input-identity-admission-invalid'),false);assert.equal(result.formalEligible,false);
+  for(const mutate of [v=>{v.odds={odds1:1.5};},v=>{v.buyEndTime='2026-10-08 23:00:00';},
+    v=>{v.homeTeamId='different';},v=>{v.externalSignals.other={fake:true};},v=>{v.probabilityModel={fake:true};}]){
+    const bad=copy(derived);mutate(bad);
+    assert.equal(identity.verifyPrematchV3AssessmentIdentity(proof,{...options.identityContext,match:bad}),false);
+    assert.equal(assessment.eventFromMatch(bad,options).cutoffAt,null);
+  }
+  assert.equal(identity.verifyPrematchV3AssessmentIdentity(proof,{...context,originalMatch:{...f.match,id:'sporttery_124'}}),false);
+  assert.equal(identity.verifyPrematchV3AssessmentIdentity(proof,{match:derived,originalMatch:f.match,identityAccepted:true}),false);
+  assert.equal(JSON.stringify(value),before);
 });

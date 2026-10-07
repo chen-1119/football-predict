@@ -39,8 +39,8 @@ function parseArgs(args){
  check(values['--input']&&values['--output'],'ARGS');
  return {input:values['--input'],output:values['--output'],history:values['--history']||null,ahStatus:values['--ah-status']||null};
 }
-function bindingFor(match,bindings=CAMPAIGN_BINDINGS){
- const event=eventFromMatch(match);
+function bindingFor(match,bindings=CAMPAIGN_BINDINGS,identityOptions={}){
+ const event=eventFromMatch(match,identityOptions);
  const found=bindings.filter(binding=>binding.sourceMatchId===event.sourceMatchId&&clock(binding.eventVersion)!==null
   &&clock(binding.eventVersion)===clock(event.eventVersion)&&clock(binding.eventVersion)===clock(event.kickoffTime)
   &&['homeTeamId','awayTeamId','homeTeamName','awayTeamName'].every(key=>binding[key]===match[key]));
@@ -50,7 +50,9 @@ function bindingFor(match,bindings=CAMPAIGN_BINDINGS){
 }
 function validKnowledgeWindow(input,asOf){
  const at=clock(asOf),read=clock(input?.observedAt);
- return at!==null&&read!==null&&read<=at&&at-read<=FRESH_NS;
+ return at!==null&&read!==null&&read<=at&&at-read<=FRESH_NS
+  &&(input?.version!==reader.IDENTITY_VERSION||(clock(input.identitySource?.inputCapturedAt)!==null
+   &&clock(input.identitySource.inputCapturedAt)<=at));
 }
 function sourceWindow(receipt,startedAt,asOf){
  if(Array.isArray(receipt?.rawPages))return receipt.rawPages.length>0&&receipt.rawPages.every(page=>sourceWindow(page,startedAt,asOf))
@@ -74,8 +76,8 @@ function receiptFiles(bundle,outputDir){
  return {receipt:disk,bytes:rawPages.length===1?rawPages[0]:undefined,rawPages,receiptPath,
   receiptFileHash:hash(diskBytes),rawPaths};
 }
-function xgBindingsFor(match,bindings=XG_CAMPAIGN_BINDINGS){
- const event=eventFromMatch(match);
+function xgBindingsFor(match,bindings=XG_CAMPAIGN_BINDINGS,identityOptions={}){
+ const event=eventFromMatch(match,identityOptions);
  return bindings.filter(binding=>['home','away'].includes(binding.side)&&binding.sourceMatchId===event.sourceMatchId
   &&clock(binding.eventVersion)!==null&&clock(binding.eventVersion)===clock(event.eventVersion)
   &&clock(event.eventVersion)===clock(event.kickoffTime)&&binding.siteTeamId===event[`${binding.side}TeamId`]
@@ -205,7 +207,9 @@ function validateAhAccessStatus(value,{asOf}={}){
 async function collectEvidence({input,inputBytes,rawBytes,outputDir,history=null,ahStatus=null},dependencies={}){
  const now=dependencies.now||(()=>new Date().toISOString());
  const startedAt=now();
- check(reader.verifyOnlineRead(input,{date:input?.businessDate,rawResponse:rawBytes}),'ONLINE_INPUT_BINDING');
+ const trustRegistry=input?.version===reader.IDENTITY_VERSION
+  ?dependencies.trustRegistry||reader.loadTrustedRegistry(dependencies.env||process.env):undefined;
+ check(reader.verifyOnlineRead(input,{date:input?.businessDate,rawResponse:rawBytes,trustRegistry}),'ONLINE_INPUT_BINDING');
  check(Buffer.isBuffer(inputBytes)&&stableHash(JSON.parse(inputBytes))===stableHash(input),'INPUT_BYTES_BINDING');
  check(validKnowledgeWindow(input,startedAt),'ONLINE_INPUT_NOT_FRESH');
  check(input.matches.length<=ahAdapter.MAX_MATCHES,'MATCH_BOUND');
@@ -213,8 +217,9 @@ async function collectEvidence({input,inputBytes,rawBytes,outputDir,history=null
  const historyEvidence=history?validateHistoryEvidence(history,{input,inputBytes,rawBytes,asOf:startedAt}):null;
  const initialInputHash=stableHash(input),bindings=dependencies.bindings||CAMPAIGN_BINDINGS;
  const xgBindings=dependencies.xgBindings||XG_CAMPAIGN_BINDINGS;
- const targetXgBindings=input.matches.map(match=>xgBindingsFor(match,xgBindings));
- const targetBindings=input.matches.map(match=>bindingFor(match,bindings));
+ const identities=input.matches.map((match,index)=>reader.identityOptionsFor(input,index,trustRegistry));
+ const targetXgBindings=input.matches.map((match,index)=>xgBindingsFor(match,xgBindings,identities[index]));
+ const targetBindings=input.matches.map((match,index)=>bindingFor(match,bindings,identities[index]));
  const providers=[...new Set(targetBindings.filter(Boolean).map(binding=>binding.provider))];
  const sources={};
  for(const provider of providers){
@@ -241,7 +246,7 @@ async function collectEvidence({input,inputBytes,rawBytes,outputDir,history=null
  if(accessStatus?.active){
   ah={version:ahAdapter.VERSION,productionWrites:0,formalEligible:false,reusedAccessStatusOnly:true,capturesFetchedThisRun:0,
    failureObservedAt:accessStatus.failureObservedAt,accessStatusReceipt:accessStatus,asianHandicapObservations:[],captures:[],
-   fixtures:input.matches.map(match=>({sourceMatchId:eventFromMatch(match).sourceMatchId,state:'blocked',
+   fixtures:input.matches.map((match,index)=>({sourceMatchId:eventFromMatch(match,identities[index]).sourceMatchId,state:'blocked',
     reason:'known-source-security-challenge-backoff',requestSkipped:true,rows:[]})),
    summary:{targets:input.matches.length,requestedPages:0,eligibleV3Observations:0}};
  }else try{ah=await (dependencies.collectAh||ahAdapter.collectAsianHandicapPages)({input});
@@ -254,11 +259,11 @@ async function collectEvidence({input,inputBytes,rawBytes,outputDir,history=null
  check(xgReviews.every(review=>Object.values(review).every(value=>value.reviewCompletedAt===null
   ||clock(value.reviewCompletedAt)<=clock(asOf))),'XG_REVIEW_AFTER_SNAPSHOT');
  const historyAdapter=historyEvidence?require('./prematchHistoryCollectionAdapter.cjs'):null;
- const modelRead=require('../src/services/prematchV3ModelRegistry.cjs').readPrematchV3RegistryFromOnlineInput(input,{asOf});
+ const modelRead=require('../src/services/prematchV3ModelRegistry.cjs').readPrematchV3RegistryFromOnlineInput(input,{asOf,trustRegistry});
  const options={asOf,baseline:modelRead.baseline,parameters:modelRead.parameters,modelRegistry:{asOf:modelRead.asOf,
   status:modelRead.status,storage:modelRead.storage,blockers:modelRead.blockers,receipts:modelRead.receipts}};
  const events=input.matches.map((match,index)=>{
-  const baseEvent=eventFromMatch(match),binding=targetBindings[index];
+  const identityOptions=identities[index],baseEvent=eventFromMatch(match,identityOptions),binding=targetBindings[index];
   const event={...baseEvent,homeTeamName:match.homeTeamName,awayTeamName:match.awayTeamName,
    ...(binding?{teamCategory:binding.teamCategory}: {})};
   let adapted={status:'unavailable',reason:'official-team-campaign-binding-missing',teamObservations:[]};
@@ -271,7 +276,7 @@ async function collectEvidence({input,inputBytes,rawBytes,outputDir,history=null
    }else adapted={status:'failed',reason:source.reason||'source-actual-collection-window-invalid',teamObservations:[]};
   }
   const historyAdaptations=historyAdapter?Object.fromEntries(['home','away'].map(side=>[side,
-   historyAdapter.adaptLedgerTeamHistory({history:historyEvidence,input,event:baseEvent,side,asOf})])):{};
+   historyAdapter.adaptLedgerTeamHistory({history:historyEvidence,input,event:baseEvent,side,asOf,identityOptions})])):{};
   const xgAdaptations=Object.fromEntries(['home','away'].map(side=>{
    const {binding,items,rejected,reviewCompletedAt}=xgReviews[index][side];
    const adapted=binding?xgAdapter.combineObservedXgReceipts({items,event,side,asOf})
@@ -290,7 +295,7 @@ async function collectEvidence({input,inputBytes,rawBytes,outputDir,history=null
   const sourceContract={version:'prematch-v3-source-input-v1',teamObservations,asianHandicapObservations:[],entityMapping:null,
    sourceAdmission:'unverified-private-research-only',formalEligible:false};
   const derivedMatch={...match,externalSignals:{...(match.externalSignals||{}),prematchV3:sourceContract}};
-  const assessment=buildPrematchV3Assessment(derivedMatch,options);
+  const assessment=buildPrematchV3Assessment(derivedMatch,{...options,...identityOptions});
   const historicalFacts=(historyEvidence?.rows||[]).filter(row=>row.teamId===event.homeTeamId||row.teamId===event.awayTeamId);
   const knownFamily=(side,family)=>Object.entries(assessment.teamSnapshot.features).some(([key,value])=>
    key.startsWith(`${side}.${family}.`)&&typeof value==='number');

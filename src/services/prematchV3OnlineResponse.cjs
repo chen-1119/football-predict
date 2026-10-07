@@ -5,6 +5,7 @@ const {strictInstant}=require('./strictInstant.cjs');
 const {epochNanoseconds}=require('./prematchV3Clock.cjs');
 const {sportteryDeadlineClock}=require('./sportteryDeadlineClock.cjs');
 const VERSION='prematch-v3-online-readonly-v2';
+const IDENTITY_VERSION='prematch-v3-online-readonly-v3';
 const MAX_MODEL_ARTIFACT_BYTES=4*1024*1024;
 const MODEL_ARTIFACT_KEYS=Object.freeze(['prematch-v3-baseline','prematch-v3-parameters']);
 const MAX_MATCHES=128, MAX_INVENTORY=24;
@@ -17,9 +18,13 @@ function validDate(date) {
   return typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date) && Boolean(strictInstant(`${date}T00:00:00Z`));
 }
 
-function validateResponse(value, date) {
+function identityContextFor(value,index,trustRegistry) {
+  return {row:value.matchRows[index],publication:require('./prematchV3InputIdentity.cjs').publicationFromMeta(value.generation),
+    endpoint:value.identitySource.endpoint,pgObservedAt:value.observedAt,inputCapturedAt:value.identitySource.inputCapturedAt,trustRegistry};
+}
+function validateResponse(value, date, {trustRegistry}={}) {
   check(validDate(date), 'DATE');
-  check(object(value) && value.version === VERSION && value.readOnly === 'on' && value.productionWrites === 0
+  check(object(value) && [VERSION,IDENTITY_VERSION].includes(value.version) && value.readOnly === 'on' && value.productionWrites === 0
     && value.businessDate === date && instant(value.observedAt) !== null
     && Array.isArray(value.matches) && value.matches.length <= MAX_MATCHES
     && Array.isArray(value.modelArtifactInventory) && value.modelArtifactInventory.length <= MAX_INVENTORY
@@ -29,17 +34,39 @@ function validateResponse(value, date) {
     && /^[a-f0-9]{64}$/.test(value.generation.manifest_hash)
     && (value.generation.committed_at == null || instant(value.generation.committed_at) !== null), 'GENERATION_METADATA');
   const missingFields = [], clockNormalizations = [];
+  const withIdentity=value.version===IDENTITY_VERSION;
+  const identity=withIdentity?require('./prematchV3InputIdentity.cjs'):null;
+  if(withIdentity) {
+    check(object(trustRegistry)&&!Array.isArray(trustRegistry)&&object(value.identitySource)
+      &&value.identitySource.version==='prematch-v3-online-identity-source-v1'
+      &&value.identitySource.sourcePath===identity.CURRENT_SNAPSHOT_NAMESPACE
+      &&object(value.identitySource.endpoint)&&instant(value.identitySource.inputCapturedAt)!==null
+      &&instant(value.observedAt)<=instant(value.identitySource.inputCapturedAt)
+      &&value.identitySource.collectorTrustRegistryHash===require('./collectorAttestation.cjs').sha256CollectorJson(trustRegistry)
+      &&Array.isArray(value.matchRows)&&value.matchRows.length===value.matches.length
+      &&Array.isArray(value.identityAdmissions)&&value.identityAdmissions.length===value.matches.length,'IDENTITY_SIDECARS');
+    check(require('../../scripts/recommendationPlatform/liveOfficialHad.cjs').verifySignedCurrentEndpointIdentity(
+      value.identitySource.endpoint,{asOf:value.identitySource.inputCapturedAt,trustRegistry}),'IDENTITY_SOURCE_SIGNATURE');
+    const eventKeys=value.matches.map(m=>`${m?.sourceMatchId}|${String(instant(m?.eventVersion))}`);
+    check(new Set(eventKeys).size===eventKeys.length&&new Set(value.matches.map(m=>m?.id)).size===value.matches.length,'MATCH_EVENT_AMBIGUOUS');
+  }
   value.matches.forEach((match, index) => {
     check(object(match) && match.businessDate === date, 'MATCH_BUSINESS_DATE');
     const id = match.id, sourceId = match.sourceMatchId;
     check((text(id, 256) || text(sourceId, 256)) && (id == null || text(id, 256))
       && (sourceId == null || text(sourceId, 256)), 'MATCH_IDENTITY');
-    const normalize = id => id.replace(/^sporttery_/, '');
-    check((id == null || text(normalize(id), 256)) && (sourceId == null || text(normalize(sourceId), 256)), 'MATCH_IDENTITY');
-    check(id == null || sourceId == null || normalize(id) === normalize(sourceId), 'MATCH_IDENTITY');
+    const identityContext=withIdentity?identityContextFor(value,index,trustRegistry):null;
+    if(withIdentity)check(identity.verifyPrematchV3InputIdentity(value.identityAdmissions[index],{...identityContext,match}),'MATCH_IDENTITY');
+    else {
+      const normalize = id => id.replace(/^sporttery_/, '');
+      check((id == null || text(normalize(id), 256)) && (sourceId == null || text(normalize(sourceId), 256)), 'MATCH_IDENTITY');
+      check(id == null || sourceId == null || normalize(id) === normalize(sourceId), 'MATCH_IDENTITY');
+    }
+    const resolve=(raw,field)=>withIdentity?identity.resolveIdentityDeadline(match,raw,{field,
+      identityAdmission:value.identityAdmissions[index],identityContext}):sportteryDeadlineClock(match,raw,{field});
     for (const field of ['kickoffTime', 'eventVersion', 'buyEndTime']) {
       if (match[field] != null) {
-        const resolved=field==='buyEndTime'?sportteryDeadlineClock(match,match[field],{field}):{instant:match[field]};
+        const resolved=field==='buyEndTime'?resolve(match[field],field):{instant:match[field]};
         check(instant(resolved.instant) !== null, 'MATCH_CLOCK');
         if(resolved.normalization) clockNormalizations.push({index,...resolved.normalization});
       }
@@ -52,14 +79,14 @@ function validateResponse(value, date) {
     check(match.predictionMeta == null || object(match.predictionMeta), 'MATCH_CUTOFF');
     const cutoffs = [['cutoffAt',match.cutoffAt],['cutoffTime',match.cutoffTime],['predictionMeta.cutoffTime',match.predictionMeta?.cutoffTime]]
       .filter(([,value])=>value!=null).map(([field,value])=>{
-        const resolved=sportteryDeadlineClock(match,value,{field});
+        const resolved=resolve(value,field);
         if(resolved.normalization) clockNormalizations.push({index,...resolved.normalization});
         return resolved.instant;
       });
     check(cutoffs.every(value => instant(value) !== null), 'MATCH_CUTOFF');
     if (match.cutoffAt != null && match.cutoffTime != null)
-      check(instant(sportteryDeadlineClock(match,match.cutoffAt,{field:'cutoffAt'}).instant)
-        === instant(sportteryDeadlineClock(match,match.cutoffTime,{field:'cutoffTime'}).instant), 'MATCH_CUTOFF');
+      check(instant(resolve(match.cutoffAt,'cutoffAt').instant)
+        === instant(resolve(match.cutoffTime,'cutoffTime').instant), 'MATCH_CUTOFF');
     const missing = [];
     if (sourceId == null) missing.push('sourceMatchId');
     if (match.kickoffTime == null) missing.push('kickoffTime');
@@ -90,4 +117,4 @@ function validateResponse(value, date) {
   return { matches: value.matches.length, inventory: value.modelArtifactInventory.length, modelArtifacts: value.modelArtifacts.length, missingFields, clockNormalizations };
 }
 
-module.exports={VERSION,MAX_MODEL_ARTIFACT_BYTES,MODEL_ARTIFACT_KEYS,MAX_MATCHES,MAX_INVENTORY,validDate,validateResponse};
+module.exports={VERSION,IDENTITY_VERSION,MAX_MODEL_ARTIFACT_BYTES,MODEL_ARTIFACT_KEYS,MAX_MATCHES,MAX_INVENTORY,validDate,identityContextFor,validateResponse};
