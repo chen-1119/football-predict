@@ -43,6 +43,7 @@ function renderCenter(row,{now=NOW,language='zh',mode='recommendations',selected
   if(id==='./DayCoverage')return {DayCoverage:()=>null};
   if(id==='./DualResearchV2')return compile('../src/components/recommendations/DualResearchV2.tsx');
   if(id==='./MarketComparison')return {MarketComparison:()=>null};
+  if(id==='./PrdPaperDirections')return {PrdPaperDirections:()=>null};
   if(id==='lucide-react')return {RefreshCw:()=>null,ChevronDown:()=>null,Search:()=>null,ArrowUpRight:()=>null};
   if(id.endsWith('.css'))return {};return native(id);
  }},{filename:file});

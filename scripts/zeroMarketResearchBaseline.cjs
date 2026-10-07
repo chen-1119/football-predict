@@ -26,15 +26,18 @@ const before = (a, b) => clock(a) !== null && clock(b) !== null && clock(a) < cl
 const equalClock = (a, b) => clock(a) !== null && clock(a) === clock(b);
 const exactKeys = (v, allowed) => object(v) && Object.keys(v).every(k => allowed.includes(k));
 const completeKeys = (v, required) => exactKeys(v, required) && required.every(k => Object.hasOwn(v, k));
+// Inspect callable source with this realm's intrinsic; never invoke input code.
+const nativeSourceInspector = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(function nativeSourceProbe() {}), 'toString').value;
+const nativeCallableSource = value => Reflect.apply(nativeSourceInspector, value, []);
 function nativeArrayPrototype(prototype) {
   if (!Array.isArray(prototype)) return false;
   const parent = Object.getPrototypeOf(prototype), parentConstructor = parent && Object.getOwnPropertyDescriptor(parent, 'constructor');
   if (!parent || Object.getPrototypeOf(parent) !== null || !parentConstructor || !Object.hasOwn(parentConstructor, 'value')
-    || typeof parentConstructor.value !== 'function' || Function.prototype.toString.call(parentConstructor.value) !== 'function Object() { [native code] }'
+    || typeof parentConstructor.value !== 'function' || nativeCallableSource(parentConstructor.value) !== 'function Object() { [native code] }'
     || parentConstructor.value.prototype !== parent) return false;
   const constructor = Object.getOwnPropertyDescriptor(prototype, 'constructor');
   if (!constructor || !Object.hasOwn(constructor, 'value') || typeof constructor.value !== 'function'
-    || Function.prototype.toString.call(constructor.value) !== 'function Array() { [native code] }'
+    || nativeCallableSource(constructor.value) !== 'function Array() { [native code] }'
     || constructor.value.prototype !== prototype) return false;
   const expected = Reflect.ownKeys(Array.prototype), keys = Reflect.ownKeys(prototype);
   if (keys.length !== expected.length || keys.some((key, i) => key !== expected[i])) return false;
@@ -44,7 +47,7 @@ function nativeArrayPrototype(prototype) {
       || d.writable !== baseline.writable) return false;
     if (typeof d.value === 'function') {
       const name = key === 'constructor' ? 'Array' : key === Symbol.iterator ? 'values' : key;
-      if (Function.prototype.toString.call(d.value) !== `function ${name}() { [native code] }`) return false;
+      if (nativeCallableSource(d.value) !== `function ${name}() { [native code] }`) return false;
     } else if (key === 'length') { if (d.value !== 0) return false; }
     else if (key === Symbol.unscopables) {
       if (!object(d.value) || Object.getPrototypeOf(d.value) !== null || Reflect.ownKeys(d.value).some(k => typeof k !== 'string')) return false;
@@ -63,9 +66,11 @@ function plainJson(value) {
     if (typeof v === 'string') { characters += v.length; return characters <= 16 * 1024 * 1024; }
     if (typeof v !== 'object' || ancestors.has(v) || Object.getOwnPropertySymbols(v).length) return false;
     const array = Array.isArray(v), prototype = Object.getPrototypeOf(v);
-    if (!array && prototype !== Object.prototype && prototype !== null
-      && !(Object.getPrototypeOf(prototype) === null && Object.hasOwn(prototype, 'constructor')
-        && Function.prototype.toString.call(prototype.constructor) === 'function Object() { [native code] }')) return false;
+    if (!array && prototype !== Object.prototype && prototype !== null) {
+      const constructor = Object.getOwnPropertyDescriptor(prototype, 'constructor');
+      if (Object.getPrototypeOf(prototype) !== null || !constructor || !Object.hasOwn(constructor, 'value')
+        || typeof constructor.value !== 'function' || nativeCallableSource(constructor.value) !== 'function Object() { [native code] }') return false;
+    }
     if (array && !nativeArrayPrototype(prototype)) return false;
     const descriptors = Object.getOwnPropertyDescriptors(v), names = Object.keys(v);
     if (array && (v.length > 10000 || names.length !== v.length || names.some((key, i) => key !== String(i)))) return false;

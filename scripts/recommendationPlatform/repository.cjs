@@ -142,10 +142,14 @@ class Repository {
     await this.client.query(`INSERT INTO football.daily_featured_combo_state(id,payload) VALUES(1,$1::jsonb)
       ON CONFLICT(id) DO UPDATE SET payload=(CASE WHEN jsonb_typeof(football.daily_featured_combo_state.payload)='object' THEN football.daily_featured_combo_state.payload ELSE '{}'::jsonb END) || EXCLUDED.payload`,[JSON.stringify({recommendationCenter:center})]);
   }
+  async prdPaperProjection(businessDate,{asOf}={}) {
+    const trustRegistry=require('../../src/services/collectorAttestation.cjs').loadCollectorTrustRegistry(this.trustRegistry);
+    return require('./prdPaperRepository.cjs').readPrdPaperProjection(this.client, { businessDate, asOf, trustRegistry });
+  }
 }
 function postgresPorts(pool, clock=Date.now) {
   const {withPostgresTransaction}=require('../../server/postgresStore.cjs');
-  return {clock,supportsResearchV2:true,async transaction(lane,action){
+  return {clock,supportsResearchV2:true,prdPaperPool:pool,async transaction(lane,action){
     for(let attempt=0;attempt<3;attempt++){
       try{return await withPostgresTransaction(pool,async client=>{
         await client.query("SELECT set_config('lock_timeout','3000',true),set_config('statement_timeout','20000',true)");

@@ -272,6 +272,7 @@ function renderedText(data,props,now){
     if(id==='../../services/publishedRecommendationStatus.cjs')return publishedStatus;
     if(id==='./DayCoverage')return {DayCoverage:()=>null};
     if(id==='./MarketComparison')return {MarketComparison:()=>null};
+    if(id==='./PrdPaperDirections')return {PrdPaperDirections:()=>null};
     if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
     if(id==='../../hooks/useRecommendationReviewPage')return {useRecommendationReviewPage:filters=>{
       const source=filters.kind==='single'?data.review.singles:data.review.combos.filter(row=>row.combo.size===(filters.kind==='two'?2:3));

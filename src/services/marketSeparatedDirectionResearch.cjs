@@ -38,13 +38,16 @@ const actualTimestamp = v => typeof v === 'string' && clock(v) !== null
   && new Date(v).toISOString() === v;
 const copy = v => structuredClone(v);
 const hash = v => baseline.hash(v);
+// Inspect callable source with this realm's intrinsic; never invoke input code.
+const nativeSourceInspector = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(function nativeSourceProbe() {}), 'toString').value;
+const nativeCallableSource = value => Reflect.apply(nativeSourceInspector, value, []);
 
 // Read descriptors before dispatching any input array methods or getters.
 function nativeArrayPrototype(p) {
   if (!Array.isArray(p)) return false;
   const d = Object.getOwnPropertyDescriptor(p, 'constructor');
   if (!d || !Object.hasOwn(d, 'value') || typeof d.value !== 'function'
-    || Function.prototype.toString.call(d.value) !== 'function Array() { [native code] }'
+    || nativeCallableSource(d.value) !== 'function Array() { [native code] }'
     || d.value.prototype !== p) return false;
   const names = Reflect.ownKeys(p), wanted = Reflect.ownKeys(Array.prototype);
   if (names.length !== wanted.length || names.some((k, i) => k !== wanted[i])) return false;
@@ -54,7 +57,7 @@ function nativeArrayPrototype(p) {
       || current.writable !== original.writable || current.configurable !== original.configurable) return false;
     if (typeof current.value === 'function') {
       const functionName = name === 'constructor' ? 'Array' : name === Symbol.iterator ? 'values' : name;
-      if (Function.prototype.toString.call(current.value) !== `function ${functionName}() { [native code] }`) return false;
+      if (nativeCallableSource(current.value) !== `function ${functionName}() { [native code] }`) return false;
     } else if (name === 'length') { if (current.value !== 0) return false; }
     else if (name === Symbol.unscopables) {
       if (!object(current.value) || Object.getPrototypeOf(current.value) !== null
@@ -94,7 +97,7 @@ function plainObjectPrototype(p) {
   const constructor = Object.getOwnPropertyDescriptor(p, 'constructor');
   return Object.getPrototypeOf(p) === null && constructor && Object.hasOwn(constructor, 'value')
     && typeof constructor.value === 'function'
-    && Function.prototype.toString.call(constructor.value) === 'function Object() { [native code] }'
+    && nativeCallableSource(constructor.value) === 'function Object() { [native code] }'
     && constructor.value.prototype === p;
 }
 function sealed(value) {

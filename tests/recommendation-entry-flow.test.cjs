@@ -34,6 +34,7 @@ async function center(){
   if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
   if(id==='./DayCoverage')return{DayCoverage:()=>null};
   if(id==='./MarketComparison')return{MarketComparison:()=>null};
+  if(id==='./PrdPaperDirections')return{PrdPaperDirections:()=>null};
   if(id==='./DualResearchV2')return{DualResearchV2:()=>null};
   if(id.endsWith('/recommendationCenterView'))return view;
   if(id.endsWith('/publishedMatchRecommendation'))return publishedResults;
