@@ -51,6 +51,22 @@ node --test tests/league-history-training.test.cjs
 
 ## 继续接通所需内容
 
+### 22:21 生产注册与实际兼容性检查
+
+新增 `readPrematchModelRegistryStatus.cjs`，固定 SSH 指纹，以只读事务仅查询两个模型注册键；不读取或绕过赛事身份校验。2026-10-08 22:21:15（北京）实际查询确认 `prematch-v3-baseline`、`prematch-v3-parameters` 均不存在，生产写入为 0。同轮完整赛事读取器报 `V3_READER_MATCH_IDENTITY`，该调用未取得可用赛事输入。
+
+新增 `prepareLeagueModelRegistration.cjs`，核对研究报告与历史输入承诺、实现哈希，并重新拟合比较报告；它不重新下载来源，也不代替原采集/源文件验收。22:23 的真实报告回放通过；现有训练注册验证器返回 `V3_LEARNING_RESEARCH_REQUEST_REQUIRED`，加载器返回 `baseline-schema-or-hash-invalid` 和 `payload-clock-invalid`。因此 `readyToRegister=false`，没有可执行的注册写入命令。本地兼容性检查不等于线上采用。
+
+可执行检查（固定 Node 22，静默加载既有发布环境，输出为绝对新路径）：
+
+```text
+node scripts/readPrematchModelRegistryStatus.cjs ABSOLUTE_NEW_STATUS_JSON
+node scripts/prepareLeagueModelRegistration.cjs ABSOLUTE_HISTORY_JSON ABSOLUTE_REPORT_JSON ABSOLUTE_NEW_PREPARATION_JSON
+node --test tests/model-registry-status-read.test.cjs tests/model-registration-preparation.test.cjs
+```
+
+下一适配必须明确新研究模型版本与参数结构、验证参数数学与训练报告绑定、可信线上球队映射、推理输入时钟及逐条采用回执；不能只改 schema 名称或跳过旧验证器。现有 `registerPrematchV3Parameters.cjs --prepare` 只接受原 V3 请求、报告和绑定基线。其 `--apply` 还需新鲜双注册项 CAS 与真实读回，不能拿本报告冒充该输入。当前检查没有执行 `--apply`，没有修改正式准入要求。
+
 1. 补芬超 2025/2026 和巴甲 9 月 20 日后的许可来源；审批源球队与线上球队身份映射，核实中立场。
 2. 对研究产物实现独立、可复验的注册/加载适配及真实未来采用回执；旧动态模型和新拟合格式不能互冒。
 3. 补同决策时刻官方报价、分市场/让球线校准与原有正式准入证据；8 周 CLV 从真实前瞻样本开始。
