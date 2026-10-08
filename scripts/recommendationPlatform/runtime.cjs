@@ -92,7 +92,8 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     if(!ports.prdPaperPool)return {enabled:false};
     let value;try{value=await require('./leagueBaselineRuntime.cjs').run({pool:ports.prdPaperPool,trustRegistry:ports.prdPaperTrustRegistry});}
     catch(e){value={enabled:true,status:'blocked',errorCode:/^LEAGUE_MODEL_[A-Z_]+$/.test(e.code||'')?e.code:'LEAGUE_MODEL_CYCLE_FAILED',formalEligible:false};}
-    return stage('league-baseline',async()=>value);
+    return stage('league-baseline',async()=>({...value,modelStatus:value.status,
+      reasons:value.reasons||(value.errorCode?[value.errorCode]:[])}));
   }
   async function prdPaper(){
     if(!ports.prdPaperPool)return {enabled:false};
