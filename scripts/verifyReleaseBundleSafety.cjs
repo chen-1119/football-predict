@@ -167,6 +167,12 @@ const expectedSafeEntries = [
   "docs/npmrc-example.md"
 ];
 const requiredReleaseEntries = [
+  "src/services/sportteryOpeningPolicy.cjs",
+  "scripts/verifySportteryOpeningPolicy.cjs",
+  "tests/sporttery-opening-policy.test.cjs",
+  "tests/sporttery-fast-opening.test.cjs",
+  "tests/sync-worker-eleven-opening.test.cjs",
+  "tests/sporttery-opening-projection.test.cjs",
   "scripts/zeroMarketResearchBaseline.cjs",
   "src/services/marketSeparatedDirectionResearch.cjs",
   "tests/zero-market-research-baseline.test.cjs",

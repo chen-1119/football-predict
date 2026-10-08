@@ -94,3 +94,28 @@ test('normal runtime cannot republish an authentic V1 receipt as a new current d
     assert.equal(hash(item),before);
   }
 });
+test('an identical bare SP clock cannot displace its independently verified current receipt at new publication',async()=>{
+  const c=await capture(),input=structuredClone(c.inputs.current[0]);
+  input.oddsSource='sporttery:HAD';input.oddsReceivedAt=input.officialHadQuoteReceipt.observedAt;
+  input.oddsUpdatedAt=input.oddsReceivedAt;
+  input.externalSignals={...(input.externalSignals||{}),bookmakerOdds:{...(input.externalSignals?.bookmakerOdds||{}),
+    had:{...input.odds,source:'sporttery:HAD',sourceMatchId:input.sourceMatchId,eventVersion:input.eventVersion,receivedAt:input.oddsReceivedAt}}};
+  const context={now:NOW,publication:publication(NOW),inputCapture:c.inputs.inputCapture,trustRegistry:c.registry};
+  const assessed=evaluateForecast(input,context);assert.equal(assessed.eligible,true);
+  assert.equal(assessed.candidate.quoteProvenance.receiptHash,input.officialHadQuoteReceipt.receiptHash);
+  const ports=memoryPorts(),transaction=ports.transaction;
+  ports.transaction=(lane,action)=>transaction(lane,repo=>{
+    repo.trustRegistry=c.registry;repo.publication=async()=>publication(NOW);
+    repo.currentInputs=async()=>({...c.inputs,current:[input]});return action(repo);
+  });
+  assert.equal((await createRuntime(ports).publish()).ok,true);assert.equal(ports.state.decisions.length,1);
+  assert.equal(ports.state.decisions[0].sourceVerification,'trusted-collector-signed-live-had');
+  assert.equal(validDecision(ports.state.decisions[0],{trustRegistry:c.registry}),true);
+});
+test('the quote tie preference does not reinterpret an old bare-clock frozen record',()=>{
+  const {match}=require('./recommendationFixture.cjs'),before=NOW-8*3600000;
+  const m=match(1,before),candidate=evaluateForecast(m,{now:before,publication:publication(before)}).candidate;
+  assert(candidate);assert.equal(candidate.quoteProvenance,undefined);
+  const old=buildRecord(candidate,before),bytes=JSON.stringify(old);
+  assert.equal(verifyRecord(old),true);assert.equal(JSON.stringify(old),bytes);
+});

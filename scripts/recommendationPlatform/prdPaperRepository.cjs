@@ -1,4 +1,5 @@
 'use strict';
+const {assessPaperOpening}=require('../../src/services/sportteryOpeningPolicy.cjs');
 
 // Paper artifacts use the existing, create-only learning ledger. This module
 // never writes learning events, active pointers, or published decisions.
@@ -343,11 +344,11 @@ async function appendPrdPaper(pool, { record, task, trustRegistry }) {
       return { artifactHash: prior.artifactHash, createdAt: prior.createdAt, inserted: false, record: prior.input };
     }
     assert(paperHeaders.length < 2, 'PRD_PAPER_EVENT_QUOTA', 'Paper event/model/day quota is already full');
-    deadline(record, now);
+    freshOpening(record,now);deadline(record, now);
     const out = await createOnly(client, { value: record, type: PAPER_TYPE, metadata, createdAt: now });
-    deadline(record, await dbClock(client));
+    const completedAt=await dbClock(client);freshOpening(record,completedAt);deadline(record, completedAt);
     return { ...out, record };
-  }, async client => { if (precommitRecord) deadline(precommitRecord, await dbClock(client)); });
+  }, async client => { if (precommitRecord){const now=await dbClock(client);freshOpening(precommitRecord,now);deadline(precommitRecord,now);} });
 
   // This fresh DB clock is observed only AFTER the first COMMIT has completed.
   // A precommit query cannot prove that COMMIT finished before a deadline.
@@ -363,7 +364,7 @@ async function appendPrdPaper(pool, { record, task, trustRegistry }) {
         deadline(stored.record, prior.input.paperCommitObservedAt);
         return { artifactHash: prior.artifactHash, record: prior.input };
       }
-      deadline(stored.record, now);
+      freshOpening(stored.record,now);deadline(stored.record, now);
       const readback = validatedPaperRow(await rowByHash(client, stored.artifactHash, PAPER_TYPE), { trustRegistry });
       assert(same(readback.input, stored.record) && readback.createdAt === stored.createdAt,
         'PRD_PAPER_READBACK', 'Postcommit paper original changed');
@@ -375,9 +376,9 @@ async function appendPrdPaper(pool, { record, task, trustRegistry }) {
       const ack = { ...body, contentHash: hash(body) };
       acknowledgeRecord = stored.record;
       const out = await createOnly(client, { value: ack, type: ACK_TYPE, metadata: ackMetadata(ack), createdAt: now });
-      deadline(stored.record, await dbClock(client));
+      const completedAt=await dbClock(client);freshOpening(stored.record,completedAt);deadline(stored.record, completedAt);
       return { artifactHash: out.artifactHash, record: ack };
-    }, async client => { if (acknowledgeRecord) deadline(acknowledgeRecord, await dbClock(client)); });
+    }, async client => { if (acknowledgeRecord){const now=await dbClock(client);freshOpening(acknowledgeRecord,now);deadline(acknowledgeRecord,now);} });
     return { stored: true, inserted: stored.inserted, acknowledged: true, formalEligible: false,
       productionEligible: false, artifactHash: stored.artifactHash, acknowledgementHash: acknowledgement.artifactHash,
       record: stored.record, acknowledgement: acknowledgement.record };
@@ -385,6 +386,10 @@ async function appendPrdPaper(pool, { record, task, trustRegistry }) {
     return { stored: true, inserted: stored.inserted, acknowledged: false, formalEligible: false,
       productionEligible: false, artifactHash: stored.artifactHash, reason: error.code || 'PRD_ACK_FAILED' };
   }
+}
+function freshOpening(record,now){
+  const result=assessPaperOpening(record,now);
+  assert(result.eligible,'PRD_OPENING_WAIT',result.reason);
 }
 async function readPrdPaperProjection(client, { businessDate, trustRegistry, asOf = null }) {
   assert(day(businessDate), 'PRD_BUSINESS_DATE', 'Exact business date required');

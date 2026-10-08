@@ -59,17 +59,19 @@ test('future, expired and invalid signed sources retain rejection diagnostics',a
   const corrupted=snapshot(NOW);corrupted.endpoints[0].collectorAttestation.signature='bad';
   for(const [s,reason] of [[snapshot(NOW+1001),'endpoint-acquired-after-asof'],[snapshot(NOW-16*60000),'endpoint-expired'],
     [corrupted,'collector-attestation-invalid']]){
-    const {inputs}=await captured(s),audit=inputs.inputCapture.officialHandicap;
+    const {inputs,original}=await captured(s),audit=inputs.inputCapture.officialHandicap;
     assert.equal(audit.status,'source-unavailable');
     assert.equal(audit.endpoints.calculator.reason,reason);
-    assert.equal(inputs.current[0].handicapOddsReceivedAt,stamp(NOW-16*60000));
+    assert.equal(inputs.current[0].handicapOddsReceivedAt,undefined);
+    assert.equal(original.handicapOddsReceivedAt,stamp(NOW-16*60000));assert.equal(inputs.inputCapture.currentHash,hash([original]));
     assert.equal(validInputCapture(inputs.inputCapture,stamp(NOW+1000)),true);
   }
 });
 test('individually signed endpoint pairs from different collector cycles are not joined',async()=>{
-  const {inputs}=await captured(snapshot(NOW,(e,method)=>{if(method==='current')e.sourceCycleId='other-cycle';}));
+  const {inputs,original}=await captured(snapshot(NOW,(e,method)=>{if(method==='current')e.sourceCycleId='other-cycle';}));
   assert.equal(inputs.inputCapture.officialHandicap.status,'source-cycle-conflict');
-  assert.equal(inputs.current[0].handicapOddsReceivedAt,stamp(NOW-16*60000));
+  assert.equal(inputs.current[0].handicapOddsReceivedAt,undefined);
+  assert.equal(original.handicapOddsReceivedAt,stamp(NOW-16*60000));assert.equal(inputs.inputCapture.currentHash,hash([original]));
 });
 test('frozen capture digest binds the decision and cannot be replaced with a rehashed diagnostic',async()=>{
   const {inputs,now}=await captured();
@@ -91,12 +93,13 @@ test('capture clock and malformed digest cannot be used as admission credentials
 test('blank signed cycles and oversized unverified metadata remain bounded and cannot refresh quotes',async()=>{
   for(const cycle of [' ','','x'.repeat(1024*1024)]){
     const s=snapshot(NOW,(e)=>{e.sourceCycleId=cycle;});
-    const {inputs}=await captured(s),audit=inputs.inputCapture.officialHandicap;
+    const {inputs,original}=await captured(s),audit=inputs.inputCapture.officialHandicap;
     assert.equal(audit.status,'source-unavailable');assert.equal(audit.endpoints.calculator.reason,'endpoint-cycle-invalid');
     assert.equal(audit.endpoints.calculator.sourceCycleId,null);
     assert.ok(Buffer.byteLength(JSON.stringify(inputs.inputCapture))<16384);
     assert.equal(validInputCapture(inputs.inputCapture,stamp(NOW+1000)),true);
-    assert.equal(inputs.current[0].handicapOddsReceivedAt,stamp(NOW-16*60000));
+    assert.equal(inputs.current[0].handicapOddsReceivedAt,undefined);
+    assert.equal(original.handicapOddsReceivedAt,stamp(NOW-16*60000));assert.equal(inputs.inputCapture.currentHash,hash([original]));
   }
 });
 test('current input audit counts are not capped by the independent source endpoint row limit',()=>{

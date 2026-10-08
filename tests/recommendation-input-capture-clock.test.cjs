@@ -2,6 +2,10 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {NOW,match,memoryPorts,validators}=require('./recommendationFixture.cjs');
+const {source,snapshot}=require('./fixtures/signed-live-had.cjs');
+const {joinOfficialHad}=require('../scripts/recommendationPlatform/liveOfficialHad.cjs');
+const {joinOfficialHandicap}=require('../scripts/recommendationPlatform/liveOfficialHandicap.cjs');
+const {hash}=require('../src/services/publishedForecastPolicy.cjs');
 const stamp=v=>new Date(v).toISOString();
 const capture=(startedAt,knownAt)=>({version:'current-input-capture-v1',startedAt:stamp(startedAt),capturedAt:stamp(knownAt),
   currentHash:'a'.repeat(64),marketSignalHash:'b'.repeat(64),joinedInputHash:'c'.repeat(64),officialHandicap:{
@@ -14,9 +18,13 @@ function delayedInput({delay=1000,quoteOffset=0,cutoff=NOW+60000,captureOffset=0
     repo.currentInputs=async startedAt=>{
       p.now+=delay;
       const quoteAt=p.now+quoteOffset;
-      return {current:[match(1,NOW,{buyEndTime:stamp(cutoff),oddsUpdatedAt:stamp(quoteAt)})],
-        receiptHashes:new Set(),inputKnowledgeAt:stamp(p.now+captureOffset),
-        inputCapture:capture(startedAt,p.now)};
+      const m=source(1,NOW);m.buyEndTime=stamp(cutoff);m.oddsUpdatedAt=stamp(NOW-1000);m.oddsReceivedAt=m.oddsUpdatedAt;
+      const signed=snapshot([m],{requestedAt:quoteAt-500,receivedAt:quoteAt}),hh={},had={};
+      repo.trustRegistry=signed.registry;p.testRegistry=signed.registry;
+      const first=joinOfficialHandicap([m],signed.snapshot,{now:p.now,trustRegistry:signed.registry,audit:hh});
+      const joined=joinOfficialHad(first,signed.snapshot,{now:p.now,trustRegistry:signed.registry,audit:had});
+      return {...joined,inputKnowledgeAt:stamp(p.now+captureOffset),inputCapture:{...capture(startedAt,p.now),version:'current-input-capture-v2',
+        currentHash:hash([m]),marketSignalHash:hash(signed.snapshot),joinedInputHash:hash(joined.current),officialHandicap:hh,officialHad:had}};
     };
     return action(repo);
   });
@@ -32,7 +40,7 @@ test('quote acquired during awaited input reads uses the real later decision clo
   assert.equal(p.state.decisions[0].quoteObservedAt,stamp(NOW+1000));
   assert.equal(p.state.lanes.publish.inputCapture.capturedAt,stamp(NOW+1000));
   assert.equal(p.state.decisions[0].inputCapture.capturedAt,stamp(NOW+1000));
-  assert.equal(require('../scripts/recommendationPlatform/decision.cjs').validDecision(p.state.decisions[0]),true);
+  assert.equal(require('../scripts/recommendationPlatform/decision.cjs').validDecision(p.state.decisions[0],{trustRegistry:p.testRegistry}),true);
 });
 
 test('rechecking the later clock rejects an input whose sales cutoff crossed during reads',async()=>{

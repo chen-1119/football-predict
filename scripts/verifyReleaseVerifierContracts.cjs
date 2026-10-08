@@ -7,6 +7,15 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('daily opening cannot adopt pre-opening prices or stop schedule and result collection',()=>{
+  const proof=require('./verifySportteryOpeningPolicy.cjs').run();
+  assert.equal(proof.ok,true);assert.ok(proof.tests>=20);assert.equal(proof.skipped,0);assert.equal(proof.productionWrites,0);
+  const factory=read('scripts/createReleaseBundle.cjs'),safety=read('scripts/verifyReleaseBundleSafety.cjs');
+  assert.ok(factory.indexOf('const sportteryOpening = spawnSync')<factory.indexOf('const outDir ='));
+  for(const file of ['src/services/sportteryOpeningPolicy.cjs','scripts/verifySportteryOpeningPolicy.cjs',...proof.files]){
+    assert.ok(factory.includes('"'+file+'"'));assert.ok(safety.includes('"'+file+'"'));
+  }
+});
 check('signed live HAD source, publication, deadline and frozen replay pass before signing',()=>{
   const report=require('./verifySignedLiveHadPublication.cjs').run();
   assert.equal(report.ok,true);assert.ok(report.tests>=100);assert.equal(report.skipped,0);assert.equal(report.productionWrites,0);

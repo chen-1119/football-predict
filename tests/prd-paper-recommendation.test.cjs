@@ -67,7 +67,7 @@ function fixture({ markets = ['HAD', 'HHAD'], line = -1, had = { H: 10, D: 10, A
   const quoteSnapshot = { endpoints: ['current', 'calculator'].map(method => {
     const url = method === 'current' ? SPORTTERY_CURRENT_URL : SPORTTERY_CALCULATOR_URL;
     return resign({ method, page: null, ok: true, url, sourceRequest: { url, method: 'GET', page: null, role: method },
-      requestedAt: stamp(NOW - 700), receivedAt: stamp(NOW - 500), sourceCycleId: 'synthetic-paper-price-cycle',
+      requestedAt: stamp(NOW), receivedAt: stamp(NOW), sourceCycleId: 'synthetic-paper-price-cycle',
       httpStatus: 200, contentType: 'application/json;charset=utf-8', rawBytes: 1000, rawSha256: digest, headersSha256: 'a'.repeat(64),
       payload: { success: true, value: { matchInfoList: [{ businessDate: match.businessDate, subMatchList: [structuredClone(raw)] }] } } });
   }) };
@@ -94,7 +94,7 @@ test('signed complete snapshot plus fully replayed zero-market fit creates only 
   assert.deepEqual(record.markets.HHAD.probabilities, input.forecast.grid.hhad.probabilities);
   assert.equal(record.markets.HAD.quote.priceRelationToForecast, 'acquired-after-team-forecast');
   assert.equal(record.forecastAsOf, stamp(NOW - 1000)); assert.equal(record.decisionAt, stamp(NOW));
-  assert.equal(record.decisionPriceAsOf, stamp(NOW - 500)); assert.equal(record.marketPriorUsed, false);
+  assert.equal(record.decisionPriceAsOf, stamp(NOW)); assert.equal(record.marketPriorUsed, false);
   const ev = Object.values(record.markets).flatMap(m => m.options).filter(o => o.paperEligible).map(o => o.modelExpectedValue);
   assert.equal(record.paperPrimary.modelExpectedValue, Math.max(...ev));
 }));
@@ -236,6 +236,57 @@ test('public storage acknowledgement is sealed with exact nanosecond and thirty-
       storageCommit: { ...storageCommit, paperCommitObservedAt: value } }), null);
   const diagnostic = paper.publicPrdPaperProjection(record, { trustRegistry: pair.registry });
   assert.equal(diagnostic.paperArtifactHash, null); assert.equal(diagnostic.acknowledgementHash, null);
+}));
+
+test('new paper waits before Beijing 11 even when valid prices and a frozen model already exist',()=>controlled(()=>{
+  const input=fixture();tick=NOW-1;
+  const record=make(input);assert.equal(record.status,'blocked');assert.deepEqual(record.reasons,['opening-not-reached']);
+  assert.equal(record.formalEligible,false);assert.equal(record.paperPrimary,null);
+}));
+test('new paper does not reuse a signed early cache or a request spanning the opening boundary',()=>controlled(()=>{
+  for(const receivedAt of [stamp(NOW-1),stamp(NOW)]){
+    const input=fixture();for(const e of input.quoteSnapshot.endpoints){e.requestedAt=stamp(NOW-2);e.receivedAt=receivedAt;resign(e);}
+    const record=make(input);assert.equal(record.status,'blocked');assert.deepEqual(record.reasons,['quote-acquired-before-opening']);
+  }
+}));
+test('HHAD cannot use a fresh calculator price with an early current sale-state source',()=>controlled(()=>{
+  const input=fixture({markets:['HHAD']});
+  const current=input.quoteSnapshot.endpoints.find(e=>e.method==='current');
+  current.requestedAt=stamp(NOW-2);current.receivedAt=stamp(NOW-1);resign(current);
+  const record=make(input);assert.equal(record.status,'blocked');assert.deepEqual(record.reasons,['quote-acquired-before-opening']);
+}));
+test('a historical pre-opening signed paper original still passes exact mathematical and signature replay',()=>controlled(()=>{
+  const fs=require('node:fs'),Module=require('node:module'),{createRequire}=Module;
+  const filename=require.resolve('../src/services/prdPaperRecommendation.cjs'),native=createRequire(filename);
+  const legacy=new Module(filename,module);legacy.filename=filename;legacy.paths=module.paths;
+  // Only the newly added creation boundary is absent in this old-producer
+  // boundary double. The real derive/identity/signature/math and seal run.
+  legacy.require=id=>id==='./sportteryOpeningPolicy.cjs'?{...native(id),assessOpening:()=>({eligible:true}),assessPaperOpening:()=>({eligible:true})}:native(id);
+  const source=fs.readFileSync(filename,'utf8'),markerLine='    privateInputs.openingProjection={version:OPENING_VERSION,businessDate:privateInputs.match.businessDate,openingAt:opening.openingAt};';
+  assert.equal(source.split(markerLine).length,2);
+  legacy._compile(source.replace(markerLine,''),filename);
+  const input=fixture();for(const e of input.quoteSnapshot.endpoints){e.requestedAt=stamp(NOW-800);e.receivedAt=stamp(NOW-500);resign(e);}
+  tick=NOW-1;const old=legacy.exports.createPrdPaperRecommendation(input);
+  assert.equal(old.status,'paper-screened',JSON.stringify(old.reasons));assert.equal(old.decisionAt,stamp(NOW-1));assert.equal(verify(old),true);
+  tick=NOW+86400000;assert.equal(verify(old),true);assert.equal(old.formalEligible,false);
+}));
+test('new paper retains valid HAD when only calculator acquisition predates opening and preserves both raw signed originals',()=>controlled(()=>{
+  const input=fixture(),calculator=input.quoteSnapshot.endpoints.find(e=>e.method==='calculator');
+  calculator.requestedAt=stamp(NOW-2);calculator.receivedAt=stamp(NOW-1);resign(calculator);
+  const raw=baseline.hash(input.quoteSnapshot),record=ready(input);
+  assert(record.markets.HAD.quote);assert.equal(record.markets.HHAD.quote,null);
+  assert.deepEqual(record.markets.HHAD.reasons,['quote-acquired-before-opening']);
+  assert.equal(record.paperPrimary.market,'HAD');assert.equal(baseline.hash(record.privateInputs.quoteSnapshot),raw);
+  assert.equal(baseline.hash(input.quoteSnapshot),raw);assert.deepEqual(record.privateInputs.openingProjection,
+    {version:'sporttery-eleven-opening-v1',businessDate:'2030-10-07',openingAt:stamp(NOW)});
+  tick=NOW+86400000;assert.equal(verify(record),true);
+}));
+test('opening projections cannot authorize another date, earlier hour, market mask or caller-supplied marker',()=>controlled(()=>{
+  const input=fixture();input.openingProjection={version:'caller-mask',businessDate:'other',openingAt:stamp(NOW-1),markets:['HAD']};
+  const record=ready(input);assert.equal(record.privateInputs.openingProjection.version,'sporttery-eleven-opening-v1');
+  for(const patch of [{version:'caller-mask'},{businessDate:'2030-10-06'},{openingAt:stamp(NOW-1)},{markets:['HAD']}]){
+    const altered=structuredClone(record);Object.assign(altered.privateInputs.openingProjection,patch);assert.equal(verify(rehash(altered)),false);
+  }
 }));
 
 test('pre-registered common EV tie abstains instead of a market, favorite or outcome-code fallback', () => controlled(() => {

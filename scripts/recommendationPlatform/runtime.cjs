@@ -15,6 +15,7 @@ const {buildDataCoverage}=require('../dataCoverage.cjs');
 const {createDualResearchRecord}=require('./dualChoiceResearch.cjs');
 const {createDualResearchV2Record,validDualResearchV2Record,settleDualResearchV2}=require('./dualChoiceResearchV2.cjs');
 const {officialResultValidators,resultAllowsCalibration}=require('./officialResults.cjs');
+const openingPolicy=require('../../src/services/sportteryOpeningPolicy.cjs');
 
 function freshPublication(p,now){return p && /^[a-f0-9]{64}$/.test(p.manifestHash||'') && typeof p.generationId==='string' && p.generationId.length>0 && Number.isFinite(time(p.committedAt)) && now>=time(p.committedAt) && now-time(p.committedAt)<=15*60000;}
 function requireBeforeCutoff(records,now){if(records.some(d=>now>=time(d.cutoffTime)))throw Object.assign(new Error('Cutoff crossed'),{code:'DEADLINE_CROSSED'});}
@@ -29,6 +30,10 @@ function completedInputClock(inputs,startedAt,clock){
 }
 async function assessInputs(repo,publication,now,clock){
   const startedAt=now;
+  const dailyOpening=openingPolicy.assessOpening({businessDate:day(now),asOf:new Date(now).toISOString()});
+  if(!dailyOpening.eligible)return {decisions:[],issues:[],currentInputs:[],attempted:0,assessmentAt:now,inputAsOf:null,
+    openingStatus:{version:openingPolicy.VERSION,status:'waiting-opening',...dailyOpening},
+    handicapCalibration:buildHandicapCalibration([],new Map(),day(now),{asOf:now})};
   const committed=time(publication?.committedAt);
   if(!publication || !/^[a-f0-9]{64}$/.test(publication.manifestHash||'') || !publication.generationId
     || !Number.isFinite(committed) || committed>now)throw Object.assign(new Error('Valid committed input required'),{code:'SOURCE_STALE'});
@@ -38,11 +43,18 @@ async function assessInputs(repo,publication,now,clock){
   const calibrationHeads=new Map(rawHeads.filter(e=>validResultEvent(e)&&resultAllowsCalibration(e)).map(e=>[e.eventKey,e]));
   const handicapCalibration=buildHandicapCalibration(historical.filter(d=>validDecision(d,{trustRegistry:repo.trustRegistry})),calibrationHeads,day(now),{asOf:now});
   const assessed=evaluateCurrent(inputs.current,{now,publication,handicapCalibration,inputCapture:inputs.inputCapture,trustRegistry:repo.trustRegistry});
+  const admitted=[];let openingBlocked=0;
+  for(const decision of assessed.decisions){
+    const gate=openingPolicy.assessDecisionOpening(decision,new Date(now).toISOString(),{trustRegistry:repo.trustRegistry});
+    if(gate.eligible)admitted.push(decision);
+    else{openingBlocked++;assessed.issues.push({sourceMatchId:decision.sourceMatchId,reason:gate.reason});}
+  }
+  assessed.decisions=admitted;
   // A full model publication is not a quote clock. An older generation may
   // supply a still-valid prospective model ONLY with a fresh, independently
   // acquired exact-event receipt in this transaction. Model/cutoff policy is
   // unchanged. No receipt means the original 15-minute source gate still holds.
-  if(!freshPublication(publication,now)){
+  if(!freshPublication(publication,now)&&!(openingBlocked&&admitted.length===0)){
     const fresh=assessed.decisions.filter(d=>inputs.receiptHashes.has(d.quoteProvenance?.receiptHash));
     if(!fresh.length)throw Object.assign(new Error('Fresh input required'),{code:'SOURCE_STALE'});
     for(const d of assessed.decisions)if(!fresh.includes(d))assessed.issues.push({sourceMatchId:d.sourceMatchId,reason:'source-stale'});
@@ -50,6 +62,7 @@ async function assessInputs(repo,publication,now,clock){
   }
   const quoteTimes=assessed.decisions.map(d=>time(d.quoteObservedAt));
   return {...assessed,currentInputs:inputs.current,handicapCalibration,attempted:inputs.current.length,assessmentAt:now,
+    openingStatus:{version:openingPolicy.VERSION,status:openingBlocked?'waiting-opening-quotes':'opening-ready',...dailyOpening,blockedCount:openingBlocked},
     ...(inputs.inputCapture?{inputCapture:inputs.inputCapture}:{}),inputAsOf:quoteTimes.length?new Date(Math.min(...quoteTimes)).toISOString():publication.committedAt};
 }
 /** Bind the exact current inputs inside the caller's transaction. The source
@@ -106,14 +119,14 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
   }
   async function publish(){return stage('publish',async repo=>{
     const publication=await repo.publication(),now=clock();
-    const {decisions,issues,attempted,inputAsOf,handicapCalibration,inputCapture}=await assessInputs(repo,publication,now,clock);
+    const {decisions,issues,attempted,inputAsOf,handicapCalibration,inputCapture,openingStatus}=await assessInputs(repo,publication,now,clock);
     const bound=await bindCurrentDecisions(repo,decisions,clock);
     const accepted=bound.accepted;issues.push(...bound.issues);
     for(const issue of issues)await repo.issue('publish',issue);
     requireBeforeCutoff(accepted,clock());
-    return {publication,decisionIds:accepted.map(d=>d.decisionId),inputAsOf,...(inputCapture?{inputCapture}:{}),
+    return {publication,decisionIds:accepted.map(d=>d.decisionId),inputAsOf,openingStatus,...(inputCapture?{inputCapture}:{}),
       quotePublicationLatency:require('./quotePublicationLatency.cjs').summarizeQuotePublicationLatency(accepted),
-      basePublicationAsOf:publication.committedAt,issues:issues.length,attempted,handicapCalibration:{profileHash:handicapCalibration.profileHash,sampleRows:handicapCalibration.sampleRows,activeGroups:Object.values(handicapCalibration.groups).filter(g=>g.active).length}};
+      basePublicationAsOf:publication?.committedAt??null,issues:issues.length,attempted,handicapCalibration:{profileHash:handicapCalibration.profileHash,sampleRows:handicapCalibration.sampleRows,activeGroups:Object.values(handicapCalibration.groups).filter(g=>g.active).length}};
   });}
   // Research has its own transaction. A missing migration, late cutoff, or
   // invalid research row cannot roll back the published single lane.
@@ -197,7 +210,7 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
       else previews.push(selection);
     }
     requireBeforeCutoff(created,clock());
-    return {publication,previews,inputAsOf:assessed.inputAsOf,...(assessed.inputCapture?{inputCapture:assessed.inputCapture}:{}),basePublicationAsOf:publication.committedAt,candidateCount:eligibleSources.size,referenceCount:candidates.length,watchCount:candidates.filter(d=>!eligibleSources.has(d.sourceMatchId)).length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length,handicapCalibration:{profileHash:assessed.handicapCalibration.profileHash,sampleRows:assessed.handicapCalibration.sampleRows,activeGroups:Object.values(assessed.handicapCalibration.groups).filter(g=>g.active).length}};
+    return {publication,previews,inputAsOf:assessed.inputAsOf,openingStatus:assessed.openingStatus,...(assessed.inputCapture?{inputCapture:assessed.inputCapture}:{}),basePublicationAsOf:publication?.committedAt??null,candidateCount:eligibleSources.size,referenceCount:candidates.length,watchCount:candidates.filter(d=>!eligibleSources.has(d.sourceMatchId)).length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length,handicapCalibration:{profileHash:assessed.handicapCalibration.profileHash,sampleRows:assessed.handicapCalibration.sampleRows,activeGroups:Object.values(assessed.handicapCalibration.groups).filter(g=>g.active).length}};
   });}
   async function settle(){return stage('settlement',async repo=>{
     const verify=validators || officialResultValidators(clock());

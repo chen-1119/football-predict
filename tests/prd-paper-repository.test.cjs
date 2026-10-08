@@ -67,12 +67,15 @@ async function fixture({ eventOffset = false } = {}) {
   await new Promise(resolve => setTimeout(resolve, 3));
   // Deliberately different: an explicitly reviewed official business day is
   // not a formula derived from the source's nominal fixture day.
-  const businessDate = new Date(future - 86400000).toISOString().slice(0, 10);
+  const businessDate = new Date(Date.now()+8*3600000).toISOString().slice(0, 10);
   const forward = repo.buildPrdForwardInput({ artifact, forecast: made.forecast, businessDate });
-  const storedAt = stamp(Date.now()), nowMs = Date.now() + 20;
+  // The SQL double explicitly observes an after-opening clock; this is not a
+  // claim about production DB time or admission of the synthetic model.
+  const storedAt = stamp(Date.now()), nowMs = Math.max(Date.now()+20,Date.parse(businessDate+'T03:00:00Z')+20);
   const body = { version: repo.PAPER_TYPE, status: 'paper-screened', syntheticMakerValid: true,
     id: 'synthetic-paper-1', decisionAt: new Date(nowMs - 10).toISOString(), createdAt: new Date(nowMs - 9).toISOString(),
     cutoffTime: event.cutoffAt, kickoffTime: new Date(future).toISOString(), formalEligible: false, productionEligible: false, primary: null, companion: null,
+    markets:{HAD:{quote:{requestedAt:stamp(nowMs-12),receivedAt:stamp(nowMs-11)}}},
     event: { sourceMatchId: event.recordedSourceMatchId, eventVersion: new Date(future).toISOString(), businessDate,
       orderedTeamIds: approval.orderedTeamIds, orderedEntityRefs: approval.orderedEntityRefs,
       sourceEventRef: event.sourceEventRef, sourceNominalDate: event.sourceNominalDate, eventEvidenceSha256: digest }, paperPrimary: null,
@@ -157,6 +160,27 @@ const types = db => [...db.rows.values()].map(r => r.artifact_type);
 const stored = async (f, options) => { const db = new SqlDouble(f, options);
   const out = await repo.appendPrdPaper(db, { record: f.record, task: f.task, trustRegistry: 'synthetic-trust' }); return { db, out }; };
 const base = fixture();
+
+test('new append rejects signed-price boundary clocks from an early cache without consuming the task',async()=>{
+  const f=await base,db=new SqlDouble(f),record=copy(f.record);delete record.contentHash;
+  const opening=Date.parse(f.businessDate+'T03:00:00Z');
+  record.markets.HAD.quote={requestedAt:stamp(opening-1),receivedAt:stamp(opening)};record.contentHash=hash(record);
+  await assert.rejects(repo.appendPrdPaper(db,{record,task:f.task}),{code:'PRD_OPENING_WAIT'});
+  assert.equal(db.insertions,0);assert.deepEqual(types(db),[repo.FORWARD_TYPE]);
+});
+test('new append cannot infer missing acquisition clocks from a record creation or upload time',async()=>{
+  const f=await base,db=new SqlDouble(f),record=copy(f.record);delete record.contentHash;
+  delete record.markets.HAD.quote.requestedAt;record.privateInputs.quoteSnapshot.uploadedAt=f.now;record.contentHash=hash(record);
+  await assert.rejects(repo.appendPrdPaper(db,{record,task:f.task}),{code:'PRD_OPENING_WAIT'});assert.equal(db.insertions,0);
+});
+test('HHAD append checks its current sale-state acquisition as well as calculator acquisition',async()=>{
+  const f=await base,db=new SqlDouble(f),record=copy(f.record);delete record.contentHash;
+  const fresh=copy(record.markets.HAD.quote),opening=Date.parse(f.businessDate+'T03:00:00Z');
+  record.markets={HHAD:{quote:fresh}};record.privateInputs.quoteSnapshot.endpoints=[
+    {method:'calculator',page:null,...fresh},{method:'current',page:null,requestedAt:stamp(opening-1),receivedAt:stamp(opening)}];
+  record.contentHash=hash(record);
+  await assert.rejects(repo.appendPrdPaper(db,{record,task:f.task}),{code:'PRD_OPENING_WAIT'});assert.equal(db.insertions,0);
+});
 
 test('empty approval list does not query or write anything', async () => {
   const client = { query: () => { throw new Error('Must not query'); } };

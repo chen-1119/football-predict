@@ -120,6 +120,12 @@ const verifierContracts = spawnSync(process.execPath, ["scripts/verifyReleaseVer
 if (verifierContracts.status !== 0) {
   throw new Error(`Release verifier contract preflight failed: ${String(verifierContracts.error?.message || verifierContracts.stderr || verifierContracts.stdout).slice(-2000)}`);
 }
+const sportteryOpening = spawnSync(process.execPath, ["scripts/verifySportteryOpeningPolicy.cjs"], {
+  cwd: rootDir, encoding: "utf8", windowsHide: true, timeout: 40_000, maxBuffer: 2 * 1024 * 1024,
+});
+if (sportteryOpening.status !== 0) {
+  throw new Error(`Sporttery opening preflight failed: ${String(sportteryOpening.error?.message || sportteryOpening.stderr || sportteryOpening.stdout).slice(-4000)}`);
+}
 const outDir = path.join(rootDir, ".codex-tmp");
 const workspaceActionPath = path.join(rootDir, ".release-actions");
 let workspaceActionPresent = false;
@@ -426,6 +432,12 @@ const blockedEntries = entries.filter((entry) => {
     || runtimeMutableSourceEntries.includes(normalized);
 });
 const requiredEntries = [
+  "src/services/sportteryOpeningPolicy.cjs",
+  "scripts/verifySportteryOpeningPolicy.cjs",
+  "tests/sporttery-opening-policy.test.cjs",
+  "tests/sporttery-fast-opening.test.cjs",
+  "tests/sync-worker-eleven-opening.test.cjs",
+  "tests/sporttery-opening-projection.test.cjs",
   "scripts/zeroMarketResearchBaseline.cjs",
   "src/services/marketSeparatedDirectionResearch.cjs",
   "tests/zero-market-research-baseline.test.cjs",

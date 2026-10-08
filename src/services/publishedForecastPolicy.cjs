@@ -91,7 +91,11 @@ function evaluateForecast(match, { now, publication, trustRegistry } = {}) {
       || Boolean(signedQuote && q.receipt === signedQuote.receipt)) && q.values.every(v => v !== null && v > 1)
       && Number.isFinite(q.atMs) && q.atMs <= now && q.atMs < deadline && now - q.atMs <= 15 * 60000
       && (!q.id || sourceId(q.id) === sourceId(match.sourceMatchId || match.id)) && (!q.event || iso(q.event) === eventVersion))
-    .sort((a, b) => b.atMs - a.atMs || Number(Boolean(a.receipt)) - Number(Boolean(b.receipt)));
+    // On the same actual quote clock, retain the independently verified live
+    // receipt ahead of a bare label (or a copied quote without request clocks).
+    .sort((a, b) => b.atMs - a.atMs
+      || Number(Boolean(b.receipt && b.receipt === signedQuote?.receipt)) - Number(Boolean(a.receipt && a.receipt === signedQuote?.receipt))
+      || Number(Boolean(a.receipt)) - Number(Boolean(b.receipt)));
   const q = candidates[0];
   if (!q) return fail('official-had-quote-unavailable');
   const quoteDeadline = Math.min(deadline, q.cutoffMs ?? deadline);

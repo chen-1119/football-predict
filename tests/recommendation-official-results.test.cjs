@@ -8,7 +8,7 @@ const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {makeDecision}=require('../scripts/recommendationPlatform/decision.cjs');
 const {publication}=require('./recommendationFixture.cjs');
 const KICKOFF='2026-09-26T08:30:00.000Z',PUBLISHED=Date.parse('2026-09-26T06:00:00.000Z'),OBSERVED='2026-09-26T10:30:00.000Z',NOW=Date.parse(OBSERVED)+60000;
-function scheduled(){return match('2041558',PUBLISHED,{businessDate:'2026-09-26',homeTeamName:'安养FC',awayTeamName:'蔚山现代',
+function scheduled(){return match('2041558',PUBLISHED,{businessDate:'2026-09-26',matchNo:'周六001',homeTeamName:'安养FC',awayTeamName:'蔚山现代',
   kickoffTime:KICKOFF,eventVersion:KICKOFF,handicapLine:1,handicapOdds:{odds1:2,oddsX:3,odds2:3},handicapOddsSource:'sporttery:HHAD',
   handicapOddsUpdatedAt:new Date(PUBLISHED).toISOString(),probabilityModel:{version:'test',generatedAt:new Date(PUBLISHED).toISOString(),
     oneXTwo:{final:{home:55,draw:25,away:20}},calculationTrace:{poisson:{lambdas:{home:1.5,away:1}}}}});}
