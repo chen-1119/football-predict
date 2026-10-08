@@ -177,6 +177,35 @@ export interface RecommendationCenterData {
   excludedCorruptRecords:number;modelValidation:'unvalidated';
   coverage?:DayCoverageData;
   prdPaper?:PrdPaperDirectionsData;
+  leagueBaseline?:LeagueBaselineDirections;
+}
+export interface LeagueBaselineDirection {
+ id:string;homeTeamName:string;awayTeamName:string;createdAt:string;cutoffAt:string;
+ modelVersion:string;modelHash:string;parametersHash:string;direction:Outcome|null;
+ had:Record<Outcome,number>;scoreTop3:Array<{home:number;away:number;probability:number}>;
+}
+export interface LeagueBaselineDirections {businessDate:string;updatedAt:string;records:LeagueBaselineDirection[];blocked:number}
+export function parseLeagueBaseline(value:unknown,businessDate:string,updatedAt:string):LeagueBaselineDirections{
+ const p=object(value);
+ if(p.version!=='league-baseline-directions-v1'||p.formalEligible!==false||p.businessDate!==businessDate||p.updatedAt!==updatedAt)throw new Error('Invalid league model envelope');
+ const raw=list(p.records);if(raw.length>32)throw new Error('League model bound');const ids=new Set<string>();
+ const records=raw.map(value=>{
+  const r=object(value),{contentHash,...body}=r;
+  if(paperHex(contentHash)!==prdPaperPublicHash(body)||r.version!=='league-baseline-direction-view-v1'||r.formalEligible!==false||r.businessDate!==businessDate)throw new Error('League model seal');
+  const id=paperText(r.id,90);if(!/^league-forecast-[a-f0-9]{64}$/.test(id)||ids.has(id))throw new Error('League model duplicate');ids.add(id);
+  const created=paperClock(r.createdAt),commit=paperClock(r.commitObservedAt),cutoff=paperClock(r.cutoffAt),event=object(r.event);
+  if(created.ns>=commit.ns||commit.ns>=cutoff.ns||cutoff.ns>paperClock(event.eventVersion).ns||commit.ns>paperClock(updatedAt).ns)throw new Error('League model clock');
+  const grid=object(r.grid),h=object(grid.had),had={1:number(h['1']),X:number(h.X),2:number(h['2'])};
+  if(Object.values(had).some(p=>p<0||p>1)||Math.abs(Object.values(had).reduce((a,b)=>a+b,0)-1)>1e-9)throw new Error('League model probabilities');
+  const direction=r.direction===null?null:outcome(r.direction),ranks=Object.entries(had).sort((a,b)=>b[1]-a[1]);
+  if((ranks[0][1]-ranks[1][1]>1e-12?ranks[0][0]:null)!==direction)throw new Error('League model direction');
+  const scoreTop3=list(grid.scoreTop3).map(value=>{const x=object(value),home=count(x.home),away=count(x.away),probability=number(x.probability);if(home>20||away>20||probability<0||probability>1)throw new Error('League score');return {home,away,probability};});
+  if(scoreTop3.length!==3||r.modelVersion!=='league-trained-baseline-v1')throw new Error('League model version');
+  paperHex(r.recordHash);paperHex(r.forecastHash);
+  return {id,homeTeamName:paperText(r.homeTeamName),awayTeamName:paperText(r.awayTeamName),createdAt:created.text,cutoffAt:cutoff.text,
+   modelVersion:r.modelVersion,modelHash:paperHex(r.modelHash),parametersHash:paperHex(r.parametersHash),direction,had,scoreTop3};
+ });
+ return {businessDate,updatedAt,records,blocked:count(p.blocked)};
 }
 type Obj=Record<string,unknown>;
 const object=(v:unknown):Obj=>{if(!v||typeof v!=='object'||Array.isArray(v))throw new Error('Invalid recommendation response');return v as Obj;};
@@ -788,6 +817,7 @@ export function parseRecommendationCenter(response:unknown):RecommendationCenter
   for(const k of ['publish','combos','settlement','view'] as const){if(lanes[k]==null)continue;const l=object(lanes[k]);if(l.status!=='ok'&&l.status!=='error')throw new Error('Invalid lane status');parsedLanes[k]={status:l.status,lastAttemptAt:stamp(l.lastAttemptAt),lastSuccessAt:l.lastSuccessAt==null?undefined:stamp(l.lastSuccessAt),errorCode:l.errorCode==null?null:text(l.errorCode),inputAsOf:l.inputAsOf==null?undefined:stamp(l.inputAsOf),candidateCount:l.candidateCount==null?undefined:count(l.candidateCount),eligibleCount:l.eligibleCount==null?undefined:count(l.eligibleCount),bindingFailures:l.bindingFailures==null?undefined:count(l.bindingFailures),referenceCount:l.referenceCount==null?undefined:count(l.referenceCount),watchCount:l.watchCount==null?undefined:count(l.watchCount)};}
   const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),todayDualResearch:x.todayDualResearch==null?[]:list(x.todayDualResearch).map(dualResearchV2),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),qualityReport:review.qualityReport==null?undefined:modelQuality(review.qualityReport),statistics:{single:summary(stats.single),supplementary:stats.supplementary==null?undefined:supplementarySummary(stats.supplementary),qualifiedSingle:stats.qualifiedSingle==null?undefined:summary(stats.qualifiedSingle),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated',coverage:x.coverage==null?undefined:dayCoverage(x.coverage)};
   if(Object.hasOwn(x,'prdPaper'))result.prdPaper=parsePrdPaperDirections(x.prdPaper,result.businessDate,result.updatedAt);
+  if(Object.hasOwn(x,'leagueBaseline'))result.leagueBaseline=parseLeagueBaseline(x.leagueBaseline,result.businessDate,result.updatedAt);
   if(result.coverage&&result.coverage.businessDate!==result.businessDate)throw new Error('Day coverage date mismatch');
   if(new Set(result.current.map(r=>r.decision.decisionId)).size!==result.current.length)throw new Error('Duplicate current decision');
   if(result.todayDualResearch?.some(r=>r.businessDate!==result.businessDate)

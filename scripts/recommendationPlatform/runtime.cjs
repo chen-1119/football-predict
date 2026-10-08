@@ -88,6 +88,13 @@ async function bindCurrentDecisions(repo, decisions, clock) {
 /** Each action commits independently. Never call all lanes inside one outer DB transaction. */
 function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_DUAL_RESEARCH==='1',dualResearchV2Enabled=process.env.ENABLE_DUAL_RESEARCH_V2!=='0'}={}){
   const clock=ports.clock || Date.now;
+  async function leagueBaseline(){
+    if(!ports.prdPaperPool)return {enabled:false};
+    let value;try{value=await require('./leagueBaselineRuntime.cjs').run({pool:ports.prdPaperPool,trustRegistry:ports.prdPaperTrustRegistry});}
+    catch(e){value={enabled:true,status:'blocked',errorCode:/^LEAGUE_MODEL_[A-Z_]+$/.test(e.code||'')?e.code:'LEAGUE_MODEL_CYCLE_FAILED',formalEligible:false};}
+    return stage('league-baseline',async()=>({...value,modelStatus:value.status,
+      reasons:value.reasons||(value.errorCode?[value.errorCode]:[])}));
+  }
   async function prdPaper(){
     if(!ports.prdPaperPool)return {enabled:false};
     const attemptAt=clock(),policy=require('./prdPaperRuntime.cjs');
@@ -314,10 +321,13 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
       try{projection=await repo.prdPaperProjection(day(now),{asOf:new Date(now).toISOString()});}catch{readFailed=true;await repo.issue('view',{reason:'prd-paper-projection-unavailable'});}
       prdPaperView=require('./prdPaperRuntime.cjs').pipelineView({businessDate:day(now),updatedAt:new Date(now).toISOString(),lane:lanes['prd-paper'],projection,readFailed});
     }
+    let leagueBaselineView;
+    if(ports.prdPaperPool){try{leagueBaselineView=await repo.leagueBaselineProjection(day(now),new Date(now).toISOString());}
+      catch{leagueBaselineView={version:'league-baseline-directions-v1',businessDate:day(now),updatedAt:new Date(now).toISOString(),records:[],blocked:1,formalEligible:false};}}
     const center={version:'recommendation-center-v1',policyVersion:VERSION,updatedAt:new Date(now).toISOString(),businessDate:day(now),
       inputAsOf:[lanes.publish?.inputAsOf,lanes.combos?.inputAsOf].filter(v=>Number.isFinite(time(v))).sort((a,b)=>time(b)-time(a))[0]||null,resultAsOf:lanes.settlement?.lastSuccessAt||null,lanes,
       current:selected,previews,todayCombos:today,todayDualResearch,overlapDecisionIds:overlap,coverage,
-      ...(prdPaperView?{prdPaper:prdPaperView}:{}),
+      ...(prdPaperView?{prdPaper:prdPaperView}:{}),...(leagueBaselineView?{leagueBaseline:leagueBaselineView}:{}),
       review:{singles:singles.slice(0,100),combos:combos.slice(0,100),limit:100,qualityReport:buildQualityReport(singles,{asOf:now}),
         statistics:{single:summary(singles,true),supplementary:supplementarySummary(singles),qualifiedSingle:summary(singles.filter(r=>r.selectionQuality.qualified),true),handicap:handicapSummary(singles),handicapBreakdown:handicapBreakdown(singles),marketBaseline:marketBaseline(singles),daily:dailySummary(singles,combos),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},handicapCalibration,
         definition:'latest-published-decision-before-cutoff-per-event; combos-use-exact-bound-versions'},
@@ -325,8 +335,8 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     await repo.saveView(center);
     return {centerUpdatedAt:center.updatedAt,quarantined:quarantined.length};
   });}
-  return {publish,research,researchV2,prdPaper,combos,settle,view,
-    async publishingCycle(){const publication=await publish();const dualResearch=publication.ok?await research(publication.value.decisionIds):{ok:false,skipped:'publication-failed'};const dualResearchV2=await researchV2();const paper=await prdPaper();const combinations=await combos();const projection=await view();return {publication,dualResearch,dualResearchV2,...(ports.prdPaperPool?{prdPaper:paper}:{}),combinations,projection};},
+  return {publish,research,researchV2,prdPaper,leagueBaseline,combos,settle,view,
+    async publishingCycle(){const publication=await publish();const dualResearch=publication.ok?await research(publication.value.decisionIds):{ok:false,skipped:'publication-failed'};const dualResearchV2=await researchV2();const paper=await prdPaper();const league=await leagueBaseline();const combinations=await combos();const projection=await view();return {publication,dualResearch,dualResearchV2,...(ports.prdPaperPool?{prdPaper:paper,leagueBaseline:league}:{}),combinations,projection};},
     async settlementCycle(){const settlement=await settle();const projection=await view();return {settlement,projection};}
   };
 }

@@ -144,6 +144,10 @@ class Repository {
     await this.client.query(`INSERT INTO football.daily_featured_combo_state(id,payload) VALUES(1,$1::jsonb)
       ON CONFLICT(id) DO UPDATE SET payload=(CASE WHEN jsonb_typeof(football.daily_featured_combo_state.payload)='object' THEN football.daily_featured_combo_state.payload ELSE '{}'::jsonb END) || EXCLUDED.payload`,[JSON.stringify({recommendationCenter:center})]);
   }
+  async leagueBaselineProjection(businessDate,asOf) {
+    const trust=require('../../src/services/collectorAttestation.cjs').loadCollectorTrustRegistry(this.trustRegistry);
+    return require('./leagueBaselineRuntime.cjs').projection(this.client,businessDate,asOf,trust);
+  }
   async prdPaperProjection(businessDate,{asOf}={}) {
     const trustRegistry=require('../../src/services/collectorAttestation.cjs').loadCollectorTrustRegistry(this.trustRegistry);
     return require('./prdPaperRepository.cjs').readPrdPaperProjection(this.client, { businessDate, asOf, trustRegistry });

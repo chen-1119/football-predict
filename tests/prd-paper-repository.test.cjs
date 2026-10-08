@@ -15,6 +15,9 @@ const copy = v => structuredClone(v);
 const seal = body => ({ ...body, contentHash: hash(body) });
 const stamp = ms => new Date(ms).toISOString().replace(/\.(\d{3})Z$/, '.$1000000Z');
 const ago = ms => new Date(Date.now() - ms).toISOString();
+// Synthetic only: share one UTC anchor so the explicit business day stays
+// different from the next-day source date even after Beijing midnight.
+const fixtureCalendar = now => ({ future: now + 86400000, businessDate: new Date(now).toISOString().slice(0, 10) });
 let makerChecks = 0;
 const filename = require.resolve('../scripts/recommendationPlatform/prdPaperRepository.cjs');
 const realRequire = createRequire(filename), sandbox = { module: { exports: {} }, Buffer, Date, Set, Map, Object, Array, Number, JSON, BigInt, RegExp };
@@ -50,7 +53,7 @@ async function fixture({ eventOffset = false } = {}) {
   input.approval.approvedInputHash = baseline.researchInputHash(input);
   const fitted = baseline.fitZeroMarketResearch(input); assert.equal(fitted.status, 'research-fitted', JSON.stringify(fitted.reasons));
   await new Promise(resolve => setTimeout(resolve, 3));
-  const artifact = fitted.artifact, future = Date.now() + 86400000;
+  const artifact = fitted.artifact, { future, businessDate } = fixtureCalendar(Date.now());
   const kickoffVersion = eventOffset ? new Date(future + 8 * 3600000).toISOString().replace('Z', '+08:00') : new Date(future).toISOString();
   const event = { sourceEventRef: ns + '#future/a-b', recordedSourceMatchId: 'synthetic-provider-1',
     eventVersion: kickoffVersion, sourceNominalDate: new Date(future).toISOString().slice(0, 10),
@@ -67,7 +70,6 @@ async function fixture({ eventOffset = false } = {}) {
   await new Promise(resolve => setTimeout(resolve, 3));
   // Deliberately different: an explicitly reviewed official business day is
   // not a formula derived from the source's nominal fixture day.
-  const businessDate = new Date(Date.now()+8*3600000).toISOString().slice(0, 10);
   const forward = repo.buildPrdForwardInput({ artifact, forecast: made.forecast, businessDate });
   // The SQL double explicitly observes an after-opening clock; this is not a
   // claim about production DB time or admission of the synthetic model.
@@ -160,6 +162,16 @@ const types = db => [...db.rows.values()].map(r => r.artifact_type);
 const stored = async (f, options) => { const db = new SqlDouble(f, options);
   const out = await repo.appendPrdPaper(db, { record: f.record, task: f.task, trustRegistry: 'synthetic-trust' }); return { db, out }; };
 const base = fixture();
+
+test('synthetic business/source dates remain distinct across Beijing and UTC midnight', () => {
+  for (const iso of ['2026-10-08T15:59:59.999Z', '2026-10-08T16:00:00.000Z',
+    '2026-10-08T23:59:59.999Z', '2026-10-09T00:00:00.000Z']) {
+    const now = Date.parse(iso), { future, businessDate } = fixtureCalendar(now);
+    assert.equal(future - now, 86400000);
+    assert.notEqual(businessDate, new Date(future).toISOString().slice(0, 10));
+    assert.ok(Math.max(now + 20, Date.parse(businessDate + 'T03:00:00Z') + 20) < future - 3600000);
+  }
+});
 
 test('new append rejects signed-price boundary clocks from an early cache without consuming the task',async()=>{
   const f=await base,db=new SqlDouble(f),record=copy(f.record);delete record.contentHash;

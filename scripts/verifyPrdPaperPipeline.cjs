@@ -1,6 +1,6 @@
 'use strict';
 const path=require('node:path'),{spawnSync}=require('node:child_process');
-const tests=['tests/prd-paper-recommendation.test.cjs','tests/prd-paper-repository.test.cjs',
+const tests=['tests/league-model-adoption.test.cjs','tests/prd-paper-recommendation.test.cjs','tests/prd-paper-repository.test.cjs',
   'tests/prd-paper-runtime.test.cjs','tests/prd-paper-directions-view.test.cjs',
   'tests/zero-market-research-baseline.test.cjs','tests/market-separated-direction-research.test.cjs'];
 function run(){
