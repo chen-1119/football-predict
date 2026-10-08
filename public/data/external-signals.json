@@ -1,44 +1,17 @@
 {
   "version": 1,
   "source": "external-signals+pre-match-signals",
-  "updatedAt": "2026-10-08T02:13:33.556Z",
+  "updatedAt": "2026-10-08T02:18:24.903Z",
   "sources": {
     "500.com:jczq": {
       "url": "https://trade.500.com/jczq/",
-      "updatedAt": "2026-10-08T02:13:09.848Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "rows": 6,
       "mapped": 30
     },
-    "500.com:details": {
-      "url": "https://trade.500.com/jczq/",
-      "mode": "full-details",
-      "updatedAt": "2026-10-08T02:13:12.854Z",
-      "scannedRows": 6,
-      "resultArchiveDates": [
-        "2026-10-06",
-        "2026-10-07",
-        "2026-10-08"
-      ],
-      "currentResultRows": 0,
-      "resultRows": 13,
-      "updated": 0,
-      "detailsUpdatedThisRun": 0,
-      "resultMerged": 0,
-      "cachedMerged": 576,
-      "detailsStoredTotal": 582,
-      "currentEligibleRows": 6,
-      "currentMatchesWithDetails": 4,
-      "requestedPages": 4,
-      "refreshMinutes": 180,
-      "nearRefreshMinutes": 60,
-      "urgentRefreshMinutes": 20,
-      "timeoutSeconds": 10,
-      "maxErrors": 3,
-      "errors": 3
-    },
     "open-meteo:forecast": {
       "url": "https://api.open-meteo.com/v1/forecast",
-      "updatedAt": "2026-10-08T02:13:17.433Z",
+      "updatedAt": "2026-10-08T02:18:11.630Z",
       "rows": 7,
       "mapped": 2,
       "skipped": 5,
@@ -49,7 +22,7 @@
     },
     "thesportsdb:team-venue": {
       "url": "https://www.thesportsdb.com/api/v1/json/{key}/searchteams.php",
-      "updatedAt": "2026-10-08T02:13:17.433Z",
+      "updatedAt": "2026-10-08T02:18:11.630Z",
       "attempted": 4,
       "added": 2,
       "unresolved": 2,
@@ -58,7 +31,7 @@
     },
     "api-football": {
       "url": "https://v3.football.api-sports.io",
-      "updatedAt": "2026-10-08T02:13:20.497Z",
+      "updatedAt": "2026-10-08T02:18:14.674Z",
       "syncMode": "shadow-enrichment",
       "shadowOnly": true,
       "features": {
@@ -86,7 +59,7 @@
       "maxCallsPerSync": 35
     },
     "preMatchSignals": {
-      "updatedAt": "2026-10-08T02:13:33.556Z",
+      "updatedAt": "2026-10-08T02:18:24.903Z",
       "rows": 24,
       "summary": {
         "rows": 24,
@@ -295181,7 +295154,7 @@
     },
     "166062": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041829",
       "fixtureId": "1489044",
       "matchNo": "周四001",
@@ -295195,27 +295168,12 @@
         "had": {
           "odds1": 1.43,
           "oddsX": 4.2,
-          "odds2": 5.2,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 5.2
         },
         "hhad": {
           "odds1": 2.4,
           "oddsX": 3.35,
-          "odds2": 2.42,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 2.42
         }
       },
       "infoMatchId": "166062",
@@ -295372,11 +295330,21 @@
         "fiveHundred.europeOdds",
         "fiveHundred.asianHandicap"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.43,
+        "oddsX": 4.2,
+        "odds2": 5.2,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.43 / 4.20 / 5.20",
+          "en": "500.com 1X2 reference: 1.43 / 4.20 / 5.20"
+        }
+      }
     },
     "166063": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041830",
       "fixtureId": "1489046",
       "matchNo": "周四002",
@@ -295390,27 +295358,12 @@
         "had": {
           "odds1": 1.41,
           "oddsX": 3.95,
-          "odds2": 6,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 6
         },
         "hhad": {
           "odds1": 2.43,
           "oddsX": 3.18,
-          "odds2": 2.48,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 2.48
         }
       },
       "infoMatchId": "166063",
@@ -295567,11 +295520,21 @@
         "fiveHundred.europeOdds",
         "fiveHundred.asianHandicap"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.41,
+        "oddsX": 3.95,
+        "odds2": 6,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.41 / 3.95 / 6.00",
+          "en": "500.com 1X2 reference: 1.41 / 3.95 / 6.00"
+        }
+      }
     },
     "166064": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041831",
       "fixtureId": "1362462",
       "matchNo": "周四003",
@@ -295583,29 +295546,14 @@
       "handicapLine": "1",
       "bookmakerOdds": {
         "had": {
-          "odds1": 4.02,
+          "odds1": 4.08,
           "oddsX": 3.6,
-          "odds2": 1.66,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 1.65
         },
         "hhad": {
-          "odds1": 1.96,
-          "oddsX": 3.4,
-          "odds2": 3.08,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds1": 1.98,
+          "oddsX": 3.3,
+          "odds2": 3.11
         }
       },
       "infoMatchId": "166064",
@@ -295762,206 +295710,56 @@
         "fiveHundred.europeOdds",
         "fiveHundred.asianHandicap"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 4.08,
+        "oddsX": 3.6,
+        "odds2": 1.65,
+        "summary": {
+          "zh": "500彩票网胜平负参考：4.08 / 3.60 / 1.65",
+          "en": "500.com 1X2 reference: 4.08 / 3.60 / 1.65"
+        }
+      }
     },
     "166065": {
-      "source": "500.com:jczq+500.com:details",
+      "source": "500.com:jczq",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041832",
       "fixtureId": "-1",
-      "infoMatchId": "166065",
       "matchNo": "周四004",
-      "processDate": "2026-10-08",
-      "matchDate": "2026-10-09",
       "leagueName": "巴甲",
-      "homeTeamName": "巴竞技",
-      "awayTeamName": "米竞技",
+      "homeTeamName": "巴拉纳竞技",
+      "awayTeamName": "米内罗竞技",
       "kickoffTime": "2026-10-09T07:00:00+08:00",
       "buyEndTime": "2026-10-08 22:00:00",
-      "timingPolicy": "component-as-of-v1",
-      "timingUpdateKind": "component-observation",
-      "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-      "receivedAt": "2026-10-07T05:16:30.359Z",
-      "validUntil": "2026-10-08T14:00:00.000Z",
-      "latestReceivedAt": "2026-10-07T05:16:30.359Z",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
       "handicapLine": "-1",
-      "handicapLineMeta": {
-        "source": "500.com:jczq",
-        "line": "-1",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "usableForPreMatch": true,
-        "observationPhase": "pre-match",
-        "updatedAt": "2026-10-07T05:16:30.359Z"
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.95,
+        "oddsX": 3.05,
+        "odds2": 3.46,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.95 / 3.05 / 3.46",
+          "en": "500.com 1X2 reference: 1.95 / 3.05 / 3.46"
+        }
       },
       "bookmakerOdds": {
         "had": {
           "odds1": 1.95,
-          "oddsX": 3.12,
-          "odds2": 3.38,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "oddsX": 3.05,
+          "odds2": 3.46
         },
         "hhad": {
-          "odds1": 4.15,
-          "oddsX": 3.55,
-          "odds2": 1.65,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds1": 4.3,
+          "oddsX": 3.45,
+          "odds2": 1.65
         }
-      },
-      "fiveHundred": {
-        "source": "500.com",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "updatedAt": "2026-10-07T05:16:30.359Z",
-        "fixtureId": "-1",
-        "infoMatchId": "166065",
-        "matchNo": "周四004",
-        "urls": {
-          "analysis": "https://odds.500.com/fenxi/shuju--1.shtml",
-          "asianHandicap": "https://odds.500.com/fenxi/yazhi--1.shtml",
-          "europeOdds": "https://odds.500.com/fenxi/ouzhi--1.shtml",
-          "recommendation": "https://odds.500.com/fenxi/youliao--1.shtml?channel=pc_trade"
-        },
-        "sale": {
-          "buyEndTime": "2026-10-08 22:00:00",
-          "availability": {
-            "bfdg": true,
-            "bfgg": true,
-            "bqdg": true,
-            "bqgg": true,
-            "dxqdg": false,
-            "dxqgg": false,
-            "hcdg": true,
-            "hcgg": true,
-            "jqdg": true,
-            "jqgg": true,
-            "nspfdg": false,
-            "nspfgg": true,
-            "spfdg": false,
-            "spfgg": true
-          },
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "rank": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "recentForm": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "futureSchedule": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "europeOdds": {
-          "url": "https://odds.500.com/fenxi/ouzhi--1.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverage": null,
-          "initialAverage": null,
-          "currentProbabilityAverage": null,
-          "official": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "asianHandicap": {
-          "url": "https://odds.500.com/fenxi/yazhi--1.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverageLine": null,
-          "initialAverageLine": null,
-          "lineMovement": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "marketConsensus": {
-          "officialHadProbability": {
-            "home": 0.4541,
-            "draw": 0.2838,
-            "away": 0.262
-          },
-          "europeAverageProbability": null,
-          "homeProbabilityGap": null,
-          "handicapLineGap": null,
-          "hhadAvailable": true,
-          "riskLevel": "low",
-          "notes": [],
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        }
-      },
-      "preMatchUsableComponents": [
-        "bookmakerOdds.had",
-        "bookmakerOdds.hhad",
-        "handicapLine",
-        "fiveHundred.sale",
-        "fiveHundred.marketConsensus"
-      ],
-      "preMatchIneligibleComponents": [
-        "fiveHundred.rank",
-        "fiveHundred.recentForm",
-        "fiveHundred.futureSchedule",
-        "fiveHundred.europeOdds",
-        "fiveHundred.asianHandicap"
-      ],
-      "postMatchOnlyComponents": []
+      }
     },
     "166066": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-10-08T02:13:09.848Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041833",
       "fixtureId": "1362406",
       "matchNo": "周四005",
@@ -295996,7 +295794,7 @@
     },
     "166067": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-10-08T02:13:09.848Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041834",
       "fixtureId": "1362487",
       "matchNo": "周四006",
@@ -399762,7 +399560,7 @@
     },
     "1362406": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-10-08T02:13:09.848Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041833",
       "fixtureId": "1362406",
       "matchNo": "周四005",
@@ -402039,7 +401837,7 @@
     },
     "1362462": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041831",
       "fixtureId": "1362462",
       "matchNo": "周四003",
@@ -402051,29 +401849,14 @@
       "handicapLine": "1",
       "bookmakerOdds": {
         "had": {
-          "odds1": 4.02,
+          "odds1": 4.08,
           "oddsX": 3.6,
-          "odds2": 1.66,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 1.65
         },
         "hhad": {
-          "odds1": 1.96,
-          "oddsX": 3.4,
-          "odds2": 3.08,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds1": 1.98,
+          "oddsX": 3.3,
+          "odds2": 3.11
         }
       },
       "infoMatchId": "166064",
@@ -402230,7 +402013,17 @@
         "fiveHundred.europeOdds",
         "fiveHundred.asianHandicap"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 4.08,
+        "oddsX": 3.6,
+        "odds2": 1.65,
+        "summary": {
+          "zh": "500彩票网胜平负参考：4.08 / 3.60 / 1.65",
+          "en": "500.com 1X2 reference: 4.08 / 3.60 / 1.65"
+        }
+      }
     },
     "1362467": {
       "source": "500.com:jczq+500.com:details",
@@ -403209,7 +403002,7 @@
     },
     "1362487": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-10-08T02:13:09.848Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041834",
       "fixtureId": "1362487",
       "matchNo": "周四006",
@@ -590440,7 +590233,7 @@
     },
     "1489044": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041829",
       "fixtureId": "1489044",
       "matchNo": "周四001",
@@ -590454,27 +590247,12 @@
         "had": {
           "odds1": 1.43,
           "oddsX": 4.2,
-          "odds2": 5.2,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 5.2
         },
         "hhad": {
           "odds1": 2.4,
           "oddsX": 3.35,
-          "odds2": 2.42,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 2.42
         }
       },
       "infoMatchId": "166062",
@@ -590631,11 +590409,21 @@
         "fiveHundred.europeOdds",
         "fiveHundred.asianHandicap"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.43,
+        "oddsX": 4.2,
+        "odds2": 5.2,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.43 / 4.20 / 5.20",
+          "en": "500.com 1X2 reference: 1.43 / 4.20 / 5.20"
+        }
+      }
     },
     "1489046": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041830",
       "fixtureId": "1489046",
       "matchNo": "周四002",
@@ -590649,27 +590437,12 @@
         "had": {
           "odds1": 1.41,
           "oddsX": 3.95,
-          "odds2": 6,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 6
         },
         "hhad": {
           "odds1": 2.43,
           "oddsX": 3.18,
-          "odds2": 2.48,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 2.48
         }
       },
       "infoMatchId": "166063",
@@ -590826,7 +590599,17 @@
         "fiveHundred.europeOdds",
         "fiveHundred.asianHandicap"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.41,
+        "oddsX": 3.95,
+        "odds2": 6,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.41 / 3.95 / 6.00",
+          "en": "500.com 1X2 reference: 1.41 / 3.95 / 6.00"
+        }
+      }
     },
     "1491193": {
       "source": "500.com:jczq+500.com:details",
@@ -927744,7 +927527,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041812",
         "matchId": "fivehundred_2041812",
         "matchNo": "周二001",
@@ -928057,14 +927840,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -928205,7 +927988,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041813",
         "matchId": "fivehundred_2041813",
         "matchNo": "周二003",
@@ -928518,14 +928301,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -928760,7 +928543,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041814",
         "matchId": "fivehundred_2041814",
         "matchNo": "周二004",
@@ -929108,14 +928891,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -929336,7 +929119,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041815",
         "matchId": "fivehundred_2041815",
         "matchNo": "周二005",
@@ -929650,14 +929433,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -929878,7 +929661,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041816",
         "matchId": "fivehundred_2041816",
         "matchNo": "周二006",
@@ -930192,14 +929975,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -930408,7 +930191,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041817",
         "matchId": "fivehundred_2041817",
         "matchNo": "周二007",
@@ -930722,14 +930505,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -930948,7 +930731,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041818",
         "matchId": "fivehundred_2041818",
         "matchNo": "周二008",
@@ -931262,14 +931045,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -931478,7 +931261,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041819",
         "matchId": "fivehundred_2041819",
         "matchNo": "周二009",
@@ -931792,14 +931575,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -932015,7 +931798,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041820",
         "matchId": "fivehundred_2041820",
         "matchNo": "周二010",
@@ -932329,14 +932112,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -932557,7 +932340,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041821",
         "matchId": "fivehundred_2041821",
         "matchNo": "周二011",
@@ -932871,14 +932654,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -933099,7 +932882,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041822",
         "matchId": "fivehundred_2041822",
         "matchNo": "周二012",
@@ -933413,14 +933196,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -933641,7 +933424,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041823",
         "matchId": "fivehundred_2041823",
         "matchNo": "周三001",
@@ -933989,14 +933772,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -934220,7 +934003,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041824",
         "matchId": "fivehundred_2041824",
         "matchNo": "周三002",
@@ -934568,14 +934351,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -934779,7 +934562,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041825",
         "matchId": "fivehundred_2041825",
         "matchNo": "周三003",
@@ -935093,14 +934876,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -935304,7 +935087,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041826",
         "matchId": "fivehundred_2041826",
         "matchNo": "周三004",
@@ -935618,14 +935401,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -935824,7 +935607,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041827",
         "matchId": "fivehundred_2041827",
         "matchNo": "周三005",
@@ -936132,14 +935915,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -936188,7 +935971,7 @@
     },
     "2041828": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-08T02:13:17.433Z",
+      "updatedAt": "2026-10-08T02:18:11.630Z",
       "sourceMatchId": "2041828",
       "fixtureId": "",
       "matchNo": "周三006",
@@ -936223,7 +936006,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041828",
         "matchId": "fivehundred_2041828",
         "matchNo": "周三006",
@@ -936257,7 +936040,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-07T14:00:00.000Z",
               "kickoffTime": "2026-10-07T23:30:00.000Z",
-              "sourceObservedAt": "2026-10-08T02:13:17.433Z",
+              "sourceObservedAt": "2026-10-08T02:18:11.630Z",
               "expectedPublishedAt": "2026-10-06T23:30:00.000Z"
             },
             "teamCards": {
@@ -936293,7 +936076,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-07T14:00:00.000Z",
               "kickoffTime": "2026-10-07T23:30:00.000Z",
-              "sourceObservedAt": "2026-10-08T02:13:17.433Z",
+              "sourceObservedAt": "2026-10-08T02:18:11.630Z",
               "expectedPublishedAt": "2026-10-07T22:15:00.000Z"
             },
             "injuries": {
@@ -936314,7 +936097,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-07T14:00:00.000Z",
               "kickoffTime": "2026-10-07T23:30:00.000Z",
-              "sourceObservedAt": "2026-10-08T02:13:17.433Z",
+              "sourceObservedAt": "2026-10-08T02:18:11.630Z",
               "expectedPublishedAt": "2026-10-07T17:30:00.000Z"
             },
             "xg": {
@@ -936531,14 +936314,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -936560,7 +936343,7 @@
       "weather": {
         "source": "open-meteo",
         "provider": "open-meteo",
-        "updatedAt": "2026-10-08T02:13:17.433Z",
+        "updatedAt": "2026-10-08T02:18:11.630Z",
         "forecastTime": "2026-10-08T00:00Z",
         "verified": false,
         "confidence": "estimated-location",
@@ -936587,7 +936370,7 @@
     },
     "2041829": {
       "source": "500.com:jczq+pre-match-signals+500.com:details",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041829",
       "fixtureId": "1489044",
       "matchNo": "周四001",
@@ -936601,33 +936384,18 @@
         "had": {
           "odds1": 1.43,
           "oddsX": 4.2,
-          "odds2": 5.2,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 5.2
         },
         "hhad": {
           "odds1": 2.4,
           "oddsX": 3.35,
-          "odds2": 2.42,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 2.42
         }
       },
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041829",
         "matchId": "fivehundred_2041829",
         "matchNo": "周四001",
@@ -936941,14 +936709,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -937108,11 +936876,21 @@
         "fiveHundred.europeOdds",
         "fiveHundred.asianHandicap"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.43,
+        "oddsX": 4.2,
+        "odds2": 5.2,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.43 / 4.20 / 5.20",
+          "en": "500.com 1X2 reference: 1.43 / 4.20 / 5.20"
+        }
+      }
     },
     "2041830": {
       "source": "500.com:jczq+pre-match-signals+500.com:details",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041830",
       "fixtureId": "1489046",
       "matchNo": "周四002",
@@ -937126,33 +936904,18 @@
         "had": {
           "odds1": 1.41,
           "oddsX": 3.95,
-          "odds2": 6,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 6
         },
         "hhad": {
           "odds1": 2.43,
           "oddsX": 3.18,
-          "odds2": 2.48,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 2.48
         }
       },
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041830",
         "matchId": "fivehundred_2041830",
         "matchNo": "周四002",
@@ -937466,14 +937229,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-09",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -937633,11 +937396,21 @@
         "fiveHundred.europeOdds",
         "fiveHundred.asianHandicap"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.41,
+        "oddsX": 3.95,
+        "odds2": 6,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.41 / 3.95 / 6.00",
+          "en": "500.com 1X2 reference: 1.41 / 3.95 / 6.00"
+        }
+      }
     },
     "2041831": {
       "source": "500.com:jczq+pre-match-signals+500.com:details",
-      "updatedAt": "2026-10-08T02:13:17.433Z",
+      "updatedAt": "2026-10-08T02:18:11.630Z",
       "sourceMatchId": "2041831",
       "fixtureId": "1362462",
       "matchNo": "周四003",
@@ -937649,35 +937422,20 @@
       "handicapLine": "1",
       "bookmakerOdds": {
         "had": {
-          "odds1": 4.02,
+          "odds1": 4.08,
           "oddsX": 3.6,
-          "odds2": 1.66,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 1.65
         },
         "hhad": {
-          "odds1": 1.96,
-          "oddsX": 3.4,
-          "odds2": 3.08,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds1": 1.98,
+          "oddsX": 3.3,
+          "odds2": 3.11
         }
       },
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041831",
         "matchId": "fivehundred_2041831",
         "matchNo": "周四003",
@@ -937985,14 +937743,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-09",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -938169,7 +937927,7 @@
       "weather": {
         "source": "open-meteo",
         "provider": "open-meteo",
-        "updatedAt": "2026-10-08T02:13:17.433Z",
+        "updatedAt": "2026-10-08T02:18:11.630Z",
         "forecastTime": "2026-10-08T22:00Z",
         "verified": false,
         "confidence": "estimated-location",
@@ -938192,15 +937950,25 @@
           "zh": "天气扰动较低，按中性环境处理。",
           "en": "Weather disruption is low and treated as a neutral environment."
         }
+      },
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 4.08,
+        "oddsX": 3.6,
+        "odds2": 1.65,
+        "summary": {
+          "zh": "500彩票网胜平负参考：4.08 / 3.60 / 1.65",
+          "en": "500.com 1X2 reference: 4.08 / 3.60 / 1.65"
+        }
       }
     },
     "2041832": {
-      "source": "external-signals+pre-match-signals",
-      "updatedAt": "2026-10-08T02:13:33.556Z",
+      "source": "external-signals+pre-match-signals+500.com:jczq",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041832",
         "matchId": "fivehundred_2041832",
         "matchNo": "周四004",
@@ -938234,7 +938002,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-08T14:00:00.000Z",
               "kickoffTime": "2026-10-08T23:00:00.000Z",
-              "sourceObservedAt": null,
+              "sourceObservedAt": "2026-10-08T02:18:08.068Z",
               "expectedPublishedAt": "2026-10-07T23:00:00.000Z"
             },
             "teamCards": {
@@ -938270,7 +938038,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-08T14:00:00.000Z",
               "kickoffTime": "2026-10-08T23:00:00.000Z",
-              "sourceObservedAt": null,
+              "sourceObservedAt": "2026-10-08T02:18:08.068Z",
               "expectedPublishedAt": "2026-10-08T21:45:00.000Z"
             },
             "injuries": {
@@ -938291,7 +938059,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-08T14:00:00.000Z",
               "kickoffTime": "2026-10-08T23:00:00.000Z",
-              "sourceObservedAt": null,
+              "sourceObservedAt": "2026-10-08T02:18:08.068Z",
               "expectedPublishedAt": "2026-10-08T17:00:00.000Z"
             },
             "xg": {
@@ -938508,11 +938276,60 @@
       "matchNo": "周四004",
       "kickoffTime": "2026-10-09T07:00:00+08:00",
       "homeTeamName": "巴拉纳竞技",
-      "awayTeamName": "米内罗竞技"
+      "awayTeamName": "米内罗竞技",
+      "fixtureId": "-1",
+      "leagueName": "巴甲",
+      "buyEndTime": "2026-10-08 22:00:00",
+      "handicapLine": "-1",
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.95,
+        "oddsX": 3.05,
+        "odds2": 3.46,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.95 / 3.05 / 3.46",
+          "en": "500.com 1X2 reference: 1.95 / 3.05 / 3.46"
+        }
+      },
+      "bookmakerOdds": {
+        "had": {
+          "odds1": 1.95,
+          "oddsX": 3.05,
+          "odds2": 3.46
+        },
+        "hhad": {
+          "odds1": 4.3,
+          "oddsX": 3.45,
+          "odds2": 1.65
+        }
+      },
+      "apiFootball": {
+        "mappingVerified": false,
+        "enrichmentEligible": false,
+        "verificationStatus": "audit-only",
+        "verificationBlockers": [
+          "provider-fixture-id-missing",
+          "fixture-confidence-below-sync-threshold",
+          "provider-fixture-time-mismatch",
+          "provider-entity-registry-not-exact"
+        ],
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
+        "fixtureAccess": {
+          "version": "api-football-fixture-access-diagnostic-v1",
+          "state": "stale-record",
+          "requestedDate": "2026-10-09",
+          "allowedFrom": "2026-06-08",
+          "allowedTo": "2026-06-10",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
+          "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
+          "refreshMinutes": 120,
+          "suspended": true
+        }
+      }
     },
     "2041833": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-08T02:13:09.848Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041833",
       "fixtureId": "1362406",
       "matchNo": "周四005",
@@ -938547,7 +938364,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041833",
         "matchId": "fivehundred_2041833",
         "matchNo": "周四005",
@@ -938581,7 +938398,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-08T14:00:00.000Z",
               "kickoffTime": "2026-10-09T00:30:00.000Z",
-              "sourceObservedAt": "2026-10-08T02:13:09.848Z",
+              "sourceObservedAt": "2026-10-08T02:18:08.068Z",
               "expectedPublishedAt": "2026-10-08T00:30:00.000Z"
             },
             "teamCards": {
@@ -938617,7 +938434,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-08T14:00:00.000Z",
               "kickoffTime": "2026-10-09T00:30:00.000Z",
-              "sourceObservedAt": "2026-10-08T02:13:09.848Z",
+              "sourceObservedAt": "2026-10-08T02:18:08.068Z",
               "expectedPublishedAt": "2026-10-08T23:15:00.000Z"
             },
             "injuries": {
@@ -938638,7 +938455,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-08T14:00:00.000Z",
               "kickoffTime": "2026-10-09T00:30:00.000Z",
-              "sourceObservedAt": "2026-10-08T02:13:09.848Z",
+              "sourceObservedAt": "2026-10-08T02:18:08.068Z",
               "expectedPublishedAt": "2026-10-08T18:30:00.000Z"
             },
             "xg": {
@@ -938861,14 +938678,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-09",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -938877,7 +938694,7 @@
     },
     "2041834": {
       "source": "500.com:jczq+pre-match-signals",
-      "updatedAt": "2026-10-08T02:13:09.848Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041834",
       "fixtureId": "1362487",
       "matchNo": "周四006",
@@ -938912,7 +938729,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041834",
         "matchId": "fivehundred_2041834",
         "matchNo": "周四006",
@@ -938946,7 +938763,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-08T14:00:00.000Z",
               "kickoffTime": "2026-10-09T00:30:00.000Z",
-              "sourceObservedAt": "2026-10-08T02:13:09.848Z",
+              "sourceObservedAt": "2026-10-08T02:18:08.068Z",
               "expectedPublishedAt": "2026-10-08T00:30:00.000Z"
             },
             "teamCards": {
@@ -938982,7 +938799,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-08T14:00:00.000Z",
               "kickoffTime": "2026-10-09T00:30:00.000Z",
-              "sourceObservedAt": "2026-10-08T02:13:09.848Z",
+              "sourceObservedAt": "2026-10-08T02:18:08.068Z",
               "expectedPublishedAt": "2026-10-08T23:15:00.000Z"
             },
             "injuries": {
@@ -939003,7 +938820,7 @@
               "eligibleAtCutoff": false,
               "cutoffTime": "2026-10-08T14:00:00.000Z",
               "kickoffTime": "2026-10-09T00:30:00.000Z",
-              "sourceObservedAt": "2026-10-08T02:13:09.848Z",
+              "sourceObservedAt": "2026-10-08T02:18:08.068Z",
               "expectedPublishedAt": "2026-10-08T18:30:00.000Z"
             },
             "xg": {
@@ -939226,14 +939043,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-09",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -939267,7 +939084,7 @@
       "preMatch": {
         "version": "sync-pre-match-signals-v53-temporal-evidence",
         "source": "pre-match-signal-layer",
-        "updatedAt": "2026-10-08T02:13:33.556Z",
+        "updatedAt": "2026-10-08T02:18:24.903Z",
         "sourceMatchId": "2041835",
         "matchId": "fivehundred_2041835",
         "matchNo": "周二002",
@@ -939580,14 +939397,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1061815,199 +1061632,39 @@
       }
     },
     "-1": {
-      "source": "500.com:jczq+500.com:details",
+      "source": "500.com:jczq",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041832",
       "fixtureId": "-1",
-      "infoMatchId": "166065",
       "matchNo": "周四004",
-      "processDate": "2026-10-08",
-      "matchDate": "2026-10-09",
       "leagueName": "巴甲",
-      "homeTeamName": "巴竞技",
-      "awayTeamName": "米竞技",
+      "homeTeamName": "巴拉纳竞技",
+      "awayTeamName": "米内罗竞技",
       "kickoffTime": "2026-10-09T07:00:00+08:00",
       "buyEndTime": "2026-10-08 22:00:00",
-      "timingPolicy": "component-as-of-v1",
-      "timingUpdateKind": "component-observation",
-      "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-      "receivedAt": "2026-10-07T05:16:30.359Z",
-      "validUntil": "2026-10-08T14:00:00.000Z",
-      "latestReceivedAt": "2026-10-07T05:16:30.359Z",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
       "handicapLine": "-1",
-      "handicapLineMeta": {
-        "source": "500.com:jczq",
-        "line": "-1",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "usableForPreMatch": true,
-        "observationPhase": "pre-match",
-        "updatedAt": "2026-10-07T05:16:30.359Z"
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.95,
+        "oddsX": 3.05,
+        "odds2": 3.46,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.95 / 3.05 / 3.46",
+          "en": "500.com 1X2 reference: 1.95 / 3.05 / 3.46"
+        }
       },
       "bookmakerOdds": {
         "had": {
           "odds1": 1.95,
-          "oddsX": 3.12,
-          "odds2": 3.38,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "oddsX": 3.05,
+          "odds2": 3.46
         },
         "hhad": {
-          "odds1": 4.15,
-          "oddsX": 3.55,
-          "odds2": 1.65,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds1": 4.3,
+          "oddsX": 3.45,
+          "odds2": 1.65
         }
-      },
-      "fiveHundred": {
-        "source": "500.com",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "updatedAt": "2026-10-07T05:16:30.359Z",
-        "fixtureId": "-1",
-        "infoMatchId": "166065",
-        "matchNo": "周四004",
-        "urls": {
-          "analysis": "https://odds.500.com/fenxi/shuju--1.shtml",
-          "asianHandicap": "https://odds.500.com/fenxi/yazhi--1.shtml",
-          "europeOdds": "https://odds.500.com/fenxi/ouzhi--1.shtml",
-          "recommendation": "https://odds.500.com/fenxi/youliao--1.shtml?channel=pc_trade"
-        },
-        "sale": {
-          "buyEndTime": "2026-10-08 22:00:00",
-          "availability": {
-            "bfdg": true,
-            "bfgg": true,
-            "bqdg": true,
-            "bqgg": true,
-            "dxqdg": false,
-            "dxqgg": false,
-            "hcdg": true,
-            "hcgg": true,
-            "jqdg": true,
-            "jqgg": true,
-            "nspfdg": false,
-            "nspfgg": true,
-            "spfdg": false,
-            "spfgg": true
-          },
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "rank": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "recentForm": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "futureSchedule": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "europeOdds": {
-          "url": "https://odds.500.com/fenxi/ouzhi--1.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverage": null,
-          "initialAverage": null,
-          "currentProbabilityAverage": null,
-          "official": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "asianHandicap": {
-          "url": "https://odds.500.com/fenxi/yazhi--1.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverageLine": null,
-          "initialAverageLine": null,
-          "lineMovement": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "marketConsensus": {
-          "officialHadProbability": {
-            "home": 0.4541,
-            "draw": 0.2838,
-            "away": 0.262
-          },
-          "europeAverageProbability": null,
-          "homeProbabilityGap": null,
-          "handicapLineGap": null,
-          "hhadAvailable": true,
-          "riskLevel": "low",
-          "notes": [],
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        }
-      },
-      "preMatchUsableComponents": [
-        "bookmakerOdds.had",
-        "bookmakerOdds.hhad",
-        "handicapLine",
-        "fiveHundred.sale",
-        "fiveHundred.marketConsensus"
-      ],
-      "preMatchIneligibleComponents": [
-        "fiveHundred.rank",
-        "fiveHundred.recentForm",
-        "fiveHundred.futureSchedule",
-        "fiveHundred.europeOdds",
-        "fiveHundred.asianHandicap"
-      ],
-      "postMatchOnlyComponents": []
+      }
     },
     "2026-06-21:周日037": {
       "source": "500.com:jczq+500.com:details",
@@ -1593535,14 +1593192,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1593832,14 +1593489,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1594277,14 +1593934,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1594737,14 +1594394,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1594972,14 +1594629,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1595207,14 +1594864,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1595442,14 +1595099,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1595677,14 +1595334,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1596112,14 +1595769,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1596333,14 +1595990,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1596566,14 +1596223,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1596801,14 +1596458,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1597024,14 +1596681,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1597242,14 +1596899,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1597472,14 +1597129,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1597707,14 +1597364,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1597942,14 +1597599,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1598177,14 +1597834,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1598412,14 +1598069,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1598828,14 +1598485,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1598860,14 +1598517,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1598892,14 +1598549,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-06",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1598924,14 +1598581,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1598956,14 +1598613,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-07",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1599019,14 +1598676,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1599472,14 +1599129,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1599690,14 +1599347,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1599908,14 +1599565,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1600126,14 +1599783,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1600344,14 +1600001,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1600562,14 +1600219,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1600775,14 +1600432,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1600868,14 +1600525,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1600919,7 +1600576,7 @@
     },
     "2026-10-08:周四001": {
       "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041829",
       "fixtureId": "1489044",
       "matchNo": "周四001",
@@ -1600933,27 +1600590,12 @@
         "had": {
           "odds1": 1.43,
           "oddsX": 4.2,
-          "odds2": 5.2,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 5.2
         },
         "hhad": {
           "odds1": 2.4,
           "oddsX": 3.35,
-          "odds2": 2.42,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
+          "odds2": 2.42
         }
       },
       "apiFootball": {
@@ -1600966,14 +1600608,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1601104,1291 +1600746,6 @@
             "home": 0.619,
             "draw": 0.2108,
             "away": 0.1702
-          },
-          "europeAverageProbability": null,
-          "homeProbabilityGap": null,
-          "handicapLineGap": null,
-          "hhadAvailable": true,
-          "riskLevel": "low",
-          "notes": [],
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        }
-      },
-      "preMatchUsableComponents": [
-        "bookmakerOdds.had",
-        "bookmakerOdds.hhad",
-        "handicapLine",
-        "fiveHundred.sale",
-        "fiveHundred.marketConsensus"
-      ],
-      "preMatchIneligibleComponents": [
-        "fiveHundred.rank",
-        "fiveHundred.recentForm",
-        "fiveHundred.futureSchedule",
-        "fiveHundred.europeOdds",
-        "fiveHundred.asianHandicap"
-      ],
-      "postMatchOnlyComponents": []
-    },
-    "2026-10-08:赫尔辛基:瓦萨": {
-      "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
-      "sourceMatchId": "2041829",
-      "fixtureId": "1489044",
-      "matchNo": "周四001",
-      "leagueName": "芬兰超级联赛",
-      "homeTeamName": "赫尔辛基",
-      "awayTeamName": "瓦萨",
-      "kickoffTime": "2026-10-08T23:00:00+08:00",
-      "buyEndTime": "2026-10-08 22:00:00",
-      "handicapLine": "-1",
-      "bookmakerOdds": {
-        "had": {
-          "odds1": 1.43,
-          "oddsX": 4.2,
-          "odds2": 5.2,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "hhad": {
-          "odds1": 2.4,
-          "oddsX": 3.35,
-          "odds2": 2.42,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        }
-      },
-      "apiFootball": {
-        "mappingVerified": false,
-        "enrichmentEligible": false,
-        "verificationStatus": "audit-only",
-        "verificationBlockers": [
-          "provider-fixture-id-missing",
-          "fixture-confidence-below-sync-threshold",
-          "provider-fixture-time-mismatch",
-          "provider-entity-registry-not-exact"
-        ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
-        "fixtureAccess": {
-          "version": "api-football-fixture-access-diagnostic-v1",
-          "state": "stale-record",
-          "requestedDate": "2026-10-08",
-          "allowedFrom": "2026-06-08",
-          "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
-          "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
-          "refreshMinutes": 120,
-          "suspended": true
-        }
-      },
-      "infoMatchId": "166062",
-      "processDate": "2026-10-08",
-      "matchDate": "2026-10-08",
-      "timingPolicy": "component-as-of-v1",
-      "timingUpdateKind": "component-observation",
-      "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-      "receivedAt": "2026-10-07T05:16:30.359Z",
-      "validUntil": "2026-10-08T14:00:00.000Z",
-      "latestReceivedAt": "2026-10-07T05:16:30.359Z",
-      "handicapLineMeta": {
-        "source": "500.com:jczq",
-        "line": "-1",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "usableForPreMatch": true,
-        "observationPhase": "pre-match",
-        "updatedAt": "2026-10-07T05:16:30.359Z"
-      },
-      "fiveHundred": {
-        "source": "500.com",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "updatedAt": "2026-10-07T05:16:30.359Z",
-        "fixtureId": "1489044",
-        "infoMatchId": "166062",
-        "matchNo": "周四001",
-        "urls": {
-          "analysis": "https://odds.500.com/fenxi/shuju-1489044.shtml",
-          "asianHandicap": "https://odds.500.com/fenxi/yazhi-1489044.shtml",
-          "europeOdds": "https://odds.500.com/fenxi/ouzhi-1489044.shtml",
-          "recommendation": "https://odds.500.com/fenxi/youliao-1489044.shtml?channel=pc_trade"
-        },
-        "sale": {
-          "buyEndTime": "2026-10-08 22:00:00",
-          "availability": {
-            "bfdg": true,
-            "bfgg": true,
-            "bqdg": true,
-            "bqgg": true,
-            "dxqdg": false,
-            "dxqgg": false,
-            "hcdg": true,
-            "hcgg": true,
-            "jqdg": true,
-            "jqgg": true,
-            "nspfdg": false,
-            "nspfgg": true,
-            "spfdg": false,
-            "spfgg": true
-          },
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "rank": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "recentForm": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "futureSchedule": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "europeOdds": {
-          "url": "https://odds.500.com/fenxi/ouzhi-1489044.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverage": null,
-          "initialAverage": null,
-          "currentProbabilityAverage": null,
-          "official": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "asianHandicap": {
-          "url": "https://odds.500.com/fenxi/yazhi-1489044.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverageLine": null,
-          "initialAverageLine": null,
-          "lineMovement": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "marketConsensus": {
-          "officialHadProbability": {
-            "home": 0.619,
-            "draw": 0.2108,
-            "away": 0.1702
-          },
-          "europeAverageProbability": null,
-          "homeProbabilityGap": null,
-          "handicapLineGap": null,
-          "hhadAvailable": true,
-          "riskLevel": "low",
-          "notes": [],
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        }
-      },
-      "preMatchUsableComponents": [
-        "bookmakerOdds.had",
-        "bookmakerOdds.hhad",
-        "handicapLine",
-        "fiveHundred.sale",
-        "fiveHundred.marketConsensus"
-      ],
-      "preMatchIneligibleComponents": [
-        "fiveHundred.rank",
-        "fiveHundred.recentForm",
-        "fiveHundred.futureSchedule",
-        "fiveHundred.europeOdds",
-        "fiveHundred.asianHandicap"
-      ],
-      "postMatchOnlyComponents": []
-    },
-    "2026-10-08:周四002": {
-      "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
-      "sourceMatchId": "2041830",
-      "fixtureId": "1489046",
-      "matchNo": "周四002",
-      "leagueName": "芬兰超级联赛",
-      "homeTeamName": "库奥皮奥",
-      "awayTeamName": "AC奥卢",
-      "kickoffTime": "2026-10-09T00:00:00+08:00",
-      "buyEndTime": "2026-10-08 22:00:00",
-      "handicapLine": "-1",
-      "bookmakerOdds": {
-        "had": {
-          "odds1": 1.41,
-          "oddsX": 3.95,
-          "odds2": 6,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "hhad": {
-          "odds1": 2.43,
-          "oddsX": 3.18,
-          "odds2": 2.48,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        }
-      },
-      "apiFootball": {
-        "mappingVerified": false,
-        "enrichmentEligible": false,
-        "verificationStatus": "audit-only",
-        "verificationBlockers": [
-          "provider-fixture-id-missing",
-          "fixture-confidence-below-sync-threshold",
-          "provider-fixture-time-mismatch",
-          "provider-entity-registry-not-exact"
-        ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
-        "fixtureAccess": {
-          "version": "api-football-fixture-access-diagnostic-v1",
-          "state": "stale-record",
-          "requestedDate": "2026-10-09",
-          "allowedFrom": "2026-06-08",
-          "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
-          "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
-          "refreshMinutes": 120,
-          "suspended": true
-        }
-      },
-      "infoMatchId": "166063",
-      "processDate": "2026-10-08",
-      "matchDate": "2026-10-09",
-      "timingPolicy": "component-as-of-v1",
-      "timingUpdateKind": "component-observation",
-      "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-      "receivedAt": "2026-10-07T05:16:30.359Z",
-      "validUntil": "2026-10-08T14:00:00.000Z",
-      "latestReceivedAt": "2026-10-07T05:16:30.359Z",
-      "handicapLineMeta": {
-        "source": "500.com:jczq",
-        "line": "-1",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "usableForPreMatch": true,
-        "observationPhase": "pre-match",
-        "updatedAt": "2026-10-07T05:16:30.359Z"
-      },
-      "fiveHundred": {
-        "source": "500.com",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "updatedAt": "2026-10-07T05:16:30.359Z",
-        "fixtureId": "1489046",
-        "infoMatchId": "166063",
-        "matchNo": "周四002",
-        "urls": {
-          "analysis": "https://odds.500.com/fenxi/shuju-1489046.shtml",
-          "asianHandicap": "https://odds.500.com/fenxi/yazhi-1489046.shtml",
-          "europeOdds": "https://odds.500.com/fenxi/ouzhi-1489046.shtml",
-          "recommendation": "https://odds.500.com/fenxi/youliao-1489046.shtml?channel=pc_trade"
-        },
-        "sale": {
-          "buyEndTime": "2026-10-08 22:00:00",
-          "availability": {
-            "bfdg": true,
-            "bfgg": true,
-            "bqdg": true,
-            "bqgg": true,
-            "dxqdg": false,
-            "dxqgg": false,
-            "hcdg": true,
-            "hcgg": true,
-            "jqdg": true,
-            "jqgg": true,
-            "nspfdg": false,
-            "nspfgg": true,
-            "spfdg": false,
-            "spfgg": true
-          },
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "rank": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "recentForm": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "futureSchedule": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "europeOdds": {
-          "url": "https://odds.500.com/fenxi/ouzhi-1489046.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverage": null,
-          "initialAverage": null,
-          "currentProbabilityAverage": null,
-          "official": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "asianHandicap": {
-          "url": "https://odds.500.com/fenxi/yazhi-1489046.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverageLine": null,
-          "initialAverageLine": null,
-          "lineMovement": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "marketConsensus": {
-          "officialHadProbability": {
-            "home": 0.6282,
-            "draw": 0.2242,
-            "away": 0.1476
-          },
-          "europeAverageProbability": null,
-          "homeProbabilityGap": null,
-          "handicapLineGap": null,
-          "hhadAvailable": true,
-          "riskLevel": "low",
-          "notes": [],
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        }
-      },
-      "preMatchUsableComponents": [
-        "bookmakerOdds.had",
-        "bookmakerOdds.hhad",
-        "handicapLine",
-        "fiveHundred.sale",
-        "fiveHundred.marketConsensus"
-      ],
-      "preMatchIneligibleComponents": [
-        "fiveHundred.rank",
-        "fiveHundred.recentForm",
-        "fiveHundred.futureSchedule",
-        "fiveHundred.europeOdds",
-        "fiveHundred.asianHandicap"
-      ],
-      "postMatchOnlyComponents": []
-    },
-    "2026-10-09:库奥皮奥:AC奥卢": {
-      "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
-      "sourceMatchId": "2041830",
-      "fixtureId": "1489046",
-      "matchNo": "周四002",
-      "leagueName": "芬兰超级联赛",
-      "homeTeamName": "库奥皮奥",
-      "awayTeamName": "AC奥卢",
-      "kickoffTime": "2026-10-09T00:00:00+08:00",
-      "buyEndTime": "2026-10-08 22:00:00",
-      "handicapLine": "-1",
-      "bookmakerOdds": {
-        "had": {
-          "odds1": 1.41,
-          "oddsX": 3.95,
-          "odds2": 6,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "hhad": {
-          "odds1": 2.43,
-          "oddsX": 3.18,
-          "odds2": 2.48,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        }
-      },
-      "apiFootball": {
-        "mappingVerified": false,
-        "enrichmentEligible": false,
-        "verificationStatus": "audit-only",
-        "verificationBlockers": [
-          "provider-fixture-id-missing",
-          "fixture-confidence-below-sync-threshold",
-          "provider-fixture-time-mismatch",
-          "provider-entity-registry-not-exact"
-        ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
-        "fixtureAccess": {
-          "version": "api-football-fixture-access-diagnostic-v1",
-          "state": "stale-record",
-          "requestedDate": "2026-10-09",
-          "allowedFrom": "2026-06-08",
-          "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
-          "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
-          "refreshMinutes": 120,
-          "suspended": true
-        }
-      },
-      "infoMatchId": "166063",
-      "processDate": "2026-10-08",
-      "matchDate": "2026-10-09",
-      "timingPolicy": "component-as-of-v1",
-      "timingUpdateKind": "component-observation",
-      "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-      "receivedAt": "2026-10-07T05:16:30.359Z",
-      "validUntil": "2026-10-08T14:00:00.000Z",
-      "latestReceivedAt": "2026-10-07T05:16:30.359Z",
-      "handicapLineMeta": {
-        "source": "500.com:jczq",
-        "line": "-1",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "usableForPreMatch": true,
-        "observationPhase": "pre-match",
-        "updatedAt": "2026-10-07T05:16:30.359Z"
-      },
-      "fiveHundred": {
-        "source": "500.com",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "updatedAt": "2026-10-07T05:16:30.359Z",
-        "fixtureId": "1489046",
-        "infoMatchId": "166063",
-        "matchNo": "周四002",
-        "urls": {
-          "analysis": "https://odds.500.com/fenxi/shuju-1489046.shtml",
-          "asianHandicap": "https://odds.500.com/fenxi/yazhi-1489046.shtml",
-          "europeOdds": "https://odds.500.com/fenxi/ouzhi-1489046.shtml",
-          "recommendation": "https://odds.500.com/fenxi/youliao-1489046.shtml?channel=pc_trade"
-        },
-        "sale": {
-          "buyEndTime": "2026-10-08 22:00:00",
-          "availability": {
-            "bfdg": true,
-            "bfgg": true,
-            "bqdg": true,
-            "bqgg": true,
-            "dxqdg": false,
-            "dxqgg": false,
-            "hcdg": true,
-            "hcgg": true,
-            "jqdg": true,
-            "jqgg": true,
-            "nspfdg": false,
-            "nspfgg": true,
-            "spfdg": false,
-            "spfgg": true
-          },
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "rank": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "recentForm": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "futureSchedule": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "europeOdds": {
-          "url": "https://odds.500.com/fenxi/ouzhi-1489046.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverage": null,
-          "initialAverage": null,
-          "currentProbabilityAverage": null,
-          "official": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "asianHandicap": {
-          "url": "https://odds.500.com/fenxi/yazhi-1489046.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverageLine": null,
-          "initialAverageLine": null,
-          "lineMovement": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "marketConsensus": {
-          "officialHadProbability": {
-            "home": 0.6282,
-            "draw": 0.2242,
-            "away": 0.1476
-          },
-          "europeAverageProbability": null,
-          "homeProbabilityGap": null,
-          "handicapLineGap": null,
-          "hhadAvailable": true,
-          "riskLevel": "low",
-          "notes": [],
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        }
-      },
-      "preMatchUsableComponents": [
-        "bookmakerOdds.had",
-        "bookmakerOdds.hhad",
-        "handicapLine",
-        "fiveHundred.sale",
-        "fiveHundred.marketConsensus"
-      ],
-      "preMatchIneligibleComponents": [
-        "fiveHundred.rank",
-        "fiveHundred.recentForm",
-        "fiveHundred.futureSchedule",
-        "fiveHundred.europeOdds",
-        "fiveHundred.asianHandicap"
-      ],
-      "postMatchOnlyComponents": []
-    },
-    "2026-10-08:周四003": {
-      "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
-      "sourceMatchId": "2041831",
-      "fixtureId": "1362462",
-      "matchNo": "周四003",
-      "leagueName": "巴甲",
-      "homeTeamName": "桑托斯",
-      "awayTeamName": "弗拉门戈",
-      "kickoffTime": "2026-10-09T06:30:00+08:00",
-      "buyEndTime": "2026-10-08 22:00:00",
-      "handicapLine": "1",
-      "bookmakerOdds": {
-        "had": {
-          "odds1": 4.02,
-          "oddsX": 3.6,
-          "odds2": 1.66,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "hhad": {
-          "odds1": 1.96,
-          "oddsX": 3.4,
-          "odds2": 3.08,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        }
-      },
-      "apiFootball": {
-        "mappingVerified": false,
-        "enrichmentEligible": false,
-        "verificationStatus": "audit-only",
-        "verificationBlockers": [
-          "provider-fixture-id-missing",
-          "fixture-confidence-below-sync-threshold",
-          "provider-fixture-time-mismatch",
-          "provider-entity-registry-not-exact"
-        ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
-        "fixtureAccess": {
-          "version": "api-football-fixture-access-diagnostic-v1",
-          "state": "stale-record",
-          "requestedDate": "2026-10-09",
-          "allowedFrom": "2026-06-08",
-          "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
-          "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
-          "refreshMinutes": 120,
-          "suspended": true
-        }
-      },
-      "infoMatchId": "166064",
-      "processDate": "2026-10-08",
-      "matchDate": "2026-10-09",
-      "timingPolicy": "component-as-of-v1",
-      "timingUpdateKind": "component-observation",
-      "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-      "receivedAt": "2026-10-07T05:16:30.359Z",
-      "validUntil": "2026-10-08T14:00:00.000Z",
-      "latestReceivedAt": "2026-10-07T05:16:30.359Z",
-      "handicapLineMeta": {
-        "source": "500.com:jczq",
-        "line": "1",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "usableForPreMatch": true,
-        "observationPhase": "pre-match",
-        "updatedAt": "2026-10-07T05:16:30.359Z"
-      },
-      "fiveHundred": {
-        "source": "500.com",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "updatedAt": "2026-10-07T05:16:30.359Z",
-        "fixtureId": "1362462",
-        "infoMatchId": "166064",
-        "matchNo": "周四003",
-        "urls": {
-          "analysis": "https://odds.500.com/fenxi/shuju-1362462.shtml",
-          "asianHandicap": "https://odds.500.com/fenxi/yazhi-1362462.shtml",
-          "europeOdds": "https://odds.500.com/fenxi/ouzhi-1362462.shtml",
-          "recommendation": "https://odds.500.com/fenxi/youliao-1362462.shtml?channel=pc_trade"
-        },
-        "sale": {
-          "buyEndTime": "2026-10-08 22:00:00",
-          "availability": {
-            "bfdg": true,
-            "bfgg": true,
-            "bqdg": true,
-            "bqgg": true,
-            "dxqdg": false,
-            "dxqgg": false,
-            "hcdg": true,
-            "hcgg": true,
-            "jqdg": true,
-            "jqgg": true,
-            "nspfdg": true,
-            "nspfgg": true,
-            "spfdg": false,
-            "spfgg": true
-          },
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "rank": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "recentForm": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "futureSchedule": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "europeOdds": {
-          "url": "https://odds.500.com/fenxi/ouzhi-1362462.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverage": null,
-          "initialAverage": null,
-          "currentProbabilityAverage": null,
-          "official": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "asianHandicap": {
-          "url": "https://odds.500.com/fenxi/yazhi-1362462.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverageLine": null,
-          "initialAverageLine": null,
-          "lineMovement": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "marketConsensus": {
-          "officialHadProbability": {
-            "home": 0.2203,
-            "draw": 0.2461,
-            "away": 0.5336
-          },
-          "europeAverageProbability": null,
-          "homeProbabilityGap": null,
-          "handicapLineGap": null,
-          "hhadAvailable": true,
-          "riskLevel": "low",
-          "notes": [],
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        }
-      },
-      "preMatchUsableComponents": [
-        "bookmakerOdds.had",
-        "bookmakerOdds.hhad",
-        "handicapLine",
-        "fiveHundred.sale",
-        "fiveHundred.marketConsensus"
-      ],
-      "preMatchIneligibleComponents": [
-        "fiveHundred.rank",
-        "fiveHundred.recentForm",
-        "fiveHundred.futureSchedule",
-        "fiveHundred.europeOdds",
-        "fiveHundred.asianHandicap"
-      ],
-      "postMatchOnlyComponents": []
-    },
-    "2026-10-09:桑托斯:弗拉门戈": {
-      "source": "500.com:jczq+500.com:details",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
-      "sourceMatchId": "2041831",
-      "fixtureId": "1362462",
-      "matchNo": "周四003",
-      "leagueName": "巴甲",
-      "homeTeamName": "桑托斯",
-      "awayTeamName": "弗拉门戈",
-      "kickoffTime": "2026-10-09T06:30:00+08:00",
-      "buyEndTime": "2026-10-08 22:00:00",
-      "handicapLine": "1",
-      "bookmakerOdds": {
-        "had": {
-          "odds1": 4.02,
-          "oddsX": 3.6,
-          "odds2": 1.66,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "hhad": {
-          "odds1": 1.96,
-          "oddsX": 3.4,
-          "odds2": 3.08,
-          "source": "500.com:jczq",
-          "handicapLine": "1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        }
-      },
-      "apiFootball": {
-        "mappingVerified": false,
-        "enrichmentEligible": false,
-        "verificationStatus": "audit-only",
-        "verificationBlockers": [
-          "provider-fixture-id-missing",
-          "fixture-confidence-below-sync-threshold",
-          "provider-fixture-time-mismatch",
-          "provider-entity-registry-not-exact"
-        ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
-        "fixtureAccess": {
-          "version": "api-football-fixture-access-diagnostic-v1",
-          "state": "stale-record",
-          "requestedDate": "2026-10-09",
-          "allowedFrom": "2026-06-08",
-          "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
-          "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
-          "refreshMinutes": 120,
-          "suspended": true
-        }
-      },
-      "infoMatchId": "166064",
-      "processDate": "2026-10-08",
-      "matchDate": "2026-10-09",
-      "timingPolicy": "component-as-of-v1",
-      "timingUpdateKind": "component-observation",
-      "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-      "receivedAt": "2026-10-07T05:16:30.359Z",
-      "validUntil": "2026-10-08T14:00:00.000Z",
-      "latestReceivedAt": "2026-10-07T05:16:30.359Z",
-      "handicapLineMeta": {
-        "source": "500.com:jczq",
-        "line": "1",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "usableForPreMatch": true,
-        "observationPhase": "pre-match",
-        "updatedAt": "2026-10-07T05:16:30.359Z"
-      },
-      "fiveHundred": {
-        "source": "500.com",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "updatedAt": "2026-10-07T05:16:30.359Z",
-        "fixtureId": "1362462",
-        "infoMatchId": "166064",
-        "matchNo": "周四003",
-        "urls": {
-          "analysis": "https://odds.500.com/fenxi/shuju-1362462.shtml",
-          "asianHandicap": "https://odds.500.com/fenxi/yazhi-1362462.shtml",
-          "europeOdds": "https://odds.500.com/fenxi/ouzhi-1362462.shtml",
-          "recommendation": "https://odds.500.com/fenxi/youliao-1362462.shtml?channel=pc_trade"
-        },
-        "sale": {
-          "buyEndTime": "2026-10-08 22:00:00",
-          "availability": {
-            "bfdg": true,
-            "bfgg": true,
-            "bqdg": true,
-            "bqgg": true,
-            "dxqdg": false,
-            "dxqgg": false,
-            "hcdg": true,
-            "hcgg": true,
-            "jqdg": true,
-            "jqgg": true,
-            "nspfdg": true,
-            "nspfgg": true,
-            "spfdg": false,
-            "spfgg": true
-          },
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "rank": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "recentForm": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "futureSchedule": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "europeOdds": {
-          "url": "https://odds.500.com/fenxi/ouzhi-1362462.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverage": null,
-          "initialAverage": null,
-          "currentProbabilityAverage": null,
-          "official": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "asianHandicap": {
-          "url": "https://odds.500.com/fenxi/yazhi-1362462.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverageLine": null,
-          "initialAverageLine": null,
-          "lineMovement": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "marketConsensus": {
-          "officialHadProbability": {
-            "home": 0.2203,
-            "draw": 0.2461,
-            "away": 0.5336
-          },
-          "europeAverageProbability": null,
-          "homeProbabilityGap": null,
-          "handicapLineGap": null,
-          "hhadAvailable": true,
-          "riskLevel": "low",
-          "notes": [],
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        }
-      },
-      "preMatchUsableComponents": [
-        "bookmakerOdds.had",
-        "bookmakerOdds.hhad",
-        "handicapLine",
-        "fiveHundred.sale",
-        "fiveHundred.marketConsensus"
-      ],
-      "preMatchIneligibleComponents": [
-        "fiveHundred.rank",
-        "fiveHundred.recentForm",
-        "fiveHundred.futureSchedule",
-        "fiveHundred.europeOdds",
-        "fiveHundred.asianHandicap"
-      ],
-      "postMatchOnlyComponents": []
-    },
-    "2026-10-08:周四004": {
-      "source": "500.com:jczq+500.com:details",
-      "sourceMatchId": "2041832",
-      "fixtureId": "-1",
-      "infoMatchId": "166065",
-      "matchNo": "周四004",
-      "processDate": "2026-10-08",
-      "matchDate": "2026-10-09",
-      "leagueName": "巴甲",
-      "homeTeamName": "巴竞技",
-      "awayTeamName": "米竞技",
-      "kickoffTime": "2026-10-09T07:00:00+08:00",
-      "buyEndTime": "2026-10-08 22:00:00",
-      "timingPolicy": "component-as-of-v1",
-      "timingUpdateKind": "component-observation",
-      "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-      "receivedAt": "2026-10-07T05:16:30.359Z",
-      "validUntil": "2026-10-08T14:00:00.000Z",
-      "latestReceivedAt": "2026-10-07T05:16:30.359Z",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
-      "handicapLine": "-1",
-      "handicapLineMeta": {
-        "source": "500.com:jczq",
-        "line": "-1",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "usableForPreMatch": true,
-        "observationPhase": "pre-match",
-        "updatedAt": "2026-10-07T05:16:30.359Z"
-      },
-      "bookmakerOdds": {
-        "had": {
-          "odds1": 1.95,
-          "oddsX": 3.12,
-          "odds2": 3.38,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "hhad": {
-          "odds1": 4.15,
-          "oddsX": 3.55,
-          "odds2": 1.65,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        }
-      },
-      "fiveHundred": {
-        "source": "500.com",
-        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-        "receivedAt": "2026-10-07T05:16:30.359Z",
-        "validUntil": "2026-10-08T14:00:00.000Z",
-        "updatedAt": "2026-10-07T05:16:30.359Z",
-        "fixtureId": "-1",
-        "infoMatchId": "166065",
-        "matchNo": "周四004",
-        "urls": {
-          "analysis": "https://odds.500.com/fenxi/shuju--1.shtml",
-          "asianHandicap": "https://odds.500.com/fenxi/yazhi--1.shtml",
-          "europeOdds": "https://odds.500.com/fenxi/ouzhi--1.shtml",
-          "recommendation": "https://odds.500.com/fenxi/youliao--1.shtml?channel=pc_trade"
-        },
-        "sale": {
-          "buyEndTime": "2026-10-08 22:00:00",
-          "availability": {
-            "bfdg": true,
-            "bfgg": true,
-            "bqdg": true,
-            "bqgg": true,
-            "dxqdg": false,
-            "dxqgg": false,
-            "hcdg": true,
-            "hcgg": true,
-            "jqdg": true,
-            "jqgg": true,
-            "nspfdg": false,
-            "nspfgg": true,
-            "spfdg": false,
-            "spfgg": true
-          },
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "rank": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "recentForm": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "futureSchedule": {
-          "home": null,
-          "away": null,
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "europeOdds": {
-          "url": "https://odds.500.com/fenxi/ouzhi--1.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverage": null,
-          "initialAverage": null,
-          "currentProbabilityAverage": null,
-          "official": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "asianHandicap": {
-          "url": "https://odds.500.com/fenxi/yazhi--1.shtml",
-          "rows": [],
-          "companies": 0,
-          "currentAverageLine": null,
-          "initialAverageLine": null,
-          "lineMovement": null,
-          "summary": "",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": false,
-          "observationPhase": "unavailable",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "marketConsensus": {
-          "officialHadProbability": {
-            "home": 0.4541,
-            "draw": 0.2838,
-            "away": 0.262
           },
           "europeAverageProbability": null,
           "homeProbabilityGap": null,
@@ -1602419,6 +1600776,41 @@
         "fiveHundred.asianHandicap"
       ],
       "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.43,
+        "oddsX": 4.2,
+        "odds2": 5.2,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.43 / 4.20 / 5.20",
+          "en": "500.com 1X2 reference: 1.43 / 4.20 / 5.20"
+        }
+      }
+    },
+    "2026-10-08:赫尔辛基:瓦萨": {
+      "source": "500.com:jczq+500.com:details",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
+      "sourceMatchId": "2041829",
+      "fixtureId": "1489044",
+      "matchNo": "周四001",
+      "leagueName": "芬兰超级联赛",
+      "homeTeamName": "赫尔辛基",
+      "awayTeamName": "瓦萨",
+      "kickoffTime": "2026-10-08T23:00:00+08:00",
+      "buyEndTime": "2026-10-08 22:00:00",
+      "handicapLine": "-1",
+      "bookmakerOdds": {
+        "had": {
+          "odds1": 1.43,
+          "oddsX": 4.2,
+          "odds2": 5.2
+        },
+        "hhad": {
+          "odds1": 2.4,
+          "oddsX": 3.35,
+          "odds2": 2.42
+        }
+      },
       "apiFootball": {
         "mappingVerified": false,
         "enrichmentEligible": false,
@@ -1602429,41 +1600821,28 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
-          "requestedDate": "2026-10-09",
+          "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
         }
-      }
-    },
-    "2026-10-09:巴竞技:米竞技": {
-      "source": "500.com:jczq+500.com:details",
-      "sourceMatchId": "2041832",
-      "fixtureId": "-1",
-      "infoMatchId": "166065",
-      "matchNo": "周四004",
+      },
+      "infoMatchId": "166062",
       "processDate": "2026-10-08",
-      "matchDate": "2026-10-09",
-      "leagueName": "巴甲",
-      "homeTeamName": "巴竞技",
-      "awayTeamName": "米竞技",
-      "kickoffTime": "2026-10-09T07:00:00+08:00",
-      "buyEndTime": "2026-10-08 22:00:00",
+      "matchDate": "2026-10-08",
       "timingPolicy": "component-as-of-v1",
       "timingUpdateKind": "component-observation",
       "sourceObservedAt": "2026-10-07T05:16:30.359Z",
       "receivedAt": "2026-10-07T05:16:30.359Z",
       "validUntil": "2026-10-08T14:00:00.000Z",
       "latestReceivedAt": "2026-10-07T05:16:30.359Z",
-      "updatedAt": "2026-10-07T05:16:30.359Z",
-      "handicapLine": "-1",
       "handicapLineMeta": {
         "source": "500.com:jczq",
         "line": "-1",
@@ -1602474,47 +1600853,20 @@
         "observationPhase": "pre-match",
         "updatedAt": "2026-10-07T05:16:30.359Z"
       },
-      "bookmakerOdds": {
-        "had": {
-          "odds1": 1.95,
-          "oddsX": 3.12,
-          "odds2": 3.38,
-          "source": "500.com:jczq",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        },
-        "hhad": {
-          "odds1": 4.15,
-          "oddsX": 3.55,
-          "odds2": 1.65,
-          "source": "500.com:jczq",
-          "handicapLine": "-1",
-          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
-          "receivedAt": "2026-10-07T05:16:30.359Z",
-          "validUntil": "2026-10-08T14:00:00.000Z",
-          "usableForPreMatch": true,
-          "observationPhase": "pre-match",
-          "updatedAt": "2026-10-07T05:16:30.359Z"
-        }
-      },
       "fiveHundred": {
         "source": "500.com",
         "sourceObservedAt": "2026-10-07T05:16:30.359Z",
         "receivedAt": "2026-10-07T05:16:30.359Z",
         "validUntil": "2026-10-08T14:00:00.000Z",
         "updatedAt": "2026-10-07T05:16:30.359Z",
-        "fixtureId": "-1",
-        "infoMatchId": "166065",
-        "matchNo": "周四004",
+        "fixtureId": "1489044",
+        "infoMatchId": "166062",
+        "matchNo": "周四001",
         "urls": {
-          "analysis": "https://odds.500.com/fenxi/shuju--1.shtml",
-          "asianHandicap": "https://odds.500.com/fenxi/yazhi--1.shtml",
-          "europeOdds": "https://odds.500.com/fenxi/ouzhi--1.shtml",
-          "recommendation": "https://odds.500.com/fenxi/youliao--1.shtml?channel=pc_trade"
+          "analysis": "https://odds.500.com/fenxi/shuju-1489044.shtml",
+          "asianHandicap": "https://odds.500.com/fenxi/yazhi-1489044.shtml",
+          "europeOdds": "https://odds.500.com/fenxi/ouzhi-1489044.shtml",
+          "recommendation": "https://odds.500.com/fenxi/youliao-1489044.shtml?channel=pc_trade"
         },
         "sale": {
           "buyEndTime": "2026-10-08 22:00:00",
@@ -1602572,7 +1600924,7 @@
           "updatedAt": "2026-10-07T05:16:30.359Z"
         },
         "europeOdds": {
-          "url": "https://odds.500.com/fenxi/ouzhi--1.shtml",
+          "url": "https://odds.500.com/fenxi/ouzhi-1489044.shtml",
           "rows": [],
           "companies": 0,
           "currentAverage": null,
@@ -1602588,7 +1600940,7 @@
           "updatedAt": "2026-10-07T05:16:30.359Z"
         },
         "asianHandicap": {
-          "url": "https://odds.500.com/fenxi/yazhi--1.shtml",
+          "url": "https://odds.500.com/fenxi/yazhi-1489044.shtml",
           "rows": [],
           "companies": 0,
           "currentAverageLine": null,
@@ -1602604,9 +1600956,9 @@
         },
         "marketConsensus": {
           "officialHadProbability": {
-            "home": 0.4541,
-            "draw": 0.2838,
-            "away": 0.262
+            "home": 0.619,
+            "draw": 0.2108,
+            "away": 0.1702
           },
           "europeAverageProbability": null,
           "homeProbabilityGap": null,
@@ -1602636,11 +1600988,966 @@
         "fiveHundred.europeOdds",
         "fiveHundred.asianHandicap"
       ],
-      "postMatchOnlyComponents": []
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.43,
+        "oddsX": 4.2,
+        "odds2": 5.2,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.43 / 4.20 / 5.20",
+          "en": "500.com 1X2 reference: 1.43 / 4.20 / 5.20"
+        }
+      }
+    },
+    "2026-10-08:周四002": {
+      "source": "500.com:jczq+500.com:details",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
+      "sourceMatchId": "2041830",
+      "fixtureId": "1489046",
+      "matchNo": "周四002",
+      "leagueName": "芬兰超级联赛",
+      "homeTeamName": "库奥皮奥",
+      "awayTeamName": "AC奥卢",
+      "kickoffTime": "2026-10-09T00:00:00+08:00",
+      "buyEndTime": "2026-10-08 22:00:00",
+      "handicapLine": "-1",
+      "bookmakerOdds": {
+        "had": {
+          "odds1": 1.41,
+          "oddsX": 3.95,
+          "odds2": 6
+        },
+        "hhad": {
+          "odds1": 2.43,
+          "oddsX": 3.18,
+          "odds2": 2.48
+        }
+      },
+      "apiFootball": {
+        "mappingVerified": false,
+        "enrichmentEligible": false,
+        "verificationStatus": "audit-only",
+        "verificationBlockers": [
+          "provider-fixture-id-missing",
+          "fixture-confidence-below-sync-threshold",
+          "provider-fixture-time-mismatch",
+          "provider-entity-registry-not-exact"
+        ],
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
+        "fixtureAccess": {
+          "version": "api-football-fixture-access-diagnostic-v1",
+          "state": "stale-record",
+          "requestedDate": "2026-10-09",
+          "allowedFrom": "2026-06-08",
+          "allowedTo": "2026-06-10",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
+          "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
+          "refreshMinutes": 120,
+          "suspended": true
+        }
+      },
+      "infoMatchId": "166063",
+      "processDate": "2026-10-08",
+      "matchDate": "2026-10-09",
+      "timingPolicy": "component-as-of-v1",
+      "timingUpdateKind": "component-observation",
+      "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+      "receivedAt": "2026-10-07T05:16:30.359Z",
+      "validUntil": "2026-10-08T14:00:00.000Z",
+      "latestReceivedAt": "2026-10-07T05:16:30.359Z",
+      "handicapLineMeta": {
+        "source": "500.com:jczq",
+        "line": "-1",
+        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+        "receivedAt": "2026-10-07T05:16:30.359Z",
+        "validUntil": "2026-10-08T14:00:00.000Z",
+        "usableForPreMatch": true,
+        "observationPhase": "pre-match",
+        "updatedAt": "2026-10-07T05:16:30.359Z"
+      },
+      "fiveHundred": {
+        "source": "500.com",
+        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+        "receivedAt": "2026-10-07T05:16:30.359Z",
+        "validUntil": "2026-10-08T14:00:00.000Z",
+        "updatedAt": "2026-10-07T05:16:30.359Z",
+        "fixtureId": "1489046",
+        "infoMatchId": "166063",
+        "matchNo": "周四002",
+        "urls": {
+          "analysis": "https://odds.500.com/fenxi/shuju-1489046.shtml",
+          "asianHandicap": "https://odds.500.com/fenxi/yazhi-1489046.shtml",
+          "europeOdds": "https://odds.500.com/fenxi/ouzhi-1489046.shtml",
+          "recommendation": "https://odds.500.com/fenxi/youliao-1489046.shtml?channel=pc_trade"
+        },
+        "sale": {
+          "buyEndTime": "2026-10-08 22:00:00",
+          "availability": {
+            "bfdg": true,
+            "bfgg": true,
+            "bqdg": true,
+            "bqgg": true,
+            "dxqdg": false,
+            "dxqgg": false,
+            "hcdg": true,
+            "hcgg": true,
+            "jqdg": true,
+            "jqgg": true,
+            "nspfdg": false,
+            "nspfgg": true,
+            "spfdg": false,
+            "spfgg": true
+          },
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": true,
+          "observationPhase": "pre-match",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "rank": {
+          "home": null,
+          "away": null,
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "recentForm": {
+          "home": null,
+          "away": null,
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "futureSchedule": {
+          "home": null,
+          "away": null,
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "europeOdds": {
+          "url": "https://odds.500.com/fenxi/ouzhi-1489046.shtml",
+          "rows": [],
+          "companies": 0,
+          "currentAverage": null,
+          "initialAverage": null,
+          "currentProbabilityAverage": null,
+          "official": null,
+          "summary": "",
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "asianHandicap": {
+          "url": "https://odds.500.com/fenxi/yazhi-1489046.shtml",
+          "rows": [],
+          "companies": 0,
+          "currentAverageLine": null,
+          "initialAverageLine": null,
+          "lineMovement": null,
+          "summary": "",
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "marketConsensus": {
+          "officialHadProbability": {
+            "home": 0.6282,
+            "draw": 0.2242,
+            "away": 0.1476
+          },
+          "europeAverageProbability": null,
+          "homeProbabilityGap": null,
+          "handicapLineGap": null,
+          "hhadAvailable": true,
+          "riskLevel": "low",
+          "notes": [],
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": true,
+          "observationPhase": "pre-match",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        }
+      },
+      "preMatchUsableComponents": [
+        "bookmakerOdds.had",
+        "bookmakerOdds.hhad",
+        "handicapLine",
+        "fiveHundred.sale",
+        "fiveHundred.marketConsensus"
+      ],
+      "preMatchIneligibleComponents": [
+        "fiveHundred.rank",
+        "fiveHundred.recentForm",
+        "fiveHundred.futureSchedule",
+        "fiveHundred.europeOdds",
+        "fiveHundred.asianHandicap"
+      ],
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.41,
+        "oddsX": 3.95,
+        "odds2": 6,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.41 / 3.95 / 6.00",
+          "en": "500.com 1X2 reference: 1.41 / 3.95 / 6.00"
+        }
+      }
+    },
+    "2026-10-09:库奥皮奥:AC奥卢": {
+      "source": "500.com:jczq+500.com:details",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
+      "sourceMatchId": "2041830",
+      "fixtureId": "1489046",
+      "matchNo": "周四002",
+      "leagueName": "芬兰超级联赛",
+      "homeTeamName": "库奥皮奥",
+      "awayTeamName": "AC奥卢",
+      "kickoffTime": "2026-10-09T00:00:00+08:00",
+      "buyEndTime": "2026-10-08 22:00:00",
+      "handicapLine": "-1",
+      "bookmakerOdds": {
+        "had": {
+          "odds1": 1.41,
+          "oddsX": 3.95,
+          "odds2": 6
+        },
+        "hhad": {
+          "odds1": 2.43,
+          "oddsX": 3.18,
+          "odds2": 2.48
+        }
+      },
+      "apiFootball": {
+        "mappingVerified": false,
+        "enrichmentEligible": false,
+        "verificationStatus": "audit-only",
+        "verificationBlockers": [
+          "provider-fixture-id-missing",
+          "fixture-confidence-below-sync-threshold",
+          "provider-fixture-time-mismatch",
+          "provider-entity-registry-not-exact"
+        ],
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
+        "fixtureAccess": {
+          "version": "api-football-fixture-access-diagnostic-v1",
+          "state": "stale-record",
+          "requestedDate": "2026-10-09",
+          "allowedFrom": "2026-06-08",
+          "allowedTo": "2026-06-10",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
+          "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
+          "refreshMinutes": 120,
+          "suspended": true
+        }
+      },
+      "infoMatchId": "166063",
+      "processDate": "2026-10-08",
+      "matchDate": "2026-10-09",
+      "timingPolicy": "component-as-of-v1",
+      "timingUpdateKind": "component-observation",
+      "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+      "receivedAt": "2026-10-07T05:16:30.359Z",
+      "validUntil": "2026-10-08T14:00:00.000Z",
+      "latestReceivedAt": "2026-10-07T05:16:30.359Z",
+      "handicapLineMeta": {
+        "source": "500.com:jczq",
+        "line": "-1",
+        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+        "receivedAt": "2026-10-07T05:16:30.359Z",
+        "validUntil": "2026-10-08T14:00:00.000Z",
+        "usableForPreMatch": true,
+        "observationPhase": "pre-match",
+        "updatedAt": "2026-10-07T05:16:30.359Z"
+      },
+      "fiveHundred": {
+        "source": "500.com",
+        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+        "receivedAt": "2026-10-07T05:16:30.359Z",
+        "validUntil": "2026-10-08T14:00:00.000Z",
+        "updatedAt": "2026-10-07T05:16:30.359Z",
+        "fixtureId": "1489046",
+        "infoMatchId": "166063",
+        "matchNo": "周四002",
+        "urls": {
+          "analysis": "https://odds.500.com/fenxi/shuju-1489046.shtml",
+          "asianHandicap": "https://odds.500.com/fenxi/yazhi-1489046.shtml",
+          "europeOdds": "https://odds.500.com/fenxi/ouzhi-1489046.shtml",
+          "recommendation": "https://odds.500.com/fenxi/youliao-1489046.shtml?channel=pc_trade"
+        },
+        "sale": {
+          "buyEndTime": "2026-10-08 22:00:00",
+          "availability": {
+            "bfdg": true,
+            "bfgg": true,
+            "bqdg": true,
+            "bqgg": true,
+            "dxqdg": false,
+            "dxqgg": false,
+            "hcdg": true,
+            "hcgg": true,
+            "jqdg": true,
+            "jqgg": true,
+            "nspfdg": false,
+            "nspfgg": true,
+            "spfdg": false,
+            "spfgg": true
+          },
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": true,
+          "observationPhase": "pre-match",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "rank": {
+          "home": null,
+          "away": null,
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "recentForm": {
+          "home": null,
+          "away": null,
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "futureSchedule": {
+          "home": null,
+          "away": null,
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "europeOdds": {
+          "url": "https://odds.500.com/fenxi/ouzhi-1489046.shtml",
+          "rows": [],
+          "companies": 0,
+          "currentAverage": null,
+          "initialAverage": null,
+          "currentProbabilityAverage": null,
+          "official": null,
+          "summary": "",
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "asianHandicap": {
+          "url": "https://odds.500.com/fenxi/yazhi-1489046.shtml",
+          "rows": [],
+          "companies": 0,
+          "currentAverageLine": null,
+          "initialAverageLine": null,
+          "lineMovement": null,
+          "summary": "",
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "marketConsensus": {
+          "officialHadProbability": {
+            "home": 0.6282,
+            "draw": 0.2242,
+            "away": 0.1476
+          },
+          "europeAverageProbability": null,
+          "homeProbabilityGap": null,
+          "handicapLineGap": null,
+          "hhadAvailable": true,
+          "riskLevel": "low",
+          "notes": [],
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": true,
+          "observationPhase": "pre-match",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        }
+      },
+      "preMatchUsableComponents": [
+        "bookmakerOdds.had",
+        "bookmakerOdds.hhad",
+        "handicapLine",
+        "fiveHundred.sale",
+        "fiveHundred.marketConsensus"
+      ],
+      "preMatchIneligibleComponents": [
+        "fiveHundred.rank",
+        "fiveHundred.recentForm",
+        "fiveHundred.futureSchedule",
+        "fiveHundred.europeOdds",
+        "fiveHundred.asianHandicap"
+      ],
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.41,
+        "oddsX": 3.95,
+        "odds2": 6,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.41 / 3.95 / 6.00",
+          "en": "500.com 1X2 reference: 1.41 / 3.95 / 6.00"
+        }
+      }
+    },
+    "2026-10-08:周四003": {
+      "source": "500.com:jczq+500.com:details",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
+      "sourceMatchId": "2041831",
+      "fixtureId": "1362462",
+      "matchNo": "周四003",
+      "leagueName": "巴甲",
+      "homeTeamName": "桑托斯",
+      "awayTeamName": "弗拉门戈",
+      "kickoffTime": "2026-10-09T06:30:00+08:00",
+      "buyEndTime": "2026-10-08 22:00:00",
+      "handicapLine": "1",
+      "bookmakerOdds": {
+        "had": {
+          "odds1": 4.08,
+          "oddsX": 3.6,
+          "odds2": 1.65
+        },
+        "hhad": {
+          "odds1": 1.98,
+          "oddsX": 3.3,
+          "odds2": 3.11
+        }
+      },
+      "apiFootball": {
+        "mappingVerified": false,
+        "enrichmentEligible": false,
+        "verificationStatus": "audit-only",
+        "verificationBlockers": [
+          "provider-fixture-id-missing",
+          "fixture-confidence-below-sync-threshold",
+          "provider-fixture-time-mismatch",
+          "provider-entity-registry-not-exact"
+        ],
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
+        "fixtureAccess": {
+          "version": "api-football-fixture-access-diagnostic-v1",
+          "state": "stale-record",
+          "requestedDate": "2026-10-09",
+          "allowedFrom": "2026-06-08",
+          "allowedTo": "2026-06-10",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
+          "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
+          "refreshMinutes": 120,
+          "suspended": true
+        }
+      },
+      "infoMatchId": "166064",
+      "processDate": "2026-10-08",
+      "matchDate": "2026-10-09",
+      "timingPolicy": "component-as-of-v1",
+      "timingUpdateKind": "component-observation",
+      "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+      "receivedAt": "2026-10-07T05:16:30.359Z",
+      "validUntil": "2026-10-08T14:00:00.000Z",
+      "latestReceivedAt": "2026-10-07T05:16:30.359Z",
+      "handicapLineMeta": {
+        "source": "500.com:jczq",
+        "line": "1",
+        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+        "receivedAt": "2026-10-07T05:16:30.359Z",
+        "validUntil": "2026-10-08T14:00:00.000Z",
+        "usableForPreMatch": true,
+        "observationPhase": "pre-match",
+        "updatedAt": "2026-10-07T05:16:30.359Z"
+      },
+      "fiveHundred": {
+        "source": "500.com",
+        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+        "receivedAt": "2026-10-07T05:16:30.359Z",
+        "validUntil": "2026-10-08T14:00:00.000Z",
+        "updatedAt": "2026-10-07T05:16:30.359Z",
+        "fixtureId": "1362462",
+        "infoMatchId": "166064",
+        "matchNo": "周四003",
+        "urls": {
+          "analysis": "https://odds.500.com/fenxi/shuju-1362462.shtml",
+          "asianHandicap": "https://odds.500.com/fenxi/yazhi-1362462.shtml",
+          "europeOdds": "https://odds.500.com/fenxi/ouzhi-1362462.shtml",
+          "recommendation": "https://odds.500.com/fenxi/youliao-1362462.shtml?channel=pc_trade"
+        },
+        "sale": {
+          "buyEndTime": "2026-10-08 22:00:00",
+          "availability": {
+            "bfdg": true,
+            "bfgg": true,
+            "bqdg": true,
+            "bqgg": true,
+            "dxqdg": false,
+            "dxqgg": false,
+            "hcdg": true,
+            "hcgg": true,
+            "jqdg": true,
+            "jqgg": true,
+            "nspfdg": true,
+            "nspfgg": true,
+            "spfdg": false,
+            "spfgg": true
+          },
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": true,
+          "observationPhase": "pre-match",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "rank": {
+          "home": null,
+          "away": null,
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "recentForm": {
+          "home": null,
+          "away": null,
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "futureSchedule": {
+          "home": null,
+          "away": null,
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "europeOdds": {
+          "url": "https://odds.500.com/fenxi/ouzhi-1362462.shtml",
+          "rows": [],
+          "companies": 0,
+          "currentAverage": null,
+          "initialAverage": null,
+          "currentProbabilityAverage": null,
+          "official": null,
+          "summary": "",
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "asianHandicap": {
+          "url": "https://odds.500.com/fenxi/yazhi-1362462.shtml",
+          "rows": [],
+          "companies": 0,
+          "currentAverageLine": null,
+          "initialAverageLine": null,
+          "lineMovement": null,
+          "summary": "",
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "marketConsensus": {
+          "officialHadProbability": {
+            "home": 0.2203,
+            "draw": 0.2461,
+            "away": 0.5336
+          },
+          "europeAverageProbability": null,
+          "homeProbabilityGap": null,
+          "handicapLineGap": null,
+          "hhadAvailable": true,
+          "riskLevel": "low",
+          "notes": [],
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": true,
+          "observationPhase": "pre-match",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        }
+      },
+      "preMatchUsableComponents": [
+        "bookmakerOdds.had",
+        "bookmakerOdds.hhad",
+        "handicapLine",
+        "fiveHundred.sale",
+        "fiveHundred.marketConsensus"
+      ],
+      "preMatchIneligibleComponents": [
+        "fiveHundred.rank",
+        "fiveHundred.recentForm",
+        "fiveHundred.futureSchedule",
+        "fiveHundred.europeOdds",
+        "fiveHundred.asianHandicap"
+      ],
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 4.08,
+        "oddsX": 3.6,
+        "odds2": 1.65,
+        "summary": {
+          "zh": "500彩票网胜平负参考：4.08 / 3.60 / 1.65",
+          "en": "500.com 1X2 reference: 4.08 / 3.60 / 1.65"
+        }
+      }
+    },
+    "2026-10-09:桑托斯:弗拉门戈": {
+      "source": "500.com:jczq+500.com:details",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
+      "sourceMatchId": "2041831",
+      "fixtureId": "1362462",
+      "matchNo": "周四003",
+      "leagueName": "巴甲",
+      "homeTeamName": "桑托斯",
+      "awayTeamName": "弗拉门戈",
+      "kickoffTime": "2026-10-09T06:30:00+08:00",
+      "buyEndTime": "2026-10-08 22:00:00",
+      "handicapLine": "1",
+      "bookmakerOdds": {
+        "had": {
+          "odds1": 4.08,
+          "oddsX": 3.6,
+          "odds2": 1.65
+        },
+        "hhad": {
+          "odds1": 1.98,
+          "oddsX": 3.3,
+          "odds2": 3.11
+        }
+      },
+      "apiFootball": {
+        "mappingVerified": false,
+        "enrichmentEligible": false,
+        "verificationStatus": "audit-only",
+        "verificationBlockers": [
+          "provider-fixture-id-missing",
+          "fixture-confidence-below-sync-threshold",
+          "provider-fixture-time-mismatch",
+          "provider-entity-registry-not-exact"
+        ],
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
+        "fixtureAccess": {
+          "version": "api-football-fixture-access-diagnostic-v1",
+          "state": "stale-record",
+          "requestedDate": "2026-10-09",
+          "allowedFrom": "2026-06-08",
+          "allowedTo": "2026-06-10",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
+          "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
+          "refreshMinutes": 120,
+          "suspended": true
+        }
+      },
+      "infoMatchId": "166064",
+      "processDate": "2026-10-08",
+      "matchDate": "2026-10-09",
+      "timingPolicy": "component-as-of-v1",
+      "timingUpdateKind": "component-observation",
+      "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+      "receivedAt": "2026-10-07T05:16:30.359Z",
+      "validUntil": "2026-10-08T14:00:00.000Z",
+      "latestReceivedAt": "2026-10-07T05:16:30.359Z",
+      "handicapLineMeta": {
+        "source": "500.com:jczq",
+        "line": "1",
+        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+        "receivedAt": "2026-10-07T05:16:30.359Z",
+        "validUntil": "2026-10-08T14:00:00.000Z",
+        "usableForPreMatch": true,
+        "observationPhase": "pre-match",
+        "updatedAt": "2026-10-07T05:16:30.359Z"
+      },
+      "fiveHundred": {
+        "source": "500.com",
+        "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+        "receivedAt": "2026-10-07T05:16:30.359Z",
+        "validUntil": "2026-10-08T14:00:00.000Z",
+        "updatedAt": "2026-10-07T05:16:30.359Z",
+        "fixtureId": "1362462",
+        "infoMatchId": "166064",
+        "matchNo": "周四003",
+        "urls": {
+          "analysis": "https://odds.500.com/fenxi/shuju-1362462.shtml",
+          "asianHandicap": "https://odds.500.com/fenxi/yazhi-1362462.shtml",
+          "europeOdds": "https://odds.500.com/fenxi/ouzhi-1362462.shtml",
+          "recommendation": "https://odds.500.com/fenxi/youliao-1362462.shtml?channel=pc_trade"
+        },
+        "sale": {
+          "buyEndTime": "2026-10-08 22:00:00",
+          "availability": {
+            "bfdg": true,
+            "bfgg": true,
+            "bqdg": true,
+            "bqgg": true,
+            "dxqdg": false,
+            "dxqgg": false,
+            "hcdg": true,
+            "hcgg": true,
+            "jqdg": true,
+            "jqgg": true,
+            "nspfdg": true,
+            "nspfgg": true,
+            "spfdg": false,
+            "spfgg": true
+          },
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": true,
+          "observationPhase": "pre-match",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "rank": {
+          "home": null,
+          "away": null,
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "recentForm": {
+          "home": null,
+          "away": null,
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "futureSchedule": {
+          "home": null,
+          "away": null,
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "europeOdds": {
+          "url": "https://odds.500.com/fenxi/ouzhi-1362462.shtml",
+          "rows": [],
+          "companies": 0,
+          "currentAverage": null,
+          "initialAverage": null,
+          "currentProbabilityAverage": null,
+          "official": null,
+          "summary": "",
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "asianHandicap": {
+          "url": "https://odds.500.com/fenxi/yazhi-1362462.shtml",
+          "rows": [],
+          "companies": 0,
+          "currentAverageLine": null,
+          "initialAverageLine": null,
+          "lineMovement": null,
+          "summary": "",
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": false,
+          "observationPhase": "unavailable",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        },
+        "marketConsensus": {
+          "officialHadProbability": {
+            "home": 0.2203,
+            "draw": 0.2461,
+            "away": 0.5336
+          },
+          "europeAverageProbability": null,
+          "homeProbabilityGap": null,
+          "handicapLineGap": null,
+          "hhadAvailable": true,
+          "riskLevel": "low",
+          "notes": [],
+          "sourceObservedAt": "2026-10-07T05:16:30.359Z",
+          "receivedAt": "2026-10-07T05:16:30.359Z",
+          "validUntil": "2026-10-08T14:00:00.000Z",
+          "usableForPreMatch": true,
+          "observationPhase": "pre-match",
+          "updatedAt": "2026-10-07T05:16:30.359Z"
+        }
+      },
+      "preMatchUsableComponents": [
+        "bookmakerOdds.had",
+        "bookmakerOdds.hhad",
+        "handicapLine",
+        "fiveHundred.sale",
+        "fiveHundred.marketConsensus"
+      ],
+      "preMatchIneligibleComponents": [
+        "fiveHundred.rank",
+        "fiveHundred.recentForm",
+        "fiveHundred.futureSchedule",
+        "fiveHundred.europeOdds",
+        "fiveHundred.asianHandicap"
+      ],
+      "postMatchOnlyComponents": [],
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 4.08,
+        "oddsX": 3.6,
+        "odds2": 1.65,
+        "summary": {
+          "zh": "500彩票网胜平负参考：4.08 / 3.60 / 1.65",
+          "en": "500.com 1X2 reference: 4.08 / 3.60 / 1.65"
+        }
+      }
+    },
+    "2026-10-08:周四004": {
+      "source": "500.com:jczq",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
+      "sourceMatchId": "2041832",
+      "fixtureId": "-1",
+      "matchNo": "周四004",
+      "leagueName": "巴甲",
+      "homeTeamName": "巴拉纳竞技",
+      "awayTeamName": "米内罗竞技",
+      "kickoffTime": "2026-10-09T07:00:00+08:00",
+      "buyEndTime": "2026-10-08 22:00:00",
+      "handicapLine": "-1",
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.95,
+        "oddsX": 3.05,
+        "odds2": 3.46,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.95 / 3.05 / 3.46",
+          "en": "500.com 1X2 reference: 1.95 / 3.05 / 3.46"
+        }
+      },
+      "bookmakerOdds": {
+        "had": {
+          "odds1": 1.95,
+          "oddsX": 3.05,
+          "odds2": 3.46
+        },
+        "hhad": {
+          "odds1": 4.3,
+          "oddsX": 3.45,
+          "odds2": 1.65
+        }
+      },
+      "apiFootball": {
+        "mappingVerified": false,
+        "enrichmentEligible": false,
+        "verificationStatus": "audit-only",
+        "verificationBlockers": [
+          "provider-fixture-id-missing",
+          "fixture-confidence-below-sync-threshold",
+          "provider-fixture-time-mismatch",
+          "provider-entity-registry-not-exact"
+        ],
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
+        "fixtureAccess": {
+          "version": "api-football-fixture-access-diagnostic-v1",
+          "state": "stale-record",
+          "requestedDate": "2026-10-09",
+          "allowedFrom": "2026-06-08",
+          "allowedTo": "2026-06-10",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
+          "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
+          "refreshMinutes": 120,
+          "suspended": true
+        }
+      }
+    },
+    "2026-10-09:巴竞技:米竞技": {
+      "source": "500.com:jczq",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
+      "sourceMatchId": "2041832",
+      "fixtureId": "-1",
+      "matchNo": "周四004",
+      "leagueName": "巴甲",
+      "homeTeamName": "巴拉纳竞技",
+      "awayTeamName": "米内罗竞技",
+      "kickoffTime": "2026-10-09T07:00:00+08:00",
+      "buyEndTime": "2026-10-08 22:00:00",
+      "handicapLine": "-1",
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.95,
+        "oddsX": 3.05,
+        "odds2": 3.46,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.95 / 3.05 / 3.46",
+          "en": "500.com 1X2 reference: 1.95 / 3.05 / 3.46"
+        }
+      },
+      "bookmakerOdds": {
+        "had": {
+          "odds1": 1.95,
+          "oddsX": 3.05,
+          "odds2": 3.46
+        },
+        "hhad": {
+          "odds1": 4.3,
+          "oddsX": 3.45,
+          "odds2": 1.65
+        }
+      }
     },
     "2026-10-08:周四005": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-10-08T02:13:09.848Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041833",
       "fixtureId": "1362406",
       "matchNo": "周四005",
@@ -1602682,14 +1601989,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-09",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1602698,7 +1602005,7 @@
     },
     "2026-10-09:弗鲁米嫩:科里蒂巴": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-10-08T02:13:09.848Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041833",
       "fixtureId": "1362406",
       "matchNo": "周四005",
@@ -1602733,7 +1602040,7 @@
     },
     "2026-10-08:周四006": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-10-08T02:13:09.848Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041834",
       "fixtureId": "1362487",
       "matchNo": "周四006",
@@ -1602775,14 +1602082,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-09",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1602791,7 +1602098,7 @@
     },
     "2026-10-09:帕梅拉斯:巴伊亚": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-10-08T02:13:09.848Z",
+      "updatedAt": "2026-10-08T02:18:08.068Z",
       "sourceMatchId": "2041834",
       "fixtureId": "1362487",
       "matchNo": "周四006",
@@ -1602842,14 +1602149,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1602874,14 +1602181,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1602906,14 +1602213,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-08",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1602938,14 +1602245,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-09",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1602970,14 +1602277,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-09",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
@@ -1603002,14 +1602309,14 @@
           "provider-fixture-time-mismatch",
           "provider-entity-registry-not-exact"
         ],
-        "lastCheckedAt": "2026-10-08T02:13:20.497Z",
+        "lastCheckedAt": "2026-10-08T02:18:14.674Z",
         "fixtureAccess": {
           "version": "api-football-fixture-access-diagnostic-v1",
           "state": "stale-record",
           "requestedDate": "2026-10-09",
           "allowedFrom": "2026-06-08",
           "allowedTo": "2026-06-10",
-          "checkedAt": "2026-10-08T02:13:20.497Z",
+          "checkedAt": "2026-10-08T02:18:14.674Z",
           "restrictionRecordedAt": "2026-06-10T09:49:22.566Z",
           "refreshMinutes": 120,
           "suspended": true
