@@ -48,8 +48,11 @@ function payload() {
     row.providerObservedAt = at(now - (index % 2 ? 3600000 : 7200000));
     row.receivedAt = at(Date.parse(row.providerObservedAt) + 60000);
   }
+  const feedback = require('../src/services/prematchV3FeedbackLoop.cjs');
+  const validated = feedback.buildValidatedParameterPacket({ artifact: synthetic.parameters,
+    records: synthetic.learningRecords, asOf: '2026-09-15T11:00:00Z' });
   const modelArtifacts = [packet('prematch-v3-baseline', clone(synthetic.baseline), synthetic.baseline.artifact.version),
-    packet('prematch-v3-parameters', clone(synthetic.parameters), synthetic.parameters.version)];
+    packet('prematch-v3-parameters', validated, feedback.VERSION)];
   return { version: reader.VERSION, readOnly: 'on', productionWrites: 0, businessDate: date,
     observedAt: at(now - 2000), generation: { data_generation_id: 'synthetic-shadow-generation',
       manifest_hash: 'a'.repeat(64), committed_at: at(now - 3000) }, matches: [match], modelArtifacts,

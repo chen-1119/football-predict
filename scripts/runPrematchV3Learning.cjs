@@ -8,12 +8,13 @@ const { createHash } = require('node:crypto');
 const { stableHash } = require('../src/services/webConsensusEvidence.cjs');
 const { learnPrematchV3Candidate, VERSION: LEARNER_VERSION, RECORD_VERSION } = require('../src/services/prematchV3Learning.cjs');
 const { epochNanoseconds } = require('../src/services/prematchV3Clock.cjs');
+const feedback = require('../src/services/prematchV3FeedbackLoop.cjs');
 
 const VERSION = 'prematch-v3-learning-run-report-v1';
 const REQUEST_VERSION = 'prematch-v3-learning-request-v1';
 const MAX_INPUT_BYTES = 64 * 1024 * 1024;
 const IMPLEMENTATION_FILES = Object.freeze(['scripts/runPrematchV3Learning.cjs',
-  'src/services/prematchV3Learning.cjs', 'src/services/prematchTeamEvidenceV3.cjs',
+  'src/services/prematchV3Learning.cjs', 'src/services/prematchV3FeedbackLoop.cjs', 'src/services/prematchTeamEvidenceV3.cjs',
   'src/services/prematchV3Clock.cjs', 'src/services/strictInstant.cjs',
   'src/services/webConsensusEvidence.cjs', 'src/services/goalDistribution.cjs',
   'src/services/matchLifecycle.cjs', 'scripts/modelLearningRegistry.cjs']);
@@ -81,6 +82,12 @@ function run({ input, output } = {}) {
   const fitCompletedAt = new Date().toISOString();
   check(epochNanoseconds(fitCompletedAt) >= epochNanoseconds(fitStartedAt), 'ACTUAL_CLOCK_REGRESSED');
   const learning = completeCandidateReceipt(fitted, fitCompletedAt);
+  let feedbackPacket = null, feedbackBlockers = [];
+  if (learning.artifact) {
+    try { feedbackPacket = feedback.buildValidatedParameterPacket({ artifact: learning.artifact,
+      records: request.records, asOf: fitCompletedAt }); }
+    catch (error) { feedbackBlockers = [/^V3_FEEDBACK_[A-Z_]+$/.test(error.message) ? error.message : 'V3_FEEDBACK_PACKET_INVALID']; }
+  } else feedbackBlockers = ['V3_FEEDBACK_TRAINING_BLOCKED'];
   const implementationAfter = implementationHashes(repo);
   check(stableHash(implementationBefore) === stableHash(implementationAfter), 'IMPLEMENTATION_CHANGED_DURING_FIT');
   check(sha256(fs.readFileSync(inputPath)) === inputSha256 && stableHash(request) === stableHash(JSON.parse(inputBytes.toString('utf8'))), 'INPUT_CHANGED');
@@ -95,14 +102,14 @@ function run({ input, output } = {}) {
     evidenceScope: 'explicit-frozen-V3-research-records;held-out-probability-metrics-are-not-formal-accuracy-or-promotion-proof',
     calibrated: false, registryStatus: 'not-registered', activeModelPublished: false,
     invariants: { inputChanged: false, originalPredictionsChanged: false, registryWrites: 0,
-      productionWrites: 0, datasetWrites: 0, modelPointerWrites: 0 }, learning };
+      productionWrites: 0, datasetWrites: 0, modelPointerWrites: 0 }, learning, feedbackPacket, feedbackBlockers };
   const report = { ...body, contentHash: stableHash(body) };
   // wx also protects against a file created between the check and this write.
   fs.writeFileSync(outputPath, JSON.stringify(report, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
   return { output: outputPath, status: report.status, contentHash: report.contentHash,
     actualFittedAt: report.actualFittedAt, parameterArtifactHash: learning.artifact?.contentHash || null,
     pairedTestRows: learning.coverage?.pairedTestRows || 0, formalEligible: false,
-    registryWrites: 0, productionWrites: 0 };
+    registryWrites: 0, productionWrites: 0, feedbackReady: feedbackPacket !== null, feedbackBlockers };
 }
 
 if (require.main === module) {

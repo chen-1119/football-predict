@@ -99,9 +99,16 @@ function buildPrematchV3Assessment(match = {}, options = {}) {
     baseline = forecastDynamicGoalStrengthV3({artifact:baselinePacket.artifact,event,asOf,createdAt:baselinePacket.createdAt,availableAt:baselinePacket.availableAt});
   }
   const parameters = options.parameters || null;
+  const feedbackRequired = registry && Object.hasOwn(registry, 'parameterValidation');
+  const feedbackValidation = registry?.parameterValidation;
+  const feedbackValid = !feedbackRequired || (feedbackValidation?.parameterArtifactHash === parameters?.contentHash
+    && feedbackValidation?.parametersHash === parameters?.parametersHash
+    && feedbackValidation?.baselineArtifactHashes?.includes(baselinePacket?.artifact?.artifactHash)
+    && clock(feedbackValidation?.availableAt) !== null && clock(feedbackValidation.availableAt) < at);
   const parameterCheck = parameters ? require('./prematchV3Learning.cjs').verifyPrematchV3ParameterArtifact(parameters,
     {featureSchema:team.FEATURE_SCHEMA,featureSchemaHash:team.FEATURE_SCHEMA_HASH,featureNames:parameters.featureNames}) : {valid:false,reasons:['trained-parameters-missing']};
-  const effects = team.applyPrematchTeamEffects(snapshot,baseline.baseRates,parameterCheck.valid?parameters:null);
+  if (!feedbackValid) blockers.push('trained-parameter-holdout-validation-missing');
+  const effects = team.applyPrematchTeamEffects(snapshot,baseline.baseRates,parameterCheck.valid && feedbackValid?parameters:null);
   blockers.push(...parameterCheck.reasons);
   blockers.push(...baseline.blockers, ...effects.blockers);
   const marketOnly = marketReference(match,event,asOf);
@@ -122,6 +129,17 @@ function buildPrematchV3Assessment(match = {}, options = {}) {
     formalEligible:false,productionEligible:false,primary:null,companion:null,sourceVerification:'unverified',
     blockers:[...new Set(blockers)].sort(),teamSnapshot:snapshot,asianTimeline:timeline,baseline,effects,parameterCheck,
     modelRegistry:registry?structuredClone(registry):null,
+    ...(feedbackRequired ? { parameterAdoption: {
+      scope: 'prospective-team-shadow;not-formal-recommendation', formalEligible: false,
+      status: teamProjection && feedbackValid ? 'applied' : 'blocked',
+      parameterArtifactHash: parameters?.contentHash || null,
+      validationPacketHash: feedbackValidation?.packetHash || null,
+      parametersHash: parameters?.parametersHash || null,
+      featureSnapshotHash: snapshot.contentHash,
+      baseRates: baseline.baseRates, appliedRates: teamProjection && feedbackValid ? effects.after : null,
+      outputProbabilityHash: teamProjection && feedbackValid ? stableHash(teamProjection.probabilities) : null,
+      asOf, eventVersion: event.eventVersion, sourceMatchId: event.sourceMatchId,
+    } } : {}),
     comparisons:{baseline:cleanProjection(baselineProjection),teamOnly:cleanProjection(teamProjection),marketOnly,hybrid},asianPrices,
     legacyModel:{version:match.probabilityModel?.version || null,marketWeight:finite(match.probabilityModel?.ensembleWeights?.market)?match.probabilityModel.ensembleWeights.market:null,
       role:'existing-model-unchanged;not-used-as-zero-market-baseline'},

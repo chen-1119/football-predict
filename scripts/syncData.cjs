@@ -18056,7 +18056,8 @@ async function sync() {
     output, prospectiveAuditMatches, Date.now(), {
       baseline: prematchV3Registry.baseline, parameters: prematchV3Registry.parameters,
       modelRegistry: { asOf: prematchV3Registry.asOf, status: prematchV3Registry.status,
-        storage: prematchV3Registry.storage, blockers: prematchV3Registry.blockers, receipts: prematchV3Registry.receipts },
+        storage: prematchV3Registry.storage, blockers: prematchV3Registry.blockers, receipts: prematchV3Registry.receipts,
+        parameterValidation: prematchV3Registry.parameterValidation || null },
     },
   );
   output = attachImmutableAnalysisReferenceDecisions(output, existingBySourceId, capturedAt);

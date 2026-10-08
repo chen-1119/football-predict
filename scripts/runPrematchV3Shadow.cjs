@@ -17,7 +17,7 @@ const IMPLEMENTATION_FILES = ['scripts/runPrematchV3Shadow.cjs','scripts/readPre
   'server/relayCollectorEvidence.cjs','scripts/sportteryEndpointContract.cjs',
   'scripts/dynamicGoalStrengthModel.cjs','src/services/prematchV3Assessment.cjs','src/services/prematchV3Clock.cjs',
   'src/services/prematchTeamEvidenceV3.cjs','src/services/asianHandicapEvidenceV3.cjs',
-  'src/services/prematchV3Learning.cjs','src/services/prematchV3FrozenRecord.cjs',
+  'src/services/prematchV3Learning.cjs','src/services/prematchV3FeedbackLoop.cjs','src/services/prematchV3FrozenRecord.cjs',
   'src/services/prematchV3ModelRegistry.cjs','src/services/formNeedPressure.cjs','src/services/prospectiveForecastInput.cjs',
   'src/services/strictInstant.cjs','src/services/sportteryDeadlineClock.cjs','src/services/webConsensusEvidence.cjs','src/services/goalDistribution.cjs',
   'src/services/matchLifecycle.cjs','scripts/historicalAsOfFeatureBuilder.cjs',
@@ -39,7 +39,7 @@ function buildReport(input, {asOf,implementationHashes,gitHead,trustRegistry}) {
   const modelRead = require('../src/services/prematchV3ModelRegistry.cjs').readPrematchV3RegistryFromOnlineInput(input,{asOf,trustRegistry});
   const assessmentOptions={asOf,baseline:modelRead.baseline,parameters:modelRead.parameters,
     modelRegistry:{asOf:modelRead.asOf,status:modelRead.status,storage:modelRead.storage,
-      blockers:modelRead.blockers,receipts:modelRead.receipts}};
+      blockers:modelRead.blockers,receipts:modelRead.receipts,parameterValidation:modelRead.parameterValidation||null}};
   const rows = input.matches.map((match,index) => {
     const options={...assessmentOptions,...identityOptionsFor(input,index,trustRegistry)};
     const assessment=buildPrematchV3Assessment(match,options);
