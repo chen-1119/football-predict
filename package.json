@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "research:league-history:collect": "node scripts/collectLeagueTextHistory.cjs",
+    "research:league-baseline:fit": "node scripts/runLeagueBaselineExperiment.cjs",
+    "test:league-history-training": "node --test tests/league-history-training.test.cjs",
     "test:sporttery-opening": "node scripts/verifySportteryOpeningPolicy.cjs",
     "research:markets:read": "node scripts/readMarketSeparatedRegression.cjs",
     "research:markets:regress": "node scripts/marketSeparatedRegression.cjs",
