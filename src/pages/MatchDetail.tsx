@@ -2457,7 +2457,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       Number.isFinite(match.oddsTrend.odds2Change) ? `${language === 'zh' ? '客' : 'A'} ${Number(match.oddsTrend.odds2Change) > 0 ? '+' : ''}${formatDecimal(match.oddsTrend.odds2Change)}` : ''
     ].filter(Boolean).join(' / ')
     : '';
-  const injuryCount = Number(externalSignals?.injuries?.home?.length || 0) + Number(externalSignals?.injuries?.away?.length || 0);
+  const evidenceCoverage = preMatchQuality?.evidenceCoverage;
+  const injuryCount = evidenceCoverage
+    ? (evidenceCoverage.sides.home.injuryPlayers ?? 0) + (evidenceCoverage.sides.away.injuryPlayers ?? 0)
+    : Number(externalSignals?.injuries?.home?.length || 0) + Number(externalSignals?.injuries?.away?.length || 0);
   const lineupQuality = preMatchQuality?.components?.lineup;
   const legacyLineupIsConfirmed = lineupQuality?.confirmed === true
     || ['confirmed-lineup', 'official-starting-xi'].includes(String(lineupQuality?.evidenceType || '').toLowerCase());
@@ -2480,25 +2483,18 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     && signal.usableForPreMatch !== false
   );
   const lineupSignalReady = Boolean(
-    hasAuditableSource(confirmedLineupSignal)
-    && (
-      confirmedLineupSummaryText
-      || confirmedLineupSignal?.homeFormation
-      || confirmedLineupSignal?.awayFormation
-    )
+    evidenceCoverage?.confirmedBoth === true
+    && hasAuditableSource(confirmedLineupSignal)
   );
   const projectedRosterReady = Boolean(
-    String(projectedRosterSignal?.source || '').trim()
+    evidenceCoverage?.projectedAny === true
+    && String(projectedRosterSignal?.source || '').trim()
     && Number.isFinite(Date.parse(String(projectedRosterSignal?.sourceObservedAt || '')))
     && projectedRosterSignal?.usableForPreMatch !== false
-    && (
-      projectedRosterSummaryText
-      || projectedRosterSignal?.homeFormation
-      || projectedRosterSignal?.awayFormation
-    )
   );
   const injurySignalReady = Boolean(
-    hasAuditableSource(externalSignals?.injuries)
+    evidenceCoverage && Object.values(evidenceCoverage.sides).some(side => side.injuryStatus === 'reported')
+    && hasAuditableSource(externalSignals?.injuries)
     && (injuryCount > 0 || injurySummaryText)
   );
   const refereeSignalReady = Boolean(
@@ -2529,7 +2525,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       ? (injuryCount > 0
         ? (language === 'zh' ? `伤停 ${injuryCount} 条` : `${injuryCount} injury notes`)
         : injurySummaryText)
-      : '',
+      : (language === 'zh' ? '伤停未知，分析降级' : 'Injuries unknown; reduced evidence'),
     refereeText,
     Number.isFinite(yellowCardsTotal)
       ? (language === 'zh' ? `预计黄牌 ${formatDecimal(yellowCardsTotal)}` : `expected yellows ${formatDecimal(yellowCardsTotal)}`)

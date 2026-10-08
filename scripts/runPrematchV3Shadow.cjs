@@ -16,7 +16,7 @@ const IMPLEMENTATION_FILES = ['scripts/runPrematchV3Shadow.cjs','scripts/readPre
   'scripts/recommendationPlatform/liveOfficialHad.cjs','scripts/storedResultTeamIdentity.cjs',
   'server/relayCollectorEvidence.cjs','scripts/sportteryEndpointContract.cjs',
   'scripts/dynamicGoalStrengthModel.cjs','src/services/prematchV3Assessment.cjs','src/services/prematchV3Clock.cjs',
-  'src/services/prematchTeamEvidenceV3.cjs','src/services/asianHandicapEvidenceV3.cjs',
+  'src/services/prematchTeamEvidenceV3.cjs','src/services/prematchEvidenceCoverage.cjs','src/services/asianHandicapEvidenceV3.cjs',
   'src/services/prematchV3Learning.cjs','src/services/prematchV3FeedbackLoop.cjs','src/services/prematchV3FrozenRecord.cjs',
   'src/services/prematchV3ModelRegistry.cjs','src/services/formNeedPressure.cjs','src/services/prospectiveForecastInput.cjs',
   'src/services/strictInstant.cjs','src/services/sportteryDeadlineClock.cjs','src/services/webConsensusEvidence.cjs','src/services/goalDistribution.cjs',
