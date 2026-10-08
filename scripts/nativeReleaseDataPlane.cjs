@@ -133,6 +133,7 @@ function legacyGenerationTransition(baseline, current) {
     to: Object.fromEntries(fields.map(field => [field, current[field]])), advanced };
 }
 async function allocate(sha, directory) {
+  const capacity = require('./nativeReleaseCapacity.cjs').assertNativeReleaseCapacity();
   const oldIdentity = readOldRuntimeIdentity(), oldSha = oldIdentity.bundleMarker;
   const environment = fs.readFileSync("/etc/football-predict/env", "utf8");
   const native = /^FOOTBALL_STORAGE_MODE=postgres-only\s*$/m.test(environment);
@@ -146,6 +147,7 @@ async function allocate(sha, directory) {
   const intent = { version: "native-release-preparation-v1", sha, oldSha, kind: native ? "runtime-only" : "initial-cutover", clusterId: before.clusterId,
     maintenanceOid: before.databases.postgres, oldDatabaseOid: before.databases.football, candidateDatabase, archiveDatabase,
     legacyBaselineSha256, key: crypto.randomBytes(32).toString("hex"), createdAt: new Date().toISOString() };
+  write(path.join(directory, "capacity-before-allocation.json"), capacity);
   write(path.join(directory, "allocation-intent.json"), intent);
   const admin = pool(intent, "postgres", intent.maintenanceOid);
   try {

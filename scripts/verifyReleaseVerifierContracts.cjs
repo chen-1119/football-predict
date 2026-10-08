@@ -7,6 +7,19 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('native capacity and protected retention planning fail closed before signing', () => {
+  const child = require('node:child_process').spawnSync(process.execPath,
+    ['--test', '--test-reporter=tap', 'tests/native-release-capacity.test.cjs', 'tests/release-retention-plan.test.cjs'],
+    { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 10000, maxBuffer: 1024 * 1024 });
+  assert.equal(child.status, 0, child.stderr || child.stdout);
+  assert.match(child.stdout, /^# tests 26$/m); assert.match(child.stdout, /^# pass 26$/m);
+  assert.match(child.stdout, /^# skipped 0$/m);
+  for (const relative of ['scripts/nativeReleaseCapacity.cjs', 'scripts/releaseRetentionPlan.cjs',
+    'tests/native-release-capacity.test.cjs', 'tests/release-retention-plan.test.cjs']) {
+    assert(read('scripts/createReleaseBundle.cjs').includes('"' + relative + '"'));
+    assert(read('scripts/verifyReleaseBundleSafety.cjs').includes('"' + relative + '"'));
+  }
+});
 check('daily opening cannot adopt pre-opening prices or stop schedule and result collection',()=>{
   const proof=require('./verifySportteryOpeningPolicy.cjs').run();
   assert.equal(proof.ok,true);assert.ok(proof.tests>=20);assert.equal(proof.skipped,0);assert.equal(proof.productionWrites,0);
