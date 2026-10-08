@@ -418,4 +418,7 @@ function validPublicPrdPaperProjection(value) {
 }
 
 module.exports = { VERSION, PUBLIC_VERSION, REGISTRATION, createPrdPaperRecommendation,
-  verifyPrdPaperRecommendation, publicPrdPaperProjection, validPublicPrdPaperProjection };
+  verifyPrdPaperRecommendation, publicPrdPaperProjection, validPublicPrdPaperProjection,
+  // Shared price extraction is not model admission. Callers must validate their
+  // own model format, exact event and frozen probability distribution first.
+  quoteInput, pricesFor };
