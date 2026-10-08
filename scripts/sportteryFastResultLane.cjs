@@ -8,6 +8,7 @@ const { spawn, spawnSync } = require("node:child_process");
 const {
   sportteryResultObservation,
 } = require("../src/services/sportteryResultSemantics.cjs");
+const { assessOpening, assessQuoteOpening } = require("../src/services/sportteryOpeningPolicy.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const runnerScriptPath = path.join(rootDir, "scripts", "runSportteryFastResultLane.cjs");
@@ -99,6 +100,7 @@ const fastLanePublishDecision = ({
   lastUploadedResultFingerprint,
   lastUploadOkAt,
   currentHeartbeatMs = 60_000,
+  openingDue = false,
   nowMs = Date.now()
 }) => {
   const currentFingerprint = String(fingerprint || "").trim();
@@ -115,20 +117,50 @@ const fastLanePublishDecision = ({
   const uploadAgeMs = uploadClockTrusted ? Math.max(0, safeNowMs - lastUploadMs) : null;
   const resultChanged = !uploadedFingerprint || currentFingerprint !== uploadedFingerprint;
   const currentHeartbeatDue = !uploadClockTrusted || uploadAgeMs >= safeHeartbeatMs;
-  const publish = Boolean(currentFingerprint && (resultChanged || currentHeartbeatDue));
+  const publish = Boolean(currentFingerprint && (resultChanged || currentHeartbeatDue || openingDue === true));
   return {
     publish,
     reason: resultChanged
       ? (uploadedFingerprint ? "result-change" : "initial-result")
-      : currentHeartbeatDue
+      : openingDue === true
+        ? "daily-market-opening"
+        : currentHeartbeatDue
         ? (uploadClockTrusted ? "current-heartbeat" : "current-heartbeat-clock-missing-or-invalid")
         : "unchanged-within-current-heartbeat",
     resultChanged,
     currentHeartbeatDue,
+    openingDue: openingDue === true,
     currentHeartbeatMs: safeHeartbeatMs,
     lastUploadOkAt: uploadClockTrusted ? new Date(lastUploadMs).toISOString() : null,
     uploadAgeMs
   };
+};
+
+// This is a daily collection preference, never proof that a pool is selling.
+const fastLaneOpeningState = ({ nowMs = Date.now(), lastConfirmedBusinessDate = null } = {}) => {
+  if (!Number.isSafeInteger(nowMs) || nowMs < 0 || !Number.isFinite(new Date(nowMs + 8 * 60 * 60_000).getTime()))
+    return { businessDate: null, priceCollection: false, openingDue: false };
+  const asOf = new Date(nowMs).toISOString();
+  const businessDate = new Date(nowMs + 8 * 60 * 60_000).toISOString().slice(0, 10);
+  const priceCollection = assessOpening({ businessDate, asOf }).eligible;
+  return { businessDate, priceCollection, openingDue: priceCollection && lastConfirmedBusinessDate !== businessDate };
+};
+
+const confirmedFastLaneOpeningDate = ({ snapshot, nowMs = Date.now() }) => {
+  const opening = fastLaneOpeningState({ nowMs });
+  if (!opening.priceCollection) return null;
+  const asOf = new Date(nowMs).toISOString();
+  // Keep the original endpoint clocks. Posting or merging a snapshot cannot
+  // turn a request made before opening into the first post-opening collection.
+  const endpoints = Array.isArray(snapshot?.endpoints) ? snapshot.endpoints : [];
+  for (const method of ["current", "calculator"]) {
+    const endpoint = endpoints.find((item) => endpointMethod(item) === method && item?.ok === true && item?.payload);
+    if (!endpoint || !assessQuoteOpening({ businessDate: opening.businessDate, asOf,
+      requestedAt: endpoint.requestedAt, receivedAt: endpoint.receivedAt }).eligible) return null;
+    const requestedMs = Date.parse(endpoint.requestedAt);
+    if (!Number.isFinite(requestedMs) || nowMs - requestedMs > 15 * 60_000) return null;
+  }
+  return opening.businessDate;
 };
 
 const compactFingerprint = (value) => String(value || "").slice(0, 12) || null;
@@ -685,7 +717,8 @@ const createFastUploadSnapshot = ({
       ...(probeSnapshot?.producer || companionSnapshot?.producer || {}),
       fastResultLane: true,
       probeMode: "result-page-1",
-      companionMode: "current-calculator-on-change",
+      companionMode: companionEndpoints.some((endpoint) => endpointMethod(endpoint) === "calculator")
+        ? "current-calculator-on-change" : "schedule-current-on-change",
       resultFingerprint: fingerprint,
       constituentProducers: {
         probe: probeSnapshot?.producer || null,
@@ -1523,6 +1556,8 @@ module.exports = {
   evaluateLockOwner,
   finiteNumber,
   fastLanePublishDecision,
+  fastLaneOpeningState,
+  confirmedFastLaneOpeningDate,
   inspectProcessIdentity,
   inspectRunnerProcesses,
   observeLockActivity,

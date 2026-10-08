@@ -161,6 +161,14 @@ function runCreatePrefix(source, options = {}) {
             stdout: options.frontendEvidenceFails ? JSON.stringify({ checks: [{ name: "fixture frontend evidence failure", ok: false }] }) : "" };
         }
         else if (args[0] === "scripts/verifyReleaseVerifierContracts.cjs") { assert.equal(command, "/fixed/node"); calls.push("preSign"); }
+        else if (args[0] === "scripts/verifySportteryOpeningPolicy.cjs") {
+          assert.equal(command, "/fixed/node");
+          assert.deepEqual(Array.from(args), ["scripts/verifySportteryOpeningPolicy.cjs"]);
+          calls.push("sporttery-opening");
+          return { status: options.openingStatus ?? (options.openingUnavailable ? null : 0),
+            error: options.openingUnavailable ? { message: "fixture opening child unavailable" } : undefined,
+            stdout: options.openingStatus ? "fixture opening rejection" : "" };
+        }
         else { assert.equal(command, "npm"); assert.deepEqual(Array.from(args), ["run", "build"]); calls.push("build"); }
         return { status: 0 };
       } };
@@ -469,7 +477,7 @@ function verifyReleaseWindowPreflight() {
   });
   check("actual online create prefix runs worker, window, archive and frontend evidence before preSign, sequence reservation and build", () => {
     const result = runCreatePrefix(create); assert.equal(result.ok, true, result.error);
-    assert.deepEqual(result.calls, ["sequence-preflight", "worker", "window", "archive", "frontend-evidence", "request-utf8", "signed-had", "preSign", "reserve", "build"]);
+    assert.deepEqual(result.calls, ["sequence-preflight", "worker", "window", "archive", "frontend-evidence", "request-utf8", "signed-had", "preSign", "sporttery-opening", "reserve", "build"]);
     for (const options of [{ windowOpen: false }, { windowThrows: true }]) {
       const rejected = runCreatePrefix(create, options); assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "worker", "window"]);
     }
@@ -502,15 +510,22 @@ function verifyReleaseWindowPreflight() {
       assert.match(rejected.error,/Signed HAD publication preflight failed/);
     }
   });
+  check("opening contract failure or missing child stops before reservation and build", () => {
+    for (const options of [{ openingStatus: 1 }, { openingUnavailable: true }]) {
+      const rejected = runCreatePrefix(create, options); assert.equal(rejected.ok, false);
+      assert.deepEqual(rejected.calls, ["sequence-preflight", "worker", "window", "archive", "frontend-evidence", "request-utf8", "signed-had", "preSign", "sporttery-opening"]);
+      assert.match(rejected.error, /Sporttery opening preflight failed/);
+    }
+  });
   check("native policy rejects unaccepted bootstrap before network, reservation or build", () => {
     const rejected = runCreatePrefix(create, { nativePolicy: true, nativeRejected: true });
     assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "native-policy"]);
     const accepted = runCreatePrefix(create, { nativePolicy: true }); assert.equal(accepted.ok, true, accepted.error);
-    assert.deepEqual(accepted.calls, ["sequence-preflight", "native-policy", "worker", "window", "archive", "frontend-evidence", "request-utf8", "signed-had", "preSign", "reserve", "build"]);
+    assert.deepEqual(accepted.calls, ["sequence-preflight", "native-policy", "worker", "window", "archive", "frontend-evidence", "request-utf8", "signed-had", "preSign", "sporttery-opening", "reserve", "build"]);
   });
   check("actual offline create prefix makes no live calls and explicitly reports no window authority", () => {
     const result = runCreatePrefix(create, { offline: true, windowThrows: true }); assert.equal(result.ok, true, result.error);
-    assert.deepEqual(result.calls, ["sequence-preflight", "frontend-evidence", "request-utf8", "signed-had", "preSign", "reserve", "build"]);
+    assert.deepEqual(result.calls, ["sequence-preflight", "frontend-evidence", "request-utf8", "signed-had", "preSign", "sporttery-opening", "reserve", "build"]);
     assert.equal(result.logs[0].windowChecked, false); assert.equal(result.logs[0].readyToCutover, false);
   });
   check("actual UI create dispatch exits before live gates, full verification and local build", () => {

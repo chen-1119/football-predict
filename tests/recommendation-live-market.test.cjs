@@ -22,7 +22,18 @@ const rows=()=>[1,2,3].map(id=>attachProspectiveForecastInputs([match(id,NOW-864
 const assess=(current,now)=>evaluateCurrent(current,{now,publication:publication(NOW)});
 function livePorts(){const p=memoryPorts(),original=p.transaction.bind(p);p.current=rows();p.transaction=(lane,fn)=>original(lane,repo=>{
   repo.publication=async()=>publication(NOW);
-  repo.currentInputs=async now=>joinCurrentMarket(await repo.current(),signals(p.quoteNow??p.now),now);
+  const signedInputs=repo.currentInputs.bind(repo);
+  repo.currentInputs=async now=>{
+    // New publication now needs actual signed current acquisition clocks. Keep
+    // the old model/base generation, and explicitly advance only this synthetic
+    // collector observation (or retain it when the collector is in outage).
+    const acquiredAt=stamp(p.quoteNow??p.now);
+    p.current=p.current.map(row=>{
+      const copy=structuredClone(row),input=copy.prospectiveForecastInput||copy;
+      input.oddsUpdatedAt=acquiredAt;input.oddsReceivedAt=acquiredAt;return copy;
+    });
+    return signedInputs(now);
+  };
   return fn(repo);
 });return p;}
 test('warehouse refresh fixes expired embedded SP without editing the model or frozen parent',()=>{

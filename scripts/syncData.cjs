@@ -3,6 +3,7 @@ const path = require("path");
 const https = require("https");
 const crypto = require("crypto");
 const { readChunkedJsonFile } = require("../server/chunkedJsonFile.cjs");
+const { assessOpening, assessQuoteOpening } = require("../src/services/sportteryOpeningPolicy.cjs");
 const { predictionNowMs, predictionNowIso, executeWithPredictionClock } = require("../src/services/predictionExecutionClock.cjs");
 const { fitJointGoalRates } = require("../src/services/jointGoalFit.cjs");
 const { spawn } = require("child_process");
@@ -7190,11 +7191,77 @@ function buildPageUrl(method, pageNo = null, pageType = null) {
   return `${SPORTTERY_BASE}/gateway/uniform/fb/getMatchDataPageListV1.qry?${params.toString()}`;
 }
 
+const SPORTTERY_CURRENT_MARKET_FIELDS = {
+  HAD: [
+    "odds", "oddsSource", "oddsPoolCode", "oddsSourceMethod", "oddsObservedAt",
+    "oddsReceivedAt", "oddsUpdatedAt", "oddsSourceUrl", "oddsMarketProvenance",
+  ],
+  HHAD: [
+    "handicapOdds", "handicapLine", "handicapOddsSource", "handicapOddsPoolCode",
+    "handicapOddsSourceMethod", "handicapOddsObservedAt", "handicapOddsReceivedAt",
+    "handicapOddsUpdatedAt", "handicapOddsSourceUrl", "handicapOddsMarketProvenance",
+  ],
+};
+
+// This projection touches fresh, non-terminal market atoms only. The signed
+// endpoint payload, schedule identity and official result/payout evidence are
+// never changed. Stored markets and frozen decisions are merged independently.
+function projectSportteryCurrentMarkets(match, options = {}) {
+  if (!match || match.source !== "sporttery"
+    || match.status === "FINISHED" || match.resultDisposition === "VOID") return match;
+  const opening = assessOpening({ businessDate: match.businessDate, asOf: options.asOf });
+  const explicitTiming = Object.hasOwn(options, "requestedAt") || Object.hasOwn(options, "receivedAt");
+  let projected = match;
+  for (const [pool, fields] of Object.entries(SPORTTERY_CURRENT_MARKET_FIELDS)) {
+    const marketField = pool === "HAD" ? "odds" : "handicapOdds";
+    const provenanceField = pool === "HAD" ? "oddsMarketProvenance" : "handicapOddsMarketProvenance";
+    const timing = explicitTiming ? options : (match[provenanceField]?.timing || {});
+    const permitted = opening.eligible && (!match[marketField] || assessQuoteOpening({
+      businessDate: match.businessDate,
+      asOf: options.asOf,
+      requestedAt: timing.requestedAt,
+      receivedAt: timing.receivedAt,
+    }).eligible);
+    if (permitted) continue;
+    if (projected === match) projected = { ...match };
+    for (const field of fields) delete projected[field];
+  }
+  return projected;
+}
+
+function sportteryCurrentOpeningSummary(matches, { asOf } = {}) {
+  let waitingMatches = 0;
+  let openingReachedMatches = 0;
+  let invalidClockMatches = 0;
+  for (const match of matches || []) {
+    if (!match || match.source !== "sporttery"
+      || match.status === "FINISHED" || match.resultDisposition === "VOID") continue;
+    const opening = assessOpening({ businessDate: match.businessDate, asOf });
+    if (opening.reason === "opening-not-reached") waitingMatches += 1;
+    else if (opening.eligible) openingReachedMatches += 1;
+    else invalidClockMatches += 1;
+  }
+  // Diagnostic only: an intentional wait is distinct from a failed fetch.
+  // This never relaxes source freshness, source trust or publication gates.
+  return {
+    version: "sporttery-current-opening-projection-v1",
+    evaluatedAt: asOf ?? null,
+    policyWaiting: waitingMatches > 0,
+    waitingMatches,
+    openingReachedMatches,
+    invalidClockMatches,
+  };
+}
+
 function flatten(payload, sourceMethod, sourceUrl, sourceTiming = {}) {
   const rows = [];
+  const projectionTiming = {
+    ...sourceTiming,
+    asOf: Object.hasOwn(sourceTiming, "asOf") ? sourceTiming.asOf : new Date().toISOString(),
+  };
   for (const day of payload?.value?.matchInfoList || []) {
     for (const row of day.subMatchList || []) {
-      rows.push(mapSportteryRow(row, sourceMethod, sourceUrl, sourceTiming));
+      rows.push(mapSportteryRow(row, sourceMethod, sourceUrl, projectionTiming));
     }
   }
   return rows;
@@ -7262,7 +7329,7 @@ function mapSportteryRow(row, sourceMethod, sourceUrl, sourceTiming = {}) {
   const oddsInfo = saleClockMatchesEvent
     ? sportteryOddsInfo(row, sourceUrl, sourceMethod, sourceTiming)
     : { had: null, hhad: null };
-  return {
+  return projectSportteryCurrentMarkets({
     source: "sporttery",
     sourceMethod,
     sourceUrl,
@@ -7332,7 +7399,11 @@ function mapSportteryRow(row, sourceMethod, sourceUrl, sourceTiming = {}) {
     handicapOddsUpdatedAt: oddsInfo.hhad?.oddsUpdatedAt,
     handicapOddsSourceUrl: oddsInfo.hhad?.oddsSourceUrl,
     handicapOddsMarketProvenance: oddsInfo.hhad?.marketProvenance || null,
-  };
+  }, {
+    asOf: Object.hasOwn(sourceTiming, "asOf") ? sourceTiming.asOf : new Date().toISOString(),
+    requestedAt: sourceTiming.requestedAt,
+    receivedAt: sourceTiming.receivedAt,
+  });
 }
 
 async function fetchCurrentMatches() {
@@ -7354,9 +7425,11 @@ async function fetchCurrentMatches() {
   const allMatches = [];
   for (const item of urls) {
     try {
+      const requestedAt = new Date().toISOString();
       const payload = await httpGetJson(item.url, "concern");
       const receivedAt = new Date().toISOString();
       const matches = flatten(payload, item.method, item.url, {
+        requestedAt,
         receivedAt,
         sourceObservedAt: receivedAt,
         observationSource: "sporttery-direct-response-received-at",
@@ -7378,18 +7451,21 @@ async function fetchCurrentMatches() {
 
 async function fetchMethodMatches(method) {
   const firstUrl = buildPageUrl(method);
+  const requestedAt = new Date().toISOString();
   const payloads = [{
     payload: await httpGetJson(firstUrl, method),
     url: firstUrl,
+    requestedAt,
     receivedAt: new Date().toISOString(),
   }];
   if (method === "all") {
     for (let page = 2; page <= PAGE_DEPTH; page += 1) {
       let pageUrl = buildPageUrl(method, page, 0);
       try {
+        const pageRequestedAt = new Date().toISOString();
         const payload = await httpGetJson(pageUrl, method);
         if (!(payload?.value?.matchInfoList || []).length) break;
-        payloads.push({ payload, url: pageUrl, receivedAt: new Date().toISOString() });
+        payloads.push({ payload, url: pageUrl, requestedAt: pageRequestedAt, receivedAt: new Date().toISOString() });
         const hasMore = payload?.value?.prePage && String(payload.value.prePage) !== "0";
         if (!hasMore) break;
       } catch (error) {
@@ -7405,6 +7481,7 @@ async function fetchMethodMatches(method) {
     }
   }
   const matches = payloads.flatMap((entry) => flatten(entry.payload, method, entry.url, {
+    requestedAt: entry.requestedAt,
     receivedAt: entry.receivedAt,
     sourceObservedAt: entry.receivedAt,
     observationSource: "sporttery-direct-response-received-at",
@@ -7413,7 +7490,7 @@ async function fetchMethodMatches(method) {
   return matches;
 }
 
-function matchesFromSportteryRelaySnapshot(snapshot) {
+function matchesFromSportteryRelaySnapshot(snapshot, { asOf = new Date().toISOString() } = {}) {
   if (!snapshot?.entries?.length) return [];
   const rows = [];
   const envelope = snapshot?.payload || {};
@@ -7443,6 +7520,7 @@ function matchesFromSportteryRelaySnapshot(snapshot) {
     );
     const sourceRequest = entry?.sourceRequest || collector?.sourceRequest || null;
     rows.push(...flatten(entry.payload, `relay:${sourceMethod}`, sourceUrl, {
+      asOf,
       requestedAt,
       receivedAt,
       sourceObservedAt: receivedAt,
@@ -15779,7 +15857,7 @@ function enrichRawMatchWithPredictionSnapshot(match, existingBySourceId, history
     const existingHandicapOdds = sanitizeHandicapOdds(existing);
     const freshHandicapOdds = sanitizeHandicapOdds(match);
     const handicapSourceMatch = existingHandicapOdds ? existing : freshHandicapOdds ? match : null;
-    const handicapLineSource = [existing, match]
+    const handicapLineSource = handicapSourceMatch || [existing, match]
       .find((candidate) => parseHandicapLine(candidate?.handicapLine) !== null);
     return {
       ...match,
@@ -17771,13 +17849,17 @@ async function sync() {
       .filter(([sourceMatchId]) => sourceMatchId)
   );
   const oddsHistoryBeforeSync = await loadRuntimeOddsHistory(publicDir);
-  const allRawMatches = (await fetchSportteryMatches()).map((match) => {
+  const fetchedSportteryMatches = await fetchSportteryMatches();
+  // Capture after acquisition, not at sync start: real responses may arrive
+  // later than capturedAt. This observation clock never becomes a source clock.
+  const sportteryProjectionAt = new Date().toISOString();
+  const allRawMatches = fetchedSportteryMatches.map((match) => {
     const clockReconciledMatch = reconcileOfficialResultClock(
       existingBySourceId.get(matchStoreKey(match)),
       match
     );
     return {
-      ...clockReconciledMatch,
+      ...projectSportteryCurrentMarkets(clockReconciledMatch, { asOf: sportteryProjectionAt }),
       // One immutable cycle identifier binds source receipt, model generation,
       // feature capture and the resulting decision. It is created once for this
       // run and is never applied retroactively to stored snapshots.
@@ -17800,6 +17882,7 @@ async function sync() {
   const rawMatchesWithOdds = rawMatches.filter((match) => sanitizeOdds(match.odds));
   const rawMatchesWithHandicapOdds = rawMatches.filter((match) => sanitizeHandicapOdds(match));
   const rawResultMatches = rawMatches.filter(isOfficialResultMatch);
+  const sportteryOpeningProjection = sportteryCurrentOpeningSummary(rawMatches, { asOf: sportteryProjectionAt });
   const rawProvisionalResultMatches = rawFiveHundredFallbackMatches.filter((match) => Boolean(match?.provisionalResult));
   const rawMatchesForOutput = rawMatches.filter((match) => (
     match.status !== "FINISHED" ||
@@ -18326,6 +18409,7 @@ async function sync() {
     },
     sourceAttempt: {
       capturedAt,
+      openingProjection: sportteryOpeningProjection,
       transport: sportteryFetchSummary.transport || "direct",
       relaySnapshotCapturedAt,
       relaySnapshotStale: sportteryFetchSummary.relaySnapshot?.stale ?? null,
@@ -18799,6 +18883,9 @@ if (require.main === module) {
     matchesAfterHistoricalTrainingCutoff,
     loadWorldCupKimiDataset,
     matchesFromSportteryRelaySnapshot,
+    mapSportteryRow,
+    projectSportteryCurrentMarkets,
+    sportteryCurrentOpeningSummary,
     mergeMatch,
     mergeFreshWithExistingStore,
     mergeStoredPublishedMatch,

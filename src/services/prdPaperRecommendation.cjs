@@ -5,6 +5,7 @@
 const baseline = require('../../scripts/zeroMarketResearchBaseline.cjs');
 const research = require('./marketSeparatedDirectionResearch.cjs');
 const { epochNanoseconds: clock } = require('./prematchV3Clock.cjs');
+const {VERSION:OPENING_VERSION,openingAtForBusinessDate,assessOpening,assessQuoteOpening,assessPaperOpening}=require('./sportteryOpeningPolicy.cjs');
 const { joinOfficialHad, signedLiveHadQuoteForMatch } = require('../../scripts/recommendationPlatform/liveOfficialHad.cjs');
 const { joinOfficialHandicap } = require('../../scripts/recommendationPlatform/liveOfficialHandicap.cjs');
 const { derivedTeamId } = require('../../scripts/storedResultTeamIdentity.cjs');
@@ -160,6 +161,14 @@ function signedEventMember(endpoint, input) {
 
 function pricesFor(inputs, bound, at, trustRegistry) {
   const { forecast, quoteSnapshot } = inputs, now = Number(clock(at) / 1000000n);
+  const projected=Object.hasOwn(inputs,'openingProjection');
+  if(projected){
+    const marker=inputs.openingProjection;
+    if(!marker||Object.keys(marker).length!==3||!['version','businessDate','openingAt'].every(k=>Object.hasOwn(marker,k))
+      ||marker.version!==OPENING_VERSION||marker.businessDate!==bound.event.businessDate
+      ||marker.openingAt!==openingAtForBusinessDate(bound.event.businessDate)
+      ||!assessOpening({businessDate:marker.businessDate,asOf:at}).eligible)throw new Error('Invalid paper opening projection');
+  }
   // The pure author API receives the trusted registry from its caller; it must
   // never load a path/environment registry or persist caller trust claims.
   const registry = trustRegistry && typeof trustRegistry === 'object' && !Array.isArray(trustRegistry) && plainData(trustRegistry)
@@ -172,6 +181,12 @@ function pricesFor(inputs, bound, at, trustRegistry) {
     markets[market] = emptyMarket(market, line, p, 'signed-market-quote-unavailable');
     if (!current || !signedEventMember(current, bound.input) || (market === 'HHAD' && (!calculator || line === 0
       || calculator.entry.sourceCycleId !== current.entry.sourceCycleId))) continue;
+    if(projected){
+      const sources=market==='HAD'?[current]:[current,calculator];
+      const gate=sources.map(source=>assessQuoteOpening({businessDate:bound.event.businessDate,asOf:at,
+        requestedAt:source.entry.requestedAt,receivedAt:source.entry.receivedAt})).find(result=>!result.eligible);
+      if(gate){markets[market].reasons=[gate.reason];continue;}
+    }
     let quote = null;
     if (market === 'HAD') {
       const audit = {}, result = joinOfficialHad([bound.input], quoteSnapshot, { now, trustRegistry: registry, audit });
@@ -249,7 +264,9 @@ function derive(inputs, at, trustRegistry) {
   // No verified price is an unavailable input, not the first paper sample.
   // Let the approved task wait for a normal later snapshot. A genuine quoted
   // decision that fails both value gates is still an immutable watch sample.
-  if (!MARKETS.some(market => markets[market].quote)) return { reason: 'signed-market-quote-unavailable' };
+  if (!MARKETS.some(market => markets[market].quote)) return { reason: Object.hasOwn(inputs,'openingProjection')
+    && MARKETS.some(market=>markets[market].reasons.includes('quote-acquired-before-opening'))
+    ? 'quote-acquired-before-opening' : 'signed-market-quote-unavailable' };
   const eligible = MARKETS.flatMap(market => markets[market].options.filter(option => option.paperEligible))
     .sort((a, b) => b.modelExpectedValue - a.modelExpectedValue);
   const tied = eligible.length > 1 && Math.abs(eligible[0].modelExpectedValue - eligible[1].modelExpectedValue) <= 1e-12;
@@ -283,9 +300,14 @@ function createPrdPaperRecommendation(request) {
       || !plainData({ artifact: request.artifact, forecast: request.forecast,
       match: request.match, quoteSnapshot: request.quoteSnapshot })) return blocked('paper-input-not-bounded-plain-json', startedAt);
     const privateInputs = copy({ artifact: request.artifact, forecast: request.forecast, match: request.match, quoteSnapshot: request.quoteSnapshot });
+    const opening=assessOpening({businessDate:privateInputs.match?.businessDate,asOf:startedAt});
+    if(!opening.eligible)return blocked(opening.reason,startedAt);
+    privateInputs.openingProjection={version:OPENING_VERSION,businessDate:privateInputs.match.businessDate,openingAt:opening.openingAt};
     const derived = derive(privateInputs, startedAt, request.trustRegistry);
     if (derived.reason) return blocked(derived.reason, startedAt);
     const createdAt = new Date().toISOString();
+    const acquired=assessPaperOpening({...derived,decisionAt:startedAt,privateInputs},createdAt);
+    if(!acquired.eligible)return blocked(acquired.reason,createdAt);
     if (clock(createdAt) < clock(startedAt) || clock(createdAt) >= clock(derived.cutoffTime)
       || clock(createdAt) >= clock(derived.kickoffTime)
       || MARKETS.some(market => derived.markets[market].quote

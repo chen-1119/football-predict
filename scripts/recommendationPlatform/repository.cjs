@@ -32,7 +32,9 @@ class Repository {
     const joined=require('./currentInputs.cjs').joinCurrentMarket(current,signals,capturedAt);
     const hadAudit={},audit={};
     const had=require('./liveOfficialHad.cjs').joinOfficialHad(joined.current,snapshot,{now:capturedAt,trustRegistry:this.trustRegistry,audit:hadAudit});
-    const next=require('./liveOfficialHandicap.cjs').joinOfficialHandicap(had.current,snapshot,{now:capturedAt,trustRegistry:this.trustRegistry,audit});
+    const withHandicap=require('./liveOfficialHandicap.cjs').joinOfficialHandicap(had.current,snapshot,{now:capturedAt,trustRegistry:this.trustRegistry,audit});
+    const next=require('../../src/services/sportteryOpeningPolicy.cjs').filterNewOpeningMarkets(withHandicap,snapshot,
+      {asOf:new Date(capturedAt).toISOString(),trustRegistry:this.trustRegistry});
     const receiptHashes=new Set([...joined.receiptHashes,...had.receiptHashes]);
     return {...joined,receiptHashes,current:next,inputKnowledgeAt:new Date(capturedAt).toISOString(),inputCapture:{
       version:'current-input-capture-v2',startedAt:new Date(now).toISOString(),capturedAt:new Date(capturedAt).toISOString(),
