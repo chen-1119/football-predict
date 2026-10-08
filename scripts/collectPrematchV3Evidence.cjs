@@ -261,7 +261,8 @@ async function collectEvidence({input,inputBytes,rawBytes,outputDir,history=null
  const historyAdapter=historyEvidence?require('./prematchHistoryCollectionAdapter.cjs'):null;
  const modelRead=require('../src/services/prematchV3ModelRegistry.cjs').readPrematchV3RegistryFromOnlineInput(input,{asOf,trustRegistry});
  const options={asOf,baseline:modelRead.baseline,parameters:modelRead.parameters,modelRegistry:{asOf:modelRead.asOf,
-  status:modelRead.status,storage:modelRead.storage,blockers:modelRead.blockers,receipts:modelRead.receipts}};
+  status:modelRead.status,storage:modelRead.storage,blockers:modelRead.blockers,receipts:modelRead.receipts,
+  parameterValidation:modelRead.parameterValidation||null}};
  const events=input.matches.map((match,index)=>{
   const identityOptions=identities[index],baseEvent=eventFromMatch(match,identityOptions),binding=targetBindings[index];
   const event={...baseEvent,homeTeamName:match.homeTeamName,awayTeamName:match.awayTeamName,

@@ -167,6 +167,9 @@ const expectedSafeEntries = [
   "docs/npmrc-example.md"
 ];
 const requiredReleaseEntries = [
+  "src/services/prematchV3FeedbackLoop.cjs",
+  "scripts/registerPrematchV3Parameters.cjs",
+  "tests/prematch-v3-feedback-loop.test.cjs",
   "src/services/sportteryOpeningPolicy.cjs",
   "scripts/verifySportteryOpeningPolicy.cjs",
   "tests/sporttery-opening-policy.test.cjs",

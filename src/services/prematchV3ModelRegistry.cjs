@@ -8,6 +8,7 @@ const { createPostgresPool } = require('../../server/postgresStore.cjs');
 const strength = require('../../scripts/dynamicGoalStrengthModel.cjs');
 const team = require('./prematchTeamEvidenceV3.cjs');
 const learning = require('./prematchV3Learning.cjs');
+const feedback = require('./prematchV3FeedbackLoop.cjs');
 const { stableHash } = require('./webConsensusEvidence.cjs');
 const { epochNanoseconds } = require('./prematchV3Clock.cjs');
 const { validateResponse: validateOnlineResponse, MAX_MODEL_ARTIFACT_BYTES,IDENTITY_VERSION } = require('./prematchV3OnlineResponse.cjs');
@@ -109,10 +110,17 @@ function parameterBlockers(artifact, stored, asOf) {
 function validateStoredPrematchV3Artifact(stored, namespace, asOf) {
   if (!Object.hasOwn(KEYS, namespace)) return { valid: false, blockers: ['namespace-invalid'], value: null };
   const blockers = storedBlockers(stored, namespace, asOf);
-  if (!blockers.length) blockers.push(...(namespace === 'baseline' ? baselineBlockers : parameterBlockers)(stored.payload, stored, asOf));
+  let parameterValidation = null, parameterValue = stored?.payload;
+  if (!blockers.length && namespace === 'parameters' && stored.artifactVersion === feedback.VERSION) {
+    const verified = feedback.verifyValidatedParameterPacket(stored.payload, asOf);
+    blockers.push(...payloadClockBlockers(stored.payload, stored, asOf), ...verified.blockers);
+    parameterValue = verified.artifact; parameterValidation = verified.receipt;
+    if (verified.valid) blockers.push(...parameterBlockers(parameterValue,
+      { ...stored, artifactVersion: learning.PARAMETER_VERSION }, asOf));
+  } else if (!blockers.length) blockers.push(...(namespace === 'baseline' ? baselineBlockers : parameterBlockers)(stored.payload, stored, asOf));
   const value = blockers.length ? null : namespace === 'baseline' ? clone({ artifact: stored.payload.artifact,
-    createdAt: stored.payload.createdAt, availableAt: stored.payload.availableAt }) : clone(stored.payload);
-  return { valid: !blockers.length, blockers: unique(blockers), value };
+    createdAt: stored.payload.createdAt, availableAt: stored.payload.availableAt }) : clone(parameterValue);
+  return { valid: !blockers.length, blockers: unique(blockers), value, parameterValidation };
 }
 
 function readErrorCode(error) {
@@ -169,7 +177,10 @@ async function loadPrematchV3ModelRegistry(options = {}) {
           artifactVersion: stored.artifactVersion, payloadSha256: stored.payloadSha256, payloadBytes: stored.payloadBytes });
         const verified = validateStoredPrematchV3Artifact(stored, namespace, asOf);
         receipt.blockers = verified.blockers; receipt.status = verified.valid ? 'shadow-readable' : 'blocked';
-        if (verified.valid) result[namespace] = verified.value;
+        if (verified.valid) {
+          result[namespace] = verified.value;
+          if (namespace === 'parameters') result.parameterValidation = verified.parameterValidation;
+        }
       } catch (error) {
         const code = readErrorCode(error); receipt.status = code === 'missing' ? 'missing' : 'blocked'; receipt.blockers = [code];
       }
@@ -227,7 +238,10 @@ function readPrematchV3RegistryFromOnlineInput(value, { asOf,trustRegistry } = {
           payloadSha256: packet.payloadSha256, payloadBytes: packet.payloadBytes };
         const verified = validateStoredPrematchV3Artifact(stored, namespace, asOf);
         receipt.blockers = verified.blockers; receipt.status = verified.valid ? 'shadow-readable' : 'blocked';
-        if (verified.valid) result[namespace] = verified.value;
+        if (verified.valid) {
+          result[namespace] = verified.value;
+          if (namespace === 'parameters') result.parameterValidation = verified.parameterValidation;
+        }
       } catch (error) { receipt.status = 'blocked'; receipt.blockers = [readErrorCode(error)]; }
     }
     result.receipts.push(receipt);
