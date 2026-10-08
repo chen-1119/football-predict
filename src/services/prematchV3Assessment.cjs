@@ -55,14 +55,16 @@ function outcomeProjection(rates, homeLine) {
   const rows = scoreMatrix(rates?.home, rates?.away);
   if (!rows.length) return null;
   const probabilities = {'1':0,X:0,'2':0}, handicap = {'1':0,X:0,'2':0};
+  const totalGoals = Object.fromEntries(['0','1','2','3','4','5','6','7+'].map(key => [key,0]));
   const lotteryLine = finite(homeLine) && Number.isInteger(homeLine);
   for (const row of rows) {
     const diff = row.home-row.away;
+    totalGoals[row.home + row.away >= 7 ? '7+' : String(row.home + row.away)] += row.probability;
     probabilities[diff>0?'1':diff<0?'2':'X'] += row.probability;
     if (lotteryLine) handicap[diff+homeLine>0?'1':diff+homeLine<0?'2':'X'] += row.probability;
   }
   const mass = rows.reduce((n,row) => n+row.probability, 0);
-  return {model:'independent-poisson-goal-rate-shadow-v3', probabilities,
+  return {model:'independent-poisson-goal-rate-shadow-v3', probabilities, totalGoals,
     hhAd:lotteryLine ? {market:'HHAD',homeLine,probabilities:handicap,formalEligible:false} : null,
     scoreTop3:rows.slice().sort((a,b) => b.probability-a.probability || a.home-b.home || a.away-b.away).slice(0,3),
     scoreDistribution:{complete:true,tailMass:Math.max(0,1-mass),rows}, formalEligible:false};
@@ -114,6 +116,12 @@ function buildPrematchV3Assessment(match = {}, options = {}) {
   const marketOnly = marketReference(match,event,asOf);
   const baselineProjection = baseline.status==='shadow-ready' ? outcomeProjection(baseline.baseRates,match.handicapLine) : null;
   const teamProjection = effects.applied && !blockers.includes('event-or-sale-clock-ineligible') ? outcomeProjection(effects.after,match.handicapLine) : null;
+  // Missing optional news is not permission to impute zero or rescale coefficients.
+  // The already verified zero-market baseline may remain a research fallback;
+  // it does not become an admitted production model by having fewer inputs.
+  const fallbackAllowed = baselineProjection && sourceValid && !blockers.some(reason =>
+    ['event-or-sale-clock-ineligible','model-registry-clock-or-storage-invalid',
+      'input-identity-admission-invalid','input-identity-not-known-at-as-of'].includes(reason));
   const asianPrices = teamProjection && timeline.available ? timeline.latestQuotes.flatMap(quote => ['home','away'].map(side => ({
     source:quote.source,company:quote.company,sourceRowHash:quote.contentHash || stableHash(quote),side,
     ...asian.priceAsianHandicap({scoreDistribution:teamProjection.scoreDistribution,homeLine:quote.homeLine,decimalOdds:quote.decimalOdds[side],side})
@@ -141,6 +149,27 @@ function buildPrematchV3Assessment(match = {}, options = {}) {
       asOf, eventVersion: event.eventVersion, sourceMatchId: event.sourceMatchId,
     } } : {}),
     comparisons:{baseline:cleanProjection(baselineProjection),teamOnly:cleanProjection(teamProjection),marketOnly,hybrid},asianPrices,
+    evidenceCoverage: require('./prematchEvidenceCoverage.cjs').summarizePrematchEvidence({
+      signal:match.externalSignals || {},asOf,cutoff:event.cutoffAt}),
+    factorUse:Object.fromEntries(['roster','injuries','fatigue','history','xg','weather'].map(family => {
+      const fields=Object.entries(snapshot.features).filter(([key])=>key.split('.')[1]===family);
+      const knownFields=fields.filter(([,value])=>finite(value)).map(([key])=>key);
+      const requiredFields=(Array.isArray(parameters?.featureNames)?parameters.featureNames:[])
+        .filter(key=>typeof key==='string'&&key.split('.')[1]===family);
+      const usedFields=teamProjection ? requiredFields.filter(key=>knownFields.includes(key)) : [];
+      return [family,{knownFields,requiredFields,usedFields,usedInTeamEffects:usedFields.length>0,
+        reason:usedFields.length?'trained-feature-applied':!fields.length?'not-in-feature-schema'
+          :!knownFields.length?'evidence-missing':!requiredFields.length?'not-in-trained-model':'team-effects-not-applied'}];
+    })),
+    researchFallback: {
+      mode:teamProjection?'team-enhanced':fallbackAllowed?'baseline-only':'unavailable',
+      projection:cleanProjection(teamProjection || (fallbackAllowed ? baselineProjection : null)),
+      omittedFeatures:effects.blockers.filter(reason => reason.startsWith('required-feature-unknown:')),
+      formalEligible:false,primary:null,companion:null,
+      reason:teamProjection?'trained-team-effects-applied':fallbackAllowed
+        ?'missing-or-unvalidated-team-effects;unchanged-zero-market-research-baseline'
+        :'no-eligible-zero-market-baseline',
+    },
     legacyModel:{version:match.probabilityModel?.version || null,marketWeight:finite(match.probabilityModel?.ensembleWeights?.market)?match.probabilityModel.ensembleWeights.market:null,
       role:'existing-model-unchanged;not-used-as-zero-market-baseline'},
     policy:'prematch-shadow-only;source-shape-and-content-hashes-do-not-admit-formal-sources;no-frozen-decision-or-statistics-write'});
