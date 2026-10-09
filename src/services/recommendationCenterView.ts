@@ -170,6 +170,7 @@ export interface PrdPaperDirectionsData {
   requestedStrategy:'prd-paper-recommendation-v1';activeFormalStrategy:null;legacyReferenceStrategy:'coherent-market-primary-v1';reasons:string[];
 }
 export interface RecommendationCenterData {
+  strategySwitch?:{version:'trained-strategy-switch-v1';activeReferenceStrategy:'league-trained-baseline-v1';legacyPublicationEnabled:false;legacyFallbackEnabled:false;formalEligible:false;modelAdoptionCount:number};
   version:'recommendation-center-v1';updatedAt:string;businessDate:string;inputAsOf:string|null;resultAsOf:string|null;
   lanes:Partial<Record<'publish'|'combos'|'settlement'|'view',Lane>>;
   current:SingleRow[];previews:Combo[];todayCombos:ComboRow[];overlapDecisionIds:string[];
@@ -182,6 +183,7 @@ export interface RecommendationCenterData {
   dailyBulletin?:DailyBulletin;
 }
 export interface LeagueBaselineDirection {
+ sourceMatchId:string;eventVersion:string;homeTeamId:string;awayTeamId:string;
  id:string;homeTeamName:string;awayTeamName:string;createdAt:string;cutoffAt:string;
  modelVersion:string;modelHash:string;parametersHash:string;direction:Outcome|null;
  had:Record<Outcome,number>;scoreTop3:Array<{home:number;away:number;probability:number}>;
@@ -204,7 +206,7 @@ export function parseLeagueBaseline(value:unknown,businessDate:string,updatedAt:
   const scoreTop3=list(grid.scoreTop3).map(value=>{const x=object(value),home=count(x.home),away=count(x.away),probability=number(x.probability);if(home>20||away>20||probability<0||probability>1)throw new Error('League score');return {home,away,probability};});
   if(scoreTop3.length!==3||r.modelVersion!=='league-trained-baseline-v1')throw new Error('League model version');
   paperHex(r.recordHash);paperHex(r.forecastHash);
-  return {id,homeTeamName:paperText(r.homeTeamName),awayTeamName:paperText(r.awayTeamName),createdAt:created.text,cutoffAt:cutoff.text,
+  return {id,sourceMatchId:paperText(event.sourceMatchId),eventVersion:paperClock(event.eventVersion).text,homeTeamId:paperText(event.homeTeamId),awayTeamId:paperText(event.awayTeamId),homeTeamName:paperText(r.homeTeamName),awayTeamName:paperText(r.awayTeamName),createdAt:created.text,cutoffAt:cutoff.text,
    modelVersion:r.modelVersion,modelHash:paperHex(r.modelHash),parametersHash:paperHex(r.parametersHash),direction,had,scoreTop3};
  });
  return {businessDate,updatedAt,records,blocked:count(p.blocked)};
@@ -820,6 +822,13 @@ export function parseRecommendationCenter(response:unknown):RecommendationCenter
   const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),todayDualResearch:x.todayDualResearch==null?[]:list(x.todayDualResearch).map(dualResearchV2),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),qualityReport:review.qualityReport==null?undefined:modelQuality(review.qualityReport),statistics:{single:summary(stats.single),supplementary:stats.supplementary==null?undefined:supplementarySummary(stats.supplementary),qualifiedSingle:stats.qualifiedSingle==null?undefined:summary(stats.qualifiedSingle),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated',coverage:x.coverage==null?undefined:dayCoverage(x.coverage)};
   if(Object.hasOwn(x,'prdPaper'))result.prdPaper=parsePrdPaperDirections(x.prdPaper,result.businessDate,result.updatedAt);
   if(Object.hasOwn(x,'leagueBaseline'))result.leagueBaseline=parseLeagueBaseline(x.leagueBaseline,result.businessDate,result.updatedAt);
+  if(Object.hasOwn(x,'strategySwitch')){
+    const s=object(x.strategySwitch);
+    if(s.version!=='trained-strategy-switch-v1'||s.activeReferenceStrategy!=='league-trained-baseline-v1'||s.legacyPublicationEnabled!==false||s.legacyFallbackEnabled!==false||s.formalEligible!==false||result.current.length||result.previews.length||result.todayCombos.length||result.todayDualResearch?.length)throw new Error('Invalid trained strategy switch');
+    const modelAdoptionCount=count(s.modelAdoptionCount);
+    if(modelAdoptionCount!==(result.leagueBaseline?.records.length??0))throw new Error('Invalid trained adoption count');
+    result.strategySwitch={version:'trained-strategy-switch-v1',activeReferenceStrategy:'league-trained-baseline-v1',legacyPublicationEnabled:false,legacyFallbackEnabled:false,formalEligible:false,modelAdoptionCount};
+  }
   if(Object.hasOwn(x,'dailyBulletin'))result.dailyBulletin=parseDailyBulletin(x.dailyBulletin,result.businessDate);
   if(result.coverage&&result.coverage.businessDate!==result.businessDate)throw new Error('Day coverage date mismatch');
   if(new Set(result.current.map(r=>r.decision.decisionId)).size!==result.current.length)throw new Error('Duplicate current decision');

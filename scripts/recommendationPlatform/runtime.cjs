@@ -92,10 +92,14 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     if(!ports.prdPaperPool)return {enabled:false};
     let value;try{value=await require('./leagueBaselineRuntime.cjs').run({pool:ports.prdPaperPool,trustRegistry:ports.prdPaperTrustRegistry});}
     catch(e){value={enabled:true,status:'blocked',errorCode:/^LEAGUE_MODEL_[A-Z_]+$/.test(e.code||'')?e.code:'LEAGUE_MODEL_CYCLE_FAILED',formalEligible:false};}
-    return stage('league-baseline',async()=>({...value,modelStatus:value.status,
-      reasons:value.reasons||(value.errorCode?[value.errorCode]:[])}));
+    // The installed lane constraint admits publish/combos/settlement/view.
+    // The trained publisher owns the existing publish lane after cutover.
+    return stage(ports.trainedOnly?'publish':'league-baseline',async()=>{if(value.errorCode)throw Object.assign(new Error('Trained publisher failed'),{code:value.errorCode});return {...value,
+      ...(ports.trainedOnly?{strategy:'league-trained-baseline-v1',legacyRetired:true,decisionIds:[]}:{}),modelStatus:value.status,
+      reasons:value.reasons||[]};});
   }
   async function prdPaper(){
+    if(ports.trainedOnly)return {enabled:false,reason:'replaced-by-league-trained-publisher'};
     if(!ports.prdPaperPool)return {enabled:false};
     const attemptAt=clock(),policy=require('./prdPaperRuntime.cjs');
     let value,error=null;
@@ -125,6 +129,7 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     }
   }
   async function publish(){return stage('publish',async repo=>{
+    if(ports.trainedOnly)return {strategy:'league-trained-baseline-v1',legacyRetired:true,decisionIds:[],attempted:0,issues:0,inputAsOf:null};
     const publication=await repo.publication(),now=clock();
     const {decisions,issues,attempted,inputAsOf,handicapCalibration,inputCapture,openingStatus}=await assessInputs(repo,publication,now,clock);
     const bound=await bindCurrentDecisions(repo,decisions,clock);
@@ -161,6 +166,7 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
   // particular, a missing HAD quote must not prevent two HHAD outcomes from
   // being studied. It never writes a recommendation decision or combo.
   async function researchV2(){
+    if(ports.trainedOnly)return {ok:true,enabled:false,created:0,reason:'legacy-strategy-retired'};
     if(!dualResearchV2Enabled||!ports.supportsResearchV2)return {ok:true,enabled:false,created:0,eligible:0,issues:0};
     try{return await ports.transaction('dual-research-v2',async repo=>{
       if(typeof repo.insertDualResearchV2!=='function'||typeof repo.currentInputs!=='function')
@@ -196,6 +202,7 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     });}catch(error){return {ok:false,enabled:true,errorCode:String(error.code||'DUAL_RESEARCH_V2_FAILED').slice(0,64)};}
   }
   async function combos(){return stage('combos',async repo=>{
+    if(ports.trainedOnly)return {strategy:'league-trained-baseline-v1',legacyRetired:true,previews:[],candidateCount:0,referenceCount:0,watchCount:0,inputAsOf:null};
     const publication=await repo.publication();let now=clock();
     // Recheck actual sale state and exact current input before freezing. A
     // retained preview alone is never authority to publish after suspension.
@@ -326,7 +333,7 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
       catch{leagueBaselineView={version:'league-baseline-directions-v1',businessDate:day(now),updatedAt:new Date(now).toISOString(),records:[],blocked:1,formalEligible:false};}}
     let dailyBulletin;
     if(repo.client){
-      const attempted=await repo.savepoint(()=>require('./dailyBulletinRuntime.cjs').projection(repo,{now,decisions,heads:rawHeads}));
+      const attempted=await repo.savepoint(()=>require('./dailyBulletinRuntime.cjs').projection(repo,{now,decisions:ports.trainedOnly?[]:decisions,heads:rawHeads,readOnlyArchive:ports.trainedOnly===true}));
       if(attempted.error){await repo.issue('daily-bulletin',{reason:'daily-bulletin-unavailable'});
         dailyBulletin={version:'jincai-daily-bulletin-v1',businessDate:day(now),updatedAt:new Date(now).toISOString(),status:'unavailable',records:[],tiers:[],review:null};}
       else dailyBulletin=attempted.value;
@@ -339,6 +346,23 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
         statistics:{single:summary(singles,true),supplementary:supplementarySummary(singles),qualifiedSingle:summary(singles.filter(r=>r.selectionQuality.qualified),true),handicap:handicapSummary(singles),handicapBreakdown:handicapBreakdown(singles),marketBaseline:marketBaseline(singles),daily:dailySummary(singles,combos),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},handicapCalibration,
         definition:'latest-published-decision-before-cutoff-per-event; combos-use-exact-bound-versions'},
       excludedCorruptRecords:quarantined.length,modelValidation:'unvalidated',legacyRecordsReclassified:0};
+    if(ports.trainedOnly){
+      // Retire the legacy producer and its live projection together. Its
+      // immutable decisions, combo bindings and review denominators survive.
+      center.current=[];center.previews=[];center.todayCombos=[];center.todayDualResearch=[];center.overlapDecisionIds=[];
+      center.strategySwitch={version:'trained-strategy-switch-v1',activeReferenceStrategy:'league-trained-baseline-v1',
+        legacyPublicationEnabled:false,legacyFallbackEnabled:false,formalEligible:false,
+        modelAdoptionCount:leagueBaselineView?.records?.length||0};
+      const trained=leagueBaselineView?.records||[];
+      const missing=targetMatches.filter(m=>!trained.some(r=>r.event.sourceMatchId===String(m.sourceMatchId||'').replace(/^sporttery_/,'')
+        &&time(r.event.eventVersion)===time(m.eventVersion||m.kickoffTime)&&r.event.homeTeamId===m.homeTeamId&&r.event.awayTeamId===m.awayTeamId));
+      center.coverage={version:'recommendation-day-coverage-v1',businessDate:day(now),updatedAt:center.updatedAt,
+        targetCount:targetMatches.length,publishableCount:targetMatches.length-missing.length,qualifiedCount:0,unqualifiedCount:targetMatches.length,
+        coverageRatio:targetMatches.length?0:null,missingTotal:targetMatches.length,hasMore:targetMatches.length>32,
+        missing:targetMatches.slice(0,32).map(m=>({matchId:m.id||null,sourceMatchId:m.sourceMatchId||null,
+          homeTeamName:m.homeTeamName||'',awayTeamName:m.awayTeamName||'',reasonCode:'trained-model-adoption-required',
+          reasonText:missing.includes(m)?'等待本联赛训练参数、球队映射与新模型采用记录；不回退旧模型':'已有球队模型参考；正式分市场校准与前瞻验证尚未完成'}))};
+    }
     await repo.saveView(center);
     return {centerUpdatedAt:center.updatedAt,quarantined:quarantined.length};
   });}

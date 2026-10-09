@@ -1,4 +1,13 @@
 import type { LeagueBaselineDirections as Data } from '../../services/recommendationCenterView';
+import type { LeagueBaselineDirection } from '../../services/recommendationCenterView';
+export function TrainedMatchPick({record,language}:{record:LeagueBaselineDirection|null;language:'zh'|'en'}){
+ const zh=language==='zh';
+ return <div className="compact-pick" data-active-strategy="league-trained-baseline-v1" data-model-hash={record?.modelHash}>
+  <small>{zh?'球队模型 · 未校准参考':'Team model · Uncalibrated reference'}</small>
+  <strong>{record?.direction?{1:zh?'主胜':'Home',X:zh?'平局':'Draw',2:zh?'客胜':'Away'}[record.direction]:zh?'待验证':'Awaiting validation'}</strong>
+  {record?<details><summary>{zh?'模型版本与比分':'Model version and scores'}</summary><span>{record.modelVersion} · {record.modelHash.slice(0,12)}</span><p>{record.scoreTop3.map(s=>`${s.home}-${s.away}`).join(' / ')}</p></details>:<small>{zh?'缺少本联赛有效参数或同场采用记录；旧模型已停用':'Valid league parameters or event adoption record missing; legacy fallback disabled'}</small>}
+ </div>;
+}
 export function LeagueBaselineDirections({data,language,now,failed}:{data?:Data;language:'zh'|'en';now:number;failed:boolean}){
  const zh=language==='zh',today=new Date(now+8*3600000).toISOString().slice(0,10);
  const records=!failed&&data?.businessDate===today?data.records:[];

@@ -199,6 +199,19 @@ function verifyReleaseWindowPreflight() {
   const helper = require("./runReleaseWindowPreflight.cjs");
   const checks = [], check = (name, action) => { try { action(); checks.push({ name, ok: true }); } catch (error) { checks.push({ name, ok: false, error: error.stack }); } };
   const evaluate = (value = observation(), now = START, stage = "before-build") => helper.evaluateReleaseWindowObservation(value, now, { stage });
+  check('activation advisory keeps 900 seconds plus clock reserve without authorizing cutover',()=>{
+    const options={stage:'before-upload',nativeFullRelease:true,activationMinimum:true};
+    for(const seconds of [899,904,905,1200]){
+      const r=helper.evaluateReleaseWindowObservation(observation({horizonSeconds:seconds}),START,options);
+      assert.equal(r.ok,seconds>=905);assert.equal(r.minimumHorizonSeconds,905);
+      assert.equal(r.leaseCreated,false);assert.equal(r.windowPreauthorized,false);assert.equal(r.productionWrites,0);
+    }
+    assert.equal(helper.evaluateReleaseWindowObservation(observation({horizonSeconds:905}),START+1000,options).ok,false);
+    assert.throws(()=>helper.evaluateReleaseWindowObservation(observation(),START,{...options,nativeFullRelease:false}));
+    const changed=observation();changed.pointerAfter.generationId='g-'+ '0'.repeat(64);
+    assert.throws(()=>helper.evaluateReleaseWindowObservation(changed,START,options));
+    assert.throws(()=>helper.evaluateReleaseWindowObservation(observation(),START+60001,options));
+  });
   const reject = mutate => { const value = observation(); mutate(value); assert.throws(() => evaluate(value)); };
   const noAuthority = result => {
     for (const field of ["readyToCutover", "windowReserved", "windowPreauthorized", "leaseCreated"]) assert.equal(result[field], false, field);

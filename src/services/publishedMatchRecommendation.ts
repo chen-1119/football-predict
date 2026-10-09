@@ -21,9 +21,21 @@ export function publishedMatchRecommendation(data: RecommendationCenterData | nu
   // Current is authoritative, just as on /best. Review is only its historical
   // counterpart; an old review row must not override a current publication.
   const rows = data.current.filter(matches);
+  if(data.strategySwitch&&['SCHEDULED','LIVE'].includes(match.status))return null;
   const candidates = rows.length ? rows : data.review.singles.filter(matches);
   return [...candidates].sort((a,b) => Date.parse(b.decision.publishedAt)-Date.parse(a.decision.publishedAt)
     || b.decision.decisionId.localeCompare(a.decision.decisionId))[0] || null;
+}
+
+/** The new lane binds exact ordered team IDs and event time; never fall back
+ * to old review records or infer a mapping from names. */
+export function trainedMatchRecommendation(data:RecommendationCenterData|null,match:Match){
+  if(!data?.strategySwitch)return null;
+  const records=data.leagueBaseline?.records.filter(r=>r.sourceMatchId===sourceId(match.sourceMatchId||match.id)
+    && Date.parse(r.eventVersion)===Date.parse(match.kickoffTime)
+    && r.homeTeamId===match.homeTeamId&&r.awayTeamId===match.awayTeamId
+    && name(r.homeTeamName)===name(match.homeTeamName)&&name(r.awayTeamName)===name(match.awayTeamName))??[];
+  return records.length===1?records[0]:null;
 }
 
 function uniquePosteriorLeader(probabilities: OutcomeProbability | null | undefined): Outcome | null {
