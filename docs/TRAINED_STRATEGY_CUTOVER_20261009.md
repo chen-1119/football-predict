@@ -42,3 +42,10 @@ installed SQL constraint permits only publish/combos/settlement/view; no schema
 migration is needed. Model load failures remain errors. The separate old paper
 producer is retired on this path. Disposable SQL verifiers explicitly retain
 legacy compatibility exercises and additionally check the production cutover.
+
+The first activation (r820) stopped before live cutover at the short transition
+lease near the 18:00 match boundary; r819 remained active and no recovery was
+pending. A necessary minimum-window advisory now runs before activation invokes
+the root sequence consumer. It checks the same 900 seconds plus clock reserve;
+build/upload remain independent of that window. This advisory creates no lease
+and never replaces root schema classification or migration/cutover gates.

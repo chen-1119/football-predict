@@ -451,7 +451,12 @@ if (frontendOnly) {
     try {
       // nativeFullRelease is derived only from the verified signed archive
       // policy above; unknown or legacy full bundles retain the larger budget.
-      const windowPreflight = nativeFullRelease
+      // Reject a certainly closed short activation window before invoking the
+      // root allocator/sequence consumer. This is only a necessary minimum;
+      // installed-schema classification and every final server gate still run.
+      const windowPreflight = nativeFullRelease && activateOnly
+        ? require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({stage:"before-upload",nativeFullRelease:true,activationMinimum:true})
+        : nativeFullRelease
         ? { ok: true, windowChecked: false, reason: "signed-native-prepare-only", readyToCutover: false, windowPreauthorized: false }
         : require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({
           stage: "before-upload", nativeFullRelease
