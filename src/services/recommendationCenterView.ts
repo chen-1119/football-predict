@@ -193,6 +193,7 @@ export interface ReviewedAnalysisRecord {
  eventId:string;eventVersion:string;businessDate:string;matchNum:string;homeTeamId:string;awayTeamId:string;
  homeTeamName:string;awayTeamName:string;market:'HAD';selection:'h'|'d'|'a';sp:number;originalSp:number;
  scores:number[][];confidence:'高'|'中'|'低';reason:string;analysisUrl:string;limitations:string[];cutoffAt:string;quoteObservedAt:string;
+ evidence?:{hashes:string[];observedAt:string;missing:string[];verification:'official-single-source'};
 }
 export interface ReviewedAnalysis {businessDate:string;updatedAt:string;createdAt?:string;publicationHash?:string;records:ReviewedAnalysisRecord[];
  combos:Array<{band:number;product:number|null;confidence:string|null;legs:Array<{eventId:string;matchNum:string;selection:'h'|'d'|'a';sp:number}>}>}
@@ -211,7 +212,15 @@ export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedA
   const sp=number(r.sp),originalSp=number(r.originalSp),scores=list(r.scores).map(x=>list(x).map(number));
   if(sp<=1||originalSp<=1||scores.length!==2||scores.some(s=>s.length!==2||s.some(n=>!Number.isInteger(n)||n<0||n>15)||(s[0]===s[1]?'d':s[0]>s[1]?'h':'a')!==selection)||!['高','中','低'].includes(String(r.confidence)))throw Error('Reviewed analysis scores');
   const analysisUrl=paperText(r.analysisUrl,2000),url=new URL(analysisUrl);if(url.protocol!=='https:'||url.username||url.password)throw Error('Reviewed analysis URL');
-  return {eventId,eventVersion,businessDate,matchNum:paperText(r.matchNum,30),homeTeamId:paperText(r.homeTeamId,100),awayTeamId:paperText(r.awayTeamId,100),homeTeamName:paperText(r.homeTeamName,100),awayTeamName:paperText(r.awayTeamName,100),market:'HAD' as const,selection:selection as 'h'|'d'|'a',sp,originalSp,scores,confidence:r.confidence as '高'|'中'|'低',reason:paperText(r.reason,500),analysisUrl,limitations:list(r.limitations).map(v=>paperText(v,200)),cutoffAt,quoteObservedAt:paperClock(r.quoteObservedAt).text};
+  let evidence:ReviewedAnalysisRecord['evidence'];
+  if(Object.hasOwn(r,'evidenceAdoption')){const e=object(r.evidenceAdoption),{contentHash:eh,...eb}=e,ev=object(e.event),hashes=list(e.evidenceHashes).map(paperHex);
+   if(paperHex(eh)!==prdPaperPublicHash(eb)||e.version!=='team-evidence-adoption-view-v1'||!paperHex(e.adoptionHash)||e.verification!=='official-single-source'
+    ||e.secondIndependentSourceVerified!==false||e.formalEligible!==false||list(e.probabilityFactorsUsed).length||r.confidence!=='低'
+    ||ev.sourceMatchId!==eventId||ev.eventVersion!==eventVersion||ev.businessDate!==businessDate||ev.homeTeamId!==r.homeTeamId||ev.awayTeamId!==r.awayTeamId
+    ||hashes.length<1||hashes.length>4||JSON.stringify(hashes)!==JSON.stringify(r.evidenceHashes)||paperClock(e.asOf).ns!==paperClock(v.createdAt).ns)throw Error('Reviewed evidence binding');
+   evidence={hashes,observedAt:paperClock(e.asOf).text,missing:list(e.missing).map(x=>paperText(x,100)),verification:'official-single-source'};
+  }
+  return {eventId,eventVersion,businessDate,matchNum:paperText(r.matchNum,30),homeTeamId:paperText(r.homeTeamId,100),awayTeamId:paperText(r.awayTeamId,100),homeTeamName:paperText(r.homeTeamName,100),awayTeamName:paperText(r.awayTeamName,100),market:'HAD' as const,selection:selection as 'h'|'d'|'a',sp,originalSp,scores,confidence:r.confidence as '高'|'中'|'低',reason:paperText(r.reason,500),analysisUrl,limitations:list(r.limitations).map(v=>paperText(v,200)),cutoffAt,quoteObservedAt:paperClock(r.quoteObservedAt).text,...(evidence?{evidence}:{})};
  });
  const bands=new Set<number>(),pairs=new Set<string>();
  const parsed=combos.map(x=>{

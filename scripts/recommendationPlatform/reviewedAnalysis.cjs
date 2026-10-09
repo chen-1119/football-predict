@@ -8,7 +8,8 @@ const check=(v,c)=>{if(!v)throw Object.assign(Error('REVIEWED_ANALYSIS_'+c),{cod
 const text=(v,n=500)=>typeof v==='string'&&v.length>0&&v.length<=n&&!/[\x00-\x08\ufffd]/.test(v);
 const safeUrl=v=>{try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password;}catch{return false;}};
 function validateDraft(d,asOf){
- check(d?.version===1&&d.reportKind==='weekday-2000-selected-two'&&d.predictionScope==='chat-only research','DRAFT_KIND');
+ check((d?.version===1&&d.reportKind==='weekday-2000-selected-two'&&d.predictionScope==='chat-only research')
+  ||(d?.version===2&&d.reportKind==='evidence-backed-prematch'&&d.predictionScope==='reviewed-online-reference'),'DRAFT_KIND');
  check(d.businessDate===day(Date.parse(asOf))&&Date.parse(d.frozenAt)<=Date.parse(asOf)&&Number.isFinite(Date.parse(d.frozenAt)),'DRAFT_CLOCK');
  check(Array.isArray(d.singles)&&d.singles.length>0&&d.singles.length<=32,'ROWS');
  const seen=new Set();
@@ -17,6 +18,8 @@ function validateDraft(d,asOf){
   check(r.businessDate===d.businessDate&&['h','d','a'].includes(r.selection)&&r.market==='HAD'&&r.handicap===null,'MARKET');
   check(r.formalEligible===false&&r.modelVersion===null&&r.modelProbability===null&&r.classification==='manual-prematch-research','HONEST_SOURCE');
   check(text(r.reason)&&safeUrl(r.analysisUrl)&&['高','中','低'].includes(r.confidence),'EVIDENCE');
+  if(d.version===2)check(Array.isArray(r.evidenceKeys)&&r.evidenceKeys.length>0&&r.evidenceKeys.length<=4
+   &&new Set(r.evidenceKeys).size===r.evidenceKeys.length&&r.evidenceKeys.every(k=>/^team-evidence-[a-f0-9]{64}$/.test(k))&&r.confidence==='低','EVIDENCE_KEYS');
   check(Array.isArray(r.teams)&&r.teams.length===2&&r.teams.every(v=>text(v,100))&&Array.isArray(r.orderedTeamIds)&&r.orderedTeamIds.length===2&&r.orderedTeamIds.every(v=>Number.isSafeInteger(v)&&v>0),'TEAMS');
   check(Array.isArray(r.scores)&&r.scores.length===2&&new Set(r.scores.map(v=>JSON.stringify(v))).size===2,'SCORES');
   for(const s of r.scores)check(Array.isArray(s)&&s.length===2&&s.every(v=>Number.isInteger(v)&&v>=0&&v<=15)&&(s[0]===s[1]?'d':s[0]>s[1]?'h':'a')===r.selection,'SCORE_DIRECTION');
@@ -24,8 +27,8 @@ function validateDraft(d,asOf){
  }
  return true;
 }
-function make(draft,{matches,snapshot,trustRegistry,asOf}){
- validateDraft(draft,asOf);check(Buffer.byteLength(JSON.stringify({draft,matches,snapshot}))<=8*1024*1024,'BOUND');
+function make(draft,{matches,snapshot,trustRegistry,asOf,evidenceByEvent={}}){
+ validateDraft(draft,asOf);check(Buffer.byteLength(JSON.stringify({draft,matches,snapshot,evidenceByEvent}))<=8*1024*1024,'BOUND');
  const endpoints=snapshot?.endpoints?.filter(e=>e.method==='current');check(endpoints?.length===1,'ENDPOINT');
  const records=draft.singles.map(r=>{
   const candidates=matches.filter(m=>String(m.sourceMatchId||'').replace(/^sporttery_/,'')===r.eventId&&Date.parse(m.eventVersion||m.kickoffTime)===Date.parse(r.kickoff));
@@ -38,10 +41,22 @@ function make(draft,{matches,snapshot,trustRegistry,asOf}){
   const joined=had.joinOfficialHad([input],snapshot,{now:Date.parse(asOf),trustRegistry}).current[0];
   const quote=had.signedLiveHadQuoteForMatch(joined,Date.parse(asOf),Date.parse(identity.saleCutoff),{trustRegistry});check(quote,'SIGNED_PRICE');
   const sp=quote.odds[{h:'odds1',d:'oddsX',a:'odds2'}[r.selection]];
+  let evidenceAdoption;
+  if(draft.version===2){
+   const packets=evidenceByEvent[r.eventId];check(Array.isArray(packets)&&packets.length===r.evidenceKeys.length
+    &&packets.every((p,i)=>'team-evidence-'+p.contentHash===r.evidenceKeys[i]),'EVIDENCE_BINDING');
+   const adopted=require('../teamEvidenceSources.cjs').adopt(packets,{sourceMatchId:r.eventId,eventVersion:identity.identity.eventVersion,
+    businessDate:r.businessDate,homeTeamId:input.homeTeamId,awayTeamId:input.awayTeamId,homeTeamName:r.teams[0],awayTeamName:r.teams[1],leagueName:raw[0].leagueAllName},asOf);
+   // Full official facts remain in the frozen inputs and deterministic replay.
+   // Keep the public view inside its existing node/depth/byte budget.
+   const {teams,contentHash:adoptionHash,...compact}=adopted;void teams;
+   evidenceAdoption=seal({...compact,version:'team-evidence-adoption-view-v1',adoptionHash});
+  }
   return {eventId:r.eventId,eventVersion:identity.identity.eventVersion,businessDate:r.businessDate,matchNum:r.matchNum,
    homeTeamId:input.homeTeamId,awayTeamId:input.awayTeamId,homeTeamName:r.teams[0],awayTeamName:r.teams[1],
    market:'HAD',selection:r.selection,sp,originalSp:r.sp,scores:r.scores,confidence:r.confidence,reason:r.reason,
    analysisUrl:r.analysisUrl,limitations:['完整近5场双源未核实','首发未确认','500 SP未核实；采用官方报价'],
+   ...(evidenceAdoption?{evidenceAdoption,evidenceHashes:evidenceAdoption.evidenceHashes}:{}),
    cutoffAt:identity.saleCutoff,quoteObservedAt:quote.at,quoteHash:quote.receipt.receiptHash,
    publicationMethod:'reviewed-editorial',modelVersion:null,modelProbability:null,formalEligible:false};
  });

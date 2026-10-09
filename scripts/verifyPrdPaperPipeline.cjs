@@ -2,7 +2,8 @@
 const path=require('node:path'),{spawnSync}=require('node:child_process');
 const tests=['tests/league-model-adoption.test.cjs','tests/prd-paper-recommendation.test.cjs','tests/prd-paper-repository.test.cjs',
   'tests/prd-paper-runtime.test.cjs','tests/prd-paper-directions-view.test.cjs',
-  'tests/zero-market-research-baseline.test.cjs','tests/market-separated-direction-research.test.cjs'];
+  'tests/zero-market-research-baseline.test.cjs','tests/market-separated-direction-research.test.cjs',
+  'tests/team-evidence-pipeline.test.cjs','tests/expanded-league-history.test.cjs','tests/reviewed-analysis.test.cjs'];
 function run(){
  const child=spawnSync(process.execPath,['--test','--test-reporter=tap',...tests],{
   cwd:path.resolve(__dirname,'..'),encoding:'utf8',windowsHide:true,timeout:45000,maxBuffer:2*1024*1024});
