@@ -2567,6 +2567,7 @@ const describeCycleStages = () => ([
       "sync:api-football",
       "sync:weather",
       "sync:openfootball-observations",
+      "sync:team-evidence",
       "sync:football-data-fixtures",
       "sync:football-data-results",
       "sync:open-research",
@@ -3527,6 +3528,9 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_500_DETAILS_SYNC === "1", "sync:500:details"));
     enrichmentSteps.push(await runEnrichment(apiFootballRuntimePolicy.enabled, "sync:api-football"));
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_WEATHER_SYNC !== "0", "sync:weather"));
+    // Independent append-only PostgreSQL evidence; no legacy file rewrite or
+    // implicit model promotion. Per-source cadence and retries live in the job.
+    enrichmentSteps.push(await runEnrichment(storageMode.postgresOnly && process.env.ENABLE_TEAM_EVIDENCE_SYNC !== "0", "sync:team-evidence"));
     // Private community receipts do not feed the publication planner. They
     // retain a visible slow-step result but cannot trigger base reconstruction.
     const communityReceiptStep = await runOpenFootballObservationSchedule({

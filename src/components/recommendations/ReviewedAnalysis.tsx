@@ -3,7 +3,9 @@ const label={h:'主胜',d:'平局',a:'客胜'};
 export function ReviewedMatchPick({record,now}:{record:ReviewedAnalysisRecord;now?:number}){
  return <div className="compact-pick" data-publication-method="reviewed-editorial"><small>赛前综合分析 · 人工审核</small><strong>{label[record.selection]} · SP {record.sp.toFixed(2)}</strong>
   <small>{record.scores.map(s=>s.join('-')).join(' / ')} · {record.confidence}信心{typeof now==='number'&&now>=Date.parse(record.cutoffAt)?' · 已截止冻结':''}</small>
-  <details><summary>依据</summary><p>{record.reason}</p><p>{record.limitations.join('；')}</p><a href={record.analysisUrl} target="_blank" rel="noopener noreferrer">赛前分析来源</a><p>发布报价观察：{new Date(record.quoteObservedAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})}；原分析SP {record.originalSp.toFixed(2)}。比分为方向相容的人工选择，非模型概率前二。</p></details></div>;
+  <details><summary>依据</summary><p>{record.reason}</p><p>{record.limitations.join('；')}</p>
+   {record.evidence&&<p>已绑定 {record.evidence.hashes.length} 份官方资料，仅单源；未核实：{record.evidence.missing.join('、')}。资料用于人工审核，未作为已训练的概率因子。</p>}
+   <a href={record.analysisUrl} target="_blank" rel="noopener noreferrer">赛前分析来源</a><p>发布报价观察：{new Date(record.quoteObservedAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})}；原分析SP {record.originalSp.toFixed(2)}。比分为方向相容的人工选择，非模型概率前二。</p></details></div>;
 }
 export function ReviewedAnalysisPanel({data,tab,now,failed}:{data?:Data;tab:string;now:number;failed:boolean}){
  const today=new Date(now+8*3600000).toISOString().slice(0,10);

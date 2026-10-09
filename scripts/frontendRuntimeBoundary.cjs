@@ -75,7 +75,10 @@ const COMMAND_CALLER_FUNCTIONS = deepFreeze({
     "dc5ba7f3cc3b8e8e65d6dc9450fce24c99b9575fdca632d9c8f3c114d749dfd2", "e35c0a392d9a0ab5ca3abdd8375d0578c8b06bd508da82871c3f23e7d81751e3",
     // Reviewed native coverage await and postgres:sync routing. Commands stay
     // literal; the full reachable code and package graph are still compared.
-    "994b5f575e5f8141fc06500fee5a2e036db26d6f3b4248673f462cdd97f701eb", "50b4a036b586195589da6e7b56c11c6a1daa40cc8d183f8af039bc8415e42ff5"],
+    "994b5f575e5f8141fc06500fee5a2e036db26d6f3b4248673f462cdd97f701eb", "50b4a036b586195589da6e7b56c11c6a1daa40cc8d183f8af039bc8415e42ff5",
+    // Same runCycle plus the literal PostgreSQL supplementary evidence job.
+    // No command adapter, argument grammar or source-closure exemption changes.
+    "bc5de663a3c33c468d9062d6b8eec3be88c4c4202a173e1aaae7af2d74147678"],
 });
 const UNIT_SOURCE_HASHES = Object.freeze({
   "football-daily-prematch.service": "9e6af93d56635ed0940590b4a027e02ab5310080e53b2873775b520f46796d8a",

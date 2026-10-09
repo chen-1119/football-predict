@@ -21,8 +21,14 @@ async function publish(draft,{pool,expectedDraftHash}){
   await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',['football-postgres-projection-sync-v1']);
   p.check(!(await c.query(SELECT,[k])).rows.length,'ALREADY_PUBLISHED_READ_FIRST');
   const matches=(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(r=>r.payload);p.check(matches.length<=512,'MATCH_BOUND');
-  const snapshot=readLiveOfficialSnapshot(),asOf=await dbNow(c),record=p.make(draft,{matches,snapshot,trustRegistry:registry,asOf});
-  const inputs={matches:matches.filter(m=>record.records.some(r=>r.eventId===String(m.sourceMatchId||'').replace(/^sporttery_/,''))),snapshot};
+  const snapshot=readLiveOfficialSnapshot(),asOf=await dbNow(c),evidenceByEvent={};
+  if(draft.version===2){for(const r of draft.singles){const packets=[];
+   for(const k of r.evidenceKeys)packets.push(await require('../teamEvidenceStore.cjs').readPacket(c,k,asOf));
+   evidenceByEvent[r.eventId]=packets;
+  }}
+  const record=p.make(draft,{matches,snapshot,trustRegistry:registry,asOf,evidenceByEvent});
+  const inputs={matches:matches.filter(m=>record.records.some(r=>r.eventId===String(m.sourceMatchId||'').replace(/^sporttery_/,''))),snapshot,
+   ...(draft.version===2?{evidenceByEvent}:{})};
   const storedAt=await dbNow(c);deadline(record,storedAt);
   const payload=p.seal({version:'reviewed-analysis-freeze-v1',createdAt:record.createdAt,record,draft,inputs,storedAt});
   const row=await insert(c,k,payload,storedAt);deadline(record,await dbNow(c));return row;
