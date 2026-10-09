@@ -57,6 +57,20 @@ for (const field of Object.keys(identity)) test('any publication component chang
   a.throws(() => acceptance.assertSamePublication(identity, { ...identity, [field]: 'changed' }));
 });
 const transitions = require('../scripts/releaseTransitionLease.cjs');
+test('code lease is durable before recovery exists, without creating recovery', () => {
+  a.match(body('run_native_release'), /CANDIDATE_TRANSITION_LEASE="\$NATIVE_STATE_DIR\/code-transition-lease\.json"/);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'code-lease-before-recovery-'));
+  try {
+    const native = path.join(dir, 'native'), recovery = path.join(dir, 'recovery');
+    fs.mkdirSync(native); const current = path.join(dir, 'current.json'), lease = path.join(native, 'code-transition-lease.json');
+    fs.writeFileSync(current, JSON.stringify([{ id: 'fixture', status: 'SCHEDULED', kickoffTime: iso(4800) }]));
+    const run = () => spawnSync(process.execPath, [path.join(root, 'scripts/releaseTransitionLease.cjs'), 'create', '--current', current,
+      '--lease', lease, '--at', iso(0), '--verifier-runtime-max-seconds', '300', '--preverify-refresh-budget-seconds', '570', '--atomic-swap-margin-seconds', '30'], { encoding: 'utf8', timeout: 10000, windowsHide: true });
+    const r = run(); a.equal(r.status, 0, r.stderr); a.equal(fs.existsSync(recovery), false);
+    a.equal(JSON.parse(fs.readFileSync(lease)).minimumHorizonSeconds, 900);
+    a.notEqual(run().status, 0, 'existing lease cannot be overwritten');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
 const payload = () => [{ id: 'fixture', sourceMatchId: 'fixture', status: 'SCHEDULED', kickoffTime: iso(4800), predictionMeta: { cutoffTime: iso(1200) } }];
 test('short lease covers only code handover and rejects a crossed deadline or modified data', () => {
   const p = payload(), lease = transitions.createTransitionLease(p, { refreshAt: iso(0), verifierRuntimeMaxSeconds: 300, preverifyRefreshBudgetSeconds: 570, atomicSwapMarginSeconds: 30 });

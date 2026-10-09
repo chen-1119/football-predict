@@ -183,6 +183,7 @@ run_native_release() {
     # checked still rejects this candidate. No user/env budget override.
     CODE_CUTOVER_STARTED_SECONDS=$SECONDS
     CODE_CUTOVER_POST_SWAP_MARGIN_SECONDS=300
+    CANDIDATE_TRANSITION_LEASE="$NATIVE_STATE_DIR/code-transition-lease.json"
     "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" create \
       --current "$APP_DIR/public/data/matches-current.json" --lease "$CANDIDATE_TRANSITION_LEASE" \
       --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
