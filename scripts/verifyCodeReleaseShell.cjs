@@ -23,7 +23,7 @@ const stubs=['log','release_stage_observe','wait_for_health','prepare_managed_tr
   'cp','rm','install','chown','mv','sync','systemctl'];
 const cases=[
   {name:'code-success',mode:1},{name:'database-success',mode:0},
-  {name:'unsigned-dist',mode:1,prebuilt:0},{name:'seed-failed',mode:1,fail:'native_data:seed'},
+  {name:'unsigned-dist',mode:1,prebuilt:0},{name:'closed-code-lease',mode:1,leaseRejected:true},{name:'seed-failed',mode:1,fail:'native_data:seed'},
   {name:'reader-failed',mode:1,fail:'native_data:candidate-access'},
   {name:'candidate-failed',mode:1,fail:'run_trusted_candidate_verifier'},
   {name:'final-failed',mode:1,fail:'native_data:final'},
@@ -36,10 +36,10 @@ try{for(const item of cases){
   fs.mkdirSync(path.join(dir,'state','a'.repeat(64)),{recursive:true});
   fs.writeFileSync(path.join(dir,'node/bin/node'),'#!/usr/bin/env bash\nset -eu\n'+
     'if [ "$1" = -e ]; then\n case "$2" in *dataPlane*|*p.classify*) echo "$FIXTURE_MODE";; *) printf "runtime-only\\nfootball\\nnull\\n";; esac\n'+
-    'else printf "node:%s\\n" "$1" >>"$FIXTURE_LOG"; fi\n',{mode:0o700});
+    'else printf "node:%s\\n" "$1" >>"$FIXTURE_LOG"; if [[ "$1" = */releaseTransitionLease.cjs ]] && [ "${2:-}" = create ] && [ "$FIXTURE_LEASE_REJECT" = 1 ]; then exit 1; fi; fi\n',{mode:0o700});
   const setup=variables.filter(v=>!['PATH','HOME'].includes(v)).map(v=>v+'=0').join('\n')+'\n'+
     'RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS=900000\nPOST_SWAP_TRANSITION_START_BUDGET_SECONDS=1620\nCANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS=30\n'+
-    'export FIXTURE_ROOT="$PWD" FIXTURE_LOG="$PWD/events" FIXTURE_MODE='+item.mode+'\n'+
+    'export FIXTURE_ROOT="$PWD" FIXTURE_LOG="$PWD/events" FIXTURE_MODE='+item.mode+' FIXTURE_LEASE_REJECT='+(item.leaseRejected?1:0)+'\n'+
     'FIXTURE_FAIL='+JSON.stringify(item.fail||'')+'\nNODE_HOME="$PWD/node"\n'+
     'APP_DIR="$PWD/app"\nNEXT_DIR="$PWD/app.next"\nBACKUP_DIR="$PWD/app.previous"\nFAILED_DIR="$PWD/app.failed"\n'+
     'BUILD_DIR="$PWD/build"\nBUILD_HOME="$PWD/home"\nTRUSTED_SOURCE_DIR="$PWD/source"\nRECOVERY_DIR="$PWD/recovery"\n'+
@@ -62,7 +62,7 @@ try{for(const item of cases){
   const result=spawnSync(process.platform==='win32'?'D:/app/Git/bin/bash.exe':'/bin/bash',['--noprofile','--norc','-s'],
     {cwd:dir,input,encoding:'utf8',timeout:10000,maxBuffer:65536,windowsHide:true});
   const events=fs.existsSync(path.join(dir,'events'))?fs.readFileSync(path.join(dir,'events'),'utf8').trim().split('\n'):[];
-  const success=!item.fail&&item.prebuilt!==0&&!item.foreignPause;
+  const success=!item.fail&&item.prebuilt!==0&&!item.foreignPause&&!item.leaseRejected;
   assert.equal(result.status,success?0:1,item.name+': '+result.stderr+'\n'+events.join('\n'));
   if(success){
     assert(events.includes('post-swap-readiness'));assert(events.includes('native_data:final'));
@@ -81,10 +81,15 @@ try{for(const item of cases){
     assert(events.includes('pause-remove'),'owned pause cleaned on success/failure');
   }
   if(item.mode===1){
+    if(events.includes('recovery-prepared'))assert(events.indexOf('recovery-prepared')>events.lastIndexOf('run_build_step'),'code recovery begins only after preparation');
+    if(item.leaseRejected||item.prebuilt===0){
+      for(const event of ['recovery-prepared','quiesce_managed_maintenance_for_sqlite_snapshot','stop_worker_for_release_window','stop-service','node:/usr/local/libexec/football-release-recovery.cjs'])assert(!events.includes(event),'pre-cutover rejection must leave live services unchanged: '+event);
+    }
     for(const name of ['native_data:build-access','run_candidate_model_artifact_catchup','run_candidate_refresh_step'])assert(!events.includes(name));
     assert(!events.some(v=>v.includes('recommendation-schema-bridge.cjs')));
     if(events.includes('native_data:seed'))assert(events.indexOf('run_build_step')<events.indexOf('native_data:seed'));
   }else{
+    assert(events.indexOf('recovery-prepared')<events.indexOf('run_build_step'),'database transaction keeps its original early recovery protection');
     for(const name of ['native_data:build-access','run_candidate_model_artifact_catchup','run_candidate_refresh_step'])assert(events.includes(name));
     assert(events.some(v=>v.includes('recommendation-schema-bridge.cjs')));
   }

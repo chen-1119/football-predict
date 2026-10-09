@@ -47,6 +47,16 @@ database OID, rollback journals and source/dist validation remain.
 
 ## Completion states
 
+Code preparation opens its recovery snapshot and pauses maintenance only after
+the fresh code lease succeeds. An unsigned build or closed lease before that
+point preserves the running services. The database lane still creates recovery
+before its preparation. This corrects the observed r817 pre-cutover rejection,
+which opened recovery too early and unnecessarily restarted the existing service.
+The 900-second cutover budget, final identity checks and post-pause recovery
+remain unchanged.
+The create-only lease lives in the already allocated native transaction directory;
+it does not depend on a recovery directory that has not been created yet.
+
 Code-only engineering completion retains serving PG integrity, archive lineage,
 candidate continuity, public readiness, worker startup and exact runtime marker
 checks. It does not await a whole collection/enrichment run inside the release
