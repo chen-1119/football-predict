@@ -30,7 +30,7 @@ async function verify(pool){
     for(const [key,value] of Object.entries({data_publication_mode:'generation',data_generation_id:'test-generation',manifest_hash:'a'.repeat(64),data_generation_source_cycle_id:'test-source',committed_at:new Date(now).toISOString()}))await q('INSERT INTO football.projection_meta(key,value) VALUES($1,$2)',[key,value]);
     await Promise.all([1,2,3].map(id=>write(fixture(id))));
     // Explicit historical compatibility exercise; the production default is trained-only.
-    const runtime=createRuntime({...postgresPorts(mappedPool,()=>now),trainedOnly:false},{dualResearchEnabled:true,validators:{isFinal:r=>r.testOfficial===true&&r.status==='FINISHED',isVoid:r=>r.testOfficial===true&&r.resultDisposition==='VOID'}});
+    const runtime=createRuntime({...postgresPorts(mappedPool,()=>now),trainedOnly:false,prdPaperPool:null},{dualResearchEnabled:true,validators:{isFinal:r=>r.testOfficial===true&&r.status==='FINISHED',isVoid:r=>r.testOfficial===true&&r.resultDisposition==='VOID'}});
     const first=await runtime.publishingCycle();check(()=>assert.equal(first.publication.ok,true));check(()=>assert.equal(first.dualResearch.ok,true));check(()=>assert.equal(first.combinations.ok,true));check(()=>assert.equal(first.projection.ok,true));
     check(()=>assert.equal((first.publication.value.decisionIds).length,3));
     const frozen=(await q('SELECT payload FROM football.recommendation_combo_records ORDER BY size')).rows;
@@ -190,13 +190,17 @@ async function verify(pool){
     }finally{researchClient.release();}
     const beforeCutover=(await q('SELECT id,payload FROM football.recommendation_decisions ORDER BY id')).rows;
     const beforeCombos=(await q('SELECT payload FROM football.recommendation_combo_records ORDER BY id')).rows;
-    const switched=createRuntime(postgresPorts(mappedPool,()=>now));
+    // This legacy fixture deliberately lacks independent model artifact tables.
+    // Exercise its real SQL publication constraint without invoking their views.
+    const switchedPorts={...postgresPorts(mappedPool,()=>now),prdPaperPool:null};
+    const switched=createRuntime(switchedPorts);
     check(()=>assert.equal(postgresPorts(mappedPool).trainedOnly,true));
     const newPublish=await switched.publish(),newCombos=await switched.combos(),switchedView=await switched.view();
     check(()=>assert.equal(newPublish.ok,true));check(()=>assert.equal(newCombos.ok,true));check(()=>assert.equal(switchedView.ok,true));
     check(()=>assert.deepEqual(newPublish.value.decisionIds,[]));
     // Missing registry schema is a real blocked model cycle, recorded in the
     // installed publish lane, never an unsupported league-baseline lane.
+    switchedPorts.prdPaperPool=mappedPool;
     const blockedModel=await switched.leagueBaseline();check(()=>assert.equal(blockedModel.ok,false));
     const modelLane=(await q("SELECT payload FROM football.recommendation_lanes WHERE lane='publish'")).rows[0].payload;
     check(()=>assert.equal(modelLane.status,'error'));check(()=>assert.equal(modelLane.legacyRetired,true));

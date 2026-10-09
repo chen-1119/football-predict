@@ -54,7 +54,7 @@ async function verify(pool){
         [fresh.id,'current',fresh.sourceMatchId,fresh.kickoffTime,JSON.stringify(attached)]);
     }
     // Keep the original collector/legacy compatibility contract independently of cutover.
-    const runtime=createRuntime({...postgresPorts(mappedPool,()=>now),trainedOnly:false},{validators:{isFinal:()=>false,isVoid:()=>false}});
+    const runtime=createRuntime({...postgresPorts(mappedPool,()=>now),trainedOnly:false,prdPaperPool:null},{validators:{isFinal:()=>false,isVoid:()=>false}});
     const copied=await runtime.combos();check(()=>assert.equal(copied.ok,true));
     check(()=>assert.equal(copied.value.candidateCount,3));
     check(()=>assert.deepEqual(copied.value.previews.map(c=>c.size),[2,3]));
