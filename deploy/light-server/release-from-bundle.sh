@@ -4561,6 +4561,9 @@ stop_worker_for_release_window() {
   fi
   if systemctl cat "$WORKER_SERVICE_NAME" >/dev/null 2>&1 && systemctl is-active --quiet "$WORKER_SERVICE_NAME"; then
     log "pause ${WORKER_SERVICE_NAME} for release window"
+    if [ "${NATIVE_CODE_RELEASE:-0}" = 1 ]; then
+      "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseOwnedWorkerStop.cjs" capture "$BUNDLE_SHA256" || return 1
+    fi
     WORKER_STOPPED_FOR_SWAP=1
     systemctl stop "$WORKER_SERVICE_NAME" >/dev/null 2>&1 || return 1
     systemctl is-active --quiet "$WORKER_SERVICE_NAME" && return 1
@@ -6964,12 +6967,20 @@ assert_release_stopped_code_worker() {
   local state cgroup events
   [ "${NATIVE_CODE_RELEASE:-0}" = 1 ] || return 1
   [ "${WORKER_FROZEN_FOR_READINESS:-0}" = 0 ] || return 1
-  # Query all service fields together. A failed/transitional unit or a surviving
-  # child is not an exclusive stopped writer, even when MainPID is zero.
+  # Query service fields together; MainPID zero alone never proves quiescence.
   state="$(systemctl show "$WORKER_SERVICE_NAME" --property=LoadState --property=ActiveState --property=SubState --property=MainPID --property=ControlPID --property=ControlGroup)" || return 1
   [ "$(printf '%s\n' "$state" | grep -c '^LoadState=loaded$')" = 1 ] || return 1
-  [ "$(printf '%s\n' "$state" | grep -c '^ActiveState=inactive$')" = 1 ] || return 1
-  [ "$(printf '%s\n' "$state" | grep -c '^SubState=dead$')" = 1 ] || return 1
+  if [ "$(printf '%s\n' "$state" | grep -c '^ActiveState=inactive$')" = 1 ]; then
+    [ "$(printf '%s\n' "$state" | grep -c '^SubState=dead$')" = 1 ] || return 1
+  else
+    # Preserve the systemd timeout failure. Only this release's durable stop
+    # intent plus unchanged invocation, zero PIDs/jobs and empty cgroup/proc
+    # evidence can prove the writer drained; unknown failures remain rejected.
+    [ "$(printf '%s\n' "$state" | grep -c '^ActiveState=failed$')" = 1 ] || return 1
+    [ "$(printf '%s\n' "$state" | grep -c '^SubState=failed$')" = 1 ] || return 1
+    [ -f "${NATIVE_STATE_DIR:-}/owned-worker-stop-intent.json" ] || return 1
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseOwnedWorkerStop.cjs" verify "$BUNDLE_SHA256" || return 1
+  fi
   [ "$(printf '%s\n' "$state" | grep -c '^MainPID=0$')" = 1 ] || return 1
   [ "$(printf '%s\n' "$state" | grep -c '^ControlPID=0$')" = 1 ] || return 1
   [ "$(printf '%s\n' "$state" | grep -c '^ControlGroup=')" = 1 ] || return 1
