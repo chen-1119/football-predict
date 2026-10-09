@@ -463,6 +463,8 @@ const requiredEntries = [
   "tests/zero-market-research-baseline.test.cjs",
   "tests/market-separated-direction-research.test.cjs",
   "scripts/verifyPrdPaperPipeline.cjs",
+  "scripts/releaseOwnedWorkerStop.cjs",
+  "tests/owned-worker-stop.test.cjs",
   "scripts/nativeSnapshotCopyProof.cjs",
   "tests/native-snapshot-copy-proof.test.cjs",
   "scripts/publishReviewedAnalysis.cjs",
