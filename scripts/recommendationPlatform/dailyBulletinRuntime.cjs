@@ -27,7 +27,7 @@ async function insert(client,record){
   [record.id,p.VERSION,record.publishedAt,json,digest,Buffer.byteLength(json)]);
   return result.rows.length>0;
 }
-async function projection(repo,{now,decisions,heads}){
+async function projection(repo,{now,decisions,heads,readOnlyArchive=false}){
   // Called inside the existing view transaction. The bulletin archive and view
   // New records are hidden until a LATER transaction observes the already
   // committed bytes before cutoff. Its immutable ACK proves the record's
@@ -41,6 +41,7 @@ async function projection(repo,{now,decisions,heads}){
   if(!Number.isFinite(observedAt)||observedAt<at||observedAt-at>30000)throw Error('DAILY_OBSERVATION_CLOCK');
   const committed=archive.filter(r=>r.kind==='pick'||r.kind==='combo');
   for(const record of committed){
+    if(readOnlyArchive)continue;
     const id='daily-ack-'+hash([record.id,record.contentHash]);
     if(ids.has(id)||observedAt<Date.parse(record.publishedAt)||observedAt>=Date.parse(record.cutoffAt))continue;
     const ack=p.seal({version:p.VERSION,kind:'ack',id,publishedAt:new Date(observedAt).toISOString(),
@@ -49,7 +50,7 @@ async function projection(repo,{now,decisions,heads}){
   }
   const confirmed=r=>archive.some(a=>a.kind==='ack'&&a.recordId===r.id&&a.recordHash===r.contentHash
     &&Date.parse(a.publishedAt)>=Date.parse(r.publishedAt)&&Date.parse(a.publishedAt)<Date.parse(r.cutoffAt));
-  if(endpoint?.length===1){
+  if(!readOnlyArchive&&endpoint?.length===1){
     for(const d of decisions.filter(d=>d.businessDate===schedule.businessDate).slice(0,512)){
       if(!validDecision(d,{trustRegistry:trust})||!opening.assessDecisionOpening(d,new Date(at).toISOString(),{trustRegistry:trust}).eligible)continue;
       const input={...d,id:d.matchId,status:'SCHEDULED'};
@@ -76,7 +77,7 @@ async function projection(repo,{now,decisions,heads}){
       }
     }
   }
-  if(active.includes('featured')){
+  if(!readOnlyArchive&&active.includes('featured')){
     for(const tier of p.chooseTiers(committed.filter(r=>r.kind==='pick'&&r.slot==='featured'&&confirmed(r)),at)){
       if(tier.status!=='available')continue;
       const id='daily-combo-'+hash([p.VERSION,schedule.businessDate,tier.minimum]);if(ids.has(id))continue;

@@ -1,3 +1,5 @@
+import { TrainedMatchPick } from '../components/recommendations/LeagueBaselineDirections';
+import { trainedMatchRecommendation } from '../services/publishedMatchRecommendation';
 import { PrematchCollectionPanel } from '../components/predictions/PrematchCollectionPanel';
 import { acceptMatchDetail, detailResponseMatchesFields } from '../services/matchDetailIdentity.js';
 import type { DetailIdentityBinding } from '../services/matchDetailIdentity.js';
@@ -1494,7 +1496,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           <p>{language === 'zh' ? '开赛时间：' : 'Kickoff: '}{displayText(capturedKickoff)}{language === 'zh' ? '（北京时间）' : ' (Beijing time)'}</p>
           <strong>{language === 'zh' ? '赛前推荐与比赛参数' : 'Pre-match picks and match parameters'}</strong>
         </header>
-        {useUnified ? <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} /> : <CapturedReferenceAnalysisPanel match={match} capture={capturedData} language={language} now={nowMs} />}
+        {useUnified ? (published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)) ? <TrainedMatchPick record={trainedMatchRecommendation(published.data,match)} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} />) : <CapturedReferenceAnalysisPanel match={match} capture={capturedData} language={language} now={nowMs} />}
         <CapturedMatchData capture={capturedData} language={language} />
       </div>
     );
@@ -3069,7 +3071,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 </span>
               </div>
             )}
-            {useUnified ? <div className="card recommendation-overview-card recommendation-outcome-card"><section className="recommendation-overview-panel is-outcome"><PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} /></section></div> : <div className="card recommendation-overview-card recommendation-outcome-card">
+            {useUnified ? <div className="card recommendation-overview-card recommendation-outcome-card"><section className="recommendation-overview-panel is-outcome">{(published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)) ? <TrainedMatchPick record={trainedMatchRecommendation(published.data,match)} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} />)}</section></div> : <div className="card recommendation-overview-card recommendation-outcome-card">
               <section className="recommendation-overview-panel is-outcome">
                 <small>{language === 'zh' ? '旧版赛前归档' : 'Legacy pre-match archive'}</small>
                 <div className="recommendation-overview-head">
@@ -3552,7 +3554,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
         {activeTab === 'history' && (
           <div className="match-detail-v4__section-stack" data-section="history">
-            {useUnified && <div className="card review-card"><h3>{language === 'zh' ? '已发布推荐复盘' : 'Published recommendation review'}</h3><PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} /></div>}
+            {useUnified && <div className="card review-card"><h3>{language === 'zh' ? '已发布推荐复盘' : 'Published recommendation review'}</h3>{(published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)) ? <TrainedMatchPick record={trainedMatchRecommendation(published.data,match)} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} />)}</div>}
             {!useUnified && isResultPhase && hasReviewPredictions && (
               <div className="card review-card">
                 <div className="review-head">

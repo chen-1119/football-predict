@@ -35,6 +35,31 @@ test('daily bulletin parser accepts market-compatible scores and rejects contrad
  assert.equal(view.parseDailyBulletin(bulletin,'2026-10-09'),undefined);
 });
 async function sample(){const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();return {recommendationCenter:p.state.view};}
+test('trained cutover retires all old writers without changing archived records or review denominators',async()=>{
+ const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();
+ const before=structuredClone({decisions:p.state.decisions,combos:p.state.combos,statistics:p.state.view.review.statistics});
+ p.trainedOnly=true;p.now+=1000;p.calls.length=0;
+ const result=await createRuntime(p,{validators}).publishingCycle();assert.equal(result.publication.ok,true);assert.equal(result.combinations.ok,true);
+ assert.equal(p.calls.some(c=>['insertDecision','insertCombo'].includes(c[0])),false);
+ assert.deepEqual(p.state.decisions,before.decisions);assert.deepEqual(p.state.combos,before.combos);
+ const raw={recommendationCenter:p.state.view},parsed=parseRecommendationCenter(raw);
+ assert.equal(parsed.strategySwitch.legacyFallbackEnabled,false);assert.equal(parsed.strategySwitch.modelAdoptionCount,0);
+ assert.deepEqual(parsed.current,[]);assert.deepEqual(parsed.previews,[]);assert.deepEqual(parsed.todayCombos,[]);
+ assert.deepEqual(p.state.view.review.statistics,before.statistics);
+ const m=p.current[0];assert.equal(modelModule.exports.publishedMatchRecommendation(parsed,m),null);
+ for(const mutation of [x=>x.strategySwitch.legacyFallbackEnabled=true,x=>x.strategySwitch.modelAdoptionCount=1,
+   x=>x.current=structuredClone(before.decisions).map(decision=>({decision,settlement:{state:'PENDING'}}))]){
+   const bad=structuredClone(raw);mutation(bad.recommendationCenter);assert.throws(()=>parseRecommendationCenter(bad));
+ }
+});
+test('trained match matching requires ordered identities and never substitutes another event',()=>{
+ const m=match('22'),r={sourceMatchId:'22',eventVersion:m.kickoffTime,homeTeamId:m.homeTeamId,awayTeamId:m.awayTeamId,
+ homeTeamName:m.homeTeamName,awayTeamName:m.awayTeamName,modelHash:'a'.repeat(64)};
+ const data={strategySwitch:{},leagueBaseline:{records:[r]}};
+ assert.equal(modelModule.exports.trainedMatchRecommendation(data,m),r);
+ for(const bad of [{...m,homeTeamId:m.awayTeamId},{...m,kickoffTime:'2030-01-01T00:00:00Z'},{...m,homeTeamName:'other'}])assert.equal(modelModule.exports.trainedMatchRecommendation(data,bad),null);
+ data.leagueBaseline.records.push(r);assert.equal(modelModule.exports.trainedMatchRecommendation(data,m),null);
+});
 test('the actual runtime projection parses for current UI',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.current.length,3);assert.equal(x.previews.length,2);assert.equal(x.review.statistics.single.published,3);});
 
 async function targetPayload(){

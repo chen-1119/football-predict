@@ -99,6 +99,8 @@ test('real signed Repository -> decision -> bulletin -> immutable PG projection 
  assert.ok(d&&validDecision(d,{trustRegistry:signed.registry}));const before=JSON.stringify(d);
  const runtime=require('../scripts/recommendationPlatform/dailyBulletinRuntime.cjs');
  const initial=await runtime.projection(repo,{now,decisions:[d],heads:[]});assert.equal(initial.records.length,0);assert.equal(stored.size,1);
+ const retired=await runtime.projection(repo,{now,decisions:[d],heads:[],readOnlyArchive:true});
+ assert.equal(stored.size,1);assert.equal(retired.records.length,0); // No late ACK or new old-policy pick after cutover.
  const report=await runtime.projection(repo,{now,decisions:[d],heads:[]});assert.equal(report.records.length,1);assert.equal(report.records[0].matchNo,'周四001');
  assert.equal(report.records[0].selection.market,'HAD');assert.equal(stored.size,2);assert.equal(JSON.stringify(d),before);
  await runtime.projection(repo,{now,decisions:[d],heads:[]});assert.equal(stored.size,2);
