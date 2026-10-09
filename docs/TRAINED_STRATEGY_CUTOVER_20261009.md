@@ -36,3 +36,9 @@ formal model promotion is established.
 This document describes the candidate code. A signed release and fresh public
 projection must prove the switch is actually installed. Registration alone is
 not a live forecast, and an empty new-model list is not adoption evidence.
+
+The trained publisher records status in the existing `publish` lane. The
+installed SQL constraint permits only publish/combos/settlement/view; no schema
+migration is needed. Model load failures remain errors. The separate old paper
+producer is retired on this path. Disposable SQL verifiers explicitly retain
+legacy compatibility exercises and additionally check the production cutover.

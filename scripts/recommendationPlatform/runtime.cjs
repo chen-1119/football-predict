@@ -92,10 +92,14 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     if(!ports.prdPaperPool)return {enabled:false};
     let value;try{value=await require('./leagueBaselineRuntime.cjs').run({pool:ports.prdPaperPool,trustRegistry:ports.prdPaperTrustRegistry});}
     catch(e){value={enabled:true,status:'blocked',errorCode:/^LEAGUE_MODEL_[A-Z_]+$/.test(e.code||'')?e.code:'LEAGUE_MODEL_CYCLE_FAILED',formalEligible:false};}
-    return stage('league-baseline',async()=>({...value,modelStatus:value.status,
-      reasons:value.reasons||(value.errorCode?[value.errorCode]:[])}));
+    // The installed lane constraint admits publish/combos/settlement/view.
+    // The trained publisher owns the existing publish lane after cutover.
+    return stage(ports.trainedOnly?'publish':'league-baseline',async()=>{if(value.errorCode)throw Object.assign(new Error('Trained publisher failed'),{code:value.errorCode});return {...value,
+      ...(ports.trainedOnly?{strategy:'league-trained-baseline-v1',legacyRetired:true,decisionIds:[]}:{}),modelStatus:value.status,
+      reasons:value.reasons||[]};});
   }
   async function prdPaper(){
+    if(ports.trainedOnly)return {enabled:false,reason:'replaced-by-league-trained-publisher'};
     if(!ports.prdPaperPool)return {enabled:false};
     const attemptAt=clock(),policy=require('./prdPaperRuntime.cjs');
     let value,error=null;

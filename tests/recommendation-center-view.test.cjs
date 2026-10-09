@@ -35,6 +35,20 @@ test('daily bulletin parser accepts market-compatible scores and rejects contrad
  assert.equal(view.parseDailyBulletin(bulletin,'2026-10-09'),undefined);
 });
 async function sample(){const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();return {recommendationCenter:p.state.view};}
+
+test('trained model status uses installed publish lane and never masks model load failure',async()=>{
+ const p=memoryPorts();p.trainedOnly=true;
+ const transaction=p.transaction;
+ p.transaction=async(lane,action)=>{assert.ok(['publish','combos','view','settlement'].includes(lane));return transaction(lane,action);};
+ p.prdPaperPool={async connect(){return {async query(){return {rows:[]};},release(){}};}};
+ const runtime=createRuntime(p,{validators});await runtime.publish();
+ const waiting=await runtime.leagueBaseline();assert.equal(waiting.ok,true);
+ assert.equal(p.state.lanes.publish.modelStatus,'awaiting-model');assert.equal(p.state.lanes.publish.legacyRetired,true);
+ assert.equal((await runtime.prdPaper()).enabled,false);
+ p.prdPaperPool.connect=async()=>{throw new Error('unavailable');};
+ const failure=await runtime.leagueBaseline();assert.equal(failure.ok,false);
+ assert.equal(p.state.lanes.publish.status,'error');assert.equal(p.state.lanes.publish.errorCode,'LEAGUE_MODEL_CYCLE_FAILED');
+});
 test('trained cutover retires all old writers without changing archived records or review denominators',async()=>{
  const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();
  const before=structuredClone({decisions:p.state.decisions,combos:p.state.combos,statistics:p.state.view.review.statistics});
