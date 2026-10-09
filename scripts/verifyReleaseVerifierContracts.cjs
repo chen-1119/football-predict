@@ -623,7 +623,8 @@ check('deployment rechecks archives before local clone and upload',()=>{
   const client=read('scripts/deployReleaseBundle.cjs');
   const probe=client.indexOf('require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight()');
   assert.ok(probe>=0&&probe<client.indexOf('const localCloneVerifier = runCommand('));
-  assert.ok(probe<client.indexOf('for (const artifact of uploads)'));
+  const upload=client.indexOf('for (const artifact of (activateOnly ? [] : uploads))');
+  assert.ok(upload>0 && probe<upload);
 });
 check('read-only release window preparation and actual entrypoint routing pass before signing',()=>{
   const result=require('./verifyReleaseWindowPreflight.cjs').verifyReleaseWindowPreflight();
