@@ -4,6 +4,7 @@ const {validate}=require('../scripts/releaseOwnedWorkerStop.cjs');
 const sha='a'.repeat(64),sourceHash='b'.repeat(64),unit='football-sync-worker.service';
 function fixture(){const before={LoadState:'loaded',ActiveState:'active',SubState:'running',MainPID:'1234',ControlPID:'0',ControlGroup:'/system.slice/'+unit,InvocationID:'c'.repeat(32),Result:'success',Job:'0'};return {intent:{version:'owned-worker-stop-v1',sha,sourceHash,unit,createdAt:1000000,uptime:1000,before},current:{...before,ActiveState:'failed',SubState:'failed',MainPID:'0',Result:'timeout'},options:{sha,sourceHash,now:1060000,uptime:1060,populated:false,pidAlive:false}};}
 test('own timeout remains failed while exact drained invocation is accepted',()=>{const f=fixture();a.equal(validate(f.intent,f.current,f.options).workerState,'failed-timeout-retained');a.equal(f.current.ActiveState,'failed');});
+test('systemd empty Job serialization means no queued job',()=>{const f=fixture();f.intent.before.Job='';f.current.Job='';a.equal(validate(f.intent,f.current,f.options).writerDrained,true);});
 for(const [name,change]of [
  ['foreign release',f=>f.options.sha='d'.repeat(64)],['foreign verifier',f=>f.options.sourceHash='d'.repeat(64)],
  ['restarted invocation',f=>f.current.InvocationID='d'.repeat(32)],['other failure',f=>f.current.Result='exit-code'],
