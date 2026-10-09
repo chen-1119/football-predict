@@ -356,12 +356,17 @@ native_finish_readiness() {
   systemctl restart "$SERVICE_NAME"
   wait_for_health "http://${HOST}:${PORT}" native-post-worker 180 2 service
   fi
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    assert_release_stopped_code_worker
+  fi
   refresh_candidate_capture_heartbeat_for_readiness "$APP_DIR" "$APP_DIR"
   if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
   freeze_worker_for_readiness "$WORKER_RELEASE_STARTED_AT" "$LIVE_STORE_DIR/sync-worker-status.json"
   wait_for_frozen_worker_children_to_drain "$WORKER_FROZEN_MAIN_PID"
-  fi
   start_release_candidate_heartbeat_keeper
+  else
+  start_release_candidate_heartbeat_keeper stopped-code
+  fi
   clear_release_worker_priority_request
   clear_release_enrichment_reuse_request
   release_stage_observe begin post-swap-readiness

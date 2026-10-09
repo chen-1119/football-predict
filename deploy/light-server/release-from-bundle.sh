@@ -5505,6 +5505,9 @@ release_candidate_heartbeat_keeper_is_healthy() {
   local control_file="$RELEASE_HEARTBEAT_KEEPER_CONTROL_FILE"
   local heartbeat_file="$LIVE_STORE_DIR/candidate-prospective-capture-status.json"
   local main_pid max_age_seconds
+  if [ "${RELEASE_HEARTBEAT_WORKER_MODE:-frozen}" = stopped-code ]; then
+    assert_release_stopped_code_worker || return 1
+  fi
   [ -n "$unit" ] && [ -n "$control_file" ] || return 1
   systemctl is-active --quiet "$unit" || return 1
   main_pid="$(systemctl show "$unit" --property=MainPID --value 2>/dev/null || true)"
@@ -6954,14 +6957,52 @@ verify_live_sqlite_publication_identity() {
     "$NODE_HOME/bin/node" "$verifier"
 }
 
+assert_release_stopped_code_worker() {
+  local state cgroup events
+  [ "${NATIVE_CODE_RELEASE:-0}" = 1 ] || return 1
+  [ "${WORKER_FROZEN_FOR_READINESS:-0}" = 0 ] || return 1
+  # Query all service fields together. A failed/transitional unit or a surviving
+  # child is not an exclusive stopped writer, even when MainPID is zero.
+  state="$(systemctl show "$WORKER_SERVICE_NAME" --property=LoadState --property=ActiveState --property=SubState --property=MainPID --property=ControlPID --property=ControlGroup)" || return 1
+  [ "$(printf '%s\n' "$state" | grep -c '^LoadState=loaded$')" = 1 ] || return 1
+  [ "$(printf '%s\n' "$state" | grep -c '^ActiveState=inactive$')" = 1 ] || return 1
+  [ "$(printf '%s\n' "$state" | grep -c '^SubState=dead$')" = 1 ] || return 1
+  [ "$(printf '%s\n' "$state" | grep -c '^MainPID=0$')" = 1 ] || return 1
+  [ "$(printf '%s\n' "$state" | grep -c '^ControlPID=0$')" = 1 ] || return 1
+  [ "$(printf '%s\n' "$state" | grep -c '^ControlGroup=')" = 1 ] || return 1
+  cgroup="$(printf '%s\n' "$state" | sed -n 's/^ControlGroup=//p')"
+  case "$WORKER_SERVICE_NAME" in
+    football-sync-worker|football-sync-worker.service) ;;
+    *) return 1 ;;
+  esac
+  [ -z "$cgroup" ] || [ "$cgroup" = /system.slice/football-sync-worker.service ] || return 1
+  cgroup=/sys/fs/cgroup/system.slice/football-sync-worker.service
+  [ ! -L "$cgroup" ] || return 1
+  if [ -e "$cgroup" ]; then
+    [ -d "$cgroup" ] && [ ! -L "$cgroup/cgroup.events" ] && [ -f "$cgroup/cgroup.events" ] || return 1
+    events="$(cat "$cgroup/cgroup.events")" || return 1
+    [ "$(printf '%s\n' "$events" | grep -c '^populated 0$')" = 1 ] || return 1
+    [ "$(printf '%s\n' "$events" | grep -c '^populated ')" = 1 ] || return 1
+  fi
+}
+
 start_release_candidate_heartbeat_keeper() {
   local unit runtime_dir control_file status_file attempt max_attempts
   local -a properties=()
   [ -z "${RELEASE_HEARTBEAT_KEEPER_UNIT:-}" ] || return 1
+  case "${1:-frozen}" in
+    stopped-code)
+      assert_release_stopped_code_worker || return 1
+      ;;
+    frozen)
   [ "${WORKER_FROZEN_FOR_READINESS:-0}" = "1" ] || {
     printf 'release heartbeat keeper requires a readiness-frozen sync worker\n' >&2
     return 1
   }
+      ;;
+    *) return 1 ;;
+  esac
+  RELEASE_HEARTBEAT_WORKER_MODE="${1:-frozen}"
   [ -f "$APP_DIR/scripts/runReleaseCandidateHeartbeatKeeper.cjs" ] \
     && [ ! -L "$APP_DIR/scripts/runReleaseCandidateHeartbeatKeeper.cjs" ] || return 1
   runtime_dir="$(mktemp -d /run/football-release-heartbeat.XXXXXX)" || return 1

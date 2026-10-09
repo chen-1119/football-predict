@@ -4,6 +4,13 @@ const fs = require('node:fs'), path = require('node:path'), os = require('node:o
 const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..'), read = f => fs.readFileSync(path.join(root, f), 'utf8').replace(/\r\n/g, '\n');
 const lane = read('deploy/light-server/release-native.sh');
+const shared = read('deploy/light-server/release-from-bundle.sh');
+const sharedBody = name => {
+  const m = shared.match(new RegExp('^' + name + '\\(\\) \\{', 'm')); a(m);
+  const tail = shared.slice(m.index + m[0].length);
+  const next = tail.search(/^[a-z_][a-z0-9_]*\(\) \{/m); a(next >= 0);
+  return m[0] + tail.slice(0, next);
+};
 const body = name => { const m = lane.match(new RegExp('^' + name + '\\(\\) \\{[\\s\\S]*?^\\}', 'm')); a(m); return m[0]; };
 const sha = 'a'.repeat(64), start = Date.parse('2026-10-09T08:00:00Z'), iso = seconds => new Date(start + seconds * 1000).toISOString();
 const acceptance = require('../scripts/codeReleaseAcceptance.cjs');
@@ -106,7 +113,7 @@ test('upload-only stops after remote byte verification, activation does not uplo
     uploadOnly: true, dryRun: false, actualSha256: sha, releaseWindowPreflight: {}, steps: [], console: { log: v => output.push(JSON.parse(v)) } });
   a.equal(output[0].controllerStarted, false); a.equal(output[0].serverSequenceConsumed, false);
 });
-const stubs = ['log', 'prepare_release_enrichment_reuse_request', 'clear_release_enrichment_reuse_request',
+const stubs = ['log', 'assert_release_stopped_code_worker', 'prepare_release_enrichment_reuse_request', 'clear_release_enrichment_reuse_request',
   'prepare_release_worker_priority_request', 'start_worker_for_live_release', 'release_stage_observe',
   'wait_for_worker_official_publish_after', 'wait_for_worker_readiness_idle_after', 'wait_for_health',
   'refresh_candidate_capture_heartbeat_for_readiness', 'freeze_worker_for_readiness', 'wait_for_frozen_worker_children_to_drain',
@@ -115,6 +122,107 @@ const stubs = ['log', 'prepare_release_enrichment_reuse_request', 'clear_release
   'stop_release_candidate_heartbeat_keeper', 'resume_worker_after_readiness', 'write_recovery_phase',
   'restore_native_auxiliary_states_after_readiness', 'enable_managed_timers_after_readiness', 'commit_release_transaction',
   'clear_release_recovery_snapshot', 'cleanup_release_static_attestations', 'systemctl', 'install', 'sync', 'chown', 'chmod', 'mv'];
+
+// Execute the actual finish flow, keeper entrypoint, exclusivity guard and
+// failure trap. Only external services/PG/recovery effects are fixtures.
+// Redirect the literal cgroup root into an owned tree; no production access.
+const realReadinessSpecs = [
+  { name: 'code stopped', code: 1 },
+  { name: 'code empty lingering cgroup', code: 1, cgroup: 'populated 0\nfrozen 0\n' },
+  { name: 'code active worker', code: 1, state: 'active', fail: true },
+  { name: 'code failed unit', code: 1, state: 'failed', fail: true },
+  { name: 'code control process', code: 1, controlPid: 99, fail: true },
+  { name: 'code main process', code: 1, mainPid: 99, fail: true },
+  { name: 'code unknown unit', code: 1, loadState: 'not-found', fail: true },
+  { name: 'code residual child', code: 1, cgroup: 'populated 1\nfrozen 0\n', fail: true },
+  { name: 'code conflicting populated field', code: 1, cgroup: 'populated 0\npopulated 1\n', fail: true },
+  { name: 'code missing cgroup evidence', code: 1, cgroup: '', fail: true },
+  { name: 'code wrong cgroup', code: 1, group: '/other', fail: true },
+  { name: 'code unit lookup fails', code: 1, showFail: true, fail: true },
+  { name: 'code verifier fails', code: 1, verifyFail: true, fail: true },
+  { name: 'code worker restarts during verification', code: 1, restart: true, fail: true },
+  { name: 'database frozen', code: 0 },
+  { name: 'database not frozen', code: 0, skipFreeze: true, fail: true },
+];
+for (const spec of realReadinessSpecs) test('actual keeper and finish integration: ' + spec.name, () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'real-keeper-readiness-'));
+  try {
+    fs.mkdirSync(path.join(dir, 'scripts')); fs.writeFileSync(path.join(dir, 'scripts/runReleaseCandidateHeartbeatKeeper.cjs'), 'fixture');
+    fs.mkdirSync(path.join(dir, 'node/bin'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'node/bin/node'), '#!/usr/bin/env bash\nprintf "node:%s\\n" "$*"\n', { mode: 0o700 });
+    if (spec.cgroup !== undefined) {
+      fs.mkdirSync(path.join(dir, 'cgroup/system.slice/football-sync-worker.service'), { recursive: true });
+      if (spec.cgroup) fs.writeFileSync(path.join(dir, 'cgroup/system.slice/football-sync-worker.service/cgroup.events'), spec.cgroup);
+    }
+    const guard = sharedBody('assert_release_stopped_code_worker').replace('/sys/fs/cgroup/', '"$PWD"/cgroup/');
+    const startKeeper = sharedBody('start_release_candidate_heartbeat_keeper');
+    const healthy = sharedBody('release_candidate_heartbeat_keeper_is_healthy');
+    const finish = body('native_finish_readiness'), exit = body('native_exit');
+    const actual = [guard, startKeeper, healthy, finish, exit].join('\n');
+    const variables = [...new Set([...actual.matchAll(/\$\{?([A-Z][A-Z0-9_]*)/g)].map(m => m[1]))];
+    const excluded = new Set(['systemctl', 'start_release_candidate_heartbeat_keeper', 'freeze_worker_for_readiness',
+      'run_as_service_user_with_runtime_env', 'wait_for_release_candidate_heartbeat_keeper_healthy',
+      'start_worker_for_live_release', 'resume_worker_after_readiness', 'stop_release_candidate_heartbeat_keeper']);
+    const input = 'set -euo pipefail\n' + variables.filter(v => !['PATH', 'HOME', 'PWD'].includes(v)).map(v => v + '=fixture').join('\n') + `
+APP_DIR="$PWD"
+NODE_HOME="$PWD/node"
+NATIVE_CODE_RELEASE=${spec.code}
+WORKER_SERVICE_NAME=football-sync-worker
+WORKER_FROZEN_FOR_READINESS=0
+RELEASE_HEARTBEAT_WORKER_MODE=frozen
+RELEASE_HEARTBEAT_KEEPER_UNIT=
+RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS=1
+RECOVERY_ACTIVE=1
+CODE_READER_RETIRE_FAILED=0
+CODE_PAUSE_RETIRE_FAILED=0
+MOCK_STATE=${spec.state || 'inactive'}
+` + stubs.filter(n => !excluded.has(n)).map(n => n + '() { printf "' + n + '\\n"; }').join('\n') + `
+systemctl() {
+  if [ "$1" = show ] && [ "$2" = "$WORKER_SERVICE_NAME" ]; then
+    ${spec.showFail ? 'return 1' : ':'}
+    printf 'LoadState=${spec.loadState || 'loaded'}\nActiveState=%s\nSubState=dead\nMainPID=${spec.mainPid || 0}\nControlPID=${spec.controlPid || 0}\nControlGroup=${spec.group || ''}\n' "$MOCK_STATE"
+  elif [ "$1" = show ]; then printf '321\n'
+  elif [ "$1" = is-failed ]; then return 1
+  fi
+}
+mktemp() { mkdir "$PWD/keeper"; printf '%s\n' "$PWD/keeper"; }
+transient_build_properties() { printf '%s\n' '--property=TasksMax=64'; }
+next_transient_unit() { NEXT_TRANSIENT_UNIT=fixture-keeper; }
+systemd-run() { printf 'keeper-started\n'; }
+run_as_service_user() { printf 'heartbeat-evidence-checked\n'; }
+freeze_worker_for_readiness() { WORKER_FROZEN_FOR_READINESS=${spec.skipFreeze ? 0 : 1}; printf 'frozen\n'; }
+run_as_service_user_with_runtime_env() {
+  printf 'verify\n'
+  ${spec.restart ? 'MOCK_STATE=active' : ':'}
+  return ${spec.verifyFail ? 1 : 0}
+}
+wait_for_release_candidate_heartbeat_keeper_healthy() { release_candidate_heartbeat_keeper_is_healthy; }
+release_candidate_heartbeat_keeper_has_latched_failure() { return 1; }
+stop_release_candidate_heartbeat_keeper() { printf 'keeper-stopped\n'; RELEASE_HEARTBEAT_KEEPER_UNIT=; }
+start_worker_for_live_release() { [ -z "$RELEASE_HEARTBEAT_KEEPER_UNIT" ]; printf 'worker-started\n'; }
+resume_worker_after_readiness() { [ -z "$RELEASE_HEARTBEAT_KEEPER_UNIT" ]; printf 'worker-resumed\n'; }
+stop_candidate() { :; }
+stop_release_sync_write_barrier() { :; }
+native_data() { :; }
+remove_release_fast_watcher_pause_override() { :; }
+assert_build_user_quiescent() { :; }
+cleanup_build_tree() { printf 'failed-build-cleaned\n'; }
+` + actual + '\ntrap native_exit EXIT\nnative_finish_readiness\n';
+    const r = spawnSync(process.platform === 'win32' ? 'D:/app/Git/bin/bash.exe' : '/bin/bash', ['--noprofile', '--norc', '-s'],
+      { cwd: dir, input, encoding: 'utf8', timeout: 10000, windowsHide: true });
+    a.equal(r.error, undefined); a.equal(r.status, spec.fail ? 1 : 0, r.stderr + '\n' + r.stdout);
+    a.equal(r.stdout.includes('commit_release_transaction'), !spec.fail);
+    a.equal(r.stdout.includes('/usr/local/libexec/football-release-recovery.cjs'), !!spec.fail);
+    a.equal(r.stdout.includes('codeReleaseAcceptance.cjs write'), !spec.fail && spec.code === 1);
+    if (!spec.fail) {
+      a(r.stdout.includes('keeper-started'));
+      a(r.stdout.lastIndexOf('keeper-stopped') < r.stdout.lastIndexOf(spec.code ? 'worker-started' : 'worker-resumed'));
+    }
+  } finally {
+    a(path.basename(dir).startsWith('real-keeper-readiness-')); a.equal(fs.realpathSync(dir).toLowerCase(), path.resolve(dir).toLowerCase());
+    fs.rmSync(dir, { recursive: true });
+  }
+});
 for (const spec of [{ code: 1 }, { code: 0 }, { code: 1, fail: 'run_as_service_user_with_runtime_env' }, { code: 1, fail: 'start_worker_for_live_release' }]) {
   test('real Bash finish path ' + JSON.stringify(spec), () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'staged-code-bash-'));
@@ -122,7 +230,7 @@ for (const spec of [{ code: 1 }, { code: 0 }, { code: 1, fail: 'run_as_service_u
       fs.mkdirSync(path.join(dir, 'node/bin'), { recursive: true });
       fs.writeFileSync(path.join(dir, 'node/bin/node'), '#!/usr/bin/env bash\nprintf "node:%s\\n" "$*"\n', { mode: 0o700 });
       const func = body('native_finish_readiness'), variables = [...new Set([...func.matchAll(/\$\{?([A-Z][A-Z0-9_]*)/g)].map(m => m[1]))];
-      const input = 'set -euo pipefail\n' + variables.filter(v => !['PATH', 'HOME'].includes(v)).map(v => v + '=fixture').join('\n') + '\n' +
+    const input = 'set -euo pipefail\n' + variables.filter(v => !['PATH', 'HOME', 'PWD'].includes(v)).map(v => v + '=fixture').join('\n') + '\n' +
         'APP_DIR="$PWD"\nNODE_HOME="$PWD/node"\nNATIVE_CODE_RELEASE=' + spec.code + '\n' +
         stubs.map(n => n + '() { printf "' + n + '\\n"; ' + (spec.fail === n ? 'return 1;' : 'return 0;') + ' }').join('\n') + '\n' + func + '\nnative_finish_readiness\n';
       const r = spawnSync(process.platform === 'win32' ? 'D:/app/Git/bin/bash.exe' : '/bin/bash', ['--noprofile', '--norc', '-s'], { cwd: dir, input, encoding: 'utf8', timeout: 10000, windowsHide: true });
