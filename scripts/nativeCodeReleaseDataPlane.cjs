@@ -5,6 +5,34 @@ const { NativeReleasePostgresPool } = require('./nativeReleasePostgresTransport.
 const LIVE = '/opt/football-predict', STORE = '/var/lib/football-predict';
 const pool = (s, name, oid) => new NativeReleasePostgresPool({ database: name, databaseOid: oid, clusterId: s.clusterId });
 const driver = () => require('./nativeReleaseDataPlane.cjs');
+const WAKE_TRIGGER_DEFINITION_SHA = 'b0a62d41d43b46a2b76a0745b3d1781f8348645b0e5a2d95a18482ebfe6a1e31';
+async function restrictKnownWakeTrigger(source, role, directory) {
+  const unsafe = (await source.query(`SELECT p.oid::text AS oid,n.nspname,p.proname,pg_get_userbyid(p.proowner) AS owner,
+    p.pronargs,p.prorettype::regtype::text AS returns,p.proconfig,p.proacl,pg_get_functiondef(p.oid) AS definition
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND p.prosecdef AND has_function_privilege($1,p.oid,'EXECUTE')`, [role])).rows;
+  if (!unsafe.length) return;
+  // A trigger function is NOT harmless: a reader could attach it to its own
+  // TEMP table. Remove PUBLIC EXECUTE only for the exact reviewed notifier;
+  // unknown definer functions or changed bodies still fail before mutation.
+  assert.equal(unsafe.length, 1, 'unknown callable security-definer functions');
+  const f = unsafe[0]; assert.match(f.oid, /^[1-9][0-9]*$/);
+  assert.equal(f.nspname, 'football'); assert.equal(f.proname, 'wake_recommendation_workers');
+  assert.equal(f.owner, 'football'); assert.equal(f.pronargs, 0); assert.equal(f.returns, 'trigger');
+  assert.deepEqual(f.proconfig, ['search_path=pg_catalog']);
+  assert.equal(crypto.createHash('sha256').update(f.definition).digest('hex'), WAKE_TRIGGER_DEFINITION_SHA, 'notifier definition drift');
+  driver().write(path.join(directory, 'candidate-function-hardening-intent.json'), { role, oid: f.oid,
+    function: 'football.wake_recommendation_workers()', definitionSha256: WAKE_TRIGGER_DEFINITION_SHA, previousAcl: f.proacl,
+    operation: 'REVOKE EXECUTE FROM PUBLIC', persistentPermissionHardening: true, businessRowsChanged: 0 });
+  await source.query('REVOKE EXECUTE ON FUNCTION football.wake_recommendation_workers() FROM PUBLIC');
+  const after = (await source.query(`SELECT pg_get_functiondef($1::oid) AS definition,
+    has_function_privilege($2,$1::oid,'EXECUTE') AS candidate_execute,
+    has_function_privilege('football',$1::oid,'EXECUTE') AS owner_execute`, [f.oid, role])).rows[0];
+  assert.equal(after.definition, f.definition); assert.equal(after.candidate_execute, false); assert.equal(after.owner_execute, true);
+  driver().write(path.join(directory, 'candidate-function-hardened.json'), { ok: true, oid: f.oid,
+    definitionSha256: WAKE_TRIGGER_DEFINITION_SHA, candidateExecute: false, productionOwnerExecute: true,
+    persistentPermissionHardening: true, businessRowsChanged: 0 });
+}
 async function verifySchema(state) {
   const p = pool(state, 'football', state.oldDatabaseOid);
   try {
@@ -83,6 +111,7 @@ async function candidateAccess(state, directory) {
     const unsafe = (await source.query(`SELECT count(*)::int n FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
       WHERE n.nspname='football' AND c.relkind IN ('r','p','v','m','f') AND has_table_privilege($1,c.oid,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')`, [role])).rows[0].n;
     assert.equal(unsafe, 0, 'candidate acquired production write privileges');
+    await restrictKnownWakeTrigger(source, role, directory);
     const funcs = (await source.query(`SELECT count(*)::int n FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
       WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND p.prosecdef AND has_function_privilege($1,p.oid,'EXECUTE')`, [role])).rows[0].n;
     assert.equal(funcs, 0, 'candidate can execute custom security-definer function');
@@ -141,7 +170,7 @@ function retireSeed(sha) {
   d.write(path.join(directory, 'code-seed-retired.json'), { ...intent, removed: true, completedAt: new Date().toISOString() });
   return { ok: true, bytes, removed: true };
 }
-module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed };
+module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger };
 if (require.main === module) {
   assert.equal(process.argv.length, 4); assert.equal(process.argv[2], 'retire-seed');
   console.log(JSON.stringify(retireSeed(process.argv[3])));

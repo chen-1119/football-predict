@@ -29,6 +29,22 @@ async function run(sourceFile = path.join(__dirname, 'nativeCodeReleaseDataPlane
     await admin.query('CREATE DATABASE football OWNER football');
     db = new pg.Pool({ host: socket, user: 'postgres', database: 'football', max: 1 });
     await db.query("CREATE SCHEMA football AUTHORIZATION football; CREATE TABLE football.frozen(id integer PRIMARY KEY, direction text); ALTER TABLE football.frozen OWNER TO football; INSERT INTO football.frozen VALUES(1,'original'); REVOKE ALL ON SCHEMA football FROM PUBLIC; REVOKE ALL ON football.frozen FROM PUBLIC");
+    await db.query(`SET ROLE football;
+      CREATE TABLE football.projection_meta(key text PRIMARY KEY,value text);
+      CREATE TABLE football.recommendation_input_clock(id integer PRIMARY KEY,revision bigint DEFAULT 0,changed_at timestamptz DEFAULT clock_timestamp());
+      INSERT INTO football.recommendation_input_clock(id) VALUES(1);
+      CREATE FUNCTION football.wake_recommendation_workers() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+  IF NEW.key IN ('data_generation_id','manifest_hash','source_cycle_id','fast_result_revision')
+     AND (TG_OP='INSERT' OR NEW.value IS DISTINCT FROM OLD.value) THEN
+    UPDATE football.recommendation_input_clock SET revision=revision+1,changed_at=clock_timestamp() WHERE id=1;
+    PERFORM pg_notify('football_recommendation_input', 'changed');
+  END IF;
+  RETURN NEW;
+END;
+$$;
+      CREATE TRIGGER recommendation_input_changed AFTER INSERT OR UPDATE ON football.projection_meta
+      FOR EACH ROW EXECUTE FUNCTION football.wake_recommendation_workers(); RESET ROLE;`);
     const directory = path.join(base, 'state'); fs.mkdirSync(directory, { mode: 0o700 });
     const seedSha = 'a'.repeat(64), seedState = path.join(base, 'native', seedSha);
     fs.mkdirSync(seedState, { recursive: true, mode: 0o700 });
@@ -64,6 +80,13 @@ async function run(sourceFile = path.join(__dirname, 'nativeCodeReleaseDataPlane
     checks.push('actual isolated PG reader loads original row with default read-only');
     // Prove ACLs, not merely the overridable default_transaction_read_only.
     await reader.query('SET default_transaction_read_only=off');
+    await reader.query('CREATE TEMP TABLE candidate_temp(key text,value text)');
+    await assert.rejects(reader.query('CREATE TRIGGER candidate_escalation AFTER INSERT ON candidate_temp FOR EACH ROW EXECUTE FUNCTION football.wake_recommendation_workers()'), /permission denied/);
+    await assert.rejects(reader.query('SELECT football.wake_recommendation_workers()'), /permission denied/);
+    assert.equal((await db.query('SELECT revision FROM football.recommendation_input_clock')).rows[0].revision, '0');
+    await db.query("SET ROLE football; INSERT INTO football.projection_meta VALUES('manifest_hash','fixture'); RESET ROLE");
+    assert.equal((await db.query('SELECT revision FROM football.recommendation_input_clock')).rows[0].revision, '1');
+    checks.push('exact notifier PUBLIC execution revoked; TEMP-trigger escalation denied and production owner trigger still works');
     for (const sql of ["UPDATE football.frozen SET direction='changed'", 'DELETE FROM football.frozen', "INSERT INTO football.frozen VALUES(2,'new')", 'TRUNCATE football.frozen', 'ALTER TABLE football.frozen ADD COLUMN bad text', 'SET ROLE football']) {
       await assert.rejects(reader.query(sql));
     }

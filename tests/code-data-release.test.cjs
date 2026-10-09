@@ -78,7 +78,8 @@ function roleFixture(options = {}) {
       if (sql.includes('FROM pg_roles')) return { rows: [{ n: created ? 1 : 0 }] };
       if (sql.includes('CREATE ROLE')) created = true;
       if (sql.includes('has_table_privilege')) return { rows: [{ n: options.writeGrant || 0 }] };
-      if (sql.includes('has_function_privilege')) return { rows: [{ n: options.definer || 0 }] };
+      if (sql.includes('has_function_privilege')) return sql.includes('count(*)')
+        ? { rows: [{ n: options.definer || 0 }] } : { rows: options.definer ? [{ oid: '123', nspname: 'unsafe' }] : [] };
       if (sql.includes('DROP ROLE')) { if (options.dropFails) throw new Error('unexpected dependency'); created = false; }
       return { rows: [] };
     }
@@ -117,5 +118,15 @@ test('unknown role dependencies preserve failure without broad cleanup', async (
   const f = roleFixture({ dropFails: true }); try {
     await f.api.candidateAccess(f.state, f.directory); await a.rejects(f.api.retire(f.state, f.directory), /dependency/);
     a(!f.queries.some(q => q.includes('DROP OWNED'))); a(!fs.existsSync(path.join(f.directory, 'candidate-access-dropped.json')));
+  } finally { f.close(); }
+});
+test('same-name notifier with a changed body rejects before permission mutation', async () => {
+  const f = roleFixture(), calls = []; try {
+    const source = { query: async sql => { calls.push(sql); return { rows: [{ oid: '42', nspname: 'football',
+      proname: 'wake_recommendation_workers', owner: 'football', pronargs: 0, returns: 'trigger',
+      proconfig: ['search_path=pg_catalog'], proacl: null, definition: 'unreviewed changed body' }] }; } };
+    await a.rejects(f.api.restrictKnownWakeTrigger(source, 'reader', f.directory), /notifier definition drift/);
+    a.equal(calls.length, 1); a(!calls.some(sql => sql.includes('REVOKE')));
+    a(!fs.existsSync(path.join(f.directory, 'candidate-function-hardening-intent.json')));
   } finally { f.close(); }
 });
