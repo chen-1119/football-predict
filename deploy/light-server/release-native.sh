@@ -89,11 +89,15 @@ run_native_release() {
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseSequencePreflight.cjs"
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/verifyDeploymentConfig.cjs"
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseWorkerPreflight.cjs"
+  NATIVE_PLANNED_CODE="$("$NODE_HOME/bin/node" -e 'const p=require(process.argv[1]);console.log(p.classify(p.capture(process.argv[2]),p.capture(process.argv[3])).mode === "code-only" ? "1" : "0")' "$TRUSTED_SOURCE_DIR/scripts/releaseDataPlanePolicy.cjs" "$APP_DIR" "$TRUSTED_SOURCE_DIR")"
+  [[ "$NATIVE_PLANNED_CODE" =~ ^[01]$ ]]
+  if [ "$NATIVE_PLANNED_CODE" != 1 ]; then
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" probe \
     --current "$APP_DIR/public/data/matches-current.json" --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
     --verifier-runtime-max-seconds "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" \
     --preverify-refresh-budget-seconds "$((CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS + NATIVE_CANDIDATE_PREPARATION_SECONDS))" \
     --atomic-swap-margin-seconds "$CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS"
+  fi
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/verifyCandidateArtifactSeed.cjs"
   rotate_fixed_recovery_helper
   install_fixed_qa_access_operator
@@ -109,6 +113,7 @@ run_native_release() {
   NATIVE_CANDIDATE_DATABASE="${native_state[1]}"
   NATIVE_ARCHIVE_DATABASE="${native_state[2]}"
   NATIVE_CODE_RELEASE="$("$NODE_HOME/bin/node" -e 'console.log(require(process.argv[1]).dataPlane === "code-only" ? "1" : "0")' "$NATIVE_STATE_DIR/state.json")"
+  [ "$NATIVE_CODE_RELEASE" = "$NATIVE_PLANNED_CODE" ] || { log "data contract changed during allocation"; return 1; }
   [ "$NATIVE_RELEASE_KIND" = runtime-only ] || {
     log "signed 013 research migration requires the existing PostgreSQL-only runtime"
     return 1
@@ -171,6 +176,15 @@ run_native_release() {
     # Dependency installation has finished with NO database credential. Hold
     # the existing bounded writer barrier only for the snapshot/read-only
     # candidate checks. The public service continues to serve requests.
+    # Start the lease BEFORE stopping any publisher. Time spent preparing the
+    # package/dependencies is excluded, but a boundary crossed while seeded or
+    # checked still rejects this candidate. No user/env budget override.
+    CODE_CUTOVER_STARTED_SECONDS=$SECONDS
+    CODE_CUTOVER_POST_SWAP_MARGIN_SECONDS=300
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" create \
+      --current "$APP_DIR/public/data/matches-current.json" --lease "$CANDIDATE_TRANSITION_LEASE" \
+      --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
+      --verifier-runtime-max-seconds 300 --preverify-refresh-budget-seconds 570 --atomic-swap-margin-seconds 30
     stop_worker_for_release_window
     pause_current_fast_watcher_for_live_prebuild
     start_release_sync_write_barrier "$APP_DIR"
@@ -213,10 +227,14 @@ run_native_release() {
     WRITE_LEGACY_STATIC_PAYLOADS=0 MIRROR_PUBLISHED_DATA_TO_DIST=0 SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" "$NODE_HOME/bin/node" server/index.cjs
   wait_for_health "http://${HOST}:${CANDIDATE_PORT}" native-candidate 90 2 service
   NODE_PATH="$APP_DIR/node_modules" "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/verifyReleaseArchiveSuccessor.cjs" candidate "$BUNDLE_SHA256" "$CANDIDATE_STORE_DIR"
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
   "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/releaseTransitionLease.cjs" create --current "$NEXT_DIR/public/data/matches-current.json" \
     --lease "$CANDIDATE_TRANSITION_LEASE" --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
     --verifier-runtime-max-seconds "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" --preverify-refresh-budget-seconds "$CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS" \
     --atomic-swap-margin-seconds "$CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS"
+  else
+    native_code_verify_cutover_lease 300
+  fi
   release_stage_observe end candidate-build ok
   release_stage_observe begin candidate-readiness
   run_trusted_candidate_verifier env PATH="$PATH" HOME="$BUILD_HOME" ADMIN_TOKEN="$CANDIDATE_ADMIN_TOKEN" ACCESS_CODE_ADMIN_TOKEN="$CANDIDATE_ADMIN_TOKEN" \
@@ -240,6 +258,7 @@ run_native_release() {
   systemctl daemon-reload
   write_recovery_phase host-config-applied
   wait_for_health "http://${HOST}:${PORT}" native-before-stop 90 2 service
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then native_code_verify_cutover_lease 300; fi
   quiesce_managed_maintenance_for_sqlite_snapshot
   stop_worker_for_release_window
   if [ "${RELEASE_FAST_WATCHER_PAUSE_OVERRIDE_ACTIVE:-0}" = 1 ]; then
@@ -267,8 +286,12 @@ run_native_release() {
     --bundle-sha256 "$BUNDLE_SHA256" --release-sequence "$RELEASE_SEQUENCE"
   release_stage_observe begin stopped-window
   native_data final
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    native_code_verify_cutover_lease "$CODE_CUTOVER_POST_SWAP_MARGIN_SECONDS"
+  else
   "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/releaseTransitionLease.cjs" verify --current "$NEXT_DIR/public/data/matches-current.json" \
     --lease "$CANDIDATE_TRANSITION_LEASE" --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" --required-margin-seconds "$POST_SWAP_TRANSITION_START_BUDGET_SECONDS"
+  fi
   RUNTIME_ENV_DIRTY=1
   install -o root -g football -m 0640 "$RECOVERY_DIR/native-mode/runtime-env/env" "$RUNTIME_ENV_FILE"
   sync -f "$RUNTIME_ENV_FILE"
@@ -286,6 +309,10 @@ run_native_release() {
   verify_worker_write_permissions "$APP_DIR"
   restart_service_if_needed
   wait_for_health "http://${HOST}:${PORT}" native-post-swap 120 2 service
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    [ "$((SECONDS - CODE_CUTOVER_STARTED_SECONDS))" -lt 900 ]
+    verify_post_swap_transition_window 30 code-service-handover
+  fi
   release_stage_observe end stopped-window ok
   native_finish_readiness
   if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
@@ -294,7 +321,16 @@ run_native_release() {
   fi
 }
 
+native_code_verify_cutover_lease() {
+  [ "$NATIVE_CODE_RELEASE" = 1 ]
+  [ "$((SECONDS - CODE_CUTOVER_STARTED_SECONDS))" -lt "$((900 - $1))" ] || { log "code cutover preparation exceeded its bounded lease"; return 1; }
+  "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/releaseTransitionLease.cjs" verify \
+    --current "$NEXT_DIR/public/data/matches-current.json" --lease "$CANDIDATE_TRANSITION_LEASE" \
+    --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" --required-margin-seconds "$1"
+}
+
 native_finish_readiness() {
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
   if ! prepare_release_enrichment_reuse_request; then
     log "native enrichment reuse unavailable; full enrichment remains required"
     clear_release_enrichment_reuse_request
@@ -310,9 +346,12 @@ native_finish_readiness() {
   release_stage_observe end worker-enrichment-wait ok
   systemctl restart "$SERVICE_NAME"
   wait_for_health "http://${HOST}:${PORT}" native-post-worker 180 2 service
+  fi
   refresh_candidate_capture_heartbeat_for_readiness "$APP_DIR" "$APP_DIR"
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
   freeze_worker_for_readiness "$WORKER_RELEASE_STARTED_AT" "$LIVE_STORE_DIR/sync-worker-status.json"
   wait_for_frozen_worker_children_to_drain "$WORKER_FROZEN_MAIN_PID"
+  fi
   start_release_candidate_heartbeat_keeper
   clear_release_worker_priority_request
   clear_release_enrichment_reuse_request
@@ -339,13 +378,24 @@ native_finish_readiness() {
   fi
   wait_for_release_candidate_heartbeat_keeper_healthy
   stop_release_candidate_heartbeat_keeper clean
-  resume_worker_after_readiness
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    WORKER_RELEASE_STARTED_AT="$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')"
+    start_worker_for_live_release
+  else
+    resume_worker_after_readiness
+  fi
   if [ -n "$PUBLIC_BASE_URL" ]; then
     run_as_service_user_with_runtime_env env REMOTE_BASE_URL="$PUBLIC_BASE_URL" REMOTE_REQUIRE_HEALTHY=0 \
       REMOTE_REQUIRE_SQLITE=0 REMOTE_REQUIRE_POSTGRES_ONLY=1 REMOTE_REQUIRED_READ_SOURCE=postgres REMOTE_REQUIRE_SYNC_WORKER=1 \
       "$NODE_HOME/bin/node" "$APP_DIR/scripts/verifyRemotePublicReadiness.cjs"
   fi
   release_stage_observe begin finalization
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    # Durable engineering receipt explicitly leaves new input/model adoption
+    # pending. A later read-only observer must prove the new natural cycle;
+    # neither HTTP 200 nor this code acceptance promotes a model or forecast.
+    "$NODE_HOME/bin/node" "$APP_DIR/scripts/codeReleaseAcceptance.cjs" write "$BUNDLE_SHA256" "$WORKER_RELEASE_STARTED_AT"
+  fi
   write_recovery_phase readiness-passed
   restore_native_auxiliary_states_after_readiness
   enable_managed_timers_after_readiness

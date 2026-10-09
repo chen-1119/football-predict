@@ -36,6 +36,9 @@ const rootDir = path.resolve(__dirname, "..");
 const tmpDir = path.join(rootDir, ".codex-tmp");
 const dryRun = process.env.RELEASE_DEPLOY_DRY_RUN === "1" || process.argv.includes("--dry-run");
 const recoverMode = process.env.RELEASE_DEPLOY_RECOVER === "1" || process.argv.includes("--recover");
+const uploadOnly = process.argv.includes("--upload-only");
+const activateOnly = process.argv.includes("--activate-only");
+if ((uploadOnly && activateOnly) || ((uploadOnly || activateOnly) && recoverMode)) throw new Error("conflicting release stages");
 const host = process.env.RELEASE_DEPLOY_HOST || "134.175.132.183";
 const user = process.env.RELEASE_DEPLOY_USER || "ubuntu";
 const sshPort = Number(process.env.RELEASE_DEPLOY_PORT || 22);
@@ -448,9 +451,11 @@ if (frontendOnly) {
     try {
       // nativeFullRelease is derived only from the verified signed archive
       // policy above; unknown or legacy full bundles retain the larger budget.
-      const windowPreflight = require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({
-        stage: "before-upload", nativeFullRelease
-      });
+      const windowPreflight = nativeFullRelease
+        ? { ok: true, windowChecked: false, reason: "signed-native-prepare-only", readyToCutover: false, windowPreauthorized: false }
+        : require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({
+          stage: "before-upload", nativeFullRelease
+        });
       if (!windowPreflight.ok) fail("release window unavailable before clone/upload", { windowPreflight });
       releaseWindowPreflight = { windowChecked: true, ...windowPreflight };
     } catch (error) { fail("release window preflight rejected before clone/upload", { reason: error.message }); }
@@ -608,7 +613,7 @@ if (steps[steps.length - 1].ok !== true) {
   process.exit(1);
 }
 
-for (const artifact of uploads) {
+for (const artifact of (activateOnly ? [] : uploads)) {
   const uploadRuns = [];
   let upload = null;
   for (let attempt = 1; attempt <= uploadAttempts; attempt += 1) {
@@ -645,6 +650,18 @@ for (const artifact of uploads) {
   }
 }
 
+// Verify all four incoming byte strings even for an upload-only preparation.
+// This receipt grants no launch authority and consumes no server sequence.
+const uploadedProof = runCommand("ssh", [...sshOptions, sshTarget, uploads.map(item =>
+  `test -f ${shellQuote(item.remotePath)} && test ! -L ${shellQuote(item.remotePath)} && test "$(sha256sum ${shellQuote(item.remotePath)} | cut -d ' ' -f 1)" = ${shellQuote(crypto.createHash("sha256").update(fs.readFileSync(item.localPath)).digest("hex"))}`
+).join(" && ")]);
+if (uploadedProof.status !== 0) fail("uploaded signed bytes differ", { status: uploadedProof.status });
+if (uploadOnly) {
+  console.log(JSON.stringify({ ok: true, stage: "uploaded", sha256: actualSha256,
+    remoteBytesVerified: !dryRun, readyToCutover: false, controllerStarted: false,
+    serverSequenceConsumed: false, releaseWindowPreflight, steps }, null, 2));
+  return;
+}
 const release = runCommand("ssh", sshArgs);
 const releaseStep = {
   name: "remote bundle release",

@@ -242,7 +242,7 @@ function verifyReleaseWindowPreflight() {
     const nativeShell = readSource("deploy/light-server/release-native.sh");
     const verify = source => {
       const earlyStart = source.indexOf('releaseTransitionLease.cjs" probe');
-      const candidateStart = source.indexOf('releaseTransitionLease.cjs" create');
+      const candidateStart = source.indexOf('"$NEXT_DIR/scripts/releaseTransitionLease.cjs" create');
       assert.ok(earlyStart >= 0 && candidateStart > earlyStart);
       const early = source.slice(earlyStart, source.indexOf('verifyCandidateArtifactSeed.cjs', earlyStart));
       const candidate = source.slice(candidateStart, source.indexOf('release_stage_observe end candidate-build ok', candidateStart));
@@ -463,10 +463,10 @@ function verifyReleaseWindowPreflight() {
     const end = deploy.indexOf("  if (!nativeFullRelease) {", start); assert.ok(start >= 0 && end > start);
     for (const outcome of ["open", "closed", "throws"]) {
       const calls = [];
-      const context = { dryRun: false, releaseWindowPreflight: null, nativeFullRelease: true,
+      const context = { dryRun: false, releaseWindowPreflight: null, nativeFullRelease: false,
         fail: message => { throw new Error(message); }, require: name => {
           if (name === "./runReleaseWindowPreflight.cjs") return { runLiveReleaseWindowPreflight: ({ stage, nativeFullRelease }) => {
-            assert.equal(stage, "before-upload"); assert.equal(nativeFullRelease, true); calls.push("window");
+            assert.equal(stage, "before-upload"); assert.equal(nativeFullRelease, false); calls.push("window");
             if (outcome === "throws") throw new Error("observation unavailable"); return { ok: outcome === "open" };
           } };
           assert.equal(name, "./runReleaseArchivePreflight.cjs"); return { runLiveArchivePreflight: () => { calls.push("archive"); return { report: { ok: true } }; } };
@@ -522,7 +522,11 @@ function verifyReleaseWindowPreflight() {
     const rejected = runCreatePrefix(create, { nativePolicy: true, nativeRejected: true });
     assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "native-policy"]);
     const accepted = runCreatePrefix(create, { nativePolicy: true }); assert.equal(accepted.ok, true, accepted.error);
-    assert.deepEqual(accepted.calls, ["sequence-preflight", "native-policy", "worker", "window", "archive", "frontend-evidence", "request-utf8", "signed-had", "preSign", "sporttery-opening", "reserve", "build"]);
+    assert.deepEqual(accepted.calls, ["sequence-preflight", "native-policy", "worker", "archive", "frontend-evidence", "request-utf8", "signed-had", "preSign", "sporttery-opening", "reserve", "build"]);
+    const closed = runCreatePrefix(create, { nativePolicy: true, windowThrows: true });
+    assert.equal(closed.ok, true, closed.error); assert.deepEqual(closed.calls, accepted.calls);
+    const prepared = closed.logs.find(row => row.reason === 'native-prepare-only');
+    assert.equal(prepared.readyToCutover, false); assert.equal(prepared.windowPreauthorized, false);
   });
   check("actual offline create prefix makes no live calls and explicitly reports no window authority", () => {
     const result = runCreatePrefix(create, { offline: true, windowThrows: true }); assert.equal(result.ok, true, result.error);

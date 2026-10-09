@@ -74,7 +74,10 @@ function verifyReleaseWorkerPreflight() {
   check('client probe runs before any uploads',()=>{
     assert.match(client,/require\("\.\/releaseWorkerPreflight\.cjs"\)/);
     assert.match(client,/shellQuote\(buildReadOnlyWorkerProbe\(\)\)/);
-    assert.ok(client.indexOf('const remotePreflight = runCommand')<client.indexOf('for (const artifact of uploads)'));
+    const loop=client.indexOf('for (const artifact of (activateOnly ? [] : uploads))');
+    assert.ok(loop>0 && client.indexOf('const remotePreflight = runCommand')<loop);
+    assert.ok(loop<client.indexOf('const uploadedProof = runCommand'));
+    assert.ok(client.indexOf('const uploadedProof = runCommand')<client.indexOf('const release = runCommand'));
   });
   check('known worker failure stops the actual builder before all expensive preparation', () => {
     const source = fs.readFileSync(path.join(root, 'scripts/createReleaseBundle.cjs'), 'utf8');
