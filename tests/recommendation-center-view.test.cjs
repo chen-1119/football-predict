@@ -20,6 +20,20 @@ const {hash}=require('../src/services/publishedForecastPolicy.cjs');
 const {bindPublicReferenceDecision}=require('../src/services/publicReferenceDecision.cjs');
 const {withVerifiedInputEvidence}=require('./fixtures/recommendation-input-helper.cjs');
 const publishedStatus=require('../src/services/publishedRecommendationStatus.cjs');
+test('daily bulletin parser accepts market-compatible scores and rejects contradictory or incorrect products',()=>{
+ const at='2026-10-09T12:00:00.000Z';
+ const pick={id:'one',sourceMatchId:'1',homeTeamName:'Home',awayTeamName:'Away',matchNo:'周五001',kickoffTime:'2026-10-09T15:00:00Z',cutoffAt:'2026-10-09T14:00:00Z',
+  publishedAt:at,quoteObservedAt:at,modelVersion:'legacy',confidence:'low',summary:'未核实',analysisLink:null,
+  selection:{market:'HAD',tipCode:'1',handicapLine:0,label:'胜',odds:2},scores:[{home:1,away:0,label:'1-0',probability:.1},{home:2,away:0,label:'2-0',probability:.1}],
+  marketProbabilities:{'1':.5,X:.25,'2':.25},evidence:Array.from({length:6},(_,i)=>({name:String(i),status:'unverified',text:'未核实',sources:[]}))};
+ const bulletin={version:'jincai-daily-bulletin-v1',businessDate:'2026-10-09',updatedAt:at,status:'reference-recorded',records:[pick],tiers:[],review:null};
+ assert.ok(view.parseDailyBulletin(bulletin,'2026-10-09'));
+ const bad=structuredClone(bulletin);bad.records[0].scores[0]={home:0,away:1,label:'0-1',probability:.1};
+ assert.equal(view.parseDailyBulletin(bad,'2026-10-09'),undefined);
+ bulletin.tiers=[{minimum:2.5,status:'available',totalOdds:4,legs:[{...pick,id:'one'},{...pick,id:'two'}]}];
+ assert.ok(view.parseDailyBulletin(bulletin,'2026-10-09'));bulletin.tiers[0].totalOdds=5;
+ assert.equal(view.parseDailyBulletin(bulletin,'2026-10-09'),undefined);
+});
 async function sample(){const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();return {recommendationCenter:p.state.view};}
 test('the actual runtime projection parses for current UI',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.current.length,3);assert.equal(x.previews.length,2);assert.equal(x.review.statistics.single.published,3);});
 
@@ -268,6 +282,13 @@ function renderedText(data,props,now){
   const code=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/components/recommendations/RecommendationCenter.tsx'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
   vm.runInNewContext(code,{module,exports:module.exports,Date:now==null?Date:class extends Date{static now(){return now;}},require:id=>{
     if(id==='react')return react;if(id==='react/jsx-runtime')return require(id);
+    if(id==='./LeagueBaselineDirections'||id==='./DailyBulletinPanel'){
+      const component={exports:{}};
+      const source=fs.readFileSync(path.join(__dirname,'../src/components/recommendations',id.slice(2)+'.tsx'),'utf8');
+      vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,
+        {module:component,exports:component.exports,Date,Intl,URL,require:key=>key.endsWith('.css')?{}:key==='../../services/recommendationCenterView'?view:require(key)});
+      return component.exports;
+    }
     if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
     if(id==='../../services/publishedRecommendationStatus.cjs')return publishedStatus;
     if(id==='./DayCoverage')return {DayCoverage:()=>null};

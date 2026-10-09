@@ -1,4 +1,5 @@
 import { validCoherentPrimary, type CoherentPrimary } from './coherentPrimarySelection.cjs';
+
 export { publicationLifecycle, publicationLifecycleLabel } from './publishedRecommendationStatus.cjs';
 export type Outcome = '1' | 'X' | '2';
 export type ResultState = 'PENDING' | 'WON' | 'LOST' | 'VOID' | 'DISPUTED';
@@ -178,6 +179,7 @@ export interface RecommendationCenterData {
   coverage?:DayCoverageData;
   prdPaper?:PrdPaperDirectionsData;
   leagueBaseline?:LeagueBaselineDirections;
+  dailyBulletin?:DailyBulletin;
 }
 export interface LeagueBaselineDirection {
  id:string;homeTeamName:string;awayTeamName:string;createdAt:string;cutoffAt:string;
@@ -818,6 +820,7 @@ export function parseRecommendationCenter(response:unknown):RecommendationCenter
   const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),todayDualResearch:x.todayDualResearch==null?[]:list(x.todayDualResearch).map(dualResearchV2),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),qualityReport:review.qualityReport==null?undefined:modelQuality(review.qualityReport),statistics:{single:summary(stats.single),supplementary:stats.supplementary==null?undefined:supplementarySummary(stats.supplementary),qualifiedSingle:stats.qualifiedSingle==null?undefined:summary(stats.qualifiedSingle),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated',coverage:x.coverage==null?undefined:dayCoverage(x.coverage)};
   if(Object.hasOwn(x,'prdPaper'))result.prdPaper=parsePrdPaperDirections(x.prdPaper,result.businessDate,result.updatedAt);
   if(Object.hasOwn(x,'leagueBaseline'))result.leagueBaseline=parseLeagueBaseline(x.leagueBaseline,result.businessDate,result.updatedAt);
+  if(Object.hasOwn(x,'dailyBulletin'))result.dailyBulletin=parseDailyBulletin(x.dailyBulletin,result.businessDate);
   if(result.coverage&&result.coverage.businessDate!==result.businessDate)throw new Error('Day coverage date mismatch');
   if(new Set(result.current.map(r=>r.decision.decisionId)).size!==result.current.length)throw new Error('Duplicate current decision');
   if(result.todayDualResearch?.some(r=>r.businessDate!==result.businessDate)
@@ -969,4 +972,50 @@ export function comboEligibilityEvidence(data:RecommendationCenterData|null|unde
   const coverage=data?.coverage?.businessDate===data?.businessDate?data?.coverage:undefined;
   const reasons=coverage?.missing.map(row=>`${row.homeTeamName} - ${row.awayTeamName}：${row.reasonText}`)??[];
   return {summary,reasons,partial:coverage?.hasMore===true};
+}
+
+export interface BulletinPick {
+ id:string;sourceMatchId:string;homeTeamName:string;awayTeamName:string;matchNo:string|null;kickoffTime:string;cutoffAt:string;
+ publishedAt:string;modelVersion:string;confidence:'high'|'medium'|'low';summary:string;analysisLink:string|null;
+ selection:{market:'HAD'|'HHAD';tipCode:'1'|'X'|'2';handicapLine:number;label:string;odds:number};
+ scores:Array<{home:number;away:number;label:string;probability:number}>;quoteObservedAt:string;
+ marketProbabilities:Record<'1'|'X'|'2',number>;evidence:Array<{name:string;status:string;text:string;sources:Array<{url:string}>}>;
+}
+interface Stats {published:number;settled:number;won:number;hitRate:number|null;scoreTop1:number;scoreTop2:number;pending:number;excluded:number}
+export interface DailyBulletin {
+ version:'jincai-daily-bulletin-v1';businessDate:string;updatedAt:string;status:string;
+ schedule?:{earlyAt:string;featuredAt:string;fullAt:string;reviewAt:string};records:BulletinPick[];
+ tiers:Array<{minimum:number;status:string;reason?:string;totalOdds:number|null;legs:Array<{id:string;homeTeamName:string;awayTeamName:string;matchNo:string|null;selection:BulletinPick['selection']}>}>;
+ review:null|{previousBusinessDate:string;previous:Stats;cumulative:Stats;confidence:Record<string,Stats>;markets:Record<string,Stats>;combos:Array<{id:string;businessDate:string;minimum:number;state:string}>};
+}
+const dailyObj=(v:unknown):Record<string,unknown>=>v!==null&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:{};
+const dailyStr=(v:unknown)=>typeof v==='string'&&v.length<=2000;
+const dailyStamp=(v:unknown)=>dailyStr(v)&&Number.isFinite(Date.parse(v as string));
+export function parseDailyBulletin(v:unknown,day:string):DailyBulletin|undefined {
+ const x=dailyObj(v);if(x.version!=='jincai-daily-bulletin-v1'||x.businessDate!==day||!dailyStamp(x.updatedAt)||!Array.isArray(x.records)||x.records.length>512||!Array.isArray(x.tiers)||x.tiers.length>3)return undefined;
+ const seen=new Set();
+ for(const raw of x.records){const r=dailyObj(raw),s=dailyObj(r.selection);
+  if(!dailyStr(r.id)||seen.has(r.id)||!dailyStr(r.homeTeamName)||!dailyStr(r.awayTeamName)||!dailyStamp(r.kickoffTime)||!dailyStamp(r.cutoffAt)||!dailyStamp(r.publishedAt)||!dailyStamp(r.quoteObservedAt)
+   ||!['high','medium','low'].includes(String(r.confidence))||!['HAD','HHAD'].includes(String(s.market))||!['1','X','2'].includes(String(s.tipCode))
+   ||!Number.isSafeInteger(s.handicapLine)||(s.market==='HAD'&&s.handicapLine!==0)||typeof s.odds!=='number'||!Number.isFinite(s.odds)||s.odds<=1||!dailyStr(s.label)
+   ||!Array.isArray(r.scores)||r.scores.length!==2||!Array.isArray(r.evidence)||r.evidence.length!==6||!dailyStr(r.summary)||!dailyStr(r.modelVersion))return undefined;
+  for(const q of r.scores){const score=dailyObj(q);if(!Number.isSafeInteger(score.home)||!Number.isSafeInteger(score.away)||(score.home as number)<0||(score.away as number)<0||score.label!==`${score.home}-${score.away}`)return undefined;
+   const margin=(score.home as number)-(score.away as number)+(s.market==='HHAD'?s.handicapLine as number:0);if((margin>0?'1':margin<0?'2':'X')!==s.tipCode)return undefined;}
+  if(r.analysisLink!==null){try{if(new URL(String(r.analysisLink)).protocol!=='https:')return undefined;}catch{return undefined;}}
+  if(r.evidence.some(f=>!dailyStr(dailyObj(f).name)||!dailyStr(dailyObj(f).text)||!['unverified','verified'].includes(String(dailyObj(f).status))))return undefined;
+  const probs=dailyObj(r.marketProbabilities);if(['1','X','2'].some(c=>typeof probs[c]!=='number'||!Number.isFinite(probs[c])||(probs[c] as number)<0||(probs[c] as number)>1))return undefined;
+  seen.add(r.id);
+ }
+ for(const raw of x.tiers){const t=dailyObj(raw);if(![2.5,5,10].includes(Number(t.minimum))||!Array.isArray(t.legs))return undefined;
+  if(t.status==='available'){if(t.legs.length!==2||typeof t.totalOdds!=='number'||t.totalOdds<Number(t.minimum))return undefined;
+   const a=dailyObj(t.legs[0]),b=dailyObj(t.legs[1]);if(a.id===b.id||[a,b].some(l=>!dailyStr(l.id)||!dailyStr(l.homeTeamName)||!dailyStr(l.awayTeamName)||!dailyStr(dailyObj(l.selection).label)))return undefined;
+   const product=Number(dailyObj(a.selection).odds)*Number(dailyObj(b.selection).odds);if(!Number.isFinite(product)||Math.abs(product-t.totalOdds)>1e-8)return undefined;
+  }else if(t.status!=='unavailable'||t.totalOdds!==null||t.legs.length!==0)return undefined;
+ }
+ if(x.schedule&&Object.values(dailyObj(x.schedule)).some(v=>typeof v==='string'&&v.includes('T')&&!dailyStamp(v)))return undefined;
+ if(x.review!==null){const review=dailyObj(x.review);for(const stat of [review.previous,review.cumulative,...Object.values(dailyObj(review.confidence)),...Object.values(dailyObj(review.markets))]){
+   const s=dailyObj(stat);if(['published','settled','won','scoreTop1','scoreTop2','pending','excluded'].some(k=>!Number.isSafeInteger(s[k])||(s[k] as number)<0)
+    ||Number(s.won)>Number(s.settled)||s.hitRate!==(Number(s.settled)?Number(s.won)/Number(s.settled):null))return undefined;}
+   if(!Array.isArray(review.combos)||review.combos.some(c=>!dailyStr(dailyObj(c).id)||!['WON','LOST','PENDING','VOID','DISPUTED'].includes(String(dailyObj(c).state))))return undefined;}
+ return x as unknown as DailyBulletin;
 }
