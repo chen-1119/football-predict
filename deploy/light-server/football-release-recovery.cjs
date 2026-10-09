@@ -1413,11 +1413,71 @@ const resolveTransaction = (transaction) => {
   fsyncPath(transaction.recoveryRoot);
 };
 
+// A native release may die after installing its /run pause, before its shell
+// EXIT trap can run. Keep ownership in the root-only recovery transaction.
+const WATCHER_PAUSE_FILES = [
+  { target: "/run/football-release-fast-watcher-pause.env", mode: 0o640,
+    body: "RELAY_FAST_WATCHER_ENABLED=0\n" },
+  { target: "/run/systemd/system/football-predict.service.d/90-release-fast-watcher-pause.conf", mode: 0o644,
+    body: "[Service]\nEnvironmentFile=\nEnvironmentFile=/etc/football-predict/env\nEnvironmentFile=/run/football-release-fast-watcher-pause.env\n" }
+];
+
+const recordWatcherPauseIntent = (transaction, expectedSha) => {
+  if (!transaction?.native || transaction.bundleSha !== expectedSha || !validateDigest(expectedSha))
+    fail("watcher pause intent requires the current native transaction");
+  assertSecureDirectory(transaction.currentDir, "watcher pause transaction");
+  for (const item of WATCHER_PAUSE_FILES) {
+    if (pathExistsNoFollow(hostPath(item.target))) fail("watcher pause refuses existing override");
+  }
+  const file = path.join(transaction.currentDir, "watcher-pause-intent.json");
+  fs.writeFileSync(file, JSON.stringify({ version: 1, bundleSha256: expectedSha, priorOverridesAbsent: true }) + "\n",
+    { flag: "wx", mode: 0o600 });
+  fsyncPath(file); fsyncPath(transaction.currentDir);
+  return { recorded: true, bundleSha256: expectedSha };
+};
+
+const restoreOwnedWatcherPause = (transaction, system) => {
+  const file = path.join(transaction.currentDir, "watcher-pause-intent.json");
+  if (!pathExistsNoFollow(file)) return false; // Legacy transaction: never infer ownership.
+  const intent = readJsonFile(file, "watcher pause intent");
+  if (!transaction.native || Object.keys(intent).sort().join(",") !== "bundleSha256,priorOverridesAbsent,version"
+      || intent.version !== 1 || intent.bundleSha256 !== transaction.bundleSha || intent.priorOverridesAbsent !== true)
+    fail("watcher pause intent identity mismatch");
+  const present = [];
+  for (const item of WATCHER_PAUSE_FILES) {
+    const target = hostPath(item.target), stat = lstatOrNull(target);
+    if (!stat) continue;
+    let parent = path.dirname(target);
+    while (parent !== hostPath("/run") && parent !== path.dirname(parent)) {
+      const ps = fs.lstatSync(parent);
+      if (!ps.isDirectory() || ps.isSymbolicLink() || (!TEST_MODE && (ps.uid !== 0 || (ps.mode & 0o022))))
+        fail("watcher pause parent is unsafe");
+      parent = path.dirname(parent);
+    }
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size !== Buffer.byteLength(item.body)
+        || (!TEST_MODE && (stat.uid !== 0 || (stat.mode & 0o777) !== item.mode))
+        || fs.readFileSync(target, "utf8") !== item.body)
+      fail("watcher pause override changed; preserve for inspection");
+    present.push({ target, stat });
+  }
+  // Validate both before deleting either. Recovery already holds the normal
+  // release lock and has stopped application/writer units.
+  for (const { target, stat } of present) {
+    const now = fs.lstatSync(target);
+    if (now.ino !== stat.ino || now.dev !== stat.dev || now.mtimeMs !== stat.mtimeMs || now.size !== stat.size)
+      fail("watcher pause override changed during cleanup");
+    fs.unlinkSync(target); fsyncPath(path.dirname(target));
+  }
+  if (present.length) system.daemonReload();
+  return present.length > 0;
+};
+
 const recoverRollback = (transaction, system) => {
   const nativeWasActive = transaction.native ? nativeDataActive(transaction.native, system) : false;
   prevalidateRestoreTargets(transaction);
   updatePhase(transaction, "recovering-rollback");
   quiesceAll(transaction, system);
+  restoreOwnedWatcherPause(transaction, system);
   if (transaction.native && nativeDataActive(transaction.native, system) !== nativeWasActive) fail("native database changed during recovery quiesce");
   if (transaction.native) system.reopenBoundNativeDatabase(transaction.native.contract, nativeWasActive);
   if (transaction.native?.legacyBaseline) {
@@ -1473,7 +1533,7 @@ const recoverForward = (transaction, system) => {
     }
   }
   updatePhase(transaction, "recovering-commit");
-  if (transaction.native) quiesceAll(transaction, system);
+  if (transaction.native) { quiesceAll(transaction, system); restoreOwnedWatcherPause(transaction, system); }
   else system.stopTransientUnits(transaction.bundleSha);
   if (transaction.native) {
     prevalidateRestoreTargets(transaction);
@@ -1521,7 +1581,10 @@ const recover = () => {
 
 const main = () => {
   try {
-    const result = recover();
+    const args = process.argv.slice(2);
+    if (args.length && (args.length !== 2 || args[0] !== "--record-fast-watcher-pause"))
+      fail("unsupported recovery arguments");
+    const result = args.length ? recordWatcherPauseIntent(loadTransaction(), args[1]) : recover();
     process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
   } catch (error) {
     const exitCode = error instanceof RecoveryError ? error.exitCode : 1;
@@ -1533,6 +1596,8 @@ const main = () => {
 if (require.main === module) main();
 
 module.exports = {
+  recordWatcherPauseIntent,
+  restoreOwnedWatcherPause,
   buildDualResearchRollbackSql,
   FORWARD_PHASES,
   PRE_SWAP_PHASES,

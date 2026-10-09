@@ -17,6 +17,11 @@ native_exit() {
     native_data drop-candidate-access || { CODE_READER_RETIRE_FAILED=1; log "code release reader retirement failed; restoring service and retaining evidence"; }
   fi
   cleanup_release_static_attestations || true
+  # Only this process's pause may be removed here. A pre-existing override
+  # remains an operator/recovery concern, never an invitation to delete it.
+  if [ "${RELEASE_FAST_WATCHER_PAUSE_OVERRIDE_ACTIVE:-0}" = 1 ]; then
+    remove_release_fast_watcher_pause_override || { CODE_PAUSE_RETIRE_FAILED=1; log "native failure: owned watcher pause cleanup failed; attempting fixed recovery with durable ownership"; }
+  fi
   if [ "${RECOVERY_ACTIVE:-0}" = "1" ]; then
     if [ "${SWAP_STARTED:-0}" != "1" ] && [ "${NATIVE_NEXT_CREATED:-0}" = "1" ]; then
       [ "$NEXT_DIR" = "/opt/football-predict.next" ] && [ ! -L "$NEXT_DIR" ] || exit 1
@@ -27,6 +32,7 @@ native_exit() {
     "$NODE_HOME/bin/node" /usr/local/libexec/football-release-recovery.cjs || exit 1
   fi
   [ "${CODE_READER_RETIRE_FAILED:-0}" != 1 ] || exit 1
+  [ "${CODE_PAUSE_RETIRE_FAILED:-0}" != 1 ] || exit 1
   # A successful fixed recovery leaves no build process or recovery consumer
   # using this disposable candidate copy. Preserve it on every stop/recovery
   # or quiescence failure; remove only the existing guarded BUILD_DIR.
@@ -236,7 +242,13 @@ run_native_release() {
   wait_for_health "http://${HOST}:${PORT}" native-before-stop 90 2 service
   quiesce_managed_maintenance_for_sqlite_snapshot
   stop_worker_for_release_window
-  pause_current_fast_watcher_for_live_prebuild
+  if [ "${RELEASE_FAST_WATCHER_PAUSE_OVERRIDE_ACTIVE:-0}" = 1 ]; then
+    # The code lane already owns this pause from its immutable seed capture.
+    # Preserve it until the stopped window; do not try to install it twice.
+    assert_release_fast_watcher_pause_guard
+  else
+    pause_current_fast_watcher_for_live_prebuild
+  fi
   start_release_sync_write_barrier
   stop_service_for_release_window
   quiesce_native_auxiliary_writers

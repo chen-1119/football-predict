@@ -5,6 +5,54 @@ const policy = require('../scripts/releaseDataPlanePolicy.cjs');
 const { planCapacity } = require('../scripts/nativeReleaseCapacity.cjs');
 const { validate } = require('../scripts/runReleaseCapacityPreflight.cjs');
 const root = path.resolve(__dirname, '..');
+function pauseFixture(run) {
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'code-pause-')),modPath=require.resolve('../deploy/light-server/football-release-recovery.cjs');
+  const saved=[process.env.FOOTBALL_RELEASE_RECOVERY_TEST_MODE,process.env.FOOTBALL_RELEASE_RECOVERY_TEST_ROOT];
+  process.env.FOOTBALL_RELEASE_RECOVERY_TEST_MODE='1';process.env.FOOTBALL_RELEASE_RECOVERY_TEST_ROOT=dir;delete require.cache[modPath];
+  try {
+    const mod=require(modPath),currentDir=path.join(dir,'var/lib/football-release/recovery/current');fs.mkdirSync(currentDir,{recursive:true,mode:0o700});
+    const transaction={currentDir,bundleSha:'a'.repeat(64),native:{}},files=[
+      ['run/football-release-fast-watcher-pause.env','RELAY_FAST_WATCHER_ENABLED=0\n'],
+      ['run/systemd/system/football-predict.service.d/90-release-fast-watcher-pause.conf','[Service]\nEnvironmentFile=\nEnvironmentFile=/etc/football-predict/env\nEnvironmentFile=/run/football-release-fast-watcher-pause.env\n']
+    ].map(([p,body])=>({file:path.join(dir,p),body}));
+    let reloads=0; const system={daemonReload(){reloads++;}};
+    const install=()=>{for(const f of files){fs.mkdirSync(path.dirname(f.file),{recursive:true});fs.writeFileSync(f.file,f.body);}};
+    return run({mod,transaction,files,install,system,reloads:()=>reloads});
+  } finally {
+    delete require.cache[modPath];for(const [i,key] of ['FOOTBALL_RELEASE_RECOVERY_TEST_MODE','FOOTBALL_RELEASE_RECOVERY_TEST_ROOT'].entries()){
+      if(saved[i]===undefined)delete process.env[key];else process.env[key]=saved[i];
+    }
+    a.equal(fs.realpathSync(dir).toLowerCase(),path.resolve(dir).toLowerCase());a.ok(path.basename(dir).startsWith('code-pause-'));fs.rmSync(dir,{recursive:true});
+  }
+}
+test('cold recovery cleans a durable owned pause after the writer process is gone',()=>pauseFixture(x=>{
+  x.mod.recordWatcherPauseIntent(x.transaction,x.transaction.bundleSha);x.install();
+  a.equal(x.mod.restoreOwnedWatcherPause(x.transaction,x.system),true);a.equal(x.reloads(),1);
+  for(const f of x.files)a.equal(fs.existsSync(f.file),false);
+  a.equal(x.mod.restoreOwnedWatcherPause(x.transaction,x.system),false);
+}));
+test('legacy recovery without ownership leaves existing pause untouched',()=>pauseFixture(x=>{
+  x.install();a.equal(x.mod.restoreOwnedWatcherPause(x.transaction,x.system),false);for(const f of x.files)a.ok(fs.existsSync(f.file));
+}));
+test('pause intent refuses a pre-existing override',()=>pauseFixture(x=>{
+  x.install();a.throws(()=>x.mod.recordWatcherPauseIntent(x.transaction,x.transaction.bundleSha),/existing override/);
+}));
+test('pause intent refuses another transaction and duplicate claim',()=>pauseFixture(x=>{
+  a.throws(()=>x.mod.recordWatcherPauseIntent(x.transaction,'b'.repeat(64)),/current native/);
+  x.mod.recordWatcherPauseIntent(x.transaction,x.transaction.bundleSha);a.throws(()=>x.mod.recordWatcherPauseIntent(x.transaction,x.transaction.bundleSha),/EEXIST/);
+}));
+test('changed override preserves both files before any deletion',()=>pauseFixture(x=>{
+  x.mod.recordWatcherPauseIntent(x.transaction,x.transaction.bundleSha);x.install();fs.appendFileSync(x.files[1].file,'changed');
+  a.throws(()=>x.mod.restoreOwnedWatcherPause(x.transaction,x.system),/changed/);for(const f of x.files)a.ok(fs.existsSync(f.file));a.equal(x.reloads(),0);
+}));
+test('partial completed pause install can recover after a crash',()=>pauseFixture(x=>{
+  x.mod.recordWatcherPauseIntent(x.transaction,x.transaction.bundleSha);x.install();fs.unlinkSync(x.files[1].file);
+  a.equal(x.mod.restoreOwnedWatcherPause(x.transaction,x.system),true);a.equal(fs.existsSync(x.files[0].file),false);
+}));
+test('recovery refuses a changed pause ownership identity',()=>pauseFixture(x=>{
+  x.mod.recordWatcherPauseIntent(x.transaction,x.transaction.bundleSha);x.install();
+  a.throws(()=>x.mod.restoreOwnedWatcherPause({...x.transaction,bundleSha:'b'.repeat(64)},x.system),/identity mismatch/);
+}));
 function fixture() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'code-release-'));
   for (const name of [...policy.FIXED, 'server/postgres/migrations/001_core.sql']) {

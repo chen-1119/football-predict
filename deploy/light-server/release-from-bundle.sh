@@ -749,6 +749,11 @@ write_release_fast_watcher_pause_override() {
       printf 'release fast watcher pause refuses a pre-existing runtime override\n' >&2
       return 1
     }
+  if [ "${TRANSACTION_VERSION:-3}" = 4 ]; then
+    [ "$RUNTIME_ENV_FILE" = /etc/football-predict/env ] || return 1
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/deploy/light-server/football-release-recovery.cjs" \
+      --record-fast-watcher-pause "$BUNDLE_SHA256" || return 1
+  fi
   install -d -o root -g root -m 0755 -- "$RELEASE_FAST_WATCHER_PAUSE_DROPIN_DIR" || return 1
   [ -d "$RELEASE_FAST_WATCHER_PAUSE_DROPIN_DIR" ] \
     && [ ! -L "$RELEASE_FAST_WATCHER_PAUSE_DROPIN_DIR" ] \
