@@ -472,6 +472,7 @@ const requiredEntries = [
   "scripts/teamEvidenceStore.cjs",
   "scripts/syncTeamEvidence.cjs",
   "scripts/collectExpandedLeagueHistory.cjs",
+  "scripts/expandedLeagueHistoryParser.cjs",
   "tests/team-evidence-pipeline.test.cjs",
   "tests/expanded-league-history.test.cjs",
   "scripts/recommendationPlatform/reviewedAnalysis.cjs",

@@ -48,6 +48,11 @@ function verifyFrontendRuntimeBoundary() {
       assert.equal(observed.workers.length, 1);
       assert.ok(observed.files.some(row => row.path === "server/publicationResolverWorker.cjs"));
       assert.ok(observed.files.some(row => row.path === "scripts/publishOfficialResultsFast.cjs"));
+      assert.ok(observed.files.some(row => row.path === "scripts/syncTeamEvidence.cjs"));
+      assert.ok(observed.files.some(row => row.path === "scripts/teamEvidenceStore.cjs"));
+      assert.ok(observed.files.some(row => row.path === "scripts/teamEvidenceSources.cjs"));
+      assert.ok(observed.files.some(row => row.path === "scripts/expandedLeagueHistoryParser.cjs"));
+      assert.equal(observed.files.some(row => row.path === "scripts/collectExpandedLeagueHistory.cjs"), false);
       for (const file of ["scripts/syncDailyPrematchApi.cjs", "scripts/syncApiFootballData.cjs", "scripts/dailyFeaturedComboLedger.cjs", "scripts/runMarketCollector.cjs", "scripts/runRecommendationSettlement.cjs"])
         assert.ok(observed.files.some(row => row.path === file), `missing runtime closure: ${file}`);
       assert.ok(observed.commands.some(row => row.file === "scripts/syncDailyPrematchApi.cjs" && row.api === "spawnSync"));
@@ -195,6 +200,7 @@ function verifyFrontendRuntimeBoundary() {
       changed("scripts/runSyncWorker.cjs", text => text.replace("const child = spawn(command, args, {", "const child = spawn(process.env.OVERRIDE || command, args, {"), rejected);
     });
     check("unchanged generic process adapter cannot authorize a new dynamic wrapper caller", () => {
+      changed("scripts/runSyncWorker.cjs", text => text.replace('"sync:team-evidence"));', 'process.env.UNREVIEWED_EVIDENCE_COMMAND));'), unreviewed);
       changed("server/index.cjs", text => `${text}\nrunCommand(process.env.UNKNOWN_EXECUTABLE, process.env.UNKNOWN_ARGUMENTS);\n`, unreviewed);
       changed("server/index.cjs", text => `${text}\nrunCommand('node', ['src/pages/PredictionsList.tsx']);\n`, unreviewed);
     });

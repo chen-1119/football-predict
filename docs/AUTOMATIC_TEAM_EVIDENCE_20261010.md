@@ -12,6 +12,8 @@ The normal PostgreSQL worker's slow-enrichment stage invokes `sync:team-evidence
 
 The source allowlist and evidence validation are in `teamEvidenceSources.cjs`; PostgreSQL storage is in `teamEvidenceStore.cjs`. Existing broader OpenFootball research receipts remain independent; this addition does not declare them verified or overwrite their records.
 
+The installed collector imports only `expandedLeagueHistoryParser.cjs`. The local research CLI's Git subprocesses are excluded from its runtime closure. The worker's updated literal job call has an exact reviewed function commitment; source closure comparisons, command grammar and mutation rejection remain enabled.
+
 ## Actual downstream path
 
 `publishReviewedAnalysis.cjs --publish ABS_DRAFT EXPECTED_STABLE_HASH` additionally accepts version 2:

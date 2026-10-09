@@ -1,5 +1,5 @@
 'use strict';
-const {parse,LEAGUES}=require('./collectExpandedLeagueHistory.cjs');
+const {parse,LEAGUES}=require('./expandedLeagueHistoryParser.cjs');
 const {hash,sha,seal}=require('../src/services/leagueBaselineModel.cjs');
 const k=require('./syncKLeagueOfficialStandings.cjs');
 const {day}=require('../src/services/publishedForecastPolicy.cjs');
