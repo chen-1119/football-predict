@@ -121,11 +121,13 @@ run_native_release() {
   if [ "$NATIVE_RELEASE_KIND" = runtime-only ]; then NATIVE_CANDIDATE_DATABASE=-; NATIVE_ARCHIVE_DATABASE=-; fi
   TRANSACTION_VERSION=4
   PRIMARY_READ_SOURCE=postgres
-  initialize_release_recovery_snapshot
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
+    initialize_release_recovery_snapshot
+    TIMER_STATE_DIRTY=1
+    quiesce_managed_maintenance_for_sqlite_snapshot
+  fi
   ensure_build_user
   assert_build_user_quiescent
-  TIMER_STATE_DIRTY=1
-  quiesce_managed_maintenance_for_sqlite_snapshot
   release_stage_observe begin candidate-build
   cleanup_build_tree
   install -d -o root -g root -m 0700 "$BUILD_DIR"
@@ -185,6 +187,12 @@ run_native_release() {
       --current "$APP_DIR/public/data/matches-current.json" --lease "$CANDIDATE_TRANSITION_LEASE" \
       --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
       --verifier-runtime-max-seconds 300 --preverify-refresh-budget-seconds 570 --atomic-swap-margin-seconds 30
+    # Code preparation has not touched live services or maintenance. Only a
+    # granted cutover lease may open the recoverable service transaction.
+    # A closed window/build rejection therefore exits without restarting APP.
+    initialize_release_recovery_snapshot
+    TIMER_STATE_DIRTY=1
+    quiesce_managed_maintenance_for_sqlite_snapshot
     stop_worker_for_release_window
     pause_current_fast_watcher_for_live_prebuild
     start_release_sync_write_barrier "$APP_DIR"
