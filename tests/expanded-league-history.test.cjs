@@ -1,0 +1,15 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const {parse,parseText}=require('../scripts/collectExpandedLeagueHistory.cjs');
+const opts={league:'de.1',season:'2025-26',knownAt:'2026-10-10T00:00:00.000Z'};
+const m={date:'2025-09-01',team1:'A',team2:'B',round:'Matchday 1',score:{ft:[2,1]}};
+const input=matches=>Buffer.from(JSON.stringify({name:'Bundesliga 2025/26',matches}));
+test('explicit FT admitted with actual acquisition time, unknown historical clock/venue',()=>{const r=parse(input([m]),opts).rows[0];assert.equal(r.homeGoals,2);assert.equal(r.knownAt,opts.knownAt);assert.equal(r.historicalKnownAt,null);assert.equal(r.neutral,null);});
+test('array scores and unplayed rows are excluded rather than zero-filled',()=>{const r=parse(input([{...m,score:[2,1]},{...m,date:'2025-09-02',score:{}}]),opts);assert.equal(r.rows.length,0);assert.deepEqual(r.excluded.map(e=>e.reason),['ambiguous-score-array','missing-explicit-ft']);});
+test('future and same day scores excluded',()=>{const o={...opts,knownAt:'2026-06-01T20:00:00.000Z'};assert.equal(parse(input([{...m,date:'2026-06-01'}]),o).rows.length,0);});
+test('playoffs and extra time excluded',()=>{for(const x of [{...m,round:'Playoffs'},{...m,score:{ft:[1,1],et:[2,1]}}])assert.equal(parse(input([x]),opts).rows.length,0);});
+test('invalid/duplicate identities and impossible scores rejected',()=>{for(const x of [{...m,date:'2025-02-30'},{...m,team2:'A'},{...m,score:{ft:[-1,1]}},{...m,date:'2024-09-01'}])assert.throws(()=>parse(input([x]),opts));assert.throws(()=>parse(input([m,m]),opts));});
+test('wrong title and unknown league rejected',()=>{assert.throws(()=>parse(Buffer.from('{"name":"2024/25","matches":[]}'),opts));assert.throws(()=>parse(input([m]),{...opts,league:'invented'}));});
+test('text cross-year season preserves dates and excludes ambiguous scores',()=>{const raw=Buffer.from('= Netherlands Eerste Divisie 2024/25\n▪ Matchday 1\nTue Dec 31 2024\nA  v B  1-0 (0-0)\nWed Jan 1\nC  v D  2-1\nC  v E  1-1 aet');const r=parseText(raw,{league:'nl.2',season:'2024-25',knownAt:opts.knownAt});assert.deepEqual(r.rows.map(x=>x.date),['2024-12-31','2025-01-01']);assert.equal(r.excluded.length,1);});
+test('text unknown season identity rejected',()=>{assert.throws(()=>parseText(Buffer.from('= wrong 2025'),{league:'se.1',season:'2025',knownAt:opts.knownAt}));});
+test('round-grouped postponed calendar fixtures need not be date-sorted',()=>{const r=parseText(Buffer.from('= Sweden Allsvenskan 2025\nSat May 3 2025\nA  v B  1-0\nTue Apr 1\nC  v D  0-0'),{league:'se.1',season:'2025',knownAt:opts.knownAt});assert.deepEqual(r.rows.map(x=>x.date),['2025-05-03','2025-04-01']);});
