@@ -2641,11 +2641,11 @@ verify_and_normalize_prebuilt_dist() {
 
 validate_build_artifacts() {
   local artifact_root="${1:-$BUILD_DIR}"
-  node - "$artifact_root" "${PUBLIC_DATA_CACHE_FILES[*]}" "${PUBLIC_ROOT_CACHE_FILES[*]}" <<'NODE'
+  node - "$artifact_root" "${PUBLIC_DATA_CACHE_FILES[*]}" "${PUBLIC_ROOT_CACHE_FILES[*]}" "${NATIVE_CODE_RELEASE:-0}" "${NATIVE_STATE_DIR:-}/seed-accepted.json" "$BUNDLE_SHA256" "${TRUSTED_SOURCE_DIR:-}/scripts/nativeSnapshotCopyProof.cjs" <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
 
-const [buildRoot, dataNamesRaw, rootNamesRaw] = process.argv.slice(2);
+const [buildRoot, dataNamesRaw, rootNamesRaw, nativeCodeRelease, seedProof, releaseSha, snapshotProofHelper] = process.argv.slice(2);
 const nodeModulesRoot = path.join(buildRoot, "node_modules");
 const distRoot = path.join(buildRoot, "dist");
 const historicalTrainingRoot = path.join(buildRoot, ".release-model-assets");
@@ -2777,7 +2777,10 @@ const inspectOptionalData = (relative) => {
   if (!fs.existsSync(target)) return;
   const info = fs.lstatSync(target);
   if (!safeOptionalDataFile(relative, info)) {
-    fail(`unsafe whitelisted data file: ${relative}`);
+    // Original limits still apply to every unproven candidate data file.
+    if (nativeCodeRelease !== "1" || relative !== "public/data/prediction-snapshots.json") fail(`unsafe whitelisted data file: ${relative}`);
+    const proof = require(snapshotProofHelper).verify({ artifactRoot: buildRoot, relative, seedProof, releaseSha });
+    if (proof.ok !== true) fail(`unproven native generation copy: ${relative}`);
   }
 };
 for (const name of dataNamesRaw.split(" ").filter(Boolean)) inspectOptionalData(`public/data/${name}`);

@@ -189,6 +189,8 @@ const requiredReleaseEntries = [
   "tests/zero-market-research-baseline.test.cjs",
   "tests/market-separated-direction-research.test.cjs",
   "scripts/verifyPrdPaperPipeline.cjs",
+  "scripts/nativeSnapshotCopyProof.cjs",
+  "tests/native-snapshot-copy-proof.test.cjs",
   "scripts/publishReviewedAnalysis.cjs",
   "scripts/recommendationPlatform/reviewedAnalysis.cjs",
   "scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs",
