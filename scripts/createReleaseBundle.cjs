@@ -60,6 +60,9 @@ if (process.env.RELEASE_DEPLOY_KEY) {
   const workerPreflight = require("./runReleaseWorkerPreflight.cjs").runLiveWorkerPreflight();
   console.error(JSON.stringify({ phase: "worker-preflight-before-build", ...workerPreflight }));
   if (!workerPreflight.ok) throw new Error(`release foundation unavailable before sequence reservation and build: ${workerPreflight.blockers.join(",")}`);
+  const capacityPreflight = require("./runReleaseCapacityPreflight.cjs").runLiveCapacityPreflight();
+  console.error(JSON.stringify({ phase: "capacity-preflight-before-build", ...capacityPreflight }));
+  if (!capacityPreflight.ok) throw new Error("release capacity unavailable before sequence reservation and build");
   const windowPreflight = require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({ stage: "before-build" });
   console.error(JSON.stringify({ phase: "window-preflight-before-build", ...windowPreflight }));
   if (!windowPreflight.ok) throw new Error("release window unavailable before archive preflight, sequence reservation and build");
@@ -834,6 +837,13 @@ const requiredEntries = [
   "scripts/nativeReleaseDatabaseSession.cjs",
   "scripts/nativeReleaseDataPlane.cjs",
   "scripts/nativeReleaseCapacity.cjs",
+  "scripts/releaseDataPlanePolicy.cjs",
+  "scripts/nativeCodeReleaseDataPlane.cjs",
+  "tests/code-data-release.test.cjs",
+  "scripts/verifyCodeReleaseShell.cjs",
+  "scripts/verifyCodeReleasePostgresIsolation.cjs",
+  "scripts/runReleaseCapacityPreflight.cjs",
+  "tests/release-capacity-preflight.test.cjs",
   "scripts/releaseRetentionPlan.cjs",
   "tests/native-release-capacity.test.cjs",
   "tests/release-retention-plan.test.cjs",

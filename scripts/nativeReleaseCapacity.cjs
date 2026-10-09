@@ -4,16 +4,17 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
 const { spawnSync } = require('node:child_process');
 const GiB = 1024 ** 3;
 function positive(v) { assert(Number.isSafeInteger(v) && v > 0, 'capacity-input-invalid'); return v; }
-function planCapacity({ databaseBytes, generationBytes, applicationBytes, volumes }) {
+function planCapacity({ databaseBytes, generationBytes, applicationBytes, volumes }, mode = 'database') {
+  assert(['database', 'code-only'].includes(mode), 'capacity-mode-invalid');
   [databaseBytes, generationBytes, applicationBytes].forEach(positive);
-  const demands = { postgres: positive(3 * databaseBytes), native: positive(databaseBytes + 2 * generationBytes),
+  const demands = { postgres: mode === 'code-only' ? 0 : positive(3 * databaseBytes), native: positive(mode === 'code-only' ? 4 * generationBytes : databaseBytes + 2 * generationBytes),
     application: positive(3 * applicationBytes + 2 * GiB) };
   const devices = new Map();
   for (const role of Object.keys(demands)) {
     const v = volumes[role]; assert(v && typeof v.device === 'string' && v.device.length > 0);
     assert(Number.isSafeInteger(v.availableBytes) && v.availableBytes >= 0, 'available-capacity-invalid');
     const group = devices.get(v.device) || { device: v.device, roles: [], requiredWorkBytes: 0, availableBytes: v.availableBytes };
-    group.roles.push(role); group.requiredWorkBytes += demands[role]; positive(group.requiredWorkBytes);
+    group.roles.push(role); group.requiredWorkBytes += demands[role]; assert(Number.isSafeInteger(group.requiredWorkBytes) && group.requiredWorkBytes >= 0);
     group.availableBytes = Math.min(group.availableBytes, v.availableBytes); devices.set(v.device, group);
   }
   const checks = [...devices.values()].map(g => { const reserveBytes = Math.max(5 * GiB, Math.ceil(g.requiredWorkBytes / 10));
@@ -50,8 +51,8 @@ function observeCapacity() {
   return { observedAt: new Date().toISOString(), databaseBytes: Number(database.databaseBytes), generationBytes: treeBytes(generation),
     applicationBytes: treeBytes('/opt/football-predict'), volumes: { postgres: volume(database.dataDirectory), native: volume('/var/lib/football-release'), application: volume('/opt') } };
 }
-function assertNativeReleaseCapacity() {
-  const observation = observeCapacity(), report = { ...planCapacity(observation), observation };
+function assertNativeReleaseCapacity(mode = 'database') {
+  const observation = observeCapacity(), report = { ...planCapacity(observation, mode), mode, observation };
   if (!report.ok) { const error = new Error('native-release-insufficient-capacity'); error.capacity = report; throw error; }
   return report;
 }

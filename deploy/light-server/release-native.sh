@@ -13,7 +13,15 @@ native_exit() {
   stop_candidate || { log "native failure: candidate could not be stopped; recovery retained"; exit 1; }
   stop_release_candidate_heartbeat_keeper || { log "native failure: heartbeat keeper remains; recovery retained"; exit 1; }
   stop_release_sync_write_barrier || { log "native failure: sync barrier remains; recovery retained"; exit 1; }
+  if [ "${NATIVE_CODE_RELEASE:-0}" = 1 ] && [ "${RECOVERY_ACTIVE:-0}" = 1 ]; then
+    native_data drop-candidate-access || { CODE_READER_RETIRE_FAILED=1; log "code release reader retirement failed; restoring service and retaining evidence"; }
+  fi
   cleanup_release_static_attestations || true
+  # Only this process's pause may be removed here. A pre-existing override
+  # remains an operator/recovery concern, never an invitation to delete it.
+  if [ "${RELEASE_FAST_WATCHER_PAUSE_OVERRIDE_ACTIVE:-0}" = 1 ]; then
+    remove_release_fast_watcher_pause_override || { CODE_PAUSE_RETIRE_FAILED=1; log "native failure: owned watcher pause cleanup failed; attempting fixed recovery with durable ownership"; }
+  fi
   if [ "${RECOVERY_ACTIVE:-0}" = "1" ]; then
     if [ "${SWAP_STARTED:-0}" != "1" ] && [ "${NATIVE_NEXT_CREATED:-0}" = "1" ]; then
       [ "$NEXT_DIR" = "/opt/football-predict.next" ] && [ ! -L "$NEXT_DIR" ] || exit 1
@@ -23,6 +31,8 @@ native_exit() {
     # rename before APP was exchanged. It never restores SQLite/model data.
     "$NODE_HOME/bin/node" /usr/local/libexec/football-release-recovery.cjs || exit 1
   fi
+  [ "${CODE_READER_RETIRE_FAILED:-0}" != 1 ] || exit 1
+  [ "${CODE_PAUSE_RETIRE_FAILED:-0}" != 1 ] || exit 1
   # A successful fixed recovery leaves no build process or recovery consumer
   # using this disposable candidate copy. Preserve it on every stop/recovery
   # or quiescence failure; remove only the existing guarded BUILD_DIR.
@@ -98,6 +108,7 @@ run_native_release() {
   NATIVE_RELEASE_KIND="${native_state[0]}"
   NATIVE_CANDIDATE_DATABASE="${native_state[1]}"
   NATIVE_ARCHIVE_DATABASE="${native_state[2]}"
+  NATIVE_CODE_RELEASE="$("$NODE_HOME/bin/node" -e 'console.log(require(process.argv[1]).dataPlane === "code-only" ? "1" : "0")' "$NATIVE_STATE_DIR/state.json")"
   [ "$NATIVE_RELEASE_KIND" = runtime-only ] || {
     log "signed 013 research migration requires the existing PostgreSQL-only runtime"
     return 1
@@ -121,6 +132,7 @@ run_native_release() {
   # Hold a database snapshot through dump, independent restore and full row
   # comparison. The production HTTP process and official worker remain live.
   native_seed_log="$NATIVE_STATE_DIR/seed.log"
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
   native_data seed >"$native_seed_log" 2>&1
   native_materialize_candidate
   # Candidate reconciliation itself verifies the exact PostgreSQL schema, so
@@ -137,18 +149,39 @@ run_native_release() {
   restart_worker_if_needed
   native_data import-ledgers
   native_data build-access
+  fi
   NATIVE_BUILD_ENV_FILE="$NATIVE_STATE_DIR/build.env"
   chown -hR "$BUILD_USER:$BUILD_USER" "$BUILD_DIR"
   install -d -o "$BUILD_USER" -g "$BUILD_USER" -m 0700 "$BUILD_HOME"
   prebuilt_status=0
   verify_and_normalize_prebuilt_dist || prebuilt_status="$?"
   [ "$prebuilt_status" = 0 ] || [ "$prebuilt_status" = 2 ]
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    [ "$PREBUILT_DIST_VALIDATED" = 1 ] || { log "code release requires signed prebuilt dist"; return 1; }
+  fi
   run_build_step npm-ci env PATH="$PATH" HOME="$BUILD_HOME" npm_config_cache="${BUILD_HOME}/.npm" NODE_ENV=development "$NODE_HOME/bin/npm" ci --include=dev --ignore-scripts
   run_build_step postgres-migration-plan env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production "$NODE_HOME/bin/node" scripts/verifyPostgresMigrationPlan.cjs
   if [ "$PREBUILT_DIST_VALIDATED" != 1 ]; then run_build_step application-build env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production "$NODE_HOME/bin/npm" run build; fi
-  run_candidate_model_artifact_catchup "$CANDIDATE_STORE_DIR" "$CANDIDATE_STORE_DIR/retired-sqlite-must-not-open.db"
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
+    run_candidate_model_artifact_catchup "$CANDIDATE_STORE_DIR" "$CANDIDATE_STORE_DIR/retired-sqlite-must-not-open.db"
+  fi
   run_build_step npm-prune env PATH="$PATH" HOME="$BUILD_HOME" npm_config_cache="${BUILD_HOME}/.npm" NODE_ENV=production "$NODE_HOME/bin/npm" prune --omit=dev --ignore-scripts
   assert_build_user_quiescent
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    # Dependency installation has finished with NO database credential. Hold
+    # the existing bounded writer barrier only for the snapshot/read-only
+    # candidate checks. The public service continues to serve requests.
+    stop_worker_for_release_window
+    pause_current_fast_watcher_for_live_prebuild
+    start_release_sync_write_barrier "$APP_DIR"
+    native_data seed >"$native_seed_log" 2>&1
+    native_materialize_candidate
+    seed_candidate_model_artifacts
+    candidate_ai_state_status=0
+    copy_regular_file_nofollow "$LIVE_STORE_DIR/ai-arena-state.json" "$CANDIDATE_STORE_DIR/ai-arena-state.json" || candidate_ai_state_status="$?"
+    [ "$candidate_ai_state_status" = 0 ] || [ "$candidate_ai_state_status" = 2 ]
+    chown -hR "$BUILD_USER:$BUILD_USER" "$BUILD_DIR"
+  fi
   validate_build_artifacts
   normalize_validated_artifact_modes "$BUILD_DIR"
   validate_build_artifacts
@@ -159,9 +192,11 @@ run_native_release() {
   validate_build_artifacts "$NEXT_DIR"
   verify_worker_write_permissions "$NEXT_DIR"
   prepare_release_static_attestations
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
   run_candidate_refresh_step native-deadline-refresh env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production \
     SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" PUBLIC_DATA_DIR="$NEXT_DIR/public/data" DATA_GENERATION_PUBLIC_DATA_DIR="$NEXT_DIR/public/data" \
     "$NODE_HOME/bin/node" scripts/captureCandidateProspectiveDeadline.cjs --deadline-only
+  fi
   fix_app_permissions "$NEXT_DIR"
   # The deadline refresh is followed by root ownership normalization. Restore
   # the service write directories before accepting and exchanging this tree.
@@ -192,6 +227,7 @@ run_native_release() {
   release_stage_observe end candidate-readiness ok
   stop_candidate
   assert_build_user_quiescent
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then stop_release_sync_write_barrier clean; fi
   native_data drop-candidate-access
   cleanup_build_tree
   snapshot_app_tree_identity "$RECOVERY_DIR" new-app "$NEXT_DIR" /opt/football-predict.next
@@ -206,7 +242,13 @@ run_native_release() {
   wait_for_health "http://${HOST}:${PORT}" native-before-stop 90 2 service
   quiesce_managed_maintenance_for_sqlite_snapshot
   stop_worker_for_release_window
-  pause_current_fast_watcher_for_live_prebuild
+  if [ "${RELEASE_FAST_WATCHER_PAUSE_OVERRIDE_ACTIVE:-0}" = 1 ]; then
+    # The code lane already owns this pause from its immutable seed capture.
+    # Preserve it until the stopped window; do not try to install it twice.
+    assert_release_fast_watcher_pause_guard
+  else
+    pause_current_fast_watcher_for_live_prebuild
+  fi
   start_release_sync_write_barrier
   stop_service_for_release_window
   quiesce_native_auxiliary_writers
@@ -216,7 +258,9 @@ run_native_release() {
   # the serving database immediately before the new application can start.
   # A durable intent lets cold recovery remove an empty 014 table and its
   # migration row together if this release is rolled back.
-  "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/deploy/light-server/recommendation-schema-bridge.cjs" live "$BUNDLE_SHA256"
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/deploy/light-server/recommendation-schema-bridge.cjs" live "$BUNDLE_SHA256"
+  fi
   "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/candidateReleaseContinuity.cjs" snapshot \
     --revision-transition "$NEXT_DIR/deploy/light-server/candidate-revision-transition.json" \
     --registry "$LIVE_STORE_DIR/model-artifacts/candidate-prospective-registry.json" --output "$RECOVERY_DIR/candidate-release-continuity-before.json" \
@@ -244,6 +288,10 @@ run_native_release() {
   wait_for_health "http://${HOST}:${PORT}" native-post-swap 120 2 service
   release_stage_observe end stopped-window ok
   native_finish_readiness
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/nativeCodeReleaseDataPlane.cjs" retire-seed "$BUNDLE_SHA256" \
+      || log "accepted code release: disposable seed retained; inspect retirement receipt before retrying cleanup"
+  fi
 }
 
 native_finish_readiness() {

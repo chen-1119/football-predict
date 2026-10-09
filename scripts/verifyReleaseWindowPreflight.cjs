@@ -183,6 +183,7 @@ function runCreatePrefix(source, options = {}) {
         calls.push("worker"); if (options.workerThrows) throw new Error("fixture worker observation unavailable");
         return { ok: options.workerOpen !== false, blockers: options.workerOpen === false ? ["worker-latest-official-cycle-failed"] : [], readyToCutover: false };
       } };
+      if (name === "./runReleaseCapacityPreflight.cjs") return { runLiveCapacityPreflight: () => ({ ok: true, readyToCutover: false }) };
       if (name === "./runReleaseWindowPreflight.cjs") return { runLiveReleaseWindowPreflight: ({ stage }) => {
         assert.equal(stage, "before-build");
         calls.push("window"); if (options.windowThrows) throw new Error("fixture window unavailable"); return { ok: options.windowOpen !== false, readyToCutover: false };

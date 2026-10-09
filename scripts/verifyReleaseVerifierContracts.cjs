@@ -7,6 +7,20 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('code releases separate PG migration and model work before signing',()=>{
+  const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/code-data-release.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 30$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  const shell=require('node:child_process').spawnSync(process.execPath,['scripts/verifyCodeReleaseShell.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+  assert.equal(shell.status,0,shell.stderr);const proof=JSON.parse(shell.stdout);assert.equal(proof.ok,true);assert.equal(proof.checks.length,10);assert.equal(proof.actualBashBranchExecution,true);
+  for(const file of ['scripts/releaseDataPlanePolicy.cjs','scripts/nativeCodeReleaseDataPlane.cjs','tests/code-data-release.test.cjs','scripts/verifyCodeReleaseShell.cjs','scripts/verifyCodeReleasePostgresIsolation.cjs'])
+    for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+file+'"'));
+});
+check('online capacity observation precedes allocation and signing',()=>{
+  const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/release-capacity-preflight.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:10000,maxBuffer:1048576});
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 10$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  const factory=read('scripts/createReleaseBundle.cjs');assert(factory.indexOf('const capacityPreflight =')<factory.indexOf('const sequenceReservation ='));
+  for(const f of ['scripts/runReleaseCapacityPreflight.cjs','tests/release-capacity-preflight.test.cjs'])for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+f+'"'));
+});
 check('native capacity and protected retention planning fail closed before signing', () => {
   const child = require('node:child_process').spawnSync(process.execPath,
     ['--test', '--test-reporter=tap', 'tests/native-release-capacity.test.cjs', 'tests/release-retention-plan.test.cjs'],
