@@ -300,6 +300,7 @@ async function finalizeRuntime(state, directory) {
     session = await require("./postgresRuntimeReadSession.cjs").openPostgresRuntimeReadSession({ pool: sourcePool, storeDir: STORE,
       publicDataDir: "/opt/football-predict/public/data", protectReceipt: true, pointerLockHandle: held });
     await session.guardedFinals(); assertWritersStopped();
+    if (state.dataPlane === 'code-only') require('./codeReleaseAcceptance.cjs').assertSamePublication(seed.identity, session.identity);
     const { storePaths, readPointer } = require("../server/dataGenerationStore.cjs"), pointer = readPointer(storePaths(STORE).currentPointer);
     for (const name of ["generationId", "manifestHash", "sourceCycleId", "committedAt"]) assert.equal(pointer[name], session.identity[name]);
     const legacyBaselineTransition = state.contract.legacyBaselineSha256

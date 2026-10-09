@@ -19,6 +19,7 @@ const stubs=['log','release_stage_observe','wait_for_health','prepare_managed_tr
   'quiesce_native_auxiliary_writers',
   'assert_native_cutover_processes_drained','sync_model_artifact_mirrors','restart_service_if_needed',
   'stop_release_candidate_heartbeat_keeper','cleanup_release_static_attestations',
+  'native_code_verify_cutover_lease','verify_post_swap_transition_window',
   'cp','rm','install','chown','mv','sync','systemctl'];
 const cases=[
   {name:'code-success',mode:1},{name:'database-success',mode:0},
@@ -34,7 +35,7 @@ try{for(const item of cases){
   const dir=path.join(base,item.name);fs.mkdirSync(path.join(dir,'node/bin'),{recursive:true});fs.mkdirSync(path.join(dir,'app'));
   fs.mkdirSync(path.join(dir,'state','a'.repeat(64)),{recursive:true});
   fs.writeFileSync(path.join(dir,'node/bin/node'),'#!/usr/bin/env bash\nset -eu\n'+
-    'if [ "$1" = -e ]; then\n case "$2" in *dataPlane*) echo "$FIXTURE_MODE";; *) printf "runtime-only\\nfootball\\nnull\\n";; esac\n'+
+    'if [ "$1" = -e ]; then\n case "$2" in *dataPlane*|*p.classify*) echo "$FIXTURE_MODE";; *) printf "runtime-only\\nfootball\\nnull\\n";; esac\n'+
     'else printf "node:%s\\n" "$1" >>"$FIXTURE_LOG"; fi\n',{mode:0o700});
   const setup=variables.filter(v=>!['PATH','HOME'].includes(v)).map(v=>v+'=0').join('\n')+'\n'+
     'RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS=900000\nPOST_SWAP_TRANSITION_START_BUDGET_SECONDS=1620\nCANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS=30\n'+

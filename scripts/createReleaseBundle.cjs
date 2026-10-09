@@ -52,7 +52,8 @@ const { validateSignedArchiveSourceEvidence } = require("./releaseArchiveSourceI
 
 const rootDir = path.resolve(__dirname, "..");
 const nativePolicyPath = path.join(rootDir, "deploy/light-server/native-release-policy.json");
-if (fs.existsSync(nativePolicyPath)) require("./validateNativeReleasePolicy.cjs").readPolicy(nativePolicyPath);
+const nativePreparation = fs.existsSync(nativePolicyPath);
+if (nativePreparation) require("./validateNativeReleasePolicy.cjs").readPolicy(nativePolicyPath);
 // Online release callers already supply the pinned deployment key. Reject
 // unrestorable originals before any sequence reservation or frontend build.
 // Offline bundle creation does not claim live readiness; deployment rechecks.
@@ -63,7 +64,12 @@ if (process.env.RELEASE_DEPLOY_KEY) {
   const capacityPreflight = require("./runReleaseCapacityPreflight.cjs").runLiveCapacityPreflight();
   console.error(JSON.stringify({ phase: "capacity-preflight-before-build", ...capacityPreflight }));
   if (!capacityPreflight.ok) throw new Error("release capacity unavailable before sequence reservation and build");
-  const windowPreflight = require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({ stage: "before-build" });
+  // A signed native package is preparation, not a cutover lease. The root
+  // executor reclassifies the actual installed schema immediately before use.
+  // Database changes retain the complete server-side migration window.
+  const windowPreflight = nativePreparation
+    ? { ok: true, windowChecked: false, reason: "native-prepare-only", readyToCutover: false, windowPreauthorized: false }
+    : require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({ stage: "before-build" });
   console.error(JSON.stringify({ phase: "window-preflight-before-build", ...windowPreflight }));
   if (!windowPreflight.ok) throw new Error("release window unavailable before archive preflight, sequence reservation and build");
   const { report } = require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight();
@@ -849,6 +855,9 @@ const requiredEntries = [
   "scripts/nativeCodeReleaseDataPlane.cjs",
   "tests/code-data-release.test.cjs",
   "scripts/verifyCodeReleaseShell.cjs",
+  "scripts/codeReleaseAcceptance.cjs",
+  "scripts/verifyStagedCodeRelease.cjs",
+  "tests/staged-code-release.test.cjs",
   "scripts/verifyCodeReleasePostgresIsolation.cjs",
   "scripts/runReleaseCapacityPreflight.cjs",
   "tests/release-capacity-preflight.test.cjs",

@@ -7,6 +7,12 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('staged code preparation, bounded handover and independent natural-cycle evidence pass before signing',()=>{
+  const report=require('./verifyStagedCodeRelease.cjs').run();
+  assert.equal(report.ok,true);assert.ok(report.tests>=20);assert.equal(report.skipped,0);
+  for(const file of ['scripts/codeReleaseAcceptance.cjs','scripts/verifyStagedCodeRelease.cjs','tests/staged-code-release.test.cjs'])
+    for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+file+'"'));
+});
 check('daily bulletin scheduling, source proof and immutable cohort pass before signing',()=>{
   const report=require('./verifyDailyBulletinPolicy.cjs').run();assert.equal(report.ok,true);assert.ok(report.tests>=20);assert.equal(report.skipped,0);
   for(const file of ['scripts/verifyDailyBulletinPolicy.cjs','scripts/captureDailySourceEvidence.cjs','scripts/recommendationPlatform/dailyBulletinPolicy.cjs',
@@ -617,7 +623,8 @@ check('deployment rechecks archives before local clone and upload',()=>{
   const client=read('scripts/deployReleaseBundle.cjs');
   const probe=client.indexOf('require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight()');
   assert.ok(probe>=0&&probe<client.indexOf('const localCloneVerifier = runCommand('));
-  assert.ok(probe<client.indexOf('for (const artifact of uploads)'));
+  const upload=client.indexOf('for (const artifact of (activateOnly ? [] : uploads))');
+  assert.ok(upload>0 && probe<upload);
 });
 check('read-only release window preparation and actual entrypoint routing pass before signing',()=>{
   const result=require('./verifyReleaseWindowPreflight.cjs').verifyReleaseWindowPreflight();
