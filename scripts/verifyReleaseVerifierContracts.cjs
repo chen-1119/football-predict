@@ -7,6 +7,10 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('reviewed editorial source and exact public direction binding fail closed',()=>{
+ const r=require('node:child_process').spawnSync(process.execPath,['--test','tests/reviewed-analysis.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1048576});
+ assert.equal(r.status,0,r.stderr||r.stdout);assert.match(r.stdout,/# skipped 0/);
+});
 check('staged code preparation, bounded handover and independent natural-cycle evidence pass before signing',()=>{
   const report=require('./verifyStagedCodeRelease.cjs').run();
   assert.equal(report.ok,true);assert.ok(report.tests>=20);assert.equal(report.skipped,0);

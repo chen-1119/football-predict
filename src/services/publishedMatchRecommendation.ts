@@ -38,6 +38,14 @@ export function trainedMatchRecommendation(data:RecommendationCenterData|null,ma
   return records.length===1?records[0]:null;
 }
 
+export function reviewedMatchRecommendation(data:RecommendationCenterData|null,match:Match){
+ const records=data?.reviewedAnalysis?.records.filter(r=>r.eventId===sourceId(match.sourceMatchId||match.id)
+  &&Date.parse(r.eventVersion)===Date.parse(match.kickoffTime)&&r.businessDate===data.businessDate
+  &&r.homeTeamId===match.homeTeamId&&r.awayTeamId===match.awayTeamId
+  &&r.homeTeamName===match.homeTeamName&&r.awayTeamName===match.awayTeamName)??[];
+ return records.length===1?records[0]:null;
+}
+
 function uniquePosteriorLeader(probabilities: OutcomeProbability | null | undefined): Outcome | null {
   if (!probabilities) return null;
   const values: Array<[Outcome, number]> = [

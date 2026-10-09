@@ -1,6 +1,9 @@
+import { ReviewedMatchPick } from './ReviewedAnalysis';
+import type { ReviewedAnalysisRecord } from '../../services/recommendationCenterView';
 import type { LeagueBaselineDirections as Data } from '../../services/recommendationCenterView';
 import type { LeagueBaselineDirection } from '../../services/recommendationCenterView';
-export function TrainedMatchPick({record,language}:{record:LeagueBaselineDirection|null;language:'zh'|'en'}){
+export function TrainedMatchPick({record,language,reviewed,now}:{record:LeagueBaselineDirection|null;language:'zh'|'en';reviewed?:ReviewedAnalysisRecord|null;now?:number}){
+ if(reviewed)return <ReviewedMatchPick record={reviewed} now={now}/>;
  const zh=language==='zh';
  return <div className="compact-pick" data-active-strategy="league-trained-baseline-v1" data-model-hash={record?.modelHash}>
   <small>{zh?'球队模型 · 未校准参考':'Team model · Uncalibrated reference'}</small>

@@ -180,6 +180,7 @@ export interface RecommendationCenterData {
   coverage?:DayCoverageData;
   prdPaper?:PrdPaperDirectionsData;
   leagueBaseline?:LeagueBaselineDirections;
+  reviewedAnalysis?:ReviewedAnalysis;
   dailyBulletin?:DailyBulletin;
 }
 export interface LeagueBaselineDirection {
@@ -187,6 +188,41 @@ export interface LeagueBaselineDirection {
  id:string;homeTeamName:string;awayTeamName:string;createdAt:string;cutoffAt:string;
  modelVersion:string;modelHash:string;parametersHash:string;direction:Outcome|null;
  had:Record<Outcome,number>;scoreTop3:Array<{home:number;away:number;probability:number}>;
+}
+export interface ReviewedAnalysisRecord {
+ eventId:string;eventVersion:string;businessDate:string;matchNum:string;homeTeamId:string;awayTeamId:string;
+ homeTeamName:string;awayTeamName:string;market:'HAD';selection:'h'|'d'|'a';sp:number;originalSp:number;
+ scores:number[][];confidence:'高'|'中'|'低';reason:string;analysisUrl:string;limitations:string[];cutoffAt:string;quoteObservedAt:string;
+}
+export interface ReviewedAnalysis {businessDate:string;updatedAt:string;createdAt?:string;publicationHash?:string;records:ReviewedAnalysisRecord[];
+ combos:Array<{band:number;product:number|null;confidence:string|null;legs:Array<{eventId:string;matchNum:string;selection:'h'|'d'|'a';sp:number}>}>}
+export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedAt:string):ReviewedAnalysis{
+ const v=object(value),rows=list(v.records),combos=list(v.combos);
+ if(v.version!=='reviewed-analysis-view-v1'||v.businessDate!==businessDate||v.updatedAt!==updatedAt||v.formalEligible!==false||rows.length>32||combos.length>3)throw Error('Reviewed analysis envelope');
+ if(!rows.length){if(combos.length)throw Error('Reviewed analysis empty');return {businessDate,updatedAt,records:[],combos:[]};}
+ const {contentHash,...body}=v;
+ if(paperHex(contentHash)!==prdPaperPublicHash(body)||paperClock(v.createdAt).ns>=paperClock(v.commitObservedAt).ns||paperClock(v.commitObservedAt).ns>paperClock(updatedAt).ns)throw Error('Reviewed analysis seal');
+ const ids=new Set<string>();
+ const records=rows.map(x=>{
+  const r=object(x),eventId=paperText(r.eventId,20),selection=r.selection;
+  if(!/^\d+$/.test(eventId)||ids.has(eventId)||!['h','d','a'].includes(String(selection))||r.businessDate!==businessDate||r.market!=='HAD'||r.publicationMethod!=='reviewed-editorial'||r.formalEligible!==false||r.modelProbability!==null||r.modelVersion!==null)throw Error('Reviewed analysis record');ids.add(eventId);
+  const cutoffAt=paperClock(r.cutoffAt).text,eventVersion=paperClock(r.eventVersion).text;
+  if(paperClock(v.commitObservedAt).ns>=paperClock(cutoffAt).ns||paperClock(cutoffAt).ns>paperClock(eventVersion).ns||paperClock(r.quoteObservedAt).ns>paperClock(v.createdAt).ns)throw Error('Reviewed analysis clock');
+  const sp=number(r.sp),originalSp=number(r.originalSp),scores=list(r.scores).map(x=>list(x).map(number));
+  if(sp<=1||originalSp<=1||scores.length!==2||scores.some(s=>s.length!==2||s.some(n=>!Number.isInteger(n)||n<0||n>15)||(s[0]===s[1]?'d':s[0]>s[1]?'h':'a')!==selection)||!['高','中','低'].includes(String(r.confidence)))throw Error('Reviewed analysis scores');
+  const analysisUrl=paperText(r.analysisUrl,2000),url=new URL(analysisUrl);if(url.protocol!=='https:'||url.username||url.password)throw Error('Reviewed analysis URL');
+  return {eventId,eventVersion,businessDate,matchNum:paperText(r.matchNum,30),homeTeamId:paperText(r.homeTeamId,100),awayTeamId:paperText(r.awayTeamId,100),homeTeamName:paperText(r.homeTeamName,100),awayTeamName:paperText(r.awayTeamName,100),market:'HAD' as const,selection:selection as 'h'|'d'|'a',sp,originalSp,scores,confidence:r.confidence as '高'|'中'|'低',reason:paperText(r.reason,500),analysisUrl,limitations:list(r.limitations).map(v=>paperText(v,200)),cutoffAt,quoteObservedAt:paperClock(r.quoteObservedAt).text};
+ });
+ const bands=new Set<number>(),pairs=new Set<string>();
+ const parsed=combos.map(x=>{
+  const c=object(x),band=number(c.band);if(![2.5,5,10].includes(band)||bands.has(band))throw Error('Reviewed combo band');bands.add(band);
+  const legs=list(c.legs).map(x=>{const l=object(x),r=records.find(r=>r.eventId===l.eventId);if(!r||l.market!=='HAD'||l.selection!==r.selection||l.sp!==r.sp||l.matchNum!==r.matchNum)throw Error('Reviewed combo binding');return {eventId:r.eventId,matchNum:r.matchNum,selection:r.selection,sp:r.sp};});
+  if(!legs.length){if(c.product!==null||c.confidence!==null)throw Error('Reviewed combo empty');return {band,legs,product:null,confidence:null};}
+  const pair=legs.map(l=>l.eventId).sort().join('/'),product=number(c.product);
+  if(legs.length!==2||legs[0].eventId===legs[1].eventId||pairs.has(pair)||product<band||Math.abs(product-legs[0].sp*legs[1].sp)>1e-9)throw Error('Reviewed combo product');pairs.add(pair);
+  return {band,legs,product,confidence:paperText(c.confidence,2)};
+ });
+ return {businessDate,updatedAt,createdAt:paperClock(v.createdAt).text,publicationHash:paperHex(v.publicationHash),records,combos:parsed};
 }
 export interface LeagueBaselineDirections {businessDate:string;updatedAt:string;records:LeagueBaselineDirection[];blocked:number}
 export function parseLeagueBaseline(value:unknown,businessDate:string,updatedAt:string):LeagueBaselineDirections{
@@ -822,6 +858,7 @@ export function parseRecommendationCenter(response:unknown):RecommendationCenter
   const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),todayDualResearch:x.todayDualResearch==null?[]:list(x.todayDualResearch).map(dualResearchV2),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),qualityReport:review.qualityReport==null?undefined:modelQuality(review.qualityReport),statistics:{single:summary(stats.single),supplementary:stats.supplementary==null?undefined:supplementarySummary(stats.supplementary),qualifiedSingle:stats.qualifiedSingle==null?undefined:summary(stats.qualifiedSingle),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated',coverage:x.coverage==null?undefined:dayCoverage(x.coverage)};
   if(Object.hasOwn(x,'prdPaper'))result.prdPaper=parsePrdPaperDirections(x.prdPaper,result.businessDate,result.updatedAt);
   if(Object.hasOwn(x,'leagueBaseline'))result.leagueBaseline=parseLeagueBaseline(x.leagueBaseline,result.businessDate,result.updatedAt);
+  if(Object.hasOwn(x,'reviewedAnalysis'))result.reviewedAnalysis=parseReviewedAnalysis(x.reviewedAnalysis,result.businessDate,result.updatedAt);
   if(Object.hasOwn(x,'strategySwitch')){
     const s=object(x.strategySwitch);
     if(s.version!=='trained-strategy-switch-v1'||s.activeReferenceStrategy!=='league-trained-baseline-v1'||s.legacyPublicationEnabled!==false||s.legacyFallbackEnabled!==false||s.formalEligible!==false||result.current.length||result.previews.length||result.todayCombos.length||result.todayDualResearch?.length)throw new Error('Invalid trained strategy switch');

@@ -75,7 +75,7 @@ test('browser projection verifies binding, hides old-day references and renders 
  const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript'),path=require('node:path');
  function compile(file){const module={exports:{}},native=require('node:module').createRequire(path.resolve(file));
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,
-   {module,exports:module.exports,Date,require:native});return module.exports;}
+   {module,exports:module.exports,Date,require:(id)=>{if(id.startsWith('.')){const base=path.resolve(path.dirname(file),id);for(const ext of ['.tsx','.ts'])if(fs.existsSync(base+ext))return compile(base+ext);}return native(id);}});return module.exports;}
  const view=compile('src/services/recommendationCenterView.ts');
  const parsed=view.parseLeagueBaseline(raw,raw.businessDate,raw.updatedAt);assert.equal(parsed.records[0].modelHash,f.packet.contentHash);
  const component=compile('src/components/recommendations/LeagueBaselineDirections.tsx').LeagueBaselineDirections;
