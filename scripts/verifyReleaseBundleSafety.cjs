@@ -487,6 +487,8 @@ const requiredReleaseEntries = [
   "scripts/nativeReleaseDatabaseSession.cjs",
   "scripts/nativeReleaseDataPlane.cjs",
   "scripts/nativeReleaseCapacity.cjs",
+  "scripts/runReleaseCapacityPreflight.cjs",
+  "tests/release-capacity-preflight.test.cjs",
   "scripts/releaseRetentionPlan.cjs",
   "tests/native-release-capacity.test.cjs",
   "tests/release-retention-plan.test.cjs",

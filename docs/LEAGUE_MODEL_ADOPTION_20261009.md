@@ -76,8 +76,15 @@ venues, closed events, missing signed prices and future clocks block the event.
 - Original Brazil report replay produced parameters hash
   `de3921291ceccf23794f5c96555c3307aa82db6b02939f8fd915324c0bfc058f`:
   1,417 training rows and 29 team literals, selected Poisson weight 1.
-- The prepared artifact currently has **zero reviewed team mappings**. It is
-  private and is not committed to Git. It has not been registered in production.
+- The first prepared artifact had zero mappings. On October 9 at 09:12 Beijing,
+  a new private packet was prepared with eight manually reviewed Brazil club
+  mappings, using the signed Sporttery identity, exact production team IDs,
+  ordered event pairs and UTC kickoff times against opened provider event/team
+  pages. Saved web evidence hashes identify factual extracts, not raw HTML or
+  provider signatures. No scores or lineup information from those pages entered
+  training or prediction. The new model hash is
+  `ec51d51f47c2a0513179895e33fe5acbc67f2f25bc557b65cc5d66fd152f1755`;
+  parameters are unchanged. It has not been registered in production.
 - Finland remains blocked by insufficient holdout rows; it is not silently
   replaced with the Brazil model.
 - New online read at Beijing 2026-10-09 01:31 found 12 October 9 target events
