@@ -133,6 +133,8 @@ function legacyGenerationTransition(baseline, current) {
     to: Object.fromEntries(fields.map(field => [field, current[field]])), advanced };
 }
 async function allocate(sha, directory) {
+  const code = await require('./nativeCodeReleaseDataPlane.cjs').tryAllocate(sha, directory);
+  if (code) return code;
   const capacity = require('./nativeReleaseCapacity.cjs').assertNativeReleaseCapacity();
   const oldIdentity = readOldRuntimeIdentity(), oldSha = oldIdentity.bundleMarker;
   const environment = fs.readFileSync("/etc/football-predict/env", "utf8");
@@ -201,6 +203,10 @@ async function copyGenerationAsService(identity, destination) {
   assert.equal(resolved.manifestHash, identity.manifestHash); return proof;
 }
 async function prepare(state, directory, seed) {
+  if (state.dataPlane === 'code-only') {
+    assert.equal(seed, true, 'code release never reconciles production data');
+    return require('./nativeCodeReleaseDataPlane.cjs').seed(state, directory);
+  }
   const administrator = pool(state, "postgres", state.maintenanceOid), sourcePool = pool(state, "football", state.oldDatabaseOid);
   const candidatePool = pool(state, state.candidateDatabase, state.candidateOid);
   const session = new NativeReleaseDatabaseSession({ administrator, sourcePool, candidatePool, contract: mirrorContract(state), key: Buffer.from(state.key, "hex") });
@@ -266,6 +272,7 @@ function publisherPointerLock() {
   } catch (error) { held.release(); throw error; }
 }
 async function finalizeRuntime(state, directory) {
+  if (state.dataPlane === 'code-only') await require('./nativeCodeReleaseDataPlane.cjs').verifySchema(state);
   assert.equal(state.kind, "runtime-only"); assert.equal(state.contract.oldDatabaseOid, state.contract.newDatabaseOid); assertWritersStopped();
   if (state.contract.legacyBaselineSha256) {
     const baselineFile = path.join(directory, "legacy-unaccepted-baseline.json"), baselineBytes = fs.readFileSync(baselineFile);
@@ -349,6 +356,10 @@ async function finalize(state, directory) {
   } finally { await session.close(); await administrator.end(); if (held) held.release(); }
 }
 async function candidateAccess(state, directory, writable = false) {
+  if (state.dataPlane === 'code-only') {
+    assert.equal(writable, false, 'code release cannot acquire a database writer');
+    return require('./nativeCodeReleaseDataPlane.cjs').candidateAccess(state, directory);
+  }
   const prefix = writable ? "build" : "candidate", role = "football_" + prefix + "_" + state.candidateDatabase.slice("football_release_".length), password = crypto.randomBytes(32).toString("hex");
   assert.match(role, /^football_(candidate|build)_[a-f0-9]{12}_[0-9]{1,10}$/);
   const admin = pool(state, "postgres", state.maintenanceOid), candidate = pool(state, state.candidateDatabase, state.candidateOid);
@@ -376,6 +387,10 @@ async function candidateAccess(state, directory, writable = false) {
   } finally { await candidate.end(); await admin.end(); }
 }
 async function dropCandidateAccess(state, directory, writable = false) {
+  if (state.dataPlane === 'code-only') {
+    if (writable) return { ok: true, buildDatabaseAccess: false };
+    return require('./nativeCodeReleaseDataPlane.cjs').retire(state, directory);
+  }
   const prefix = writable ? "build" : "candidate", record = read(path.join(directory, prefix + "-access.json")); assert.equal(record.database, state.candidateDatabase);
   assert.match(record.role, /^football_(candidate|build)_[a-f0-9]{12}_[0-9]{1,10}$/);
   const admin = pool(state, "postgres", state.maintenanceOid), candidate = pool(state, state.candidateDatabase, state.candidateOid);
@@ -408,5 +423,6 @@ async function main() {
   return prepare(state, directory, action === "seed");
 }
 module.exports = { allocate, prepare, read, write, copyGenerationAsService, mirrorContract, finalize,
-  legacyGenerationTransition, protectedFrozenRecommendationHash, assertWritersStopped, candidateAccess, dropCandidateAccess };
+  legacyGenerationTransition, protectedFrozenRecommendationHash, assertWritersStopped, candidateAccess, dropCandidateAccess,
+  secureDirectory, topology, readOldRuntimeIdentity };
 if (require.main === module) main().then(result => console.log(JSON.stringify(result))).catch(error => { console.error(JSON.stringify({ ok: false, error: error.message, mirrorProgress: error.mirrorProgress })); process.exitCode = 1; });
