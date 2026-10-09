@@ -7,6 +7,13 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('daily bulletin scheduling, source proof and immutable cohort pass before signing',()=>{
+  const report=require('./verifyDailyBulletinPolicy.cjs').run();assert.equal(report.ok,true);assert.ok(report.tests>=20);assert.equal(report.skipped,0);
+  for(const file of ['scripts/verifyDailyBulletinPolicy.cjs','scripts/captureDailySourceEvidence.cjs','scripts/recommendationPlatform/dailyBulletinPolicy.cjs',
+    'scripts/recommendationPlatform/dailyBulletinRuntime.cjs','scripts/recommendationPlatform/dailySourceEvidence.cjs','tests/daily-bulletin-policy.test.cjs',
+    'src/components/recommendations/DailyBulletinPanel.tsx','src/components/recommendations/daily-bulletin.css'])
+    for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+file+'"'));
+});
 check('code releases separate PG migration and model work before signing',()=>{
   const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/code-data-release.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
   assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 30$/m);assert.match(child.stdout,/^# skipped 0$/m);

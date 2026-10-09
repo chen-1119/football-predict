@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { LeagueBaselineDirections } from './LeagueBaselineDirections';
+import { DailyBulletinPanel } from './DailyBulletinPanel';
 import { RefreshCw, ChevronDown, Search, ArrowUpRight } from 'lucide-react';
 import { useRecommendationCenter } from '../../hooks/useRecommendationCenter';
 import { TeamBadge } from '../TeamBadge';
@@ -264,6 +265,7 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
   const activeInputs=tab==='single'?data?.inputAsOf:data?.lanes.combos?.inputAsOf??data?.inputAsOf;
   return <section className="recommendation-center" aria-labelledby="rc-title">
     <header className="rc-heading"><div><span className="rc-eyebrow">{zh?'比赛日 '+(data?.businessDate||'—'):'MATCH DAY '+(data?.businessDate||'—')}</span><h1 id="rc-title">{review?(zh?'赛后复盘':'Result Review'):(zh?'今日推荐':'Today’s Recommendations')}</h1><p>{review?(zh?'查看真实赛果，复盘每一次选择。':'Review every selection against actual results.'):(zh?'先看比赛与方向，再看选择依据。':'Start with the match and pick, then explore the evidence.')}</p></div><button type="button" className="rc-refresh" onClick={()=>{refresh();if(review)reviewPage.refresh();}} disabled={loading||reviewPage.loading} aria-label={zh?'刷新推荐与复盘':'Refresh recommendations and review'}><RefreshCw size={16} aria-hidden="true"/>{loading||reviewPage.loading?(zh?'更新中':'Updating'):(zh?'刷新':'Refresh')}</button></header>
+    <DailyBulletinPanel data={data?.dailyBulletin} now={now} failed={failed||authorizationRequired} review={review}/>
     {!review&&tab==='single'&&<LeagueBaselineDirections data={data?.leagueBaseline} language={language} now={now} failed={failed||authorizationRequired}/>}
     {!review&&tab==='single'&&<PrdPaperDirections data={data?.prdPaper} language={language} now={now} loading={loading} failed={failed||authorizationRequired}/>}
     {!review&&<h2 className="rc-legacy-heading" data-legacy-strategy="coherent-market-primary-v1">{zh?'旧策略冻结记录':'Frozen records from the previous strategy'}</h2>}
