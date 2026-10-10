@@ -13,13 +13,16 @@ const catalog=Object.freeze({
   releaseSha256:'24dc8ab5a1462febd55079f4f8236c92f86b9e52a08ce79a54434ae2bb87ec5f',
   viewJsonSha256:'a3b6c9caadbe3b3d06c393adec8e573ca1c21d2891baf23817208811694c1d2b',
   observedAt:'2026-10-10T12:17:26.709Z',
+  firstVersionFile:'2026-10-10-first-version.json',firstVersionSha256:'2a36a1d81242b169e2fa9bdea3785fc776faf6299444f21ff8c5f493040c722b',
+  screenshotSha256:'8d8d9c795c7c7db998b21d8ef9601e244528ffb3cca8fb5f05ba3e46ed6d12df',
  }),
 });
 const check=(ok,code)=>p.check(ok,'HISTORICAL_COMBO_'+code);
 const stamp=value=>{const ns=epochNanoseconds(value);check(ns!==null,'CLOCK');return ns;};
-function loadArchive(entry){
- const file=path.join(__dirname,'reviewedComboHistory',entry.file),fd=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
- try{const s=fs.fstatSync(fd);check(s.isFile()&&s.size>0&&s.size<=65536,'BOUND');const b=Buffer.alloc(s.size);check(fs.readSync(fd,b,0,b.length,0)===b.length,'READ');check(p.sha(b)===entry.sha256,'SOURCE_BYTES');return JSON.parse(b.toString('utf8'));}
+function loadArchive(entry){return loadFile(entry.file,entry.sha256);}
+function loadFile(name,digest){
+ const file=path.join(__dirname,'reviewedComboHistory',name),fd=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
+ try{const s=fs.fstatSync(fd);check(s.isFile()&&s.size>0&&s.size<=65536,'BOUND');const b=Buffer.alloc(s.size);check(fs.readSync(fd,b,0,b.length,0)===b.length,'READ');check(p.sha(b)===digest,'SOURCE_BYTES');return JSON.parse(b.toString('utf8'));}
  finally{fs.closeSync(fd);}
 }
 function exactProduct(legs){
@@ -63,7 +66,26 @@ function restoreArchivedCombos(history,asOf){
  // Keep valid singles visible when no exact original combination view matches.
  if(archive.view.publicationHash!==history.publicationHash||archive.view.draftHash!==history.draftHash||p.hash(archive.view.records)!==p.hash(history.records))return history;
  validateArchive(archive,history,asOf);
+ const firstVersion=loadFile(entry.firstVersionFile,entry.firstVersionSha256);
+ validateFirstVersion(firstVersion,history,asOf);
  const {contentHash,...body}=history;void contentHash;
- return p.seal({...body,comboArchive:archive});
+ return p.seal({...body,comboArchive:{...archive,firstVersion}});
 }
-module.exports={restoreArchivedCombos,validateArchive};
+function validateFirstVersion(first,history,asOf){
+ const entry=catalog[history?.businessDate],{contentHash,...body}=first??{};
+ check(entry&&p.hash(body)===contentHash&&first.version==='reviewed-combo-user-first-version-v1'&&first.businessDate===history.businessDate,'FIRST_SEAL');
+ check(first.source?.kind==='user-provided-screenshot'&&first.source.imageSha256===entry.screenshotSha256&&first.source.originalObservedAt===null
+  &&stamp(first.source.suppliedAt)<=stamp(asOf)&&first.productionWrites===0&&first.settlementEligible===false,'FIRST_SOURCE');
+ check(p.hash(first.recordHashes)===p.hash(history.records.map(r=>p.hash(r))),'FIRST_RECORDS');
+ check(Array.isArray(first.combos)&&first.combos.length===3&&!Object.hasOwn(first,'threeCombos'),'FIRST_COMBOS');
+ const records=new Map(history.records.map(r=>[r.eventId,r])),bands=new Set(),groups=new Set();
+ for(const combo of first.combos){
+  check([2.5,5,10].includes(combo.band)&&!bands.has(combo.band)&&Array.isArray(combo.legs)&&combo.legs.length===2,'FIRST_BAND');bands.add(combo.band);
+  const bound=combo.legs.map(leg=>{const r=records.get(leg.eventId);check(r,'FIRST_LEG');const expected={eventId:r.eventId,matchNum:r.matchNum,market:r.market,...(r.market==='HHAD'?{handicap:r.handicap}:{}),selection:r.selection,sp:r.sp};check(p.hash(leg)===p.hash(expected),'FIRST_BINDING');return r;});
+  const group=bound.map(r=>r.eventId).sort().join('/');check(bound[0].eventId!==bound[1].eventId&&!groups.has(group),'FIRST_DUPLICATE');groups.add(group);
+  check(combo.product===exactProduct(combo.legs)&&combo.product>=combo.band,'FIRST_PRODUCT');
+  check(combo.confidence===(bound.some(r=>r.confidence==='低')?'低':bound.some(r=>r.confidence==='中')?'中':'高'),'FIRST_CONFIDENCE');
+ }
+ return true;
+}
+module.exports={restoreArchivedCombos,validateArchive,validateFirstVersion};

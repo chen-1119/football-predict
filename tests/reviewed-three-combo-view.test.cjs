@@ -153,12 +153,24 @@ test('archive integrity rejects unchanged original-byte hash tampering and canno
 });
 test('the saved 2026-10-10 online archive renders exactly its three original doubles through the API parser',()=>{
  const archive=JSON.parse(fs.readFileSync('scripts/recommendationPlatform/reviewedComboHistory/2026-10-10.json','utf8'));
- const original=archive.view,now='2026-10-10T17:00:00.000Z',h=require('../scripts/recommendationPlatform/reviewedComboHistory.cjs').restoreArchivedCombos(reviewed.seal({...Object.fromEntries(Object.entries(original).filter(([key])=>key!=='contentHash')),updatedAt:now,combos:[],threeCombos:[]}),now);
+ const original=archive.view,now='2026-10-11T01:00:00.000Z',h=require('../scripts/recommendationPlatform/reviewedComboHistory.cjs').restoreArchivedCombos(reviewed.seal({...Object.fromEntries(Object.entries(original).filter(([key])=>key!=='contentHash')),updatedAt:now,combos:[],threeCombos:[]}),now);
  const response=historyEnvelope(h),raw=response.recommendationCenter;raw.businessDate='2026-10-11';raw.updatedAt=now;raw.reviewedAnalysis={version:'reviewed-analysis-view-v1',businessDate:raw.businessDate,updatedAt:now,formalEligible:false,records:[],combos:[],threeCombos:[]};
  const before=JSON.stringify(response),parsed=view.parseRecommendationCenter(response),html=render(parsed.reviewedAnalysisHistory,'two',Date.parse(now));
  assert.equal(parsed.reviewedAnalysisHistory.records.length,27);assert.deepEqual(parsed.reviewedAnalysisHistory.comboArchive.view.combos,original.combos);assert.deepEqual(parsed.reviewedAnalysisHistory.comboArchive.view.threeCombos,[]);
- for(const text of ['2.5026','5.035','10.011','让胜(-2) 1.94','让胜(+2) 2.65','让负(-1) 1.90','平局 4.70'])assert.ok(html.includes(text),text);
+ assert.deepEqual(parsed.reviewedAnalysisHistory.comboArchive.firstVersion.combos.map(c=>c.product),[2.5026,5.0875,11]);
+ for(const text of ['首版组合存档','2.5026','5.0875','11','周六017 主胜 1.29','周六019 让胜(-2) 1.94','周六027 让负(-1) 2.75','周六022 让负(-3) 1.85','周六020 平局 4.00'])assert.ok(html.includes(text),text);
+ assert.doesNotMatch(html,/5\.035|10\.011|原线上存档/);
  assert.equal((html.match(/data-reviewed-combo-state="historical"/g)||[]).length,3);assert.match(html,/2026-10-10 竞彩日/);assert.match(html,/已停售/);assert.doesNotMatch(html,/信心|data-reviewed-combo-state="open"/);assert.equal(JSON.stringify(response),before);
+});
+
+test('first version parser rejects altered original direction, price, handicap, fake historical clock and duplicate legs even after resealing',()=>{
+ const retained=JSON.parse(fs.readFileSync('scripts/recommendationPlatform/reviewedComboHistory/2026-10-10.json','utf8')),first=JSON.parse(fs.readFileSync('scripts/recommendationPlatform/reviewedComboHistory/2026-10-10-first-version.json','utf8'));
+ const now='2026-10-11T01:00:00.000Z';
+ for(const change of [f=>f.combos[1].legs[0].sp=2.73,f=>f.combos[1].legs[0].handicap=1,f=>f.combos[2].legs[0].selection='h',f=>f.source.originalObservedAt='2026-10-10T13:49:00Z',f=>f.recordHashes[0]='0'.repeat(64),f=>f.combos[0].legs[1]=f.combos[0].legs[0]]){
+  const altered=structuredClone(first);change(altered);delete altered.contentHash;
+  const h=reviewed.seal({...Object.fromEntries(Object.entries(retained.view).filter(([key])=>key!=='contentHash')),updatedAt:now,combos:[],threeCombos:[],comboArchive:{...retained,firstVersion:reviewed.seal(altered)}});
+  assert.throws(()=>view.parseReviewedAnalysisHistory(h,'2026-10-11',now),/first version/);
+ }
 });
 
 function center(data,now,tab){

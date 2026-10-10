@@ -20,3 +20,19 @@ The archive is displayed separately as historical content. It never authorizes
 a current pick or settlement, replaces a frozen record, or supplies a past clock
 to the publisher. No original three-leg groups were present in this observation.
 Visible confidence labels stay removed.
+
+## User identified first version correction
+
+The user supplied a screenshot with different groups: 017 × 019 = 2.5026,
+027 × 022 = 5.0875, and 027 × 020 = 11.0000. The previous restoration selected
+the retained 20:16 view, which was not the version the user requested. The live
+combination generator selected again when legs closed; the singles stayed frozen.
+
+`2026-10-10-first-version.json` restores the exact screenshot groups separately.
+Its provenance is the supplied image SHA-256
+`8d8d9c795c7c7db998b21d8ef9601e244528ffb3cca8fb5f05ba3e46ed6d12df`.
+The screenshot observation clock is unknown and remains null. The artifact uses
+the actual restoration clock, not the footer's result check clock. Every leg
+binds to the unchanged original 27 singles, including event, line, direction and
+SP. Original view bytes, freezes and ACKs remain unchanged. The preferred groups
+are historical display only, never a new publication or settlement input.
