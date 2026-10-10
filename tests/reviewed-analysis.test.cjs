@@ -111,3 +111,26 @@ test('unknown batch COMMIT blocks further publication until readback, never crea
  const next=batch(v,[1]);await a.rejects(runtime.publish(next,{pool:db.pool,expectedDraftHash:p.hash(next)}),/ACK_MISSING/);
  a.equal(db.rows().size,1);
 });
+
+test('large unrelated current rows do not enter a small reviewed batch or its replay',async()=>{
+ const v=setup(),d=batch(v,[0]);v.matches[1].unrelated= 'x'.repeat(9*1024*1024);
+ const runtime=controlledRuntime(v),db=controlledPool(v);
+ const saved=await runtime.publish(d,{pool:db.pool,expectedDraftHash:p.hash(d)});
+ const stored=JSON.parse(db.rows().get(saved.key).payload_json);
+ a.equal(stored.inputs.matches.length,1);a.equal(stored.inputs.matches[0].sourceMatchId,v.matches[0].sourceMatchId);
+ a.equal(p.hash(stored.inputs.snapshot),p.hash(v.snapshot));
+ const view=await runtime.projection(db.client,d.businessDate,fixture.stamp(fixture.NOW+1000));
+ a.equal(view.records.length,1);a.equal(viewModule().parseReviewedAnalysis(view,d.businessDate,view.updatedAt).records.length,1);
+});
+test('an oversized selected event still rejects before commit',async()=>{
+ const v=setup(),d=batch(v,[0]);v.matches[0].large='x'.repeat(9*1024*1024);
+ const runtime=controlledRuntime(v),db=controlledPool(v);
+ await a.rejects(runtime.publish(d,{pool:db.pool,expectedDraftHash:p.hash(d)}),/REVIEWED_ANALYSIS_BOUND/);
+ a.equal(db.rows().size,0);a.equal(db.log.includes('COMMIT'),false);
+});
+test('scoping retains duplicate selected identities for rejection',async()=>{
+ const v=setup(),d=batch(v,[0]);v.matches.push(structuredClone(v.matches[0]));
+ const runtime=controlledRuntime(v),db=controlledPool(v);
+ await a.rejects(runtime.publish(d,{pool:db.pool,expectedDraftHash:p.hash(d)}),/CANONICAL_EVENT/);
+ a.equal(db.rows().size,0);
+});

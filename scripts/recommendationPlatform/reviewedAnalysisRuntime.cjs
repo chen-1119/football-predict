@@ -29,8 +29,14 @@ async function publish(draft,{pool,expectedDraftHash}){
   const prior=await projection(c,draft.businessDate,await dbNow(c));
   p.check(prior.records.length+draft.singles.length<=32,'DAILY_RECORD_BOUND');
   p.check(draft.singles.every(r=>!prior.records.some(v=>v.eventId===r.eventId)),'EVENT_ALREADY_FROZEN');
-  const matches=(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(r=>r.payload);p.check(matches.length<=512,'MATCH_BOUND');
+  const allMatches=(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(r=>r.payload);p.check(allMatches.length<=512,'MATCH_BOUND');
   const snapshot=readLiveOfficialSnapshot(),asOf=await dbNow(c),evidenceByEvent={};
+  p.validateDraft(draft,asOf);
+  // Freeze only this batch's events. Keep the complete signed source and every
+  // matching candidate so identity, duplicates and the existing 8 MiB bound
+  // are still checked by make and by committed readback replay.
+  const requested=new Set(draft.singles.map(r=>r.eventId));
+  const matches=allMatches.filter(m=>requested.has(String(m.sourceMatchId||'').replace(/^sporttery_/,'')));
   if(draft.version===2){for(const r of draft.singles){const packets=[];
    for(const k of r.evidenceKeys)packets.push(await require('../teamEvidenceStore.cjs').readPacket(c,k,asOf));
    evidenceByEvent[r.eventId]=packets;
