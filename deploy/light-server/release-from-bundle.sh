@@ -10,6 +10,10 @@ WORKER_SERVICE_NAME="${WORKER_SERVICE_NAME:-football-sync-worker}"
 NODE_HOME="${NODE_HOME:-/opt/node-v22.22.1}"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8788}"
+# r829's restored API validated its immutable publication in 150961ms.
+# Keep startup bounded while allowing that measured warmup and two probes.
+# This is not a lease extension; all transition and identity gates still apply.
+readonly FAST_WATCHER_RESTART_HEALTH_SECONDS=180
 CANDIDATE_PORT="${CANDIDATE_PORT:-8789}"
 KEEP_BACKUP="${KEEP_BACKUP:-1}"
 PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-}"
@@ -967,7 +971,7 @@ pause_current_fast_watcher_for_live_prebuild() {
   systemctl is-active --quiet "$SERVICE_NAME" && return 1
   wait_for_current_service_cgroup_reclaimed "$old_control_group" || return 1
   systemctl start "$SERVICE_NAME" || return 1
-  wait_for_health "http://${HOST}:${PORT}" "release-fast-watcher-paused" 120 2 service || return 1
+  wait_for_health "http://${HOST}:${PORT}" "release-fast-watcher-paused" "$FAST_WATCHER_RESTART_HEALTH_SECONDS" 2 service || return 1
   assert_release_fast_watcher_pause_guard || return 1
   # Keep the root-owned override installed for the whole live-prebuild window.
   # Restart=always may replace the old process at any point; every replacement
@@ -989,7 +993,7 @@ restore_release_fast_watcher_after_failed_pre_swap() {
     else
       systemctl start "$SERVICE_NAME" || return 1
     fi
-    wait_for_health "http://${HOST}:${PORT}" "release-fast-watcher-restored" 120 2 service || return 1
+    wait_for_health "http://${HOST}:${PORT}" "release-fast-watcher-restored" "$FAST_WATCHER_RESTART_HEALTH_SECONDS" 2 service || return 1
     assert_release_fast_watcher_process_state 1 || return 1
     assert_release_fast_watcher_health_state 1 || return 1
   fi

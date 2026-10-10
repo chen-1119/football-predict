@@ -4380,6 +4380,47 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   assert.doesNotMatch(bundleRelease, /curl -fsS --max-time 8 "\$1" >\/dev\/null/);
   });
 
+  check("watcher restart tolerates measured warmup but retains consecutive health and a finite timeout", () => {
+    assert.match(bundleRelease, /^readonly FAST_WATCHER_RESTART_HEALTH_SECONDS=180$/m);
+    for (const name of ["pause_current_fast_watcher_for_live_prebuild", "restore_release_fast_watcher_after_failed_pre_swap"]) {
+      const body = extractFunction(bundleRelease, name);
+      assert.match(body, /wait_for_health .*"\$FAST_WATCHER_RESTART_HEALTH_SECONDS" 2 service \|\| return 1/);
+      assert.ok(body.indexOf("wait_for_health") < body.indexOf("assert_release_fast_watcher_"));
+    }
+    const bash = process.env.RELEASE_TEST_BASH || (process.platform === "linux" ? "/bin/bash" : "");
+    assert.ok(bash && fs.existsSync(bash), "real Bash is required for startup timeout regression");
+    const body = extractFunction(bundleRelease, "wait_for_health");
+    for (const [scenario, budget, expected, elapsed] of [
+      ["warmup", 120, 1, 120], ["warmup", 180, 0, 154],
+      ["unhealthy", 180, 1, 180], ["intermittent", 180, 1, 180],
+    ]) {
+      const harness = `set -euo pipefail
+SECONDS=0
+log(){ :; }
+sleep(){ SECONDS=$((SECONDS + $1)); }
+persist_health_failure_evidence(){ :; }
+probe_health_endpoint(){
+  [ "$2" = service ] || exit 91
+  HEALTH_PROBE_CURL_EXIT=7; HEALTH_PROBE_HTTP_STATUS=000; HEALTH_PROBE_REASON=synthetic
+  case ${scenario} in
+    warmup) [ "$SECONDS" -ge 152 ] ;;
+    intermittent) [ "$((SECONDS % 4))" -eq 0 ] ;;
+    *) return 1 ;;
+  esac
+}
+wait_for_health(){
+${body}
+}
+status=0
+wait_for_health http://127.0.0.1 synthetic ${budget} 2 service || status=$?
+printf '%s %s' "$status" "$SECONDS"
+`;
+      const result = spawnSync(bash, ["-s"], { input: harness, encoding: "utf8", timeout: 10000, windowsHide: true });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout, `${expected} ${elapsed}`, scenario);
+    }
+  });
+
   check("candidate refreeze refreshes its exact-revision deadline audit before candidate startup", () => {
     const catchupBody = extractFunction(bundleRelease, "run_candidate_model_artifact_catchup");
     const candidateRefreshBody = extractFunction(bundleRelease, "run_candidate_refresh_step");
