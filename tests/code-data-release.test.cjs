@@ -17,7 +17,7 @@ test('lease pointer contention retries the complete operation after cleanup', as
     } finally { active = false; }
   }, async ms => { a.equal(active, false); waits.push(ms); });
   a.deepEqual(result, { generation: 'new-snapshot', attempt: 3 });
-  a.deepEqual(waits, [1000, 2000]);
+  a.deepEqual(waits, [10000, 10000]);
 });
 test('lease receipt barrier contention retries but permanent contention fails bounded', async () => {
   const { retryLeaseRead } = require('../scripts/nativeCodeReleaseDataPlane.cjs');
@@ -26,7 +26,7 @@ test('lease receipt barrier contention retries but permanent contention fails bo
   a.equal(await retryLeaseRead(async () => { if (++calls === 1) throw error; return 'fresh'; }, async () => {}), 'fresh');
   calls = 0;
   await a.rejects(retryLeaseRead(async () => { calls++; throw error; }, async () => {}), e => e === error);
-  a.equal(calls, 3);
+  a.equal(calls, 61);
 });
 test('lease integrity, cleanup and uncertain write errors never retry', async () => {
   const { retryLeaseRead } = require('../scripts/nativeCodeReleaseDataPlane.cjs');
@@ -36,7 +36,7 @@ test('lease integrity, cleanup and uncertain write errors never retry', async ()
     a.equal(calls, 1);
   }
 });
-test('lease retry wraps only pre-stop capture and preserves session cleanup and original cutover clock', () => {
+test('lease retry wraps only pre-stop preparation and starts cutover clock after fresh capture', () => {
   const source = fs.readFileSync(path.join(root, 'scripts/nativeCodeReleaseDataPlane.cjs'), 'utf8');
   a.match(source, /return retryLeaseRead\(\(\) => captureLeaseInputOnce\(state, directory\)\)/);
   const once = source.slice(source.indexOf('async function captureLeaseInputOnce'), source.indexOf('async function seed'));
@@ -44,7 +44,26 @@ test('lease retry wraps only pre-stop capture and preserves session cleanup and 
   a(once.includes('finally { if (session) await session.close(); await source.end(); }'));
   const shell = fs.readFileSync(path.join(root, 'deploy/light-server/release-native.sh'), 'utf8');
   a.equal(shell.split('CODE_CUTOVER_STARTED_SECONDS=$SECONDS').length - 1, 1);
-  a(shell.indexOf('CODE_CUTOVER_STARTED_SECONDS=$SECONDS') < shell.indexOf('lease-input "$BUNDLE_SHA256"'));
+  a(shell.indexOf('CODE_CUTOVER_STARTED_SECONDS=$SECONDS') > shell.indexOf('lease-input "$BUNDLE_SHA256"'));
+  a(shell.indexOf('CODE_CUTOVER_STARTED_SECONDS=$SECONDS') < shell.indexOf('--current "$NATIVE_STATE_DIR/code-lease-current.json"'));
+});
+test('lease preparation tolerates real-length projection delay without touching service state', async () => {
+  const { retryLeaseRead } = require('../scripts/nativeCodeReleaseDataPlane.cjs');
+  let now = 0, calls = 0;
+  const value = await retryLeaseRead(async () => { calls++;
+    if (now < 410000) throw new Error('native receipt read barrier busy; retry after projection completes');
+    return { generation: 'newly-committed' };
+  }, async ms => { now += ms; }, () => now);
+  a.deepEqual(value, { generation: 'newly-committed' }); a.equal(calls, 42); a.equal(now, 410000);
+});
+test('lease preparation respects elapsed deadline and rejects a backward clock', async () => {
+  const { retryLeaseRead } = require('../scripts/nativeCodeReleaseDataPlane.cjs');
+  let now = 0, calls = 0;
+  const busy = () => { calls++; throw Object.assign(new Error('busy'), { code:'POINTER_LOCK_TIMEOUT' }); };
+  await a.rejects(retryLeaseRead(busy, async ms => { now += ms; }, () => now), /deadline/);
+  a.equal(now, 600000); a.equal(calls, 60);
+  now = 5;
+  await a.rejects(retryLeaseRead(busy, async () => { now = 4; }, () => now), /clock invalid/);
 });
 for (const mode of ['exact', 'identity', 'tamper', 'oversize']) test('code lease uses PG-bound immutable current: ' + mode, () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lease-generation-'));
@@ -69,9 +88,9 @@ for (const mode of ['exact', 'identity', 'tamper', 'oversize']) test('code lease
 });
 test('lease captures committed generation before service stop and seed rejects identity drift', () => {
   const shell = fs.readFileSync(path.join(root, 'deploy/light-server/release-native.sh'), 'utf8');
-  const begin = shell.indexOf('CODE_CUTOVER_STARTED_SECONDS=$SECONDS'), capture = shell.indexOf('lease-input "$BUNDLE_SHA256"', begin);
+  const begin = shell.indexOf('CODE_CUTOVER_STARTED_SECONDS=$SECONDS'), capture = shell.indexOf('lease-input "$BUNDLE_SHA256"');
   const create = shell.indexOf('--current "$NATIVE_STATE_DIR/code-lease-current.json"', capture), stop = shell.indexOf('stop_worker_for_release_window', create);
-  a(begin >= 0 && capture > begin && create > capture && stop > create);
+  a(capture >= 0 && begin > capture && create > begin && stop > create);
   const source = fs.readFileSync(path.join(root, 'scripts/nativeCodeReleaseDataPlane.cjs'), 'utf8');
   a(source.includes('assertSamePublication(leaseInput.identity, session.identity)'));
 });

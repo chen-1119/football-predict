@@ -181,10 +181,10 @@ run_native_release() {
     # Start the lease BEFORE stopping any publisher. Time spent preparing the
     # package/dependencies is excluded, but a boundary crossed while seeded or
     # checked still rejects this candidate. No user/env budget override.
-    CODE_CUTOVER_STARTED_SECONDS=$SECONDS
     CODE_CUTOVER_POST_SWAP_MARGIN_SECONDS=300
     CANDIDATE_TRANSITION_LEASE="$NATIVE_STATE_DIR/code-transition-lease.json"
     NODE_PATH="$APP_DIR/node_modules" "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/nativeCodeReleaseDataPlane.cjs" lease-input "$BUNDLE_SHA256"
+    CODE_CUTOVER_STARTED_SECONDS=$SECONDS
     "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" create \
       --current "$NATIVE_STATE_DIR/code-lease-current.json" --lease "$CANDIDATE_TRANSITION_LEASE" \
       --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
