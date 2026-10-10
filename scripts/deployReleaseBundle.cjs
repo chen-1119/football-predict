@@ -433,6 +433,21 @@ if (!frontendOnly && bundleInspection.entries.some(entry => entry.replace(/^\.\/
   } catch (error) { fail("signed native storage dispatch rejected", { reason: error.message }); }
 }
 
+// A short-lived emergency instruction is an actual member of the signed
+// archive. No CLI flag or environment variable can turn an older package into
+// an emergency release. The native allocator must still prove code-only.
+let emergencyCodeAuthorization = null;
+const emergencyAuthorizationEntry = "deploy/light-server/code-release-activation-authorization.json";
+if (bundleInspection.entries.some(entry => entry.replace(/^\.\//, "") === emergencyAuthorizationEntry)) {
+  if (!nativeFullRelease || frontendOnly) fail("emergency activation requires signed native code release");
+  const authorization = inspectBundleEntryBytes(bundlePath, emergencyAuthorizationEntry);
+  if (!authorization.ok || authorization.bytes > 4096) fail("signed emergency activation authorization unavailable");
+  try {
+    emergencyCodeAuthorization = require("./releaseTransitionLease.cjs").validateEmergencyCodeAuthorization(
+      JSON.parse(authorization.content.toString("utf8")), { at: new Date().toISOString(), dataPlane: "code-only" });
+  } catch (error) { fail("signed emergency activation authorization rejected", { reason: error.message }); }
+}
+
 let releaseWindowPreflight = { windowChecked: false, reason: frontendOnly ? "frontend-only-no-data-cutover" : "dry-run",
   readyToCutover: false, windowPreauthorized: false };
 if (frontendOnly) {
@@ -454,7 +469,11 @@ if (frontendOnly) {
       // Reject a certainly closed short activation window before invoking the
       // root allocator/sequence consumer. This is only a necessary minimum;
       // installed-schema classification and every final server gate still run.
-      const windowPreflight = nativeFullRelease && activateOnly
+      const windowPreflight = emergencyCodeAuthorization
+        ? { ok: true, windowChecked: false, reason: "signed-time-limited-emergency-code-activation",
+          emergencyCodeAuthorization, readyToCutover: false, windowPreauthorized: false,
+          scope: "User-authorized schedule-window exception only; server code-only classification, signature, lock, PG, archive and recovery gates remain mandatory." }
+        : nativeFullRelease && activateOnly
         ? require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({stage:"before-upload",nativeFullRelease:true,activationMinimum:true})
         : nativeFullRelease
         ? { ok: true, windowChecked: false, reason: "signed-native-prepare-only", readyToCutover: false, windowPreauthorized: false }

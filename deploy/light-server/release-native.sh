@@ -91,6 +91,14 @@ run_native_release() {
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseWorkerPreflight.cjs"
   NATIVE_PLANNED_CODE="$("$NODE_HOME/bin/node" -e 'const p=require(process.argv[1]);console.log(p.classify(p.capture(process.argv[2]),p.capture(process.argv[3])).mode === "code-only" ? "1" : "0")' "$TRUSTED_SOURCE_DIR/scripts/releaseDataPlanePolicy.cjs" "$APP_DIR" "$TRUSTED_SOURCE_DIR")"
   [[ "$NATIVE_PLANNED_CODE" =~ ^[01]$ ]]
+  CODE_EMERGENCY_AUTHORIZATION="$TRUSTED_SOURCE_DIR/deploy/light-server/code-release-activation-authorization.json"
+  CODE_EMERGENCY_ACTIVE=0
+  if [ -e "$CODE_EMERGENCY_AUTHORIZATION" ] || [ -L "$CODE_EMERGENCY_AUTHORIZATION" ]; then
+    [ "$NATIVE_PLANNED_CODE" = 1 ] || { log "emergency authorization refuses database migration"; return 1; }
+    "$NODE_HOME/bin/node" -e 'require(process.argv[1]).readEmergencyCodeAuthorization(process.argv[2], {at:new Date().toISOString(),dataPlane:"code-only"})' \
+      "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" "$CODE_EMERGENCY_AUTHORIZATION"
+    CODE_EMERGENCY_ACTIVE=1
+  fi
   if [ "$NATIVE_PLANNED_CODE" != 1 ]; then
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" probe \
     --current "$APP_DIR/public/data/matches-current.json" --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
@@ -180,15 +188,21 @@ run_native_release() {
     # candidate checks. The public service continues to serve requests.
     # Start the lease BEFORE stopping any publisher. Time spent preparing the
     # package/dependencies is excluded, but a boundary crossed while seeded or
-    # checked still rejects this candidate. No user/env budget override.
+    # checked normally rejects this candidate. A separately signed, short-lived
+    # code-only authorization may ignore schedule windows; lifetime, snapshot,
+    # data/archives, ownership and rollback checks remain mandatory.
     CODE_CUTOVER_POST_SWAP_MARGIN_SECONDS=300
     CANDIDATE_TRANSITION_LEASE="$NATIVE_STATE_DIR/code-transition-lease.json"
     NODE_PATH="$APP_DIR/node_modules" "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/nativeCodeReleaseDataPlane.cjs" lease-input "$BUNDLE_SHA256"
     CODE_CUTOVER_STARTED_SECONDS=$SECONDS
+    local code_emergency_args=()
+    if [ "$CODE_EMERGENCY_ACTIVE" = 1 ]; then
+      code_emergency_args=(--emergency-authorization "$CODE_EMERGENCY_AUTHORIZATION" --data-plane code-only)
+    fi
     "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" create \
       --current "$NATIVE_STATE_DIR/code-lease-current.json" --lease "$CANDIDATE_TRANSITION_LEASE" \
       --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
-      --verifier-runtime-max-seconds 300 --preverify-refresh-budget-seconds 570 --atomic-swap-margin-seconds 30
+      --verifier-runtime-max-seconds 300 --preverify-refresh-budget-seconds 570 --atomic-swap-margin-seconds 30 "${code_emergency_args[@]}"
     # Code preparation has not touched live services or maintenance. Only a
     # granted cutover lease may open the recoverable service transaction.
     # A closed window/build rejection therefore exits without restarting APP.
@@ -321,7 +335,11 @@ run_native_release() {
   wait_for_health "http://${HOST}:${PORT}" native-post-swap 120 2 service
   if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
     [ "$((SECONDS - CODE_CUTOVER_STARTED_SECONDS))" -lt 900 ]
-    verify_post_swap_transition_window 30 code-service-handover
+    if [ "$CODE_EMERGENCY_ACTIVE" = 1 ]; then
+      native_code_verify_cutover_lease 30 "$APP_DIR"
+    else
+      verify_post_swap_transition_window 30 code-service-handover
+    fi
   fi
   release_stage_observe end stopped-window ok
   native_finish_readiness
@@ -334,9 +352,13 @@ run_native_release() {
 native_code_verify_cutover_lease() {
   [ "$NATIVE_CODE_RELEASE" = 1 ]
   [ "$((SECONDS - CODE_CUTOVER_STARTED_SECONDS))" -lt "$((900 - $1))" ] || { log "code cutover preparation exceeded its bounded lease"; return 1; }
-  "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/releaseTransitionLease.cjs" verify \
-    --current "$NEXT_DIR/public/data/matches-current.json" --lease "$CANDIDATE_TRANSITION_LEASE" \
-    --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" --required-margin-seconds "$1"
+  local code_root="${2:-$NEXT_DIR}" emergency_args=()
+  if [ "${CODE_EMERGENCY_ACTIVE:-0}" = 1 ]; then
+    emergency_args=(--emergency-authorization "$CODE_EMERGENCY_AUTHORIZATION" --data-plane code-only)
+  fi
+  "$NODE_HOME/bin/node" "$code_root/scripts/releaseTransitionLease.cjs" verify \
+    --current "$code_root/public/data/matches-current.json" --lease "$CANDIDATE_TRANSITION_LEASE" \
+    --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" --required-margin-seconds "$1" "${emergency_args[@]}"
 }
 
 native_finish_readiness() {

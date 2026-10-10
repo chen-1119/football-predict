@@ -167,6 +167,7 @@ const expectedSafeEntries = [
   "docs/npmrc-example.md"
 ];
 const requiredReleaseEntries = [
+  "tests/emergency-code-activation.test.cjs",
   "src/services/prematchV3FeedbackLoop.cjs",
   "scripts/registerPrematchV3Parameters.cjs",
   "tests/prematch-v3-feedback-loop.test.cjs",
