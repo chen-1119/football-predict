@@ -208,7 +208,9 @@ export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedA
   const r=object(x),eventId=paperText(r.eventId,20),selection=r.selection;
   if(!/^\d+$/.test(eventId)||ids.has(eventId)||!['h','d','a'].includes(String(selection))||r.businessDate!==businessDate||r.market!=='HAD'||r.publicationMethod!=='reviewed-editorial'||r.formalEligible!==false||r.modelProbability!==null||r.modelVersion!==null)throw Error('Reviewed analysis record');ids.add(eventId);
   const cutoffAt=paperClock(r.cutoffAt).text,eventVersion=paperClock(r.eventVersion).text;
-  if(paperClock(v.commitObservedAt).ns>=paperClock(cutoffAt).ns||paperClock(cutoffAt).ns>paperClock(eventVersion).ns||paperClock(r.quoteObservedAt).ns>paperClock(v.createdAt).ns)throw Error('Reviewed analysis clock');
+  const created=paperClock(r.publicationCreatedAt??v.createdAt),committed=paperClock(r.publicationCommitObservedAt??v.commitObservedAt);
+  if(Object.hasOwn(r,'publicationCreatedAt')!==Object.hasOwn(r,'publicationCommitObservedAt')||created.ns>=committed.ns||committed.ns>paperClock(v.commitObservedAt).ns
+   ||committed.ns>=paperClock(cutoffAt).ns||paperClock(cutoffAt).ns>paperClock(eventVersion).ns||paperClock(r.quoteObservedAt).ns>created.ns)throw Error('Reviewed analysis clock');
   const sp=number(r.sp),originalSp=number(r.originalSp),scores=list(r.scores).map(x=>list(x).map(number));
   if(sp<=1||originalSp<=1||scores.length!==2||scores.some(s=>s.length!==2||s.some(n=>!Number.isInteger(n)||n<0||n>15)||(s[0]===s[1]?'d':s[0]>s[1]?'h':'a')!==selection)||!['高','中','低'].includes(String(r.confidence)))throw Error('Reviewed analysis scores');
   const analysisUrl=paperText(r.analysisUrl,2000),url=new URL(analysisUrl);if(url.protocol!=='https:'||url.username||url.password)throw Error('Reviewed analysis URL');
@@ -217,7 +219,7 @@ export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedA
    if(paperHex(eh)!==prdPaperPublicHash(eb)||e.version!=='team-evidence-adoption-view-v1'||!paperHex(e.adoptionHash)||e.verification!=='official-single-source'
     ||e.secondIndependentSourceVerified!==false||e.formalEligible!==false||list(e.probabilityFactorsUsed).length||r.confidence!=='低'
     ||ev.sourceMatchId!==eventId||ev.eventVersion!==eventVersion||ev.businessDate!==businessDate||ev.homeTeamId!==r.homeTeamId||ev.awayTeamId!==r.awayTeamId
-    ||hashes.length<1||hashes.length>4||JSON.stringify(hashes)!==JSON.stringify(r.evidenceHashes)||paperClock(e.asOf).ns!==paperClock(v.createdAt).ns)throw Error('Reviewed evidence binding');
+    ||hashes.length<1||hashes.length>4||JSON.stringify(hashes)!==JSON.stringify(r.evidenceHashes)||paperClock(e.asOf).ns!==created.ns)throw Error('Reviewed evidence binding');
    evidence={hashes,observedAt:paperClock(e.asOf).text,missing:list(e.missing).map(x=>paperText(x,100)),verification:'official-single-source'};
   }
   return {eventId,eventVersion,businessDate,matchNum:paperText(r.matchNum,30),homeTeamId:paperText(r.homeTeamId,100),awayTeamId:paperText(r.awayTeamId,100),homeTeamName:paperText(r.homeTeamName,100),awayTeamName:paperText(r.awayTeamName,100),market:'HAD' as const,selection:selection as 'h'|'d'|'a',sp,originalSp,scores,confidence:r.confidence as '高'|'中'|'低',reason:paperText(r.reason,500),analysisUrl,limitations:list(r.limitations).map(v=>paperText(v,200)),cutoffAt,quoteObservedAt:paperClock(r.quoteObservedAt).text,...(evidence?{evidence}:{})};

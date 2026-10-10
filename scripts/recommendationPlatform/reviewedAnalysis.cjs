@@ -9,7 +9,18 @@ const text=(v,n=500)=>typeof v==='string'&&v.length>0&&v.length<=n&&!/[\x00-\x08
 const safeUrl=v=>{try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password;}catch{return false;}};
 function validateDraft(d,asOf){
  check((d?.version===1&&d.reportKind==='weekday-2000-selected-two'&&d.predictionScope==='chat-only research')
-  ||(d?.version===2&&d.reportKind==='evidence-backed-prematch'&&d.predictionScope==='reviewed-online-reference'),'DRAFT_KIND');
+  ||(d?.version===2&&d.reportKind==='evidence-backed-prematch'&&d.predictionScope==='reviewed-online-reference')
+  ||(d?.version===3&&d.reportKind==='manual-prematch-batch'&&d.predictionScope==='reviewed-online-reference'),'DRAFT_KIND');
+ if(d.version===3){
+  check(typeof d.originalArchive==='string'&&Buffer.byteLength(d.originalArchive)<=384*1024
+   &&sha(d.originalArchive)===d.originalArchiveSha256,'ORIGINAL_ARCHIVE');
+  let original;try{original=JSON.parse(d.originalArchive);}catch{check(false,'ORIGINAL_ARCHIVE');}
+  check(original?.version===1&&['morning-1100-review-and-early','weekday-2000-selected-two','weekday-2100-full',
+   'weekend-2100-selected-two','weekend-2200-full'].includes(original.reportKind)
+   &&['chat-only research','chat-only manual research'].includes(original.predictionScope)
+   &&original.businessDate===d.businessDate&&original.frozenAt===d.frozenAt
+   &&Array.isArray(original.singles)&&hash(original.singles.map(r=>({...r,classification:'manual-prematch-research'})))===hash(d.singles),'ORIGINAL_BINDING');
+ }
  check(d.businessDate===day(Date.parse(asOf))&&Date.parse(d.frozenAt)<=Date.parse(asOf)&&Number.isFinite(Date.parse(d.frozenAt)),'DRAFT_CLOCK');
  check(Array.isArray(d.singles)&&d.singles.length>0&&d.singles.length<=32,'ROWS');
  const seen=new Set();
