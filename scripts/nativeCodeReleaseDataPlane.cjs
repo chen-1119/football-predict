@@ -85,7 +85,24 @@ function leaseCurrent(session) {
   assert(entry && entry.bytes > 0 && entry.bytes <= 32 * 1024 * 1024, 'lease current bound');
   return require('../server/dataGenerationStore.cjs').readGenerationFile(context, 'matches-current.json', { parseJson: true });
 }
+// A reader briefly competes with the normal publisher/retention pointer lock.
+// Retry the complete read session, never reuse its old PostgreSQL snapshot.
+// The caller's existing cutover clock includes these attempts and is not reset.
+async function retryLeaseRead(operation, delay = ms => new Promise(resolve => setTimeout(resolve, ms))) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try { return await operation(); }
+    catch (error) {
+      const busy = error?.code === 'POINTER_LOCK_TIMEOUT'
+        || error?.message === 'native receipt read barrier busy; retry after projection completes';
+      if (!busy || attempt === 3) throw error;
+      await delay(attempt * 1000);
+    }
+  }
+}
 async function captureLeaseInput(state, directory) {
+  return retryLeaseRead(() => captureLeaseInputOnce(state, directory));
+}
+async function captureLeaseInputOnce(state, directory) {
   assert.equal(state.dataPlane, 'code-only');
   const old = driver().readOldRuntimeIdentity();
   assert.equal(old.bundleMarker, state.oldSha); assert.equal(old.liveMarker, state.oldSha);
@@ -201,7 +218,7 @@ function retireSeed(sha) {
   d.write(path.join(directory, 'code-seed-retired.json'), { ...intent, removed: true, completedAt: new Date().toISOString() });
   return { ok: true, bytes, removed: true };
 }
-module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, captureLeaseInput };
+module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, captureLeaseInput, retryLeaseRead };
 if (require.main === module) {
   (async () => {
     assert.equal(process.argv.length, 4); const action = process.argv[2], sha = process.argv[3];
