@@ -176,6 +176,8 @@ for (const spec of realReadinessSpecs) test('actual keeper and finish integratio
 APP_DIR="$PWD"
 NODE_HOME="$PWD/node"
 NATIVE_CODE_RELEASE=${spec.code}
+SECONDS=0
+CODE_CUTOVER_STARTED_SECONDS=0
 WORKER_SERVICE_NAME=football-sync-worker
 WORKER_FROZEN_FOR_READINESS=0
 RELEASE_HEARTBEAT_WORKER_MODE=frozen
@@ -223,9 +225,22 @@ cleanup_build_tree() { printf 'failed-build-cleaned\n'; }
     a.equal(r.stdout.includes('commit_release_transaction'), !spec.fail);
     a.equal(r.stdout.includes('/usr/local/libexec/football-release-recovery.cjs'), !!spec.fail);
     a.equal(r.stdout.includes('codeReleaseAcceptance.cjs write'), !spec.fail && spec.code === 1);
+    a.equal(r.stdout.includes('nativeCodeReleaseDataPlane.cjs complete-clock'), !spec.fail && spec.code === 1);
     if (!spec.fail) {
       a(r.stdout.includes('keeper-started'));
       a(r.stdout.lastIndexOf('keeper-stopped') < r.stdout.lastIndexOf(spec.code ? 'worker-started' : 'worker-resumed'));
+    }
+    if (spec.name === 'code stopped') {
+      const keeper = path.join(dir, 'keeper');
+      a.equal(path.dirname(keeper), dir);
+      fs.rmSync(keeper, { recursive: true });
+      const expired = spawnSync(process.platform === 'win32' ? 'D:/app/Git/bin/bash.exe' : '/bin/bash', ['--noprofile', '--norc', '-s'],
+        { cwd: dir, input: input.replace('CODE_CUTOVER_STARTED_SECONDS=0', 'CODE_CUTOVER_STARTED_SECONDS=-900'),
+          encoding: 'utf8', timeout: 10000, windowsHide: true });
+      a.equal(expired.error, undefined); a.equal(expired.status, 1, expired.stderr);
+      a.equal(expired.stdout.includes('commit_release_transaction'), false);
+      a.equal(expired.stdout.includes('codeReleaseAcceptance.cjs write'), false);
+      a.equal(expired.stdout.includes('/usr/local/libexec/football-release-recovery.cjs'), true);
     }
   } finally {
     a(path.basename(dir).startsWith('real-keeper-readiness-')); a.equal(fs.realpathSync(dir).toLowerCase(), path.resolve(dir).toLowerCase());
@@ -240,7 +255,7 @@ for (const spec of [{ code: 1 }, { code: 0 }, { code: 1, fail: 'run_as_service_u
       fs.writeFileSync(path.join(dir, 'node/bin/node'), '#!/usr/bin/env bash\nprintf "node:%s\\n" "$*"\n', { mode: 0o700 });
       const func = body('native_finish_readiness'), variables = [...new Set([...func.matchAll(/\$\{?([A-Z][A-Z0-9_]*)/g)].map(m => m[1]))];
     const input = 'set -euo pipefail\n' + variables.filter(v => !['PATH', 'HOME', 'PWD'].includes(v)).map(v => v + '=fixture').join('\n') + '\n' +
-        'APP_DIR="$PWD"\nNODE_HOME="$PWD/node"\nNATIVE_CODE_RELEASE=' + spec.code + '\n' +
+        'APP_DIR="$PWD"\nNODE_HOME="$PWD/node"\nNATIVE_CODE_RELEASE=' + spec.code + '\nSECONDS=0\nCODE_CUTOVER_STARTED_SECONDS=0\n' +
         stubs.map(n => n + '() { printf "' + n + '\\n"; ' + (spec.fail === n ? 'return 1;' : 'return 0;') + ' }').join('\n') + '\n' + func + '\nnative_finish_readiness\n';
       const r = spawnSync(process.platform === 'win32' ? 'D:/app/Git/bin/bash.exe' : '/bin/bash', ['--noprofile', '--norc', '-s'], { cwd: dir, input, encoding: 'utf8', timeout: 10000, windowsHide: true });
       a.equal(r.status, spec.fail ? 1 : 0, r.stderr);
@@ -252,6 +267,7 @@ for (const spec of [{ code: 1 }, { code: 0 }, { code: 1, fail: 'run_as_service_u
         a(events.includes('start_worker_for_live_release'));
         a(events.indexOf('run_as_service_user_with_runtime_env') < events.indexOf('commit_release_transaction'));
         a.equal(r.stdout.includes('codeReleaseAcceptance.cjs write'), spec.code === 1);
+        a.equal(r.stdout.includes('nativeCodeReleaseDataPlane.cjs complete-clock'), spec.code === 1);
       }
     } finally { a(path.basename(dir).startsWith('staged-code-bash-')); a.equal(fs.realpathSync(dir).toLowerCase(), path.resolve(dir).toLowerCase()); fs.rmSync(dir, { recursive: true }); }
   });

@@ -71,11 +71,12 @@ async function readPublication(c,k,asOf){
 }
 async function projection(c,businessDate,asOf){
  const allKeys=await keys(c,businessDate);
- if(!allKeys.length)return {version:'reviewed-analysis-view-v1',businessDate,updatedAt:asOf,records:[],combos:[],formalEligible:false};
+ if(!allKeys.length)return {version:'reviewed-analysis-view-v1',businessDate,updatedAt:asOf,records:[],combos:[],threeCombos:[],formalEligible:false};
  const publications=[];for(const k of allKeys)publications.push(await readPublication(c,k,asOf));
  if(publications.length===1){const {v,ack}=publications[0];return p.seal({version:'reviewed-analysis-view-v1',businessDate,updatedAt:asOf,createdAt:v.record.createdAt,commitObservedAt:ack.createdAt,
   publicationHash:v.record.contentHash,draftHash:v.record.draftHash,originalFrozenAt:v.record.originalFrozenAt,
-  records:v.record.records,combos:p.combinations(v.record.records.filter(r=>Date.parse(asOf)<Date.parse(r.cutoffAt))),formalEligible:false});}
+  records:v.record.records,combos:p.combinations(v.record.records.filter(r=>Date.parse(asOf)<Date.parse(r.cutoffAt))),
+  threeCombos:p.combinations(v.record.records.filter(r=>Date.parse(asOf)<Date.parse(r.cutoffAt)),3),formalEligible:false});}
  publications.sort((a,b)=>Date.parse(a.v.record.createdAt)-Date.parse(b.v.record.createdAt));
  const records=publications.flatMap(({v,ack})=>v.record.records.map(r=>({...r,publicationCreatedAt:v.record.createdAt,publicationCommitObservedAt:ack.createdAt})));
  p.check(records.length<=32&&new Set(records.map(r=>r.eventId)).size===records.length,'DAILY_RECORD_BOUND');
@@ -83,6 +84,7 @@ async function projection(c,businessDate,asOf){
  return p.seal({version:'reviewed-analysis-view-v1',businessDate,updatedAt:asOf,createdAt:last.v.record.createdAt,
   commitObservedAt:last.ack.createdAt,publicationHash:p.hash(publications.map(x=>x.v.record.contentHash)),
   draftHash:p.hash(publications.map(x=>x.v.record.draftHash)),originalFrozenAt:publications[0].v.record.originalFrozenAt,
-  records,combos:p.combinations(records.filter(r=>Date.parse(asOf)<Date.parse(r.cutoffAt))),formalEligible:false});
+  records,combos:p.combinations(records.filter(r=>Date.parse(asOf)<Date.parse(r.cutoffAt))),
+  threeCombos:p.combinations(records.filter(r=>Date.parse(asOf)<Date.parse(r.cutoffAt)),3),formalEligible:false});
 }
 module.exports={publish,projection,deadline};

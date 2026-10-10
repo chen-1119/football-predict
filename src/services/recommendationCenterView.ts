@@ -195,12 +195,22 @@ export interface ReviewedAnalysisRecord {
  scores:number[][];confidence:'高'|'中'|'低';reason:string;analysisUrl:string;limitations:string[];cutoffAt:string;quoteObservedAt:string;
  evidence?:{hashes:string[];observedAt:string;missing:string[];verification:'official-single-source'};
 }
+export interface ReviewedAnalysisCombo {band:number;product:number|null;confidence:'高'|'中'|'低'|null;
+ legs:Array<{eventId:string;matchNum:string;market:'HAD'|'HHAD';handicap?:number;selection:'h'|'d'|'a';sp:number}>}
 export interface ReviewedAnalysis {businessDate:string;updatedAt:string;createdAt?:string;publicationHash?:string;records:ReviewedAnalysisRecord[];
- combos:Array<{band:number;product:number|null;confidence:string|null;legs:Array<{eventId:string;matchNum:string;market:'HAD'|'HHAD';handicap?:number;selection:'h'|'d'|'a';sp:number}>}>}
+ combos:ReviewedAnalysisCombo[];threeCombos:ReviewedAnalysisCombo[]}
+function reviewedPriceProduct(prices:number[]):number{
+ let coefficient=1n,scale=0;
+ for(const price of prices){
+  const [decimal,exponent='0']=price.toString().split('e'),[whole,fraction='']=decimal.split('.');
+  coefficient*=BigInt(whole+fraction);scale+=fraction.length-Number(exponent);
+ }
+ return Number(`${coefficient}e${-scale}`);
+}
 export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedAt:string):ReviewedAnalysis{
- const v=object(value),rows=list(v.records),combos=list(v.combos);
- if(v.version!=='reviewed-analysis-view-v1'||v.businessDate!==businessDate||v.updatedAt!==updatedAt||v.formalEligible!==false||rows.length>32||combos.length>3)throw Error('Reviewed analysis envelope');
- if(!rows.length){if(combos.length)throw Error('Reviewed analysis empty');return {businessDate,updatedAt,records:[],combos:[]};}
+ const v=object(value),rows=list(v.records),combos=list(v.combos),threeCombos=Object.hasOwn(v,'threeCombos')?list(v.threeCombos):[];
+ if(v.version!=='reviewed-analysis-view-v1'||v.businessDate!==businessDate||v.updatedAt!==updatedAt||v.formalEligible!==false||rows.length>32||combos.length>3||threeCombos.length>3)throw Error('Reviewed analysis envelope');
+ if(!rows.length){if(combos.length||threeCombos.length)throw Error('Reviewed analysis empty');return {businessDate,updatedAt,records:[],combos:[],threeCombos:[]};}
  const {contentHash,...body}=v;
  if(paperHex(contentHash)!==reviewedAnalysisPublicHash(body)||paperClock(v.createdAt).ns>=paperClock(v.commitObservedAt).ns||paperClock(v.commitObservedAt).ns>paperClock(updatedAt).ns)throw Error('Reviewed analysis seal');
  const ids=new Set<string>();
@@ -226,16 +236,22 @@ export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedA
   }
   return {eventId,eventVersion,businessDate,matchNum:paperText(r.matchNum,30),homeTeamId:paperText(r.homeTeamId,100),awayTeamId:paperText(r.awayTeamId,100),homeTeamName:paperText(r.homeTeamName,100),awayTeamName:paperText(r.awayTeamName,100),market:r.market as 'HAD'|'HHAD',...(r.market==='HHAD'?{handicap}:{}),selection:selection as 'h'|'d'|'a',sp,originalSp,scores,confidence:r.confidence as '高'|'中'|'低',reason:paperText(r.reason,500),analysisUrl,limitations:list(r.limitations).map(v=>paperText(v,200)),cutoffAt,quoteObservedAt:paperClock(r.quoteObservedAt).text,...(evidence?{evidence}:{})};
  });
- const bands=new Set<number>(),pairs=new Set<string>();
- const parsed=combos.map(x=>{
-  const c=object(x),band=number(c.band);if(![2.5,5,10].includes(band)||bands.has(band))throw Error('Reviewed combo band');bands.add(band);
-  const legs=list(c.legs).map(x=>{const l=object(x),r=records.find(r=>r.eventId===l.eventId);if(!r||l.market!==r.market||(r.market==='HHAD'?l.handicap!==r.handicap:l.handicap!=null)||l.selection!==r.selection||l.sp!==r.sp||l.matchNum!==r.matchNum)throw Error('Reviewed combo binding');return {eventId:r.eventId,matchNum:r.matchNum,market:r.market,...(r.market==='HHAD'?{handicap:r.handicap}:{}),selection:r.selection,sp:r.sp};});
-  if(!legs.length){if(c.product!==null||c.confidence!==null)throw Error('Reviewed combo empty');return {band,legs,product:null,confidence:null};}
-  const pair=legs.map(l=>l.eventId).sort().join('/'),product=number(c.product);
-  if(legs.length!==2||legs[0].eventId===legs[1].eventId||pairs.has(pair)||product<band||Math.abs(product-legs[0].sp*legs[1].sp)>1e-9)throw Error('Reviewed combo product');pairs.add(pair);
-  return {band,legs,product,confidence:paperText(c.confidence,2)};
- });
- return {businessDate,updatedAt,createdAt:paperClock(v.createdAt).text,publicationHash:paperHex(v.publicationHash),records,combos:parsed};
+ const parseCombos=(values:unknown[],size:2|3):ReviewedAnalysisCombo[]=>{
+  const bands=new Set<number>(),groups=new Set<string>(),asOf=paperClock(updatedAt).ns;
+  return values.map(x=>{
+   const c=object(x),band=number(c.band);if(![2.5,5,10].includes(band)||bands.has(band))throw Error('Reviewed combo band');bands.add(band);
+   const bound=list(c.legs).map(x=>{const l=object(x),r=records.find(r=>r.eventId===l.eventId);if(!r||l.market!==r.market||(r.market==='HHAD'?l.handicap!==r.handicap:l.handicap!=null)||l.selection!==r.selection||l.sp!==r.sp||l.matchNum!==r.matchNum)throw Error('Reviewed combo binding');return r;});
+   const legs=bound.map(r=>({eventId:r.eventId,matchNum:r.matchNum,market:r.market,...(r.market==='HHAD'?{handicap:r.handicap}:{}),selection:r.selection,sp:r.sp}));
+   if(!legs.length){if(c.product!==null||c.confidence!==null)throw Error('Reviewed combo empty');return {band,legs,product:null,confidence:null};}
+   const group=legs.map(l=>l.eventId).sort().join('/'),product=number(c.product);
+   if(legs.length!==size||new Set(legs.map(l=>l.eventId)).size!==size||groups.has(group)||product<band||product!==reviewedPriceProduct(legs.map(l=>l.sp)))throw Error('Reviewed combo product');groups.add(group);
+   const confidence=bound.some(r=>r.confidence==='低')?'低':bound.some(r=>r.confidence==='中')?'中':'高';
+   if(c.confidence!==confidence)throw Error('Reviewed combo confidence');
+   if(bound.some(r=>paperClock(r.cutoffAt).ns<=asOf))throw Error('Reviewed combo cutoff');
+   return {band,legs,product,confidence};
+  });
+ };
+ return {businessDate,updatedAt,createdAt:paperClock(v.createdAt).text,publicationHash:paperHex(v.publicationHash),records,combos:parseCombos(combos,2),threeCombos:parseCombos(threeCombos,3)};
 }
 export interface LeagueBaselineDirections {businessDate:string;updatedAt:string;records:LeagueBaselineDirection[];blocked:number}
 export function parseLeagueBaseline(value:unknown,businessDate:string,updatedAt:string):LeagueBaselineDirections{
@@ -290,15 +306,16 @@ export function prdPaperPublicHash(value:unknown):string{
  return boundedPublicHash(value,512,16384);
 }
 // A reviewed daily view contains up to 32 individually bounded records, plus
-// its header and combos. Keep the original paper/record budget per component;
+// its header and two combo arrays. Keep the original paper/record budget per component;
 // only the aggregate envelope receives the sum of those bounded budgets.
 function reviewedAnalysisPublicHash(value:Obj):string{
- const records=list(value.records),combos=list(value.combos);
- if(records.length>32||combos.length>3)throw new Error('Reviewed analysis envelope');
+ const records=list(value.records),combos=list(value.combos),hasThree=Object.hasOwn(value,'threeCombos'),threeCombos=hasThree?list(value.threeCombos):[];
+ if(records.length>32||combos.length>3||threeCombos.length>3)throw new Error('Reviewed analysis envelope');
  for(const record of records)prdPaperPublicHash(record);
  prdPaperPublicHash(combos);
- prdPaperPublicHash({...value,records:[],combos:[]});
- return boundedPublicHash(value,34*512,34*16384);
+ if(hasThree)prdPaperPublicHash(threeCombos);
+ prdPaperPublicHash({...value,records:[],combos:[],...(hasThree?{threeCombos:[]}:{} )});
+ return boundedPublicHash(value,35*512,35*16384);
 }
 function boundedPublicHash(value:unknown,maxNodes:number,maxCharacters:number):string{
  let nodes=0;const stable=(v:unknown,depth:number):unknown=>{

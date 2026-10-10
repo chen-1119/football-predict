@@ -12,6 +12,11 @@ check('signed emergency activation bypasses only code-only schedule gates',()=>{
  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# skipped 0$/m);
  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"tests/emergency-code-activation.test.cjs"'));
 });
+check('code cutover covers result archives through its unchanged lease and checks final expiry',()=>{
+ const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/code-cutover-archive-horizon.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"tests/code-cutover-archive-horizon.test.cjs"'));
+});
 check('maintenance transitions drain and fixed evidence pack rejects conflicting sources',()=>{
  const r=require('node:child_process').spawnSync(process.execPath,['--test','tests/maintenance-quiescence.test.cjs','tests/fixed-prematch-evidence-pack.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1048576});assert.equal(r.status,0,r.stderr||r.stdout);assert.match(r.stdout,/# skipped 0/);
 });
@@ -22,8 +27,9 @@ check('native oversized snapshot requires exact protected generation bytes',()=>
  const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/native-snapshot-copy-proof.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:45000,maxBuffer:1048576});assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 8$/m);assert.match(child.stdout,/^# skipped 0$/m);
 });
 check('reviewed editorial source and exact public direction binding fail closed',()=>{
- const r=require('node:child_process').spawnSync(process.execPath,['--test','tests/reviewed-analysis.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1048576});
+ const r=require('node:child_process').spawnSync(process.execPath,['--test','tests/reviewed-analysis.test.cjs','tests/reviewed-three-combo-view.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1048576});
  assert.equal(r.status,0,r.stderr||r.stdout);assert.match(r.stdout,/# skipped 0/);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"tests/reviewed-three-combo-view.test.cjs"'));
 });
 check('staged code preparation, bounded handover and independent natural-cycle evidence pass before signing',()=>{
   const report=require('./verifyStagedCodeRelease.cjs').run();
