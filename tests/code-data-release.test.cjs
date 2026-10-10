@@ -5,6 +5,35 @@ const policy = require('../scripts/releaseDataPlanePolicy.cjs');
 const { planCapacity } = require('../scripts/nativeReleaseCapacity.cjs');
 const { validate } = require('../scripts/runReleaseCapacityPreflight.cjs');
 const root = path.resolve(__dirname, '..');
+for (const mode of ['exact', 'identity', 'tamper', 'oversize']) test('code lease uses PG-bound immutable current: ' + mode, () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lease-generation-'));
+  try {
+    const rows = [{ id: 'fixture', kickoffTime: '2030-01-01T20:00:00+08:00', buyEndTime: '2030-01-01 19:30:00' }];
+    const bytes = Buffer.from(JSON.stringify(rows)), file = path.join(dir, 'matches-current.json'); fs.writeFileSync(file, bytes);
+    const identity = { mode: 'active-generation', generationId: 'g-fixture', manifestHash: 'a'.repeat(64), sourceCycleId: 'fixture-cycle' };
+    const manifest = { ...identity, files: [{ path: 'matches-current.json', bytes: bytes.length, sha256: require('node:crypto').createHash('sha256').update(bytes).digest('hex') }] };
+    const session = { identity, publication: { context: { generationDir: dir, manifest } }, publicDataDir: '/must-not-read-mutable-projection' };
+    if (mode === 'identity') manifest.generationId = 'other-generation';
+    if (mode === 'tamper') fs.writeFileSync(file, Buffer.from(bytes.toString().replace('19:30', '19:31')));
+    if (mode === 'oversize') manifest.files[0].bytes = 32 * 1024 * 1024 + 1;
+    const read = () => require('../scripts/nativeCodeReleaseDataPlane.cjs').leaseCurrent(session);
+    if (mode === 'exact') {
+      const current = read(); a.deepEqual(current, rows);
+      const t = require('../scripts/releaseTransitionLease.cjs');
+      const lease = t.createTransitionLease(current, { refreshAt:'2030-01-01T00:00:00Z', verifierRuntimeMaxSeconds:300, preverifyRefreshBudgetSeconds:570, atomicSwapMarginSeconds:30 });
+      a.equal(t.verifyTransitionLease(current, lease, { verifiedAt:'2030-01-01T00:01:00Z' }).ok, true);
+      a.throws(() => t.verifyTransitionLease([{ ...rows[0], buyEndTime:'2030-01-01 19:00:00' }], lease, { verifiedAt:'2030-01-01T00:01:00Z' }), /data changed/);
+    } else a.throws(read);
+  } finally { fs.rmSync(dir, { recursive: true }); }
+});
+test('lease captures committed generation before service stop and seed rejects identity drift', () => {
+  const shell = fs.readFileSync(path.join(root, 'deploy/light-server/release-native.sh'), 'utf8');
+  const begin = shell.indexOf('CODE_CUTOVER_STARTED_SECONDS=$SECONDS'), capture = shell.indexOf('lease-input "$BUNDLE_SHA256"', begin);
+  const create = shell.indexOf('--current "$NATIVE_STATE_DIR/code-lease-current.json"', capture), stop = shell.indexOf('stop_worker_for_release_window', create);
+  a(begin >= 0 && capture > begin && create > capture && stop > create);
+  const source = fs.readFileSync(path.join(root, 'scripts/nativeCodeReleaseDataPlane.cjs'), 'utf8');
+  a(source.includes('assertSamePublication(leaseInput.identity, session.identity)'));
+});
 function pauseFixture(run) {
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'code-pause-')),modPath=require.resolve('../deploy/light-server/football-release-recovery.cjs');
   const saved=[process.env.FOOTBALL_RELEASE_RECOVERY_TEST_MODE,process.env.FOOTBALL_RELEASE_RECOVERY_TEST_ROOT];

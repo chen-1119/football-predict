@@ -184,8 +184,9 @@ run_native_release() {
     CODE_CUTOVER_STARTED_SECONDS=$SECONDS
     CODE_CUTOVER_POST_SWAP_MARGIN_SECONDS=300
     CANDIDATE_TRANSITION_LEASE="$NATIVE_STATE_DIR/code-transition-lease.json"
+    NODE_PATH="$APP_DIR/node_modules" "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/nativeCodeReleaseDataPlane.cjs" lease-input "$BUNDLE_SHA256"
     "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" create \
-      --current "$APP_DIR/public/data/matches-current.json" --lease "$CANDIDATE_TRANSITION_LEASE" \
+      --current "$NATIVE_STATE_DIR/code-lease-current.json" --lease "$CANDIDATE_TRANSITION_LEASE" \
       --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
       --verifier-runtime-max-seconds 300 --preverify-refresh-budget-seconds 570 --atomic-swap-margin-seconds 30
     # Code preparation has not touched live services or maintenance. Only a

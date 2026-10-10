@@ -76,6 +76,34 @@ async function tryAllocate(sha, directory) {
   return { ok: true, directory, kind: state.kind, dataPlane: state.dataPlane,
     candidateDatabasesCreated: 0, databaseCopies: 0, productionWrites: 0 };
 }
+function leaseCurrent(session) {
+  const context = session.publication?.context, identity = session.identity;
+  assert.equal(identity?.mode, 'active-generation');
+  for (const key of ['generationId', 'manifestHash', 'sourceCycleId'])
+    assert.equal(context?.manifest?.[key], identity[key], 'lease generation identity mismatch');
+  const entry = context.manifest.files.find(row => row.path === 'matches-current.json');
+  assert(entry && entry.bytes > 0 && entry.bytes <= 32 * 1024 * 1024, 'lease current bound');
+  return require('../server/dataGenerationStore.cjs').readGenerationFile(context, 'matches-current.json', { parseJson: true });
+}
+async function captureLeaseInput(state, directory) {
+  assert.equal(state.dataPlane, 'code-only');
+  const old = driver().readOldRuntimeIdentity();
+  assert.equal(old.bundleMarker, state.oldSha); assert.equal(old.liveMarker, state.oldSha);
+  const source = pool(state, 'football', state.oldDatabaseOid); let session;
+  try {
+    session = await require('./postgresRuntimeReadSession.cjs').openPostgresRuntimeReadSession({ pool: source,
+      storeDir: STORE, publicDataDir: LIVE + '/public/data', protectReceipt: true });
+    await session.guardedFinals();
+    const current = leaseCurrent(session);
+    // The lease and seed must describe the same PostgreSQL-bound immutable
+    // generation. The mutable APP projection may have different cutoff clocks.
+    driver().write(path.join(directory, 'code-lease-current.json'), current);
+    const proof = { sha: state.sha, identity: session.identity,
+      currentHash: crypto.createHash('sha256').update(JSON.stringify(current)).digest('hex'), capturedAt: new Date().toISOString() };
+    driver().write(path.join(directory, 'code-lease-input.json'), proof);
+    return { ok: true, identity: session.identity, productionWrites: 0 };
+  } finally { if (session) await session.close(); await source.end(); }
+}
 async function seed(state, directory) {
   assert.equal(state.dataPlane, 'code-only');
   await verifySchema(state);
@@ -84,6 +112,9 @@ async function seed(state, directory) {
     session = await require('./postgresRuntimeReadSession.cjs').openPostgresRuntimeReadSession({ pool: source,
       storeDir: STORE, publicDataDir: LIVE + '/public/data', protectReceipt: true });
     await session.guardedFinals();
+    const leaseInput = driver().read(path.join(directory, 'code-lease-input.json'));
+    assert.equal(leaseInput.sha, state.sha);
+    require('./codeReleaseAcceptance.cjs').assertSamePublication(leaseInput.identity, session.identity);
     const store = path.join(directory, 'code-seed-store');
     const generation = await driver().copyGenerationAsService(session.identity, store);
     const proof = { ok: true, sha: state.sha, seed: true, dataPlane: 'code-only', store,
@@ -170,8 +201,14 @@ function retireSeed(sha) {
   d.write(path.join(directory, 'code-seed-retired.json'), { ...intent, removed: true, completedAt: new Date().toISOString() });
   return { ok: true, bytes, removed: true };
 }
-module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger };
+module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, captureLeaseInput };
 if (require.main === module) {
-  assert.equal(process.argv.length, 4); assert.equal(process.argv[2], 'retire-seed');
-  console.log(JSON.stringify(retireSeed(process.argv[3])));
+  (async () => {
+    assert.equal(process.argv.length, 4); const action = process.argv[2], sha = process.argv[3];
+    assert(['retire-seed', 'lease-input'].includes(action)); assert.match(sha, /^[a-f0-9]{64}$/);
+    if (action === 'retire-seed') return retireSeed(sha);
+    assert.equal(process.platform, 'linux'); assert.equal(process.getuid(), 0);
+    const directory = '/var/lib/football-release/native/' + sha, state = driver().read(path.join(directory, 'state.json'));
+    assert.equal(state.sha, sha); return captureLeaseInput(state, directory);
+  })().then(result => console.log(JSON.stringify(result))).catch(error => { console.error(error.message); process.exitCode = 1; });
 }
