@@ -72,8 +72,13 @@ test('32 individually bounded records plus both combo arrays fit the daily aggre
  const b=body();b.records=Array.from({length:32},(_,index)=>record(index,{reason:'证据'.repeat(250)}));b.combos=reviewed.combinations(b.records,2);b.threeCombos=reviewed.combinations(b.records,3);
  const parsed=parse(b);assert.equal(parsed.records.length,32);assert.equal(parsed.threeCombos.length,3);assert.throws(()=>view.prdPaperPublicHash(b),/budget/);b.records.push(record(32));assert.throws(()=>parse(b),/envelope/);
 });
-test('three tab renders real HHAD signs, publication prices, low confidence and high volatility without model probability',()=>{
- const html=render(parse(body()),'three');assert.match(html,/精选3串1/);assert.match(html,/让负\(-1\) 2\.45/);assert.match(html,/让胜\(\+2\) 1\.65/);assert.match(html,/7\.4786.*低信心.*高波动/);assert.match(html,/发布时官方 SP，非即时价/);assert.match(html,/没有模型命中概率或收益验证/);assert.doesNotMatch(html,/精选2串1|暂无未截止/);
+test('three tab renders real HHAD signs, publication prices and volatility without confidence labels or model probability',()=>{
+ const html=render(parse(body()),'three');assert.match(html,/精选3串1/);assert.match(html,/让负\(-1\) 2\.45/);assert.match(html,/让胜\(\+2\) 1\.65/);assert.match(html,/7\.4786.*高波动/);assert.match(html,/发布时官方 SP，非即时价/);assert.match(html,/没有模型命中概率或收益验证/);assert.doesNotMatch(html,/精选2串1|暂无未截止|信心/);
+});
+test('single, two and three views omit visible confidence while preserving all stored values',()=>{
+ const data=parse(body()),before=JSON.stringify(data);
+ for(const tab of ['single','two','three']){const html=render(data,tab);assert.doesNotMatch(html,/信心|confidence/i);assert.match(html,/人工审核/);assert.match(html,/1\.85/);}
+ assert.equal(JSON.stringify(data),before);assert.equal(data.records[1].confidence,'低');assert.equal(data.threeCombos[0].confidence,'低');
 });
 test('rendered price multiplication retains all frozen decimal precision',()=>{
  const b=body();b.records=b.records.slice(0,3).map((r,i)=>({...r,sp:[1.2345,2,3][i]}));b.combos=[];b.threeCombos=[{...combo(b.records,5),product:7.407}];
@@ -110,6 +115,6 @@ function center(data,now,tab){
 }
 test('actual center suppresses legacy stale/empty combo banners for both reviewed tabs and retains them when reviewed is absent',()=>{
  const data={businessDate,inputAsOf:createdAt,resultAsOf:null,reviewedAnalysis:parse(body()),strategySwitch:{legacyPublicationEnabled:false},review:{statistics:{},qualityReport:null},current:[],todayCombos:[],previews:[],lanes:{combos:{status:'error',errorCode:'SOURCE_STALE',inputAsOf:createdAt}}};
- for(const tab of ['two','three']){const text=center(data,Date.parse(updatedAt),tab);assert.match(text,tab==='two'?/精选2串1/:/精选3串1/);assert.doesNotMatch(text,/暂无可展示的组合|等待新报价后自动重算|有效期15分钟|报价已超过15分钟/);assert.match(text,/SP≥2\.5 \/ 5 \/ 10/);}
+ for(const tab of ['two','three']){const text=center(data,Date.parse(updatedAt),tab);assert.match(text,tab==='two'?/精选2串1/:/精选3串1/);assert.doesNotMatch(text,/暂无可展示的组合|等待新报价后自动重算|有效期15分钟|报价已超过15分钟/);assert.match(text,/2串1SP≥2\.50/);assert.match(text,/3串1/);assert.doesNotMatch(text,/3串1SP≥|SP≥5\.00/);}
  const without={...data,reviewedAnalysis:undefined};assert.match(center(without,Date.parse(updatedAt),'three'),/暂无可展示的组合/);
 });
