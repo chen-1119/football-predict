@@ -24,4 +24,6 @@ Remote verification accepts retirement only when the protected current response 
 
 The focused tests cover trusted and copied policies, real freeze/ACK replay, changed SP/directions/hashes, missing ACKs, as-of refresh gaps, midnight, preserved archives, read-only transaction boundaries, browser fallback suppression and remote receipts. New tests are required by `verifyReleaseVerifierContracts.cjs` and are included in both release archive lists.
 
+Code release preparation also requires the actual current generation pointer to match the PostgreSQL snapshot on all four publication identity fields. An intact newer current generation whose intact previous generation exactly matches PostgreSQL is a bounded preparation wait while normal publishers remain running. Corrupt or inconsistent generations fail immediately. The seed checks again before copying, and the final current-pointer check remains mandatory; neither check refreshes the original 900-second cutover lease.
+
 The authority mechanism does not migrate data, create an archive, train a model, extend a release authorization, or perform a deployment. Any separately issued release authorization retains its own actual-clock validation. Full release verification and live acceptance remain separate operations.

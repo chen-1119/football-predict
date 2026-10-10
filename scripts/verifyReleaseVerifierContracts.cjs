@@ -54,7 +54,7 @@ check('daily bulletin scheduling, source proof and immutable cohort pass before 
 });
 check('code releases separate PG migration and model work before signing',()=>{
   const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/code-data-release.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
-  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 49$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 64$/m);assert.match(child.stdout,/^# skipped 0$/m);
   const shell=require('node:child_process').spawnSync(process.execPath,['scripts/verifyCodeReleaseShell.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
   assert.equal(shell.status,0,shell.stderr);const proof=JSON.parse(shell.stdout);assert.equal(proof.ok,true);assert.equal(proof.checks.length,11);assert(proof.checks.some(row=>row.name==='closed-code-lease'&&row.ok));assert.equal(proof.actualBashBranchExecution,true);
   for(const file of ['scripts/releaseDataPlanePolicy.cjs','scripts/nativeCodeReleaseDataPlane.cjs','tests/code-data-release.test.cjs','scripts/verifyCodeReleaseShell.cjs','scripts/verifyCodeReleasePostgresIsolation.cjs'])

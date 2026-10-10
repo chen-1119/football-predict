@@ -154,6 +154,121 @@ test('lease captures committed generation before service stop and seed rejects i
   const source = fs.readFileSync(path.join(root, 'scripts/nativeCodeReleaseDataPlane.cjs'), 'utf8');
   a(source.includes('assertSamePublication(leaseInput.identity, session.identity)'));
 });
+async function currentAffinityFixture(run) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'code-current-affinity-'));
+  const generations = require('../server/dataGenerationStore.cjs');
+  const bundles = require('../server/dataGenerationBundle.cjs');
+  const api = require('../scripts/nativeCodeReleaseDataPlane.cjs');
+  const commit = (cycle, clock) => generations.commitDataGeneration({ storeDir: dir, sourceCycleId: cycle,
+    committedAt: clock, files: { 'matches-current.json': { bytes: JSON.stringify([{ id:cycle,
+      predictions:[{marketType:'BEST',oddsPoolCode:'HAD',tipCode:'1',odds:2.3456}] }]), rows:1 } },
+    coreFiles:['matches-current.json'] });
+  const first = commit('before-projection', '2030-01-01T00:00:00.000Z');
+  let second;
+  const identity = proof => { const result = { mode:'active-generation', ...proof.pointer }; delete result.schemaVersion; return result; };
+  const session = proof => ({ identity:identity(proof), publication:bundles.resolveServingPublicationForSqliteIdentity({
+    storeDir:dir, publicDataDir:dir, sqliteIdentity:identity(proof), allowPrevious:true, validatePayloadSemantics:false }) });
+  const advance = () => (second = commit('awaiting-projection', '2030-01-01T00:00:01.000Z'));
+  try { return await run({ dir, generations, api, first, advance, session, second:()=>second, paths:generations.storePaths(dir) }); }
+  finally {
+    a.equal(fs.realpathSync(dir).toLowerCase(), path.resolve(dir).toLowerCase());
+    a(path.basename(dir).startsWith('code-current-affinity-')); fs.rmSync(dir, { recursive:true });
+  }
+}
+test('r840 actual immutable previous pairing is readable but cannot start a code cutover', () => currentAffinityFixture(x => {
+  const firstSession = x.session(x.first); x.api.assertCodeCurrentPublication(firstSession, x.dir);
+  x.advance(); const previousSession = x.session(x.first), before = fs.readFileSync(x.paths.currentPointer);
+  a.equal(previousSession.publication.mode, 'previous-generation');
+  a.equal(x.api.leaseCurrent(previousSession)[0].predictions[0].odds, 2.3456);
+  for (const session of [firstSession, previousSession]) {
+    a.throws(() => x.api.assertCodeCurrentPublication(session, x.dir), e => e.code === 'NATIVE_CURRENT_PUBLICATION_PENDING');
+    a.equal(fs.existsSync(x.paths.pointerLockDir), false);
+  }
+  a.deepEqual(fs.readFileSync(x.paths.currentPointer), before);
+  x.api.assertCodeCurrentPublication(x.session(x.second()), x.dir);
+}));
+for (const mutation of ['current-payload','previous-payload','missing-previous','wrong-previous','same-generation-clock',
+  'backward-clock','equal-clock','invalid-pointer','manifest-identity']) {
+  test('current publication corruption is a hard failure: ' + mutation, () => currentAffinityFixture(async x => {
+    const session = x.session(x.first); x.advance();
+    const rewrite = (file, update) => { const data = JSON.parse(fs.readFileSync(file)); update(data); fs.writeFileSync(file, JSON.stringify(data)); };
+    if (mutation === 'current-payload' || mutation === 'previous-payload') {
+      const proof = mutation === 'current-payload' ? x.second() : x.first;
+      fs.appendFileSync(path.join(x.paths.generationsDir, proof.pointer.generationId, 'matches-current.json'), ' ');
+    } else if (mutation === 'missing-previous') fs.unlinkSync(x.paths.previousPointer);
+    else if (mutation === 'wrong-previous') fs.copyFileSync(x.paths.currentPointer, x.paths.previousPointer);
+    else if (mutation === 'same-generation-clock') fs.writeFileSync(x.paths.currentPointer, JSON.stringify({ ...x.first.pointer, committedAt:'2030-01-01T00:00:02.000Z' }));
+    else if (mutation === 'backward-clock' || mutation === 'equal-clock') rewrite(x.paths.currentPointer,
+      p => { p.committedAt = mutation === 'backward-clock' ? '2029-12-31T23:59:59.000Z' : x.first.pointer.committedAt; });
+    else if (mutation === 'invalid-pointer') rewrite(x.paths.currentPointer, p => { p.generationId = '../invalid'; });
+    else rewrite(x.paths.currentPointer, p => { p.manifestHash = '0'.repeat(64); });
+    let calls = 0;
+    await a.rejects(x.api.retryLeaseRead(async () => { calls++; x.api.assertCodeCurrentPublication(session, x.dir); },
+      async () => a.fail('corrupt publication must not retry')), e => e.code !== 'NATIVE_CURRENT_PUBLICATION_PENDING');
+    a.equal(calls, 1); a.equal(fs.existsSync(x.paths.pointerLockDir), false);
+  }));
+}
+test('all original session identity fields remain mandatory', () => currentAffinityFixture(x => {
+  for (const field of ['generationId','manifestHash','sourceCycleId','committedAt']) {
+    const session = x.session(x.first); session.identity[field] = 'changed';
+    a.throws(() => x.api.assertCodeCurrentPublication(session, x.dir), /code publication moved/);
+  }
+}));
+test('current projection convergence retries fresh sessions before capture without mutating the generation', () => currentAffinityFixture(async x => {
+  x.advance(); let calls = 0, active = false, now = 0; const reports = [], pointer = fs.readFileSync(x.paths.currentPointer);
+  const result = await x.api.retryLeaseRead(async () => {
+    a.equal(active, false); active = true;
+    try { const session = x.session(++calls === 1 ? x.first : x.second()); x.api.assertCodeCurrentPublication(session, x.dir); return session.identity; }
+    finally { active = false; }
+  }, async ms => { a.equal(active, false); a.equal(fs.existsSync(x.paths.pointerLockDir), false); now += ms; },
+  () => now, report => reports.push(report));
+  a.equal(calls, 2); a.equal(now, 10000); a.equal(result.generationId, x.second().pointer.generationId);
+  a.equal(reports[0].reason, 'current-publication-pending'); a.equal(reports[0].pendingRows, null);
+  a.deepEqual(fs.readFileSync(x.paths.currentPointer), pointer);
+}));
+test('persistent current projection lag retains the original 600-second preparation deadline', () => currentAffinityFixture(async x => {
+  x.advance(); let now = 0, calls = 0;
+  await a.rejects(x.api.retryLeaseRead(async () => { calls++; x.api.assertCodeCurrentPublication(x.session(x.first), x.dir); },
+    async ms => { now += ms; }, () => now), e => e.code === 'NATIVE_LEASE_PREPARATION_TIMEOUT'
+      && e.cause.code === 'NATIVE_CURRENT_PUBLICATION_PENDING' && e.message.endsWith('current-publication-pending'));
+  a.equal(now, 600000); a.equal(calls, 60); a.equal(fs.existsSync(x.paths.pointerLockDir), false);
+}));
+test('seed refuses a pointer advance before any candidate copy or lease refresh', () => currentAffinityFixture(async x => {
+  const filename = path.join(root, 'scripts/nativeCodeReleaseDataPlane.cjs'), nativeRequire = Module.createRequire(filename);
+  const state = { dataPlane:'code-only', sha:'a'.repeat(64), oldDatabaseOid:'11' };
+  const original = x.session(x.first); x.advance(); let closed = 0, ended = 0, copies = 0, writes = 0;
+  const client = { query:async()=>({ rows:[] }), release(){} };
+  const currentSession = { ...original, guardedFinals:async()=>{}, close:async()=>{ closed++; } };
+  const module = { exports:{} };
+  const overrides = {
+    './nativeReleasePostgresTransport.cjs':{ NativeReleasePostgresPool:class { async connect(){return client;} async end(){ended++;} } },
+    '../server/postgresStore.cjs':{ verifyPostgresSchemaCurrent:async()=>{} },
+    './postgresReleaseMirror.cjs':{ assertMirrorSourceCatalog:async()=>({catalogHash:'fixture'}) },
+    './postgresRuntimeReadSession.cjs':{ openPostgresRuntimeReadSession:async()=>currentSession },
+    './nativeReleaseDataPlane.cjs':{ read:()=>({sha:state.sha,identity:original.identity}),
+      copyGenerationAsService:async()=>{copies++;}, write:()=>{writes++;} },
+    '../server/dataGenerationStore.cjs':{ ...x.generations, storePaths:()=>x.paths,
+      resolveCurrentGeneration:()=>x.generations.resolveCurrentGeneration({storeDir:x.dir}),
+      resolvePreviousGeneration:()=>x.generations.resolvePreviousGeneration({storeDir:x.dir}) },
+  };
+  require('node:vm').runInNewContext(fs.readFileSync(filename, 'utf8'), {module,exports:module.exports,Buffer,process,__dirname:path.dirname(filename),
+    require:id=>overrides[id] || nativeRequire(id)});
+  await a.rejects(module.exports.seed(state, '/private-not-written'), e => e.code === 'NATIVE_CURRENT_PUBLICATION_PENDING');
+  a.equal(copies,0); a.equal(writes,0); a.equal(closed,1); a.equal(ended,2);
+  a.equal(fs.existsSync(x.paths.pointerLockDir),false);
+}));
+test('current affinity is checked before durable capture and copying; final affinity remains exact', () => {
+  const source = fs.readFileSync(path.join(root,'scripts/nativeCodeReleaseDataPlane.cjs'),'utf8');
+  const capture = source.slice(source.indexOf('async function captureLeaseInputOnce'),source.indexOf('async function seed'));
+  a(capture.indexOf('assertCodeCurrentPublication(session)') > capture.indexOf('readCodeCutoverArchiveAuthority(session.client'));
+  a(capture.indexOf('assertCodeCurrentPublication(session)') < capture.indexOf("'code-lease-current.json'"));
+  const seed = source.slice(source.indexOf('async function seed'),source.indexOf('async function candidateAccess'));
+  a(seed.indexOf('assertCodeCurrentPublication(session)') < seed.indexOf('copyGenerationAsService'));
+  a(!seed.includes('retryLeaseRead')); a(!seed.includes('code-transition-lease'));
+  const final = fs.readFileSync(path.join(root,'scripts/nativeReleaseDataPlane.cjs'),'utf8');
+  a(final.includes('assertSamePublication(seed.identity, session.identity)'));
+  a(final.includes('for (const name of ["generationId", "manifestHash", "sourceCycleId", "committedAt"]) assert.equal(pointer[name], session.identity[name]);'));
+});
 function pauseFixture(run) {
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'code-pause-')),modPath=require.resolve('../deploy/light-server/football-release-recovery.cjs');
   const saved=[process.env.FOOTBALL_RELEASE_RECOVERY_TEST_MODE,process.env.FOOTBALL_RELEASE_RECOVERY_TEST_ROOT];
