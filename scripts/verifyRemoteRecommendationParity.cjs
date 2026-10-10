@@ -17,10 +17,60 @@ const {
   upper,
   validateArchivedDecision,
 } = require("../server/recommendationProjectionParity.cjs");
+const { TRAINED_ONLY_POLICY, isTrustedPolicy } = require("../server/recommendationAuthority.cjs");
+const { hash: authorityHash } = require("../src/services/leagueBaselineModel.cjs");
+const { day: authorityDay } = require("../src/services/publishedForecastPolicy.cjs");
 
 const VERSION = "remote-recommendation-parity-v1";
 
 const compareRecommendationParity = compareRecommendationProjectionPair;
+
+// This recognizes a receipt from the protected server response. It does not
+// mint a database authority and cannot be enabled by a match-level flag alone.
+const validateRemoteRetirementReceipt = (body, { policy, nowMs = Date.now() } = {}) => {
+  const rows = Array.isArray(body?.rows) ? body.rows : [];
+  const receipt = body?.recommendationAuthority;
+  const rowReceiptPresent = rows.some(row => row?.recommendationAuthority != null);
+  if (receipt == null && !rowReceiptPresent) return { present: false, valid: false, reasons: [], retiredRows: [] };
+  const reasons = [];
+  const object = value => value && typeof value === 'object' && !Array.isArray(value);
+  if (!isTrustedPolicy(policy)) reasons.push('local-retirement-policy-untrusted');
+  if (!object(receipt) || receipt.version !== 'recommendation-publication-authority-v1'
+    || receipt.mode !== 'reviewed-and-trained' || receipt.legacyCurrentEnabled !== false) reasons.push('retirement-receipt-invalid');
+  const validNow = Number.isSafeInteger(nowMs) && Number.isFinite(new Date(nowMs).getTime());
+  if (!validNow) reasons.push('retirement-read-clock-invalid');
+  const updated = typeof receipt?.updatedAt === 'string' ? Date.parse(receipt.updatedAt) : NaN;
+  const observed = typeof receipt?.observedAt === 'string' ? Date.parse(receipt.observedAt) : NaN;
+  const validUpdated = Number.isSafeInteger(updated), currentDay = validNow ? authorityDay(nowMs) : null;
+  const currentPublication = receipt?.businessDate === currentDay;
+  if (!validUpdated || !Number.isSafeInteger(observed) || updated > observed || observed > nowMs
+    || nowMs - observed > 60_000 || receipt?.currentBusinessDate !== currentDay
+    || receipt?.businessDate !== (validUpdated ? authorityDay(updated) : null)
+    || receipt?.availableForCurrentDay !== currentPublication
+    || receipt?.publicationState !== (currentPublication ? 'current' : 'stale')) reasons.push('retirement-receipt-clock-invalid');
+  if (receipt?.activeValidation?.ok !== true) reasons.push('retirement-active-validation-failed');
+  for (const name of ['reviewed', 'trained']) {
+    const lane = receipt?.activeValidation?.[name];
+    if (!object(lane) || !['verified', 'unavailable'].includes(lane.status)
+      || ![lane.records, lane.openRecords, lane.closedRecords].every(count => Number.isSafeInteger(count) && count >= 0 && count <= 32)
+      || lane.records !== lane.openRecords + lane.closedRecords
+      || (!currentPublication && lane.openRecords !== 0)
+      || (lane.status === 'unavailable' && lane.records !== 0)) reasons.push('retirement-' + name + '-validation-invalid');
+  }
+  if (!Array.isArray(body?.rows) || rows.length > 512) reasons.push('retirement-row-bound-invalid');
+  for (const row of rows) {
+    const rowReceipt = row?.recommendationAuthority;
+    if (!object(rowReceipt)) { reasons.push('row-retirement-receipt-missing'); continue; }
+    const { legacyArchiveState, ...summary } = rowReceipt;
+    if (!object(receipt) || authorityHash(summary) !== authorityHash(receipt)) reasons.push('row-retirement-receipt-mismatch');
+    if (!Array.isArray(row.predictions) || row.predictions.length !== 0) reasons.push('row-retired-predictions-not-empty');
+    if (row.archivedPreMatchPrediction != null) {
+      if (legacyArchiveState !== 'valid' || !validateArchivedDecision(row).valid) reasons.push('row-existing-archive-invalid');
+    } else if (!['missing', 'none'].includes(legacyArchiveState)) reasons.push('row-archive-diagnostic-invalid');
+  }
+  return { present: true, valid: reasons.length === 0, reasons: [...new Set(reasons)],
+    retiredRows: reasons.length === 0 ? rows : [] };
+};
 
 // A source can first appear after kickoff with an authoritative final score.
 // It has no pre-match BEST, no pool direction, and therefore cannot honestly
@@ -319,11 +369,25 @@ const runVerificationWithAccess = async (config) => {
     error: current.error || null,
   });
 
-  const scheduledWithoutBest = scheduledWithoutBestIds(rows, verifiedAtMs);
+  const retirement = validateRemoteRetirementReceipt(current.body, { policy: TRAINED_ONLY_POLICY, nowMs: Date.now() });
+  if (retirement.present) checks.push({
+    name: "retired current directions have a complete verified server authority receipt",
+    ok: retirement.valid,
+    reasons: retirement.reasons,
+  });
+  const retiredRows = new Set(retirement.retiredRows);
+  const scheduledWithoutBest = scheduledWithoutBestIds(rows.filter(row => !retiredRows.has(row)), verifiedAtMs);
   checks.push({
     name: "every scheduled row that exposes a direction has an explicit BEST recommendation",
     ok: scheduledWithoutBest.length === 0,
     missingIds: scheduledWithoutBest,
+  });
+  const invalidExistingArchives = rows.filter(row => row?.archivedPreMatchPrediction != null && !validateArchivedDecision(row).valid)
+    .map(row => canonicalId(row) || text(row?.id) || "unknown");
+  checks.push({
+    name: "every existing pre-match archive independently validates",
+    ok: invalidExistingArchives.length === 0,
+    invalidIds: invalidExistingArchives,
   });
 
   const resultOnlyArchives = rows.filter((row) => isAuthoritativeResultOnlyArchive(row, verifiedAtMs));
@@ -412,6 +476,8 @@ const runVerificationWithAccess = async (config) => {
       rows: rows.length,
       checked: parityRows.length,
       scheduledWithoutBest: scheduledWithoutBest.length,
+      retiredCurrentRows: retiredRows.size,
+      invalidExistingArchives: invalidExistingArchives.length,
       resultPhaseWithoutArchive: resultPhaseWithoutArchive.length,
       resultOnlyArchives: resultOnlyArchives.length,
       postKickoffScheduled: postKickoffScheduled.length,
@@ -600,4 +666,5 @@ module.exports = {
   runVerificationWithAccess,
   scheduledWithoutBestIds,
   validateArchivedDecision,
+  validateRemoteRetirementReceipt,
 };
