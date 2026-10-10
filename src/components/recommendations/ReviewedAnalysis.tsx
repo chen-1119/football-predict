@@ -1,5 +1,11 @@
 import type { ReviewedAnalysis as Data, ReviewedAnalysisRecord } from '../../services/recommendationCenterView';
 const label={h:'主胜',d:'平局',a:'客胜'};
+export function ReviewedMatchPrice({record,language}:{record:ReviewedAnalysisRecord;language:'zh'|'en'}){
+ return <><strong className="compact-sp" data-publication-method="reviewed-editorial">{record.sp.toFixed(2)}</strong><small className="compact-sp-note">{language==='zh'?'发布时官方 SP · 非即时价':'Official SP at publication · Not live'}</small></>;
+}
+export function ReviewedMatchStatus({record,now,language}:{record:ReviewedAnalysisRecord;now:number;language:'zh'|'en'}){
+ return now>=Date.parse(record.cutoffAt)?(language==='zh'?'已发布 · 待核赛果':'Published · Result pending'):(language==='zh'?'已发布 · 待开赛':'Published · Upcoming');
+}
 export function ReviewedMatchPick({record,now}:{record:ReviewedAnalysisRecord;now?:number}){
  return <div className="compact-pick" data-publication-method="reviewed-editorial"><small>赛前综合分析 · 人工审核</small><strong>{label[record.selection]} · SP {record.sp.toFixed(2)}</strong>
   <small>{record.scores.map(s=>s.join('-')).join(' / ')} · {record.confidence}信心{typeof now==='number'&&now>=Date.parse(record.cutoffAt)?' · 已截止冻结':''}</small>
