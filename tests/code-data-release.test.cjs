@@ -5,6 +5,47 @@ const policy = require('../scripts/releaseDataPlanePolicy.cjs');
 const { planCapacity } = require('../scripts/nativeReleaseCapacity.cjs');
 const { validate } = require('../scripts/runReleaseCapacityPreflight.cjs');
 const root = path.resolve(__dirname, '..');
+test('lease pointer contention retries the complete operation after cleanup', async () => {
+  const { retryLeaseRead } = require('../scripts/nativeCodeReleaseDataPlane.cjs');
+  let active = false, calls = 0; const waits = [];
+  const result = await retryLeaseRead(async () => {
+    a.equal(active, false); active = true;
+    try {
+      calls++;
+      if (calls < 3) throw Object.assign(new Error('busy'), { code: 'POINTER_LOCK_TIMEOUT' });
+      return { generation: 'new-snapshot', attempt: calls };
+    } finally { active = false; }
+  }, async ms => { a.equal(active, false); waits.push(ms); });
+  a.deepEqual(result, { generation: 'new-snapshot', attempt: 3 });
+  a.deepEqual(waits, [1000, 2000]);
+});
+test('lease receipt barrier contention retries but permanent contention fails bounded', async () => {
+  const { retryLeaseRead } = require('../scripts/nativeCodeReleaseDataPlane.cjs');
+  const error = new Error('native receipt read barrier busy; retry after projection completes');
+  let calls = 0;
+  a.equal(await retryLeaseRead(async () => { if (++calls === 1) throw error; return 'fresh'; }, async () => {}), 'fresh');
+  calls = 0;
+  await a.rejects(retryLeaseRead(async () => { calls++; throw error; }, async () => {}), e => e === error);
+  a.equal(calls, 3);
+});
+test('lease integrity, cleanup and uncertain write errors never retry', async () => {
+  const { retryLeaseRead } = require('../scripts/nativeCodeReleaseDataPlane.cjs');
+  for (const code of ['GENERATION_READER_POINTER_LOCK_MISMATCH', 'GENERATION_HASH_MISMATCH', 'EIO', 'EEXIST', 'CLOSE_FAILED']) {
+    let calls = 0; const error = Object.assign(new Error('not transient'), { code });
+    await a.rejects(retryLeaseRead(async () => { calls++; throw error; }, async () => { a.fail('unexpected delay'); }), e => e === error);
+    a.equal(calls, 1);
+  }
+});
+test('lease retry wraps only pre-stop capture and preserves session cleanup and original cutover clock', () => {
+  const source = fs.readFileSync(path.join(root, 'scripts/nativeCodeReleaseDataPlane.cjs'), 'utf8');
+  a.match(source, /return retryLeaseRead\(\(\) => captureLeaseInputOnce\(state, directory\)\)/);
+  const once = source.slice(source.indexOf('async function captureLeaseInputOnce'), source.indexOf('async function seed'));
+  a(once.includes('readOldRuntimeIdentity()')); a(once.includes('openPostgresRuntimeReadSession'));
+  a(once.includes('finally { if (session) await session.close(); await source.end(); }'));
+  const shell = fs.readFileSync(path.join(root, 'deploy/light-server/release-native.sh'), 'utf8');
+  a.equal(shell.split('CODE_CUTOVER_STARTED_SECONDS=$SECONDS').length - 1, 1);
+  a(shell.indexOf('CODE_CUTOVER_STARTED_SECONDS=$SECONDS') < shell.indexOf('lease-input "$BUNDLE_SHA256"'));
+});
 for (const mode of ['exact', 'identity', 'tamper', 'oversize']) test('code lease uses PG-bound immutable current: ' + mode, () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lease-generation-'));
   try {
