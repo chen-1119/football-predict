@@ -119,6 +119,48 @@ test('current reviewed records take precedence over history when present',()=>{
  const text=center(data,Date.parse(historyAt),'single');assert.match(text,/4 场原冻结记录/);assert.doesNotMatch(text,/HISTORY ONLY|27 场原冻结记录/);
 });
 
+function archiveHistory(){
+ const h={...historyBody(),draftHash:'b'.repeat(64)},old=structuredClone({...h,updatedAt,combos:[combo(h.records.slice(0,2),2.5)]});delete old.threeCombos;
+ const original=reviewed.seal(old);
+ return {...h,comboArchive:{version:'reviewed-combo-history-archive-v1',businessDate,source:{receiptSha256:'c'.repeat(64),intentSha256:'d'.repeat(64),releaseSha256:'e'.repeat(64),observedAt:'2030-01-01T09:01:00.000Z',viewJsonSha256:require('node:crypto').createHash('sha256').update(JSON.stringify(original)).digest('hex'),productionWrites:0},view:original}};
+}
+function resealArchive(h){const a=h.comboArchive;a.view=reviewed.seal(Object.fromEntries(Object.entries(a.view).filter(([key])=>key!=='contentHash')));a.source.viewJsonSha256=require('node:crypto').createHash('sha256').update(JSON.stringify(a.view)).digest('hex');return reviewed.seal(h);}
+test('the API history archive displays only the original saved doubles after cutoff and retains current history singles',()=>{
+ const h=archiveHistory(),response=historyEnvelope(reviewed.seal(h)),before=JSON.stringify(response),parsed=view.parseRecommendationCenter(response),history=parsed.reviewedAnalysisHistory;
+ assert.deepEqual(history.combos,[]);assert.deepEqual(history.threeCombos,[]);assert.equal(history.records.length,27);assert.equal(history.updatedAt,historyAt);
+ assert.equal(history.comboArchive.view.updatedAt,updatedAt);assert.equal(history.comboArchive.view.combos[0].product,3.4225);assert.deepEqual(history.comboArchive.view.threeCombos,[]);
+ const html=render(history,'two',Date.parse(historyAt));assert.match(html,/原线上存档/);assert.match(html,/3\.4225/);assert.match(html,/已停售.*不作为当前推荐/);assert.match(html,/data-reviewed-combo-state="historical"/);assert.doesNotMatch(html,/data-reviewed-combo-state="open"|信心/);
+ assert.match(center(parsed,Date.parse(historyAt),'single'),/27 场原冻结记录/);assert.match(center(parsed,Date.parse(historyAt),'two'),/3\.4225/);assert.match(center(parsed,Date.parse(historyAt),'three'),/未找到该竞彩日已保存的原3串1组合/);assert.equal(JSON.stringify(response),before);
+});
+for(const [name,change] of [
+ ['wrong publication',h=>{h.comboArchive.view.publicationHash='f'.repeat(64);}],
+ ['wrong draft',h=>{h.comboArchive.view.draftHash='f'.repeat(64);}],
+ ['missing original row',h=>{h.comboArchive.view.records.pop();}],
+ ['changed original direction',h=>{const r=h.comboArchive.view.records[26];r.selection='a';r.scores=[[0,1],[1,2]];}],
+ ['changed original handicap',h=>{const r=h.comboArchive.view.records[26];r.market='HHAD';r.handicap=1;}],
+ ['different original SP',h=>{h.comboArchive.view.records[26].sp=2;}],
+ ['nested archive',h=>{h.comboArchive.view.comboArchive=structuredClone(h.comboArchive);}],
+ ['original already closed when observed',h=>{h.comboArchive.source.observedAt=h.comboArchive.view.records[0].cutoffAt;}],
+ ['archive observed before published',h=>{h.comboArchive.source.observedAt=createdAt;}],
+ ['archive observed after read clock',h=>{h.comboArchive.source.observedAt='2030-01-02T18:00:00.000Z';}],
+ ['production write claim',h=>{h.comboArchive.source.productionWrites=1;}],
+ ['different archive day',h=>{h.comboArchive.businessDate='2030-01-02';}],
+ ['unproven three-leg archive',h=>{h.comboArchive.view.threeCombos=[combo(h.comboArchive.view.records.slice(0,3),5)];}],
+])test(`history archive rejects ${name} even after public resealing`,()=>{const h=archiveHistory();change(h);assert.throws(()=>view.parseRecommendationCenter(historyEnvelope(resealArchive(h))));});
+test('archive integrity rejects unchanged original-byte hash tampering and cannot enter the current parser',()=>{
+ const h=archiveHistory();h.comboArchive.source.viewJsonSha256='0'.repeat(64);assert.throws(()=>view.parseRecommendationCenter(historyEnvelope(reviewed.seal(h))),/archive/);
+ const original=archiveHistory();assert.throws(()=>view.parseReviewedAnalysis(reviewed.seal(original),businessDate,historyAt),/scope/);
+});
+test('the saved 2026-10-10 online archive renders exactly its three original doubles through the API parser',()=>{
+ const archive=JSON.parse(fs.readFileSync('scripts/recommendationPlatform/reviewedComboHistory/2026-10-10.json','utf8'));
+ const original=archive.view,now='2026-10-10T17:00:00.000Z',h=require('../scripts/recommendationPlatform/reviewedComboHistory.cjs').restoreArchivedCombos(reviewed.seal({...Object.fromEntries(Object.entries(original).filter(([key])=>key!=='contentHash')),updatedAt:now,combos:[],threeCombos:[]}),now);
+ const response=historyEnvelope(h),raw=response.recommendationCenter;raw.businessDate='2026-10-11';raw.updatedAt=now;raw.reviewedAnalysis={version:'reviewed-analysis-view-v1',businessDate:raw.businessDate,updatedAt:now,formalEligible:false,records:[],combos:[],threeCombos:[]};
+ const before=JSON.stringify(response),parsed=view.parseRecommendationCenter(response),html=render(parsed.reviewedAnalysisHistory,'two',Date.parse(now));
+ assert.equal(parsed.reviewedAnalysisHistory.records.length,27);assert.deepEqual(parsed.reviewedAnalysisHistory.comboArchive.view.combos,original.combos);assert.deepEqual(parsed.reviewedAnalysisHistory.comboArchive.view.threeCombos,[]);
+ for(const text of ['2.5026','5.035','10.011','让胜(-2) 1.94','让胜(+2) 2.65','让负(-1) 1.90','平局 4.70'])assert.ok(html.includes(text),text);
+ assert.equal((html.match(/data-reviewed-combo-state="historical"/g)||[]).length,3);assert.match(html,/2026-10-10 竞彩日/);assert.match(html,/已停售/);assert.doesNotMatch(html,/信心|data-reviewed-combo-state="open"/);assert.equal(JSON.stringify(response),before);
+});
+
 function center(data,now,tab){
  const clock=class extends Date{static now(){return now;}};
  const stub=()=>null,other={DailyBulletinPanel:stub,LeagueBaselineDirections:stub,DayCoverage:stub,DualResearchV2:stub,MarketComparison:stub,PrdPaperDirections:stub,FollowButton:stub,TeamBadge:stub};

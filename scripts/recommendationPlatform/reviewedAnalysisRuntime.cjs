@@ -105,6 +105,7 @@ async function readLatestHistory(c,beforeDay,asOf){
  p.check(Array.isArray(found)&&found.length<=1,'HISTORY_BOUND');if(!found.length)return null;
  const matched=/^reviewed-analysis-(\d{4}-\d{2}-\d{2})-(?:selected-two|batch-[a-f0-9]{64})$/.exec(found[0].artifact_key);
  p.check(matched&&matched[1]<beforeDay&&day(Date.parse(matched[1]+'T00:00:00+08:00'))===matched[1],'HISTORY_KEY');
- return projection(c,matched[1],asOf,{historical:true});
+ const history=await projection(c,matched[1],asOf,{historical:true});
+ return require('./reviewedComboHistory.cjs').restoreArchivedCombos(history,asOf);
 }
 module.exports={publish,projection,deadline,readLatestHistory};

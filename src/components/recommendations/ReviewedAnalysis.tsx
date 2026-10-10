@@ -19,7 +19,8 @@ export function ReviewedAnalysisPanel({data,tab,now,failed}:{data?:Data;tab:stri
  const today=new Date(now+8*3600000).toISOString().slice(0,10);
  if(failed||!data?.records.length||data.businessDate>today)return null;
  const historical=data.businessDate<today;
- const size=tab==='three'?3:2,combos=tab==='three'?(data.threeCombos??[]):data.combos;
+ const archived=historical?data.comboArchive:undefined,comboView=archived?.view??data;
+ const size=tab==='three'?3:2,combos=tab==='three'?(comboView.threeCombos??[]):comboView.combos;
  // Display only the combinations already present in this validated view.
  // A closed leg changes its display status, never its frozen direction or SP.
  const saved=combos.filter(c=>c.legs.length===size&&c.legs.every(l=>{
@@ -30,6 +31,7 @@ export function ReviewedAnalysisPanel({data,tab,now,failed}:{data?:Data;tab:stri
  return <section className="rc-paper" aria-label="赛前综合分析" data-publication-hash={data.publicationHash} data-reviewed-business-date={data.businessDate} data-reviewed-history={historical}><header><h2>{tab==='single'?'赛前综合分析':`精选${size}串1`}</h2><small>人工审核 · 未校准参考</small></header>
   <p>{data.businessDate} 竞彩日 · {data.records.length} 场原冻结记录{historical?' · 历史记录，非今日新荐':''}</p>
   {historical&&<p>保留原发布方向与官方 SP；已停售场次仅供历史查看。</p>}
+  {archived&&tab!=='single'&&<p>原线上存档：{new Date(archived.observedAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})}；展示当时已保存的组合。</p>}
   {tab==='single'?<div className="rc-paper__records">{data.records.map(r=><article className="rc-paper__record" key={r.eventId}><strong>{r.matchNum} {r.homeTeamName} vs {r.awayTeamName}</strong><ReviewedMatchPick record={r} now={now}/></article>)}</div>:<div data-reviewed-combo-size={size}>
    <p>按已发布的单场方向组合；使用发布时官方 SP，非即时价。没有模型命中概率或收益验证。</p>
    {saved.map(c=><article key={c.band} className="rc-paper__record" data-reviewed-combo-band={c.band} data-reviewed-combo-state={historical?'historical':closed(c)?'closed':'open'}>
