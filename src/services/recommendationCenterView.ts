@@ -199,7 +199,7 @@ export interface ReviewedAnalysisRecord {
 export interface ReviewedAnalysisCombo {band:number;product:number|null;confidence:'高'|'中'|'低'|null;
  legs:Array<{eventId:string;matchNum:string;market:'HAD'|'HHAD';handicap?:number;selection:'h'|'d'|'a';sp:number}>}
 export interface ReviewedAnalysis {businessDate:string;updatedAt:string;createdAt?:string;publicationHash?:string;records:ReviewedAnalysisRecord[];
- combos:ReviewedAnalysisCombo[];threeCombos:ReviewedAnalysisCombo[];comboArchive?:{observedAt:string;view:ReviewedAnalysis}}
+ combos:ReviewedAnalysisCombo[];threeCombos:ReviewedAnalysisCombo[];comboArchive?:{observedAt:string;view:ReviewedAnalysis;firstVersion?:{suppliedAt:string;combos:ReviewedAnalysisCombo[]}}}
 function reviewedPriceProduct(prices:number[]):number{
  let coefficient=1n,scale=0;
  for(const price of prices){
@@ -264,7 +264,7 @@ export function parseReviewedAnalysisHistory(value:unknown,currentBusinessDate:s
  if(!history.records.length||history.combos.length||history.threeCombos.length)throw Error('Reviewed history records');
  if(Object.hasOwn(v,'comboArchive')){
   const archive=object(v.comboArchive),source=object(archive.source),original=object(archive.view);
-  paperKeys(archive,['version','businessDate','source','view']);
+  paperKeys(archive,['version','businessDate','source','view',...(Object.hasOwn(archive,'firstVersion')?['firstVersion']:[])]);
   paperKeys(source,['receiptSha256','intentSha256','releaseSha256','observedAt','viewJsonSha256','productionWrites']);
   for(const key of ['receiptSha256','intentSha256','releaseSha256','viewJsonSha256'])paperHex(source[key]);
   const observed=paperClock(source.observedAt),published=paperClock(original.updatedAt);
@@ -276,6 +276,30 @@ export function parseReviewedAnalysisHistory(value:unknown,currentBusinessDate:s
    ||!saved.combos.some(c=>c.legs.length)||saved.threeCombos.length
    ||saved.combos.some(c=>c.legs.some(l=>paperClock(saved.records.find(r=>r.eventId===l.eventId)!.cutoffAt).ns<=observed.ns)))throw Error('Reviewed combo archive records');
   history.comboArchive={observedAt:observed.text,view:saved};
+  if(Object.hasOwn(archive,'firstVersion')){
+   const first=object(archive.firstVersion),provenance=object(first.source),{contentHash,...body}=first;
+   paperKeys(first,['version','businessDate','source','recordHashes','combos','productionWrites','settlementEligible','contentHash']);
+   paperKeys(provenance,['kind','imageSha256','suppliedAt','originalObservedAt']);
+   const suppliedAt=paperClock(provenance.suppliedAt),hashes=list(first.recordHashes).map(paperHex);
+   if(paperHex(contentHash)!==prdPaperPublicHash(body)||first.version!=='reviewed-combo-user-first-version-v1'||first.businessDate!==businessDate
+    ||provenance.kind!=='user-provided-screenshot'||!paperHex(provenance.imageSha256)||provenance.originalObservedAt!==null||suppliedAt.ns>updatedAt.ns
+    ||first.productionWrites!==0||first.settlementEligible!==false||hashes.length!==originalRecords.length
+    ||hashes.some((h,i)=>h!==prdPaperPublicHash(originalRecords[i])))throw Error('Reviewed first version source');
+   const bands=new Set<number>(),groups=new Set<string>(),values=list(first.combos);
+   if(values.length!==3)throw Error('Reviewed first version count');
+   const firstCombos=values.map(value=>{
+    const c=object(value),band=number(c.band);paperKeys(c,['band','legs','product','confidence']);
+    if(![2.5,5,10].includes(band)||bands.has(band))throw Error('Reviewed first version band');bands.add(band);
+    const bound=list(c.legs).map(value=>{const l=object(value),r=history.records.find(r=>r.eventId===l.eventId);
+     if(!r)throw Error('Reviewed first version event');paperKeys(l,['eventId','matchNum','market','selection','sp',...(r.market==='HHAD'?['handicap']:[])]);
+     if(l.matchNum!==r.matchNum||l.market!==r.market||l.selection!==r.selection||l.sp!==r.sp||(r.market==='HHAD'?l.handicap!==r.handicap:l.handicap!=null))throw Error('Reviewed first version leg');return r;
+    });
+    const group=bound.map(r=>r.eventId).sort().join('/'),product=number(c.product),confidence=bound.some(r=>r.confidence==='低')?'低':bound.some(r=>r.confidence==='中')?'中':'高';
+    if(bound.length!==2||bound[0].eventId===bound[1].eventId||groups.has(group)||product<band||product!==reviewedPriceProduct(bound.map(r=>r.sp))||c.confidence!==confidence)throw Error('Reviewed first version product');groups.add(group);
+    return {band,product,confidence:confidence as '高'|'中'|'低',legs:bound.map(r=>({eventId:r.eventId,matchNum:r.matchNum,market:r.market,...(r.market==='HHAD'?{handicap:r.handicap}:{}),selection:r.selection,sp:r.sp}))};
+   });
+   history.comboArchive.firstVersion={suppliedAt:suppliedAt.text,combos:firstCombos};
+  }
  }
  return history;
 }

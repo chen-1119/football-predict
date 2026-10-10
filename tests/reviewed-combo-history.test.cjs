@@ -1,19 +1,35 @@
 'use strict';
 const test=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const p=require('../scripts/recommendationPlatform/reviewedAnalysis.cjs');
-const {restoreArchivedCombos,validateArchive}=require('../scripts/recommendationPlatform/reviewedComboHistory.cjs');
+const {restoreArchivedCombos,validateArchive,validateFirstVersion}=require('../scripts/recommendationPlatform/reviewedComboHistory.cjs');
 const archiveFile=path.resolve(__dirname,'../scripts/recommendationPlatform/reviewedComboHistory/2026-10-10.json');
 const original=JSON.parse(fs.readFileSync(archiveFile,'utf8')),now='2026-10-11T01:00:00.000Z';
+const first=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../scripts/recommendationPlatform/reviewedComboHistory/2026-10-10-first-version.json'),'utf8'));
 const copy=v=>JSON.parse(JSON.stringify(v));
 function history(){const {contentHash,...body}=copy(original.view);void contentHash;return p.seal({...body,updatedAt:now,combos:[],threeCombos:[]});}
 test('retained exact online view restores original three pairs without changing singles, archive, clocks or creating triples',()=>{
  a.equal(p.sha(fs.readFileSync(archiveFile)),'f2e3903a44100c1c55359f54802b65dd073e73c14926b0af0882da527ca12242');
  const input=history(),before=JSON.stringify(input),result=restoreArchivedCombos(input,now);
  a.equal(JSON.stringify(input),before);a.deepEqual(result.records,input.records);a.equal(result.updatedAt,now);a.deepEqual(result.combos,[]);a.deepEqual(result.threeCombos,[]);
- a.deepEqual(result.comboArchive,original);a.deepEqual(result.comboArchive.view.combos.map(c=>c.product),[2.5026,5.035,10.011]);
+ const {firstVersion,...retained}=result.comboArchive;a.deepEqual(retained,original);a.deepEqual(firstVersion,first);a.deepEqual(result.comboArchive.view.combos.map(c=>c.product),[2.5026,5.035,10.011]);
  a.equal(result.comboArchive.view.updatedAt,'2026-10-10T12:16:39.396Z');a.equal(result.comboArchive.view.contentHash,'cd26c576a0aaddf004006337397a55063e2520fbdef80b24090b4eee373ee2cb');
  a.equal(Object.hasOwn(result.comboArchive.view,'threeCombos'),false);const{contentHash,...body}=result;a.equal(p.hash(body),contentHash);
 });
+test('user identified first screenshot binds its exact five frozen singles without rewriting the retained later view or a past clock',()=>{
+ a.equal(validateFirstVersion(first,history(),now),true);
+ a.deepEqual(first.combos.map(c=>c.product),[2.5026,5.0875,11]);
+ a.deepEqual(first.combos.map(c=>c.legs.map(l=>l.matchNum)),[['周六017','周六019'],['周六027','周六022'],['周六027','周六020']]);
+ a.equal(first.source.originalObservedAt,null);a.equal(first.settlementEligible,false);a.equal(first.productionWrites,0);
+});
+for(const [name,change]of[
+ ['price',v=>v.combos[1].legs[0].sp=2.73],
+ ['line',v=>v.combos[1].legs[0].handicap=1],
+ ['duplicate event',v=>v.combos[0].legs[1]=v.combos[0].legs[0]],
+ ['wrong original screenshot',v=>v.source.imageSha256='0'.repeat(64)],
+ ['invented past clock',v=>v.source.originalObservedAt='2026-10-10T13:49:00Z'],
+ ['settlement claim',v=>v.settlementEligible=true],
+ ['single record binding',v=>v.recordHashes[0]='0'.repeat(64)],
+])test('reject even resealed first version '+name,()=>{const v=copy(first);change(v);delete v.contentHash;a.throws(()=>validateFirstVersion(p.seal(v),history(),now),/HISTORICAL_COMBO_/);});
 test('archive-free days and different real publication batches keep singles unchanged',()=>{
  const missing=p.seal({...history(),businessDate:'2026-10-09'});a.equal(restoreArchivedCombos(missing,now),missing);
  for(const change of [v=>v.publicationHash='a'.repeat(64),v=>v.draftHash='b'.repeat(64),v=>v.records[0].sp+=0.01]){const v=history();change(v);a.equal(restoreArchivedCombos(v,now),v);}
