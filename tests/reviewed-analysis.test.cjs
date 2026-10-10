@@ -1,4 +1,6 @@
 'use strict';
+// The normal mandatory suite includes the retained online combo archive checks.
+require('./reviewed-combo-history.test.cjs');
 const test=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),Module=require('node:module'),path=require('node:path');
 const p=require('../scripts/recommendationPlatform/reviewedAnalysis.cjs');
 const fixture=require('./fixtures/signed-live-had.cjs');

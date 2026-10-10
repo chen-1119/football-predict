@@ -199,7 +199,7 @@ export interface ReviewedAnalysisRecord {
 export interface ReviewedAnalysisCombo {band:number;product:number|null;confidence:'高'|'中'|'低'|null;
  legs:Array<{eventId:string;matchNum:string;market:'HAD'|'HHAD';handicap?:number;selection:'h'|'d'|'a';sp:number}>}
 export interface ReviewedAnalysis {businessDate:string;updatedAt:string;createdAt?:string;publicationHash?:string;records:ReviewedAnalysisRecord[];
- combos:ReviewedAnalysisCombo[];threeCombos:ReviewedAnalysisCombo[]}
+ combos:ReviewedAnalysisCombo[];threeCombos:ReviewedAnalysisCombo[];comboArchive?:{observedAt:string;view:ReviewedAnalysis}}
 function reviewedPriceProduct(prices:number[]):number{
  let coefficient=1n,scale=0;
  for(const price of prices){
@@ -208,8 +208,9 @@ function reviewedPriceProduct(prices:number[]):number{
  }
  return Number(`${coefficient}e${-scale}`);
 }
-export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedAt:string):ReviewedAnalysis{
+export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedAt:string,allowComboArchive=false):ReviewedAnalysis{
  const v=object(value),rows=list(v.records),combos=list(v.combos),threeCombos=Object.hasOwn(v,'threeCombos')?list(v.threeCombos):[];
+ if(Object.hasOwn(v,'comboArchive')&&!allowComboArchive)throw Error('Reviewed combo archive scope');
  if(v.version!=='reviewed-analysis-view-v1'||v.businessDate!==businessDate||v.updatedAt!==updatedAt||v.formalEligible!==false||rows.length>32||combos.length>3||threeCombos.length>3)throw Error('Reviewed analysis envelope');
  if(!rows.length){if(combos.length||threeCombos.length)throw Error('Reviewed analysis empty');return {businessDate,updatedAt,records:[],combos:[],threeCombos:[]};}
  const {contentHash,...body}=v;
@@ -257,10 +258,25 @@ export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedA
 export function parseReviewedAnalysisHistory(value:unknown,currentBusinessDate:string,centerUpdatedAt:string):ReviewedAnalysis{
  const v=object(value),businessDate=date(v.businessDate),updatedAt=paperClock(v.updatedAt);
  if(businessDate>=currentBusinessDate||updatedAt.ns<paperClock(centerUpdatedAt).ns)throw Error('Reviewed history clock');
- const history=parseReviewedAnalysis(v,businessDate,updatedAt.text);
+ const history=parseReviewedAnalysis(v,businessDate,updatedAt.text,true);
  // The history endpoint replays original single freezes at the actual read
  // clock. It does not reconstruct unpersisted combinations from past prices.
  if(!history.records.length||history.combos.length||history.threeCombos.length)throw Error('Reviewed history records');
+ if(Object.hasOwn(v,'comboArchive')){
+  const archive=object(v.comboArchive),source=object(archive.source),original=object(archive.view);
+  paperKeys(archive,['version','businessDate','source','view']);
+  paperKeys(source,['receiptSha256','intentSha256','releaseSha256','observedAt','viewJsonSha256','productionWrites']);
+  for(const key of ['receiptSha256','intentSha256','releaseSha256','viewJsonSha256'])paperHex(source[key]);
+  const observed=paperClock(source.observedAt),published=paperClock(original.updatedAt);
+  if(archive.version!=='reviewed-combo-history-archive-v1'||archive.businessDate!==businessDate||source.productionWrites!==0
+   ||published.ns>observed.ns||observed.ns>updatedAt.ns||sha256Text(JSON.stringify(original))!==source.viewJsonSha256
+   ||paperHex(original.publicationHash)!==paperHex(v.publicationHash)||paperHex(original.draftHash)!==paperHex(v.draftHash))throw Error('Reviewed combo archive binding');
+  const saved=parseReviewedAnalysis(original,businessDate,published.text),originalRecords=list(original.records);
+  if(originalRecords.length!==list(v.records).length||originalRecords.some((r,i)=>prdPaperPublicHash(r)!==prdPaperPublicHash(list(v.records)[i]))
+   ||!saved.combos.some(c=>c.legs.length)||saved.threeCombos.length
+   ||saved.combos.some(c=>c.legs.some(l=>paperClock(saved.records.find(r=>r.eventId===l.eventId)!.cutoffAt).ns<=observed.ns)))throw Error('Reviewed combo archive records');
+  history.comboArchive={observedAt:observed.text,view:saved};
+ }
  return history;
 }
 export interface LeagueBaselineDirections {businessDate:string;updatedAt:string;records:LeagueBaselineDirection[];blocked:number}
@@ -324,8 +340,15 @@ function reviewedAnalysisPublicHash(value:Obj):string{
  for(const record of records)prdPaperPublicHash(record);
  prdPaperPublicHash(combos);
  if(hasThree)prdPaperPublicHash(threeCombos);
- prdPaperPublicHash({...value,records:[],combos:[],...(hasThree?{threeCombos:[]}:{} )});
- return boundedPublicHash(value,35*512,35*16384);
+ const hasArchive=Object.hasOwn(value,'comboArchive');
+ if(hasArchive){
+  const archive=object(value.comboArchive),original=object(archive.view);
+  if(Object.hasOwn(original,'comboArchive'))throw Error('Reviewed combo archive scope');
+  reviewedAnalysisPublicHash(original);
+  prdPaperPublicHash({...archive,view:null});
+ }
+ prdPaperPublicHash({...value,records:[],combos:[],...(hasThree?{threeCombos:[]}:{} ),...(hasArchive?{comboArchive:null}:{})});
+ return boundedPublicHash(value,(hasArchive?71:35)*512,(hasArchive?71:35)*16384);
 }
 function boundedPublicHash(value:unknown,maxNodes:number,maxCharacters:number):string{
  let nodes=0;const stable=(v:unknown,depth:number):unknown=>{
@@ -336,6 +359,9 @@ function boundedPublicHash(value:unknown,maxNodes:number,maxCharacters:number):s
   const o=object(v);return Object.fromEntries(Object.keys(o).sort().map(k=>[k,stable(o[k],depth+1)]));
  };
  const body=JSON.stringify(stable(value,0));if(body.length>maxCharacters)throw new Error('PRD paper hash exceeds budget');
+ return sha256Text(body);
+}
+function sha256Text(body:string):string{
  const encoded=encodeURIComponent(body),bytes:number[]=[];
  for(let i=0;i<encoded.length;i++){if(encoded[i]==='%'){bytes.push(parseInt(encoded.slice(i+1,i+3),16));i+=2;}else bytes.push(encoded.charCodeAt(i));}
  const bitLength=bytes.length*8;bytes.push(0x80);while(bytes.length%64!==56)bytes.push(0);bytes.push(0,0,0,0,(bitLength>>>24)&255,(bitLength>>>16)&255,(bitLength>>>8)&255,bitLength&255);
