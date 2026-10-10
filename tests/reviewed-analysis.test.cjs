@@ -134,3 +134,40 @@ test('scoping retains duplicate selected identities for rejection',async()=>{
  await a.rejects(runtime.publish(d,{pool:db.pool,expectedDraftHash:p.hash(d)}),/CANONICAL_EVENT/);
  a.equal(db.rows().size,0);
 });
+
+test('HHAD-only batch publishes the exact signed line and price with score settlement arithmetic',()=>{
+ const v=setup();v.draft.singles[0].market='HHAD';v.draft.singles[0].handicap=-1;v.draft.singles[0].selection='d';v.draft.singles[0].scores=[[1,0],[2,1]];
+ const signed=fixture.snapshot(v.matches,{mutate:e=>e.payload.value.matchInfoList[0].subMatchList.forEach((r,i)=>{
+  r.homeTeamId=10+i*2;r.awayTeamId=11+i*2;r.oddsList=[{poolCode:'HHAD',goalLine:'-1',h:2.4,d:3.6,a:2.1}];
+  r.poolList=[{poolCode:'HHAD',poolStatus:'Selling',cbtValue:1,cbtAllUp:1}];
+ })});v.snapshot=signed.snapshot;v.trustRegistry=signed.registry;
+ const d=batch(v,[0],'on-demand-prematch-supplement'),published=p.make(d,v),r=published.records[0];
+ a.equal(r.market,'HHAD');a.equal(r.handicap,-1);a.equal(r.sp,3.6);a.equal(r.selection,'d');
+ const at=fixture.stamp(fixture.NOW+2000),view=p.seal({version:'reviewed-analysis-view-v1',businessDate:d.businessDate,updatedAt:at,createdAt:published.createdAt,commitObservedAt:fixture.stamp(fixture.NOW+1),publicationHash:published.contentHash,draftHash:published.draftHash,records:published.records,combos:p.combinations(published.records),formalEligible:false});
+ const parsed=viewModule().parseReviewedAnalysis(view,d.businessDate,at);a.equal(parsed.records[0].handicap,-1);
+ const bad=structuredClone(view);bad.records[0].handicap=-2;delete bad.contentHash;a.throws(()=>viewModule().parseReviewedAnalysis(p.seal(bad),d.businessDate,at),/scores/);
+});
+for(const [name,mutate] of [
+ ['wrong signed line',r=>{r.oddsList[0].goalLine='-2';}],
+ ['suspended pool',r=>{r.poolList[0].poolStatus='Suspended';}],
+ ['no fixed allup',r=>{r.poolList[0].cbtAllUp=0;}],
+ ['duplicate pool',r=>r.oddsList.push({...r.oddsList[0]})],
+ ['future provider clock',r=>Object.assign(r.oddsList[0],{updateDate:'2026-09-18',updateTime:'00:00:00'})],
+ ['HAD price renamed',r=>{r.oddsList[0].poolCode='HAD';}],
+ ['invalid odds',r=>{r.oddsList[0].d=true;}],
+ ['reversed official teams',r=>{[r.homeTeamId,r.awayTeamId]=[r.awayTeamId,r.homeTeamId];}]
+])test('HHAD rejects '+name,()=>{
+ const v=setup();Object.assign(v.draft.singles[0],{market:'HHAD',handicap:-1,selection:'d',scores:[[1,0],[2,1]]});
+ const signed=fixture.snapshot(v.matches,{mutate:e=>e.payload.value.matchInfoList[0].subMatchList.forEach((r,i)=>{
+  r.homeTeamId=10+i*2;r.awayTeamId=11+i*2;r.oddsList=[{poolCode:'HHAD',goalLine:'-1',h:2.4,d:3.6,a:2.1}];r.poolList=[{poolCode:'HHAD',poolStatus:'Selling',cbtValue:1,cbtAllUp:1}];if(i===0)mutate(r);
+ })});v.snapshot=signed.snapshot;v.trustRegistry=signed.registry;
+ a.throws(()=>p.make(batch(v,[0]),v));
+});
+test('HHAD scores use home plus handicap, not ordinary home result',()=>{
+ const v=setup();Object.assign(v.draft.singles[0],{market:'HHAD',handicap:-1,selection:'h',scores:[[1,0],[2,1]]});a.throws(()=>p.validateDraft(batch(v,[0]),v.asOf),/SCORE_DIRECTION/);
+ Object.assign(v.draft.singles[0],{handicap:1,selection:'h',scores:[[0,0],[1,1]]});a.equal(p.validateDraft(batch(v,[0]),v.asOf),true);
+});
+test('HHAD combo legs retain market and line',()=>{
+ const records=[{eventId:'1',matchNum:'001',market:'HHAD',handicap:-1,selection:'d',sp:3.6,confidence:'低'},{eventId:'2',matchNum:'002',market:'HAD',selection:'h',sp:1.5,confidence:'中'}];
+ const c=p.combinations(records);a.equal(c[0].product,5.4);a.equal(c[0].legs[0].handicap,-1);a.equal(c[0].legs[0].market,'HHAD');
+});

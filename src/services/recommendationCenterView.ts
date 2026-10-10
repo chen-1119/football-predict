@@ -191,12 +191,12 @@ export interface LeagueBaselineDirection {
 }
 export interface ReviewedAnalysisRecord {
  eventId:string;eventVersion:string;businessDate:string;matchNum:string;homeTeamId:string;awayTeamId:string;
- homeTeamName:string;awayTeamName:string;market:'HAD';selection:'h'|'d'|'a';sp:number;originalSp:number;
+ homeTeamName:string;awayTeamName:string;market:'HAD'|'HHAD';handicap?:number;selection:'h'|'d'|'a';sp:number;originalSp:number;
  scores:number[][];confidence:'高'|'中'|'低';reason:string;analysisUrl:string;limitations:string[];cutoffAt:string;quoteObservedAt:string;
  evidence?:{hashes:string[];observedAt:string;missing:string[];verification:'official-single-source'};
 }
 export interface ReviewedAnalysis {businessDate:string;updatedAt:string;createdAt?:string;publicationHash?:string;records:ReviewedAnalysisRecord[];
- combos:Array<{band:number;product:number|null;confidence:string|null;legs:Array<{eventId:string;matchNum:string;selection:'h'|'d'|'a';sp:number}>}>}
+ combos:Array<{band:number;product:number|null;confidence:string|null;legs:Array<{eventId:string;matchNum:string;market:'HAD'|'HHAD';handicap?:number;selection:'h'|'d'|'a';sp:number}>}>}
 export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedAt:string):ReviewedAnalysis{
  const v=object(value),rows=list(v.records),combos=list(v.combos);
  if(v.version!=='reviewed-analysis-view-v1'||v.businessDate!==businessDate||v.updatedAt!==updatedAt||v.formalEligible!==false||rows.length>32||combos.length>3)throw Error('Reviewed analysis envelope');
@@ -206,13 +206,15 @@ export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedA
  const ids=new Set<string>();
  const records=rows.map(x=>{
   const r=object(x),eventId=paperText(r.eventId,20),selection=r.selection;
-  if(!/^\d+$/.test(eventId)||ids.has(eventId)||!['h','d','a'].includes(String(selection))||r.businessDate!==businessDate||r.market!=='HAD'||r.publicationMethod!=='reviewed-editorial'||r.formalEligible!==false||r.modelProbability!==null||r.modelVersion!==null)throw Error('Reviewed analysis record');ids.add(eventId);
+  if(!/^\d+$/.test(eventId)||ids.has(eventId)||!['h','d','a'].includes(String(selection))||r.businessDate!==businessDate||!['HAD','HHAD'].includes(String(r.market))||r.publicationMethod!=='reviewed-editorial'||r.formalEligible!==false||r.modelProbability!==null||r.modelVersion!==null)throw Error('Reviewed analysis record');ids.add(eventId);
+  const handicap=r.market==='HHAD'?number(r.handicap):0;
+  if((r.market==='HHAD'&&(!Number.isSafeInteger(handicap)||handicap===0||Math.abs(handicap)>12))||(r.market==='HAD'&&r.handicap!=null))throw Error('Reviewed handicap line');
   const cutoffAt=paperClock(r.cutoffAt).text,eventVersion=paperClock(r.eventVersion).text;
   const created=paperClock(r.publicationCreatedAt??v.createdAt),committed=paperClock(r.publicationCommitObservedAt??v.commitObservedAt);
   if(Object.hasOwn(r,'publicationCreatedAt')!==Object.hasOwn(r,'publicationCommitObservedAt')||created.ns>=committed.ns||committed.ns>paperClock(v.commitObservedAt).ns
    ||committed.ns>=paperClock(cutoffAt).ns||paperClock(cutoffAt).ns>paperClock(eventVersion).ns||paperClock(r.quoteObservedAt).ns>created.ns)throw Error('Reviewed analysis clock');
   const sp=number(r.sp),originalSp=number(r.originalSp),scores=list(r.scores).map(x=>list(x).map(number));
-  if(sp<=1||originalSp<=1||scores.length!==2||scores.some(s=>s.length!==2||s.some(n=>!Number.isInteger(n)||n<0||n>15)||(s[0]===s[1]?'d':s[0]>s[1]?'h':'a')!==selection)||!['高','中','低'].includes(String(r.confidence)))throw Error('Reviewed analysis scores');
+  if(sp<=1||originalSp<=1||scores.length!==2||scores.some(s=>s.length!==2||s.some(n=>!Number.isInteger(n)||n<0||n>15)||(s[0]+handicap===s[1]?'d':s[0]+handicap>s[1]?'h':'a')!==selection)||!['高','中','低'].includes(String(r.confidence)))throw Error('Reviewed analysis scores');
   const analysisUrl=paperText(r.analysisUrl,2000),url=new URL(analysisUrl);if(url.protocol!=='https:'||url.username||url.password)throw Error('Reviewed analysis URL');
   let evidence:ReviewedAnalysisRecord['evidence'];
   if(Object.hasOwn(r,'evidenceAdoption')){const e=object(r.evidenceAdoption),{contentHash:eh,...eb}=e,ev=object(e.event),hashes=list(e.evidenceHashes).map(paperHex);
@@ -222,12 +224,12 @@ export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedA
     ||hashes.length<1||hashes.length>4||JSON.stringify(hashes)!==JSON.stringify(r.evidenceHashes)||paperClock(e.asOf).ns!==created.ns)throw Error('Reviewed evidence binding');
    evidence={hashes,observedAt:paperClock(e.asOf).text,missing:list(e.missing).map(x=>paperText(x,100)),verification:'official-single-source'};
   }
-  return {eventId,eventVersion,businessDate,matchNum:paperText(r.matchNum,30),homeTeamId:paperText(r.homeTeamId,100),awayTeamId:paperText(r.awayTeamId,100),homeTeamName:paperText(r.homeTeamName,100),awayTeamName:paperText(r.awayTeamName,100),market:'HAD' as const,selection:selection as 'h'|'d'|'a',sp,originalSp,scores,confidence:r.confidence as '高'|'中'|'低',reason:paperText(r.reason,500),analysisUrl,limitations:list(r.limitations).map(v=>paperText(v,200)),cutoffAt,quoteObservedAt:paperClock(r.quoteObservedAt).text,...(evidence?{evidence}:{})};
+  return {eventId,eventVersion,businessDate,matchNum:paperText(r.matchNum,30),homeTeamId:paperText(r.homeTeamId,100),awayTeamId:paperText(r.awayTeamId,100),homeTeamName:paperText(r.homeTeamName,100),awayTeamName:paperText(r.awayTeamName,100),market:r.market as 'HAD'|'HHAD',...(r.market==='HHAD'?{handicap}:{}),selection:selection as 'h'|'d'|'a',sp,originalSp,scores,confidence:r.confidence as '高'|'中'|'低',reason:paperText(r.reason,500),analysisUrl,limitations:list(r.limitations).map(v=>paperText(v,200)),cutoffAt,quoteObservedAt:paperClock(r.quoteObservedAt).text,...(evidence?{evidence}:{})};
  });
  const bands=new Set<number>(),pairs=new Set<string>();
  const parsed=combos.map(x=>{
   const c=object(x),band=number(c.band);if(![2.5,5,10].includes(band)||bands.has(band))throw Error('Reviewed combo band');bands.add(band);
-  const legs=list(c.legs).map(x=>{const l=object(x),r=records.find(r=>r.eventId===l.eventId);if(!r||l.market!=='HAD'||l.selection!==r.selection||l.sp!==r.sp||l.matchNum!==r.matchNum)throw Error('Reviewed combo binding');return {eventId:r.eventId,matchNum:r.matchNum,selection:r.selection,sp:r.sp};});
+  const legs=list(c.legs).map(x=>{const l=object(x),r=records.find(r=>r.eventId===l.eventId);if(!r||l.market!==r.market||(r.market==='HHAD'?l.handicap!==r.handicap:l.handicap!=null)||l.selection!==r.selection||l.sp!==r.sp||l.matchNum!==r.matchNum)throw Error('Reviewed combo binding');return {eventId:r.eventId,matchNum:r.matchNum,market:r.market,...(r.market==='HHAD'?{handicap:r.handicap}:{}),selection:r.selection,sp:r.sp};});
   if(!legs.length){if(c.product!==null||c.confidence!==null)throw Error('Reviewed combo empty');return {band,legs,product:null,confidence:null};}
   const pair=legs.map(l=>l.eventId).sort().join('/'),product=number(c.product);
   if(legs.length!==2||legs[0].eventId===legs[1].eventId||pairs.has(pair)||product<band||Math.abs(product-legs[0].sp*legs[1].sp)>1e-9)throw Error('Reviewed combo product');pairs.add(pair);
