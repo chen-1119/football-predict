@@ -83,7 +83,7 @@ test('lease integrity, cleanup and uncertain write errors never retry', async ()
 });
 test('lease retry wraps only pre-stop preparation and starts cutover clock after fresh capture', () => {
   const source = fs.readFileSync(path.join(root, 'scripts/nativeCodeReleaseDataPlane.cjs'), 'utf8');
-  a.match(source, /return retryLeaseRead\(\(\) => captureLeaseInputOnce\(state, directory\)\)/);
+  a.match(source, /return retryLeaseRead\(\(\) => captureLeaseInputOnce\(state, directory\), undefined, undefined,/);
   const once = source.slice(source.indexOf('async function captureLeaseInputOnce'), source.indexOf('async function seed'));
   a(once.includes('readOldRuntimeIdentity()')); a(once.includes('openPostgresRuntimeReadSession'));
   a(once.includes('finally { if (session) await session.close(); await source.end(); }'));
@@ -109,6 +109,21 @@ test('lease preparation respects elapsed deadline and rejects a backward clock',
   a.equal(now, 600000); a.equal(calls, 60);
   now = 5;
   await a.rejects(retryLeaseRead(busy, async () => { now = 4; }, () => now), /clock invalid/);
+});
+test('deadline keeps its last classified cause without extending the budget',async()=>{
+  const {retryLeaseRead}=require('../scripts/nativeCodeReleaseDataPlane.cjs');let now=0,calls=0;const error=Object.assign(new Error('private diagnostic must not be emitted'),{code:'NATIVE_RESULT_ARCHIVE_PENDING',pendingRows:2}),reports=[];
+  await a.rejects(retryLeaseRead(async()=>{calls++;throw error;},async ms=>{now+=ms;},()=>now,r=>reports.push(r)),e=>e.code==='NATIVE_LEASE_PREPARATION_TIMEOUT'&&e.cause===error&&e.message.endsWith('result-archive-pending'));
+  a.equal(now,600000);a.equal(calls,60);a.equal(reports.length,60);a.equal(reports[0].pendingRows,2);a(!JSON.stringify(reports).includes('private diagnostic'));
+});
+test('preparation observations distinguish pointer and projection contention',async()=>{
+  const {retryLeaseRead}=require('../scripts/nativeCodeReleaseDataPlane.cjs');const errors=[Object.assign(new Error('private'),{code:'POINTER_LOCK_TIMEOUT'}),new Error('native receipt read barrier busy; retry after projection completes')],reports=[];
+  a.equal(await retryLeaseRead(async()=>{if(errors.length)throw errors.shift();return 'ready';},async()=>{},()=>0,r=>reports.push(r)),'ready');
+  a.deepEqual(reports.map(r=>r.reason),['pointer-lock-busy','projection-receipt-barrier-busy']);a(reports.every(r=>r.pendingRows===null));
+});
+test('preparation reports only bounded count metadata after operation cleanup',async()=>{
+  const {retryLeaseRead}=require('../scripts/nativeCodeReleaseDataPlane.cjs');let calls=0,active=false;const reports=[];
+  await retryLeaseRead(async()=>{active=true;try{if(++calls===1)throw Object.assign(new Error('secret'),{code:'NATIVE_RESULT_ARCHIVE_PENDING',pendingRows:513});return 'ready';}finally{active=false;}},async()=>{},()=>0,r=>{a.equal(active,false);reports.push(r);});
+  a.equal(reports[0].pendingRows,null);a.deepEqual(Object.keys(reports[0]).sort(),['version','attempt','elapsedMs','remainingMs','reason','pendingRows'].sort());
 });
 for (const mode of ['exact', 'identity', 'tamper', 'oversize']) test('code lease uses PG-bound immutable current: ' + mode, () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lease-generation-'));

@@ -90,22 +90,33 @@ function leaseCurrent(session) {
 // This is preparation while live services remain running. The fresh transition
 // lease and its unchanged 900s cutover budget are created only after it succeeds.
 async function retryLeaseRead(operation, delay = ms => new Promise(resolve => setTimeout(resolve, ms)),
-  clock = () => require('node:perf_hooks').performance.now()) {
-  const started = clock(); let previous = started;
+  clock = () => require('node:perf_hooks').performance.now(), report = () => {}) {
+  const started = clock(); let previous = started, lastError = null, lastReason = null;
   const elapsed = () => {
     const current = clock(); assert(Number.isFinite(current) && current >= previous, 'lease preparation clock invalid');
     previous = current; return current - started;
   };
   assert(Number.isFinite(started));
   for (let attempt = 1; attempt <= 61; attempt++) {
-    assert(elapsed() < 600_000, 'lease preparation contention deadline exceeded');
+    if (elapsed() >= 600_000) {
+      const error = new Error('lease preparation contention deadline exceeded' + (lastReason ? ': ' + lastReason : ''), { cause: lastError });
+      error.code = 'NATIVE_LEASE_PREPARATION_TIMEOUT';
+      throw error;
+    }
     try { return await operation(); }
     catch (error) {
       const busy = error?.code === 'POINTER_LOCK_TIMEOUT'
         || error?.code === 'NATIVE_RESULT_ARCHIVE_PENDING'
         || error?.message === 'native receipt read barrier busy; retry after projection completes';
       if (!busy || attempt === 61) throw error;
-      const remaining = 600_000 - elapsed();
+      lastError = error;
+      lastReason = error.code === 'POINTER_LOCK_TIMEOUT' ? 'pointer-lock-busy'
+        : error.code === 'NATIVE_RESULT_ARCHIVE_PENDING' ? 'result-archive-pending' : 'projection-receipt-barrier-busy';
+      const elapsedMs = elapsed(), remaining = 600_000 - elapsedMs;
+      report({ version: 'code-release-preparation-wait-v1', attempt, elapsedMs,
+        remainingMs: Math.max(0, remaining), reason: lastReason,
+        pendingRows: lastReason === 'result-archive-pending' && Number.isInteger(error.pendingRows)
+          && error.pendingRows >= 1 && error.pendingRows <= 512 ? error.pendingRows : null });
       if (remaining <= 0) throw error;
       await delay(Math.min(10_000, remaining));
     }
@@ -136,7 +147,8 @@ function assertResultArchivesReady(rows, nowMs) {
   return { checkedRows: rows.length, pendingRows: 0 };
 }
 async function captureLeaseInput(state, directory) {
-  return retryLeaseRead(() => captureLeaseInputOnce(state, directory));
+  return retryLeaseRead(() => captureLeaseInputOnce(state, directory), undefined, undefined,
+    diagnostic => process.stderr.write(JSON.stringify(diagnostic) + '\n'));
 }
 async function captureLeaseInputOnce(state, directory) {
   assert.equal(state.dataPlane, 'code-only');
