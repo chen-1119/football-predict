@@ -215,6 +215,14 @@ async function captureLeaseInput(state, directory) {
   return retryLeaseRead(() => captureLeaseInputOnce(state, directory), undefined, undefined,
     diagnostic => process.stderr.write(JSON.stringify(diagnostic) + '\n'));
 }
+async function readCodeCutoverArchiveAuthority(client, rows, nowMs) {
+  const authority = require('../server/recommendationAuthority.cjs');
+  const verified = await authority.readPublicationAuthority(client, { policy: authority.TRAINED_ONLY_POLICY, asOf: nowMs });
+  const projected = rows.map(row => authority.projectRetiredCurrent(row, verified));
+  return { ...assertCodeCutoverArchivesReady(projected, nowMs),
+    publicationAuthority: authority.summarizeAuthority(verified),
+    retiredLegacyArchiveMissingRows: projected.filter(row => row?.recommendationAuthority?.legacyArchiveState === 'missing').length };
+}
 async function captureLeaseInputOnce(state, directory) {
   assert.equal(state.dataPlane, 'code-only');
   if (state.emergencyActivationAuthorizationHash) {
@@ -233,7 +241,7 @@ async function captureLeaseInputOnce(state, directory) {
     const current = leaseCurrent(session);
     await session.client.query("SET LOCAL statement_timeout = '8000ms'");
     const archiveRows = await session.client.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' ORDER BY match_id LIMIT 513");
-    const archiveReadiness = assertCodeCutoverArchivesReady(archiveRows.rows.map(row => row.payload), Date.now());
+    const archiveReadiness = await readCodeCutoverArchiveAuthority(session.client, archiveRows.rows.map(row => row.payload), Date.now());
     // The lease and seed must describe the same PostgreSQL-bound immutable
     // generation. The mutable APP projection may have different cutoff clocks.
     driver().write(path.join(directory, 'code-lease-current.json'), current);
@@ -340,7 +348,7 @@ function retireSeed(sha) {
   d.write(path.join(directory, 'code-seed-retired.json'), { ...intent, removed: true, completedAt: new Date().toISOString() });
   return { ok: true, bytes, removed: true };
 }
-module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, captureLeaseInput, retryLeaseRead, assertResultArchivesReady, assertCodeCutoverArchivesReady, assertCodeArchiveCoverageClock, verifyCodeCutoverCompletionClock };
+module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, captureLeaseInput, retryLeaseRead, assertResultArchivesReady, assertCodeCutoverArchivesReady, readCodeCutoverArchiveAuthority, assertCodeArchiveCoverageClock, verifyCodeCutoverCompletionClock };
 if (require.main === module) {
   (async () => {
     assert.equal(process.argv.length, 4); const action = process.argv[2], sha = process.argv[3];

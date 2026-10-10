@@ -137,8 +137,8 @@ test('PG decision column/payload divergence is rejected independently of a valid
 });
 test('both detail entrypoints use dedicated admission while publisher/accounts keep original reader',() => {
   const src=fs.readFileSync(require.resolve('../server/index.cjs'),'utf8');
-  assert.match(src,/const buildV1MatchPayload[\s\S]*?readMatchDetailById\(decodedId, \{ basePublication \}\)/);
-  assert.match(src,/if \(matchDetailRoute\)[\s\S]*?readMatchDetailById\(matchDetailRoute\[1\]\)/);
+  assert.match(src,/const buildV1MatchPayload[\s\S]*?readMatchDetailById\(decodedId, \{ basePublication, recommendationAuthorityPolicy: currentRecommendationPolicy \}\)/);
+  assert.match(src,/if \(matchDetailRoute\)[\s\S]*?readMatchDetailById\(matchDetailRoute\[1\], \{ recommendationAuthorityPolicy: currentRecommendationPolicy \}\)/);
   assert.match(src,/readMatch: async \(id\) => \{\s*const match=await readMatchById\(id\)/);
   const page=fs.readFileSync(require.resolve('../src/pages/MatchDetail.tsx'),'utf8');
   assert.match(page,/response.status === 304 && cached[\s\S]*?await acceptMatchDetail\(matchId,cached.match\)/);

@@ -103,7 +103,7 @@ test('same-session horizon proof is obtained before durable lease capture and se
   const root = path.resolve(__dirname, '..'), source = fs.readFileSync(path.join(root, 'scripts/nativeCodeReleaseDataPlane.cjs'), 'utf8');
   const once = source.slice(source.indexOf('async function captureLeaseInputOnce'), source.indexOf('async function seed'));
   const queryAt = once.indexOf("SELECT payload FROM football.match_snapshots WHERE dataset='current'");
-  const checkAt = once.indexOf('assertCodeCutoverArchivesReady(archiveRows.rows.map(row => row.payload), Date.now())');
+  const checkAt = once.indexOf('readCodeCutoverArchiveAuthority(session.client, archiveRows.rows.map(row => row.payload), Date.now())');
   a(queryAt > 0 && checkAt > queryAt && checkAt < once.indexOf("'code-lease-current.json'"));
   const shell = fs.readFileSync(path.join(root, 'deploy/light-server/release-native.sh'), 'utf8');
   const captureAt = shell.indexOf('lease-input "$BUNDLE_SHA256"');

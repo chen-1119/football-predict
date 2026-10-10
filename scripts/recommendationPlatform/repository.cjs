@@ -1,5 +1,6 @@
 'use strict';
 const { hash } = require('../../src/services/publishedForecastPolicy.cjs');
+const { TRAINED_ONLY_POLICY } = require('../../server/recommendationAuthority.cjs');
 
 class Repository {
   constructor(client,{clock=Date.now,readOfficialSnapshot=()=>require('./liveOfficialHandicap.cjs').readLiveOfficialSnapshot(),trustRegistry}={}) {
@@ -155,7 +156,7 @@ class Repository {
 }
 function postgresPorts(pool, clock=Date.now) {
   const {withPostgresTransaction}=require('../../server/postgresStore.cjs');
-  return {clock,trainedOnly:true,supportsResearchV2:true,prdPaperPool:pool,async transaction(lane,action){
+  return {clock,trainedOnly:TRAINED_ONLY_POLICY.trainedOnly,supportsResearchV2:true,prdPaperPool:pool,async transaction(lane,action){
     for(let attempt=0;attempt<3;attempt++){
       try{return await withPostgresTransaction(pool,async client=>{
         await client.query("SELECT set_config('lock_timeout','3000',true),set_config('statement_timeout','20000',true)");

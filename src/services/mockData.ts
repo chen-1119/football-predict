@@ -1530,6 +1530,20 @@ export interface Match {
   handicapOddsSourceUrl?: string;
   predictions: PredictionDetail[];
   predictionMeta?: PredictionMeta;
+  recommendationAuthority?: {
+    version: 'recommendation-publication-authority-v1';
+    mode: 'reviewed-and-trained';
+    legacyCurrentEnabled: false;
+    businessDate?: string;
+    updatedAt?: string;
+    observedAt?: string;
+    legacyArchiveState?: 'valid' | 'missing' | 'none';
+    activeValidation?: {
+      ok: boolean;
+      reviewed: { status: 'verified' | 'unavailable'; records: number; openRecords?: number; closedRecords?: number };
+      trained: { status: 'verified' | 'unavailable'; records: number; openRecords?: number; closedRecords?: number };
+    };
+  } | null;
   gptPrediction?: GptPredictionRecord;
   probabilityModel?: MatchProbabilityModel;
   stats?: MatchStats;

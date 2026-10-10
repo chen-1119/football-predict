@@ -10,6 +10,8 @@ const { publicFixture, publicOverview } = require("./publicProduct.cjs");
 const zlib = require("node:zlib");
 const { readStorageMode, retiredSqliteStatus } = require("./storageMode.cjs");
 const storageMode = readStorageMode();
+const { TRAINED_ONLY_POLICY, isTrustedPolicy, isRetiredCurrentProjection } = require('./recommendationAuthority.cjs');
+const currentRecommendationPolicy = storageMode.postgresOnly ? TRAINED_ONLY_POLICY : null;
 const { publicationRefreshBlocked, nativePublicationReadError, publicationTransitionHealth } = require("./publicationRefreshPolicy.cjs");
 const { sendStaticFileResponse } = require("./staticFileResponse.cjs");
 const { readRequestJson } = require("./readRequestJson.cjs");
@@ -52,7 +54,8 @@ const {
 } = require("./postgresStore.cjs");
 const {
   getPostgresProjectionStatus,
-  readPostgresCurrentMatches,
+  readPostgresCurrentAuthoritySnapshot,
+  readPostgresRecommendationCenter,
   readPostgresCurrentTransitionSnapshot,
   readPostgresFastResultReceiptState,
   readPostgresHistoryMatchesForList,
@@ -181,8 +184,10 @@ const {
 } = require("../src/services/immutableAnalysisReferenceDecision.cjs");
 const {
   buildRecommendationProjectionParityAudit,
-  projectPublicPredictionRows,
+  projectPublicPredictionRows: projectLegacyPublicPredictionRows,
 } = require("./recommendationProjectionParity.cjs");
+const projectPublicPredictionRows = (match, options) => isRetiredCurrentProjection(match)
+  ? [] : projectLegacyPublicPredictionRows(match, options);
 const {
   selectCurrentPublicationRows,
   sqliteGenerationCountDivergence,
@@ -4508,15 +4513,17 @@ const readCurrentMatchesDetailed = async (options = {}) => {
     const postgresStatus = await getCachedPostgresReadStatus(meta, basePublication?.identity || null);
     requireNativePostgresReadStatus(postgresStatus);
     if (postgresFreshEnough(postgresStatus, "currentMatches", 0)) {
-      const postgresMatches = Array.isArray(options.postgresRows)
-        ? options.postgresRows
-        : await readPostgresCurrentMatches(postgresPool, {
+      const postgresRead = Array.isArray(options.postgresRows)
+        ? { rows: options.postgresRows, recommendationAuthority: options.recommendationAuthority || null }
+        : await readPostgresCurrentAuthoritySnapshot(postgresPool, {
             publicationIdentity: basePublication?.identity || null,
+            recommendationAuthorityPolicy: options.recommendationAuthorityPolicy,
           });
+      const postgresMatches = postgresRead.rows;
       const rows = basePublication?.context
         ? postgresMatches.map(resolveMatchLifecycle)
         : await mergeGptIntoMatches(postgresMatches);
-      const generationRows = rows.length === 0 && basePublication?.context
+      const generationRows = rows.length === 0 && basePublication?.context && !isTrustedPolicy(options.recommendationAuthorityPolicy)
         ? (() => {
             const generationMatches = readPublicationJson(basePublication, "matches-current.json", []);
             return Array.isArray(generationMatches) ? generationMatches.map(resolveMatchLifecycle) : [];
@@ -4536,7 +4543,7 @@ const readCurrentMatchesDetailed = async (options = {}) => {
         sqliteReadGraceSeconds: postgresStatus.readGraceSeconds ?? null,
         checkedAt: nowIso(),
       };
-      return { rows: guardedRead.rows, ...lastCurrentRead };
+      return { rows: guardedRead.rows, ...lastCurrentRead, recommendationAuthority: postgresRead.recommendationAuthority };
     }
     postgresFallbackRead = {
       source: postgresStatus.available
@@ -4544,6 +4551,10 @@ const readCurrentMatchesDetailed = async (options = {}) => {
         : "postgres-unavailable",
       dbUpdatedAt: postgresStatusUpdatedAt(postgresStatus),
     };
+  }
+
+  if (isTrustedPolicy(options.recommendationAuthorityPolicy)) {
+    throw Object.assign(new Error('Trusted recommendation publication unavailable'), { code: 'RECOMMENDATION_AUTHORITY_UNAVAILABLE', statusCode: 503 });
   }
 
   if (shouldPreferSqliteRead() && options.preferPublication !== true) {
@@ -5718,6 +5729,7 @@ const compactCurrentMatchForList = (match, globalRiskTier = "unknown") => {
       match.archivedPreMatchPrediction,
       match
     ),
+    recommendationAuthority: match.recommendationAuthority || null,
     scoreHome: match.scoreHome,
     scoreAway: match.scoreAway,
     projectedScoreHome: match.projectedScoreHome,
@@ -6182,7 +6194,10 @@ const readMatchDetailById = async (matchId, options = {}) => {
   const postgresStatus = await getCachedPostgresReadStatus(meta,basePublication.identity || null);
   requireNativePostgresReadStatus(postgresStatus);
   if (!postgresFreshEnough(postgresStatus,'historyMatches',1)) return null;
-  const match = await readPostgresMatchDetailById(postgresPool,decodedId,{publicationIdentity:basePublication.identity || null});
+  const match = await readPostgresMatchDetailById(postgresPool,decodedId,{
+    publicationIdentity:basePublication.identity || null,
+    recommendationAuthorityPolicy:options.recommendationAuthorityPolicy,
+  });
   return match ? enrichMatchHistoricalTraining(match) : null;
 };
 
@@ -8323,11 +8338,12 @@ const hhadOnlyRecommendationDirectionValid = (match) => {
 
 const buildCurrentRecommendationCoverage = async () => {
   const basePublication = resolveBasePublication();
-  const [matches, globalRiskTier] = await Promise.all([
-    readCurrentMatches(),
+  const [currentRead, globalRiskTier] = await Promise.all([
+    readCurrentMatchesDetailed({ basePublication, recommendationAuthorityPolicy: currentRecommendationPolicy }),
     readGlobalRecommendationRiskTier(basePublication),
   ]);
-  const currentRows = Array.isArray(matches) ? matches : [];
+  const currentRows = Array.isArray(currentRead.rows) ? currentRead.rows : [];
+  const publicationAuthority = currentRead.recommendationAuthority || null;
   const projectionCheckedAtMs = Date.now();
   const projectionParity = buildRecommendationProjectionParityAudit(
     currentRows.map((match) => ({
@@ -8422,6 +8438,8 @@ const buildCurrentRecommendationCoverage = async () => {
     && dualMarketAtomicMissingMatches === 0;
   return {
     version: "current-recommendation-coverage-v6",
+    publicationAuthority,
+    retiredLegacyArchiveMissingRows: currentRows.filter(row => row?.recommendationAuthority?.legacyArchiveState === 'missing').length,
     scheduledMatches,
     bestDirectionMatches,
     referenceDirectionMatches,
@@ -8464,10 +8482,9 @@ const buildCurrentRecommendationCoverage = async () => {
     projectionParity,
     trainingCoverageOk,
     dualMarketAtomicCoverageOk,
-    coverageOk: missingDispositionMatches === 0
-      && trainingCoverageOk
-      && dualMarketAtomicCoverageOk
-      && projectionParity.ok
+    coverageOk: publicationAuthority
+      ? publicationAuthority.activeValidation?.ok === true && projectionParity.ok
+      : missingDispositionMatches === 0 && trainingCoverageOk && dualMarketAtomicCoverageOk && projectionParity.ok
   };
 };
 
@@ -10965,7 +10982,11 @@ const buildV1CurrentPayload = async (url) => {
           sourceMatchIds: fastObservationSourceIds,
           limit: transitionRowLimit,
           publicationIdentity: basePublication.identity,
-        }).catch(() => ({ available: false, currentRows: [], transitionRows: [] }))
+          recommendationAuthorityPolicy: currentRecommendationPolicy,
+        }).catch(error => {
+          if (currentRecommendationPolicy) throw error;
+          return { available: false, currentRows: [], transitionRows: [] };
+        })
       : !serveInitialFromPublication && shouldPreferSqliteRead()
       ? await readSqliteCurrentTransitionSnapshot(sqliteDbPath, {
           sourceMatchIds: fastObservationSourceIds,
@@ -10981,6 +11002,8 @@ const buildV1CurrentPayload = async (url) => {
         sqliteRows: atomicSqliteSnapshot.available ? atomicSqliteSnapshot.currentRows : undefined,
         basePublication,
         preferPublication: serveInitialFromPublication,
+        recommendationAuthorityPolicy: currentRecommendationPolicy,
+        recommendationAuthority: atomicSqliteSnapshot.recommendationAuthority || null,
       }),
       includeTransitionRows
         ? atomicSqliteSnapshot.available
@@ -11103,6 +11126,7 @@ const buildV1CurrentPayload = async (url) => {
       ok: true,
       apiVersion: "v1",
       publication: basePublication.identity,
+      recommendationAuthority: detail.recommendationAuthority || null,
       version: versionTime,
       // `since` and `revision` are request-local and are applied after the
       // shared base payload is built, so clients with different clocks still
@@ -11349,7 +11373,7 @@ const buildV1MatchPayload = async (matchId) => {
 
   const promise = (async () => {
     const [match, sources] = await Promise.all([
-      readMatchDetailById(decodedId, { basePublication }),
+      readMatchDetailById(decodedId, { basePublication, recommendationAuthorityPolicy: currentRecommendationPolicy }),
       getSourceHealth().catch(() => null)
     ]);
     if (!match) return null;
@@ -11442,11 +11466,14 @@ const buildPublicProduct = async () => {
   if (publicProductInflight) return publicProductInflight;
   publicProductInflight = (async () => {
     if (!postgresPool || !shouldPreferPostgresRead()) throw new Error("PUBLIC_DATA_UNAVAILABLE");
-    const [current, result] = await Promise.all([
+    const [current, centerPayload] = await Promise.all([
       buildV1CurrentPayload(new URL("http://localhost/api/v1/matches/current?view=list")),
-      postgresPool.query("SELECT payload FROM football.daily_featured_combo_state WHERE id=1"),
+      readPostgresRecommendationCenter(postgresPool, {
+        publicationIdentity: resolveBasePublication().identity,
+        recommendationAuthorityPolicy: currentRecommendationPolicy,
+      }),
     ]);
-    const value=publicOverview(current,result.rows[0]?.payload);
+    const value=publicOverview(current,centerPayload);
     publicProductCache={at:Date.now(),value};
     return value;
   })();
@@ -11647,9 +11674,12 @@ const handleApi = async (req, res, url) => {
     if (req.method !== "GET") return sendJson(res, { ok: false, error: "method not allowed" }, 405);
     if (!(await hasRecommendationAccess(req, url))) return sendJson(res, { ok: false, error: "access code required" }, 401);
     if (!shouldPreferPostgresRead()) return sendJson(res, { ok: false, error: "PostgreSQL unavailable" }, 503);
-    const result = await postgresPool.query("SELECT payload FROM football.daily_featured_combo_state WHERE id=1");
-    if (!result.rows[0]) return sendJson(res, { ok: false, error: "combo update pending" }, 503);
-    return sendJson(res, { ok: true, ...result.rows[0].payload });
+    const payload = await readPostgresRecommendationCenter(postgresPool, {
+      publicationIdentity: resolveBasePublication().identity,
+      recommendationAuthorityPolicy: currentRecommendationPolicy,
+    });
+    if (!payload) return sendJson(res, { ok: false, error: "combo update pending" }, 503);
+    return sendJson(res, { ok: true, ...payload });
   }
 
   if (url.pathname === "/api/v1/model/evaluation") {
@@ -11815,7 +11845,7 @@ const handleApi = async (req, res, url) => {
 
   if (url.pathname === "/api/matches/current") {
     const [matches, globalRiskTier] = await Promise.all([
-      readCurrentMatches(),
+      readCurrentMatchesDetailed({ recommendationAuthorityPolicy: currentRecommendationPolicy }).then(read => read.rows),
       readGlobalRecommendationRiskTier(),
     ]);
     return sendJson(res, url.searchParams.get("view") === "list" && Array.isArray(matches)
@@ -11825,7 +11855,7 @@ const handleApi = async (req, res, url) => {
 
   if (url.pathname === "/api/matches/root") {
     const [matches, globalRiskTier] = await Promise.all([
-      readCurrentMatches(),
+      readCurrentMatchesDetailed({ recommendationAuthorityPolicy: currentRecommendationPolicy }).then(read => read.rows),
       readGlobalRecommendationRiskTier(),
     ]);
     return sendJson(res, Array.isArray(matches)
@@ -11861,7 +11891,7 @@ const handleApi = async (req, res, url) => {
   const matchDetailRoute = url.pathname.match(/^\/api\/matches\/([^/]+)$/);
   if (matchDetailRoute) {
     const [match, globalRiskTier] = await Promise.all([
-      readMatchDetailById(matchDetailRoute[1]),
+      readMatchDetailById(matchDetailRoute[1], { recommendationAuthorityPolicy: currentRecommendationPolicy }),
       readGlobalRecommendationRiskTier(),
     ]);
     return match
