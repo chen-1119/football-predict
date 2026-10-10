@@ -32,6 +32,40 @@ test('combos bind two distinct events, exact multiplication, no repeated pair, n
  const c=p.combinations(records);a.equal(c[0].product,3.7873);a.equal(c[1].product,5.1958);a.equal(c[2].product,null);
 });
 function viewModule(){const filename=path.resolve('src/services/recommendationCenterView.ts'),m=new Module(filename,module);m.filename=filename;m.paths=Module._nodeModulePaths(path.dirname(filename));m._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,filename);return m.exports;}
+
+function dailyView(size){
+ const v=setup(),publication=p.make(v.draft,v),updatedAt=fixture.stamp(fixture.NOW+2000);
+ const records=Array.from({length:size},(_,i)=>({...publication.records[i%3],eventId:String(80000+i),matchNum:`Synthetic ${i}`,
+  market:i%2?'HHAD':'HAD',...(i%2?{handicap:-1,scores:[[2,0],[3,1]]}:{}),
+  reason:'研'.repeat(500),publicationCreatedAt:publication.createdAt,publicationCommitObservedAt:fixture.stamp(fixture.NOW+1)}));
+ return p.seal({version:'reviewed-analysis-view-v1',businessDate:v.draft.businessDate,updatedAt,createdAt:publication.createdAt,
+  commitObservedAt:fixture.stamp(fixture.NOW+1),publicationHash:publication.contentHash,draftHash:publication.draftHash,
+  records,combos:p.combinations(records),formalEligible:false});
+}
+for(const size of [14,27,32])test(`actual browser parser accepts ${size} sealed daily records above the single-paper hash budget`,()=>{
+ const view=dailyView(size),{parseReviewedAnalysis,prdPaperPublicHash}=viewModule();
+ const {contentHash,...body}=view;a.equal(contentHash,p.hash(body));a.throws(()=>prdPaperPublicHash(body),/budget/);
+ const parsed=parseReviewedAnalysis(view,view.businessDate,view.updatedAt);a.equal(parsed.records.length,size);
+ a.equal(parsed.records[1].market,'HHAD');a.equal(parsed.records[1].handicap,-1);
+});
+test('daily parser retains row/count/clock/hash and per-component resource bounds',()=>{
+ const parser=viewModule().parseReviewedAnalysis;
+ for(const mutate of [
+  v=>v.records.push({...v.records[0],eventId:'99999'}),
+  v=>{v.records[1].eventId=v.records[0].eventId;},
+  v=>{v.records[0].publicationCommitObservedAt=v.records[0].cutoffAt;},
+  v=>{v.records[0].reason='x'.repeat(16385);},
+  v=>{v.records[0].extra=Array(512).fill(0);},
+  v=>{v.extra='x'.repeat(16385);},
+  v=>{v.records[0].extra=Array.from({length:9}).reduce(value=>({nested:value}),1);},
+ ]){const v=dailyView(32);mutate(v);const {contentHash,...body}=v;void contentHash;const sealed=p.seal(body);a.throws(()=>parser(sealed,sealed.businessDate,sealed.updatedAt));}
+ const tampered=dailyView(27);tampered.records[0].sp=9.99;a.throws(()=>parser(tampered,tampered.businessDate,tampered.updatedAt),/seal/);
+});
+test('the original paper hash keeps its original node, depth and character bounds',()=>{
+ const hash=viewModule().prdPaperPublicHash;a.equal(hash({a:'中文',b:[1,true,null]}),p.hash({a:'中文',b:[1,true,null]}));
+ a.throws(()=>hash(Array(512).fill(0)),/budget/);a.throws(()=>hash('x'.repeat(16385)),/budget/);
+ a.throws(()=>hash(Array.from({length:9}).reduce(value=>({nested:value}),1)),/budget/);
+});
 test('actual browser parser accepts sealed published projection and rejects changed bytes',()=>{
  const v=setup(),record=p.make(v.draft,v),updatedAt=fixture.stamp(fixture.NOW+2000);
  const view=p.seal({version:'reviewed-analysis-view-v1',businessDate:v.draft.businessDate,updatedAt,createdAt:record.createdAt,commitObservedAt:fixture.stamp(fixture.NOW+1),publicationHash:record.contentHash,draftHash:record.draftHash,records:record.records,combos:p.combinations(record.records),formalEligible:false});

@@ -202,7 +202,7 @@ export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedA
  if(v.version!=='reviewed-analysis-view-v1'||v.businessDate!==businessDate||v.updatedAt!==updatedAt||v.formalEligible!==false||rows.length>32||combos.length>3)throw Error('Reviewed analysis envelope');
  if(!rows.length){if(combos.length)throw Error('Reviewed analysis empty');return {businessDate,updatedAt,records:[],combos:[]};}
  const {contentHash,...body}=v;
- if(paperHex(contentHash)!==prdPaperPublicHash(body)||paperClock(v.createdAt).ns>=paperClock(v.commitObservedAt).ns||paperClock(v.commitObservedAt).ns>paperClock(updatedAt).ns)throw Error('Reviewed analysis seal');
+ if(paperHex(contentHash)!==reviewedAnalysisPublicHash(body)||paperClock(v.createdAt).ns>=paperClock(v.commitObservedAt).ns||paperClock(v.commitObservedAt).ns>paperClock(updatedAt).ns)throw Error('Reviewed analysis seal');
  const ids=new Set<string>();
  const records=rows.map(x=>{
   const r=object(x),eventId=paperText(r.eventId,20),selection=r.selection;
@@ -287,14 +287,28 @@ const paperClock=(value:unknown):{text:string;ns:bigint}=>{
 // Public-body consistency only: this digest does not authenticate a collector,
 // a model, or a PostgreSQL acknowledgement. Those checks belong to the server.
 export function prdPaperPublicHash(value:unknown):string{
+ return boundedPublicHash(value,512,16384);
+}
+// A reviewed daily view contains up to 32 individually bounded records, plus
+// its header and combos. Keep the original paper/record budget per component;
+// only the aggregate envelope receives the sum of those bounded budgets.
+function reviewedAnalysisPublicHash(value:Obj):string{
+ const records=list(value.records),combos=list(value.combos);
+ if(records.length>32||combos.length>3)throw new Error('Reviewed analysis envelope');
+ for(const record of records)prdPaperPublicHash(record);
+ prdPaperPublicHash(combos);
+ prdPaperPublicHash({...value,records:[],combos:[]});
+ return boundedPublicHash(value,34*512,34*16384);
+}
+function boundedPublicHash(value:unknown,maxNodes:number,maxCharacters:number):string{
  let nodes=0;const stable=(v:unknown,depth:number):unknown=>{
-  if(++nodes>512||depth>8)throw new Error('PRD paper hash exceeds budget');
+  if(++nodes>maxNodes||depth>8)throw new Error('PRD paper hash exceeds budget');
   if(v===null||typeof v==='boolean'||typeof v==='string')return v;
   if(typeof v==='number'){if(!Number.isFinite(v))throw new Error('Invalid PRD paper hash number');return v;}
   if(Array.isArray(v))return v.map(item=>stable(item,depth+1));
   const o=object(v);return Object.fromEntries(Object.keys(o).sort().map(k=>[k,stable(o[k],depth+1)]));
  };
- const body=JSON.stringify(stable(value,0));if(body.length>16384)throw new Error('PRD paper hash exceeds budget');
+ const body=JSON.stringify(stable(value,0));if(body.length>maxCharacters)throw new Error('PRD paper hash exceeds budget');
  const encoded=encodeURIComponent(body),bytes:number[]=[];
  for(let i=0;i<encoded.length;i++){if(encoded[i]==='%'){bytes.push(parseInt(encoded.slice(i+1,i+3),16));i+=2;}else bytes.push(encoded.charCodeAt(i));}
  const bitLength=bytes.length*8;bytes.push(0x80);while(bytes.length%64!==56)bytes.push(0);bytes.push(0,0,0,0,(bitLength>>>24)&255,(bitLength>>>16)&255,(bitLength>>>8)&255,bitLength&255);
