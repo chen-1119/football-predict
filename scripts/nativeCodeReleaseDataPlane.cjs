@@ -87,15 +87,26 @@ function leaseCurrent(session) {
 }
 // A reader briefly competes with the normal publisher/retention pointer lock.
 // Retry the complete read session, never reuse its old PostgreSQL snapshot.
-// The caller's existing cutover clock includes these attempts and is not reset.
-async function retryLeaseRead(operation, delay = ms => new Promise(resolve => setTimeout(resolve, ms))) {
-  for (let attempt = 1; attempt <= 3; attempt++) {
+// This is preparation while live services remain running. The fresh transition
+// lease and its unchanged 900s cutover budget are created only after it succeeds.
+async function retryLeaseRead(operation, delay = ms => new Promise(resolve => setTimeout(resolve, ms)),
+  clock = () => require('node:perf_hooks').performance.now()) {
+  const started = clock(); let previous = started;
+  const elapsed = () => {
+    const current = clock(); assert(Number.isFinite(current) && current >= previous, 'lease preparation clock invalid');
+    previous = current; return current - started;
+  };
+  assert(Number.isFinite(started));
+  for (let attempt = 1; attempt <= 61; attempt++) {
+    assert(elapsed() < 600_000, 'lease preparation contention deadline exceeded');
     try { return await operation(); }
     catch (error) {
       const busy = error?.code === 'POINTER_LOCK_TIMEOUT'
         || error?.message === 'native receipt read barrier busy; retry after projection completes';
-      if (!busy || attempt === 3) throw error;
-      await delay(attempt * 1000);
+      if (!busy || attempt === 61) throw error;
+      const remaining = 600_000 - elapsed();
+      if (remaining <= 0) throw error;
+      await delay(Math.min(10_000, remaining));
     }
   }
 }
