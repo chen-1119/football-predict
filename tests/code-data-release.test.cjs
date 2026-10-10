@@ -5,6 +5,51 @@ const policy = require('../scripts/releaseDataPlanePolicy.cjs');
 const { planCapacity } = require('../scripts/nativeReleaseCapacity.cjs');
 const { validate } = require('../scripts/runReleaseCapacityPreflight.cjs');
 const root = path.resolve(__dirname, '..');
+const archiveReadiness = require('../scripts/nativeCodeReleaseDataPlane.cjs').assertResultArchivesReady;
+const archiveFixture = () => ({ id:'sporttery_123', sourceMatchId:'123', status:'SCHEDULED',
+  kickoffTime:'2030-01-01T12:00:00Z', buyEndTime:'2030-01-01T12:00:00Z',
+  predictions:[{marketType:'BEST',oddsPoolCode:'HAD',tipCode:'1'}] });
+const validArchive = () => ({version:'archived-pre-match-prediction-v1',source:'immutable-pre-match-prediction-snapshot',
+  sourceMatchId:'123',eventVersion:'2030-01-01T12:00:00Z',capturedAt:'2030-01-01T11:00:00Z',
+  cutoffTime:'2030-01-01T12:00:00Z',prediction:{marketType:'BEST',oddsPoolCode:'HAD',tipCode:'1'}});
+test('kickoff boundary refuses absent archives but leaves future matches untouched', () => {
+  const row=archiveFixture(), at=Date.parse(row.kickoffTime);
+  a.deepEqual(archiveReadiness([row],at-1),{checkedRows:1,pendingRows:0});
+  a.throws(()=>archiveReadiness([row],at),e=>e.code==='NATIVE_RESULT_ARCHIVE_PENDING'&&e.pendingRows===1);
+  a.deepEqual(archiveReadiness([{...row,predictions:[]}],at),{checkedRows:1,pendingRows:0});
+});
+test('natural archive resolves preparation without altering original bytes', async () => {
+  const {retryLeaseRead}=require('../scripts/nativeCodeReleaseDataPlane.cjs');
+  const row=archiveFixture(),at=Date.parse(row.kickoffTime),before=JSON.stringify(row);let calls=0,active=false;
+  const complete={...row,archivedPreMatchPrediction:validArchive()}, frozen=JSON.stringify(complete);
+  const report=await retryLeaseRead(async()=>{a.equal(active,false);active=true;
+    try { return archiveReadiness([++calls===1?row:complete],at); } finally {active=false;}
+  },async ms=>{a.equal(active,false);a.equal(ms,10000);});
+  a.equal(calls,2);a.equal(report.pendingRows,0);a.equal(JSON.stringify(row),before);a.equal(JSON.stringify(complete),frozen);
+});
+test('invalid existing archives cannot be retried as temporary absence', async () => {
+  const {retryLeaseRead}=require('../scripts/nativeCodeReleaseDataPlane.cjs');
+  for(const change of [{sourceMatchId:'wrong'},{capturedAt:'2030-01-01T12:00:00Z'},{eventVersion:'2030-01-02T12:00:00Z'}]) {
+    let calls=0;await a.rejects(retryLeaseRead(async()=>{calls++;archiveReadiness([{...archiveFixture(),archivedPreMatchPrediction:{...validArchive(),...change}}],Date.parse('2030-01-01T12:00:00Z'));
+    },async()=>a.fail('invalid evidence must not wait')),/existing archive invalid/);a.equal(calls,1);
+  }
+});
+test('archive preparation has bounded rows, clock, bytes and existing retry deadline', async()=>{
+  a.throws(()=>archiveReadiness(Array(513).fill(archiveFixture()),Date.now()),/row bound/);
+  a.throws(()=>archiveReadiness([],NaN),/clock invalid/);
+  a.throws(()=>archiveReadiness([null],Date.now()),/row invalid/);
+  a.throws(()=>archiveReadiness([{...archiveFixture(),padding:'x'.repeat(32*1024*1024)}],Date.now()),/byte bound/);
+  const {retryLeaseRead}=require('../scripts/nativeCodeReleaseDataPlane.cjs');let now=0,calls=0;
+  await a.rejects(retryLeaseRead(async()=>{calls++;archiveReadiness([archiveFixture()],Date.parse('2030-01-01T12:00:00Z'));},async ms=>{now+=ms;},()=>now),/deadline/);
+  a.equal(now,600000);a.equal(calls,60);
+});
+test('archive preparation queries same read session before durable lease input writes',()=>{
+  const source=fs.readFileSync(path.join(root,'scripts/nativeCodeReleaseDataPlane.cjs'),'utf8');
+  const once=source.slice(source.indexOf('async function captureLeaseInputOnce'),source.indexOf('async function seed'));
+  a(once.indexOf('assertResultArchivesReady(')<once.indexOf("'code-lease-current.json'"));
+  a.match(once,/session\.client\.query\("SELECT payload FROM football\.match_snapshots WHERE dataset='current' ORDER BY match_id LIMIT 513"\)/);
+  a.match(once,/session\.close\(\); await source\.end\(\)/);
+});
 test('lease pointer contention retries the complete operation after cleanup', async () => {
   const { retryLeaseRead } = require('../scripts/nativeCodeReleaseDataPlane.cjs');
   let active = false, calls = 0; const waits = [];

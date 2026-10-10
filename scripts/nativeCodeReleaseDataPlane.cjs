@@ -102,6 +102,7 @@ async function retryLeaseRead(operation, delay = ms => new Promise(resolve => se
     try { return await operation(); }
     catch (error) {
       const busy = error?.code === 'POINTER_LOCK_TIMEOUT'
+        || error?.code === 'NATIVE_RESULT_ARCHIVE_PENDING'
         || error?.message === 'native receipt read barrier busy; retry after projection completes';
       if (!busy || attempt === 61) throw error;
       const remaining = 600_000 - elapsed();
@@ -109,6 +110,30 @@ async function retryLeaseRead(operation, delay = ms => new Promise(resolve => se
       await delay(Math.min(10_000, remaining));
     }
   }
+}
+// A kickoff can precede the next complete worker projection. Check the actual
+// PG rows before pausing that worker; waiting after pause cannot close the gap.
+// Reuse the final API archive predicate, never manufacture an archive or accept
+// an invalid existing one. The candidate/final health checks remain mandatory.
+function assertResultArchivesReady(rows, nowMs) {
+  assert(Array.isArray(rows) && rows.length <= 512, 'archive preparation row bound');
+  assert(Number.isFinite(nowMs), 'archive preparation clock invalid');
+  assert(Buffer.byteLength(JSON.stringify(rows)) <= 32 * 1024 * 1024, 'archive preparation byte bound');
+  const parity = require('../server/recommendationProjectionParity.cjs');
+  const pending = [];
+  for (const match of rows) {
+    assert(match && typeof match === 'object' && !Array.isArray(match), 'archive preparation row invalid');
+    if (!parity.isResultPhase(match, nowMs) || !parity.hasDirectionalEvidence(match)) continue;
+    if (match.archivedPreMatchPrediction == null) pending.push(parity.canonicalId(match));
+    else assert(parity.validateArchivedDecision(match).valid, 'archive preparation existing archive invalid');
+  }
+  if (pending.length) {
+    const error = new Error('result-phase archive pending natural projection before cutover');
+    error.code = 'NATIVE_RESULT_ARCHIVE_PENDING';
+    error.pendingRows = pending.length;
+    throw error;
+  }
+  return { checkedRows: rows.length, pendingRows: 0 };
 }
 async function captureLeaseInput(state, directory) {
   return retryLeaseRead(() => captureLeaseInputOnce(state, directory));
@@ -123,11 +148,14 @@ async function captureLeaseInputOnce(state, directory) {
       storeDir: STORE, publicDataDir: LIVE + '/public/data', protectReceipt: true });
     await session.guardedFinals();
     const current = leaseCurrent(session);
+    await session.client.query("SET LOCAL statement_timeout = '8000ms'");
+    const archiveRows = await session.client.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' ORDER BY match_id LIMIT 513");
+    const archiveReadiness = assertResultArchivesReady(archiveRows.rows.map(row => row.payload), Date.now());
     // The lease and seed must describe the same PostgreSQL-bound immutable
     // generation. The mutable APP projection may have different cutoff clocks.
     driver().write(path.join(directory, 'code-lease-current.json'), current);
     const proof = { sha: state.sha, identity: session.identity,
-      currentHash: crypto.createHash('sha256').update(JSON.stringify(current)).digest('hex'), capturedAt: new Date().toISOString() };
+      currentHash: crypto.createHash('sha256').update(JSON.stringify(current)).digest('hex'), capturedAt: new Date().toISOString(), archiveReadiness };
     driver().write(path.join(directory, 'code-lease-input.json'), proof);
     return { ok: true, identity: session.identity, productionWrites: 0 };
   } finally { if (session) await session.close(); await source.end(); }
@@ -229,7 +257,7 @@ function retireSeed(sha) {
   d.write(path.join(directory, 'code-seed-retired.json'), { ...intent, removed: true, completedAt: new Date().toISOString() });
   return { ok: true, bytes, removed: true };
 }
-module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, captureLeaseInput, retryLeaseRead };
+module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, captureLeaseInput, retryLeaseRead, assertResultArchivesReady };
 if (require.main === module) {
   (async () => {
     assert.equal(process.argv.length, 4); const action = process.argv[2], sha = process.argv[3];
