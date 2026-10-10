@@ -168,6 +168,7 @@ const expectedSafeEntries = [
 ];
 const requiredReleaseEntries = [
   "tests/emergency-code-activation.test.cjs",
+  "tests/code-cutover-archive-horizon.test.cjs",
   "src/services/prematchV3FeedbackLoop.cjs",
   "scripts/registerPrematchV3Parameters.cjs",
   "tests/prematch-v3-feedback-loop.test.cjs",
@@ -211,6 +212,7 @@ const requiredReleaseEntries = [
   "scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs",
   "src/components/recommendations/ReviewedAnalysis.tsx",
   "tests/reviewed-analysis.test.cjs",
+  "tests/reviewed-three-combo-view.test.cjs",
   "scripts/leagueBaselineRegistry.cjs",
   "scripts/registerLeagueBaseline.cjs",
   "scripts/prepareLeagueModelRegistration.cjs",

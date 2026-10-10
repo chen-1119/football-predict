@@ -151,6 +151,66 @@ function assertResultArchivesReady(rows, nowMs) {
   }
   return { checkedRows: rows.length, pendingRows: 0 };
 }
+// Code deployment pauses the only normal archive producer. A row which is
+// pre-match at capture can enter result phase while that producer is stopped.
+// Prove the exact same archive predicate across the complete cutover lifetime
+// (including its reserved final-readiness time) before touching service state. This is a
+// data-readiness check, not a schedule window: a valid existing archive permits
+// the crossing, and a directionless result still needs no invented archive.
+const CODE_ARCHIVE_LEASE_SECONDS = 900;
+function assertCodeCutoverArchivesReady(rows, nowMs) {
+  assert(Number.isSafeInteger(nowMs), 'code archive preparation clock invalid');
+  const throughMs = nowMs + CODE_ARCHIVE_LEASE_SECONDS * 1000;
+  assert(Number.isSafeInteger(throughMs) && Number.isFinite(new Date(throughMs).getTime()),
+    'code archive preparation horizon invalid');
+  const ready = assertResultArchivesReady(rows, throughMs);
+  return { ...ready, checkedAt: new Date(nowMs).toISOString(),
+    requiredThrough: new Date(throughMs).toISOString(),
+    leaseSeconds: CODE_ARCHIVE_LEASE_SECONDS };
+}
+function assertCodeArchiveCoverageClock(readiness, nowMs) {
+  assert(Number.isSafeInteger(nowMs), 'code archive completion clock invalid');
+  const checkedAtMs = Date.parse(readiness?.checkedAt), throughMs = Date.parse(readiness?.requiredThrough);
+  assert(Number.isFinite(checkedAtMs) && Number.isFinite(throughMs)
+    && readiness.leaseSeconds === CODE_ARCHIVE_LEASE_SECONDS && readiness.pendingRows === 0
+    && throughMs - checkedAtMs === CODE_ARCHIVE_LEASE_SECONDS * 1000,
+  'code archive coverage clock proof invalid');
+  assert(nowMs >= checkedAtMs && nowMs < throughMs, 'code archive coverage clock expired');
+}
+function verifyCodeCutoverCompletionClock(state, directory) {
+  assert.equal(state.dataPlane, 'code-only');
+  const input = driver().read(path.join(directory, 'code-lease-input.json'));
+  assert.equal(input.sha, state.sha);
+  // The existing native journal reader is limited to 1MiB. This is the
+  // already bounded full current input (up to 32MiB), not a small journal.
+  driver().secureDirectory(directory);
+  const currentFile = path.join(directory, 'code-lease-current.json'), before = fs.lstatSync(currentFile);
+  assert(before.isFile() && !before.isSymbolicLink() && before.nlink === 1 && before.uid === 0
+    && !(before.mode & 0o077) && before.size > 0 && before.size <= 32 * 1024 * 1024 + 1, 'code lease current file invalid');
+  const fd = fs.openSync(currentFile, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+  let bytes;
+  try {
+    const opened = fs.fstatSync(fd); assert.equal(opened.ino, before.ino); assert.equal(opened.dev, before.dev);
+    bytes = fs.readFileSync(fd); const after = fs.fstatSync(fd);
+    assert.equal(bytes.length, before.size); assert.equal(after.size, before.size);
+    assert.equal(after.mtimeMs, before.mtimeMs); assert.equal(after.ctimeMs, before.ctimeMs);
+  } finally { fs.closeSync(fd); }
+  const current = JSON.parse(bytes);
+  assert.equal(crypto.createHash('sha256').update(JSON.stringify(current)).digest('hex'), input.currentHash);
+  const lease = driver().read(path.join(directory, 'code-transition-lease.json'));
+  assert.equal(lease.minimumHorizonSeconds, CODE_ARCHIVE_LEASE_SECONDS);
+  const verifiedAt = new Date().toISOString();
+  assertCodeArchiveCoverageClock(input.archiveReadiness, Date.parse(verifiedAt));
+  const transitions = require('./releaseTransitionLease.cjs');
+  const emergency = state.emergencyActivationAuthorizationHash
+    ? transitions.readEmergencyCodeAuthorization(path.join(__dirname, '../deploy/light-server/code-release-activation-authorization.json'),
+      { at: verifiedAt, dataPlane: state.dataPlane }) : null;
+  if (emergency) assert.equal(emergency.authorizationHash, state.emergencyActivationAuthorizationHash);
+  // Verify the original persisted input, not the live generation. The normal
+  // worker has restarted by this point and may legitimately publish new data.
+  return transitions.verifyTransitionLease(current, lease, { verifiedAt, requiredMarginSeconds: 30,
+    emergencyAuthorization: emergency?.authorization || null, dataPlane: state.dataPlane });
+}
 async function captureLeaseInput(state, directory) {
   return retryLeaseRead(() => captureLeaseInputOnce(state, directory), undefined, undefined,
     diagnostic => process.stderr.write(JSON.stringify(diagnostic) + '\n'));
@@ -173,7 +233,7 @@ async function captureLeaseInputOnce(state, directory) {
     const current = leaseCurrent(session);
     await session.client.query("SET LOCAL statement_timeout = '8000ms'");
     const archiveRows = await session.client.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' ORDER BY match_id LIMIT 513");
-    const archiveReadiness = assertResultArchivesReady(archiveRows.rows.map(row => row.payload), Date.now());
+    const archiveReadiness = assertCodeCutoverArchivesReady(archiveRows.rows.map(row => row.payload), Date.now());
     // The lease and seed must describe the same PostgreSQL-bound immutable
     // generation. The mutable APP projection may have different cutoff clocks.
     driver().write(path.join(directory, 'code-lease-current.json'), current);
@@ -280,14 +340,16 @@ function retireSeed(sha) {
   d.write(path.join(directory, 'code-seed-retired.json'), { ...intent, removed: true, completedAt: new Date().toISOString() });
   return { ok: true, bytes, removed: true };
 }
-module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, captureLeaseInput, retryLeaseRead, assertResultArchivesReady };
+module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, captureLeaseInput, retryLeaseRead, assertResultArchivesReady, assertCodeCutoverArchivesReady, assertCodeArchiveCoverageClock, verifyCodeCutoverCompletionClock };
 if (require.main === module) {
   (async () => {
     assert.equal(process.argv.length, 4); const action = process.argv[2], sha = process.argv[3];
-    assert(['retire-seed', 'lease-input'].includes(action)); assert.match(sha, /^[a-f0-9]{64}$/);
+    assert(['retire-seed', 'lease-input', 'complete-clock'].includes(action)); assert.match(sha, /^[a-f0-9]{64}$/);
     if (action === 'retire-seed') return retireSeed(sha);
     assert.equal(process.platform, 'linux'); assert.equal(process.getuid(), 0);
     const directory = '/var/lib/football-release/native/' + sha, state = driver().read(path.join(directory, 'state.json'));
-    assert.equal(state.sha, sha); return captureLeaseInput(state, directory);
+    assert.equal(state.sha, sha);
+    if (action === 'complete-clock') return verifyCodeCutoverCompletionClock(state, directory);
+    return captureLeaseInput(state, directory);
   })().then(result => console.log(JSON.stringify(result))).catch(error => { console.error(error.message); process.exitCode = 1; });
 }

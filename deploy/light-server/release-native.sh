@@ -428,6 +428,11 @@ native_finish_readiness() {
   fi
   release_stage_observe begin finalization
   if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    # The 300s post-swap reserve belongs to the original 900s lease. Check
+    # that same clock after all final probes, without comparing a newly
+    # running worker's legitimate generation against the preparation input.
+    [ "$((SECONDS - CODE_CUTOVER_STARTED_SECONDS))" -lt 900 ]
+    NODE_PATH="$APP_DIR/node_modules" "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/nativeCodeReleaseDataPlane.cjs" complete-clock "$BUNDLE_SHA256"
     # Durable engineering receipt explicitly leaves new input/model adoption
     # pending. A later read-only observer must prove the new natural cycle;
     # neither HTTP 200 nor this code acceptance promotes a model or forecast.

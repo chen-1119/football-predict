@@ -205,3 +205,41 @@ test('HHAD combo legs retain market and line',()=>{
  const records=[{eventId:'1',matchNum:'001',market:'HHAD',handicap:-1,selection:'d',sp:3.6,confidence:'低'},{eventId:'2',matchNum:'002',market:'HAD',selection:'h',sp:1.5,confidence:'中'}];
  const c=p.combinations(records);a.equal(c[0].product,5.4);a.equal(c[0].legs[0].handicap,-1);a.equal(c[0].legs[0].market,'HHAD');
 });
+
+test('three-leg combinations use three distinct frozen events and exact products without changing directions',()=>{
+ const rows=[
+  {eventId:'1',matchNum:'001',market:'HHAD',handicap:2,selection:'h',sp:2.65,confidence:'低'},
+  {eventId:'2',matchNum:'002',market:'HAD',selection:'d',sp:4.7,confidence:'低'},
+  {eventId:'3',matchNum:'003',market:'HHAD',handicap:-1,selection:'a',sp:2.13,confidence:'中'},
+  {eventId:'4',matchNum:'004',market:'HAD',selection:'h',sp:1.29,confidence:'中'}];
+ const original=JSON.stringify(rows),out=p.combinations(rows,3);
+ a.equal(JSON.stringify(rows),original);a.equal(out.length,3);
+ a.equal(new Set(out.map(c=>c.legs.map(l=>l.eventId).join('/'))).size,3);
+ for(const c of out){a.equal(c.legs.length,3);a.equal(new Set(c.legs.map(l=>l.eventId)).size,3);
+  a.ok(Math.abs(c.product-c.legs.reduce((v,l)=>v*l.sp,1))<1e-9);a.equal(c.confidence,'低');
+  for(const l of c.legs){const r=rows.find(r=>r.eventId===l.eventId);a.equal(l.market,r.market);a.equal(l.handicap,r.handicap);a.equal(l.selection,r.selection);a.equal(l.sp,r.sp);}}
+ a.ok(p.combinations(rows.slice(0,2),3).every(c=>c.legs.length===0));
+ a.throws(()=>p.combinations([rows[0],rows[0],rows[1]],3),/COMBO_INPUT/);
+ a.throws(()=>p.combinations(Array.from({length:33},(_,i)=>({...rows[0],eventId:String(i)})),3),/COMBO_BOUND/);
+ a.throws(()=>p.combinations(rows,4),/COMBO_BOUND/);
+});
+
+test('three-leg projection uses acknowledged records only, expires at the first cutoff, leaves stored singles untouched',async()=>{
+ const v=setup(),runtime=controlledRuntime(v),db=controlledPool(v);
+ await runtime.publish(v.draft,{pool:db.pool,expectedDraftHash:p.hash(v.draft)});
+ const saved=JSON.stringify([...db.rows()]);
+ const at=fixture.stamp(fixture.NOW+1000),view=await runtime.projection(db.client,v.draft.businessDate,at);
+ a.equal(view.threeCombos.filter(c=>c.legs.length===3).length,1);
+ const cutoff=view.records.map(r=>Date.parse(r.cutoffAt)).sort((a,b)=>a-b)[0];
+ const expired=await runtime.projection(db.client,v.draft.businessDate,new Date(cutoff).toISOString());
+ a.ok(expired.threeCombos.every(c=>c.legs.length===0));
+ a.equal(JSON.stringify([...db.rows()]),saved);
+});
+
+test('combo decimal multiplication preserves four-place SP and avoids large-product floating noise',()=>{
+ for(const [prices,expected]of [[[1.2345,2,3],7.407],[[266.45,136.55,459.65],16723789.538375]]){
+  const rows=prices.map((sp,i)=>({eventId:String(i),matchNum:String(i),market:'HAD',selection:'h',sp,confidence:'中'}));
+  const combo=p.combinations(rows,3).find(c=>c.legs.length);a.equal(combo.product,expected);
+  a.deepEqual(combo.legs.map(l=>l.sp),prices);
+ }
+});

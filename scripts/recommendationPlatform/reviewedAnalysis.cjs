@@ -82,14 +82,26 @@ function make(draft,{matches,snapshot,trustRegistry,asOf,evidenceByEvent={}}){
  return seal({version:'reviewed-analysis-publication-v1',createdAt:asOf,businessDate:draft.businessDate,
   draftHash:hash(draft),originalFrozenAt:draft.frozenAt,records,modelProbability:null,formalEligible:false});
 }
-function combinations(records){
+function combinations(records,size=2){
+ check((size===2||size===3)&&Array.isArray(records)&&records.length<=32,'COMBO_BOUND');
+ check(new Set(records.map(r=>r.eventId)).size===records.length&&records.every(r=>Number.isFinite(r.sp)&&r.sp>1&&r.sp<1000&&['高','中','低'].includes(r.confidence)),'COMBO_INPUT');
  const options=[];
- for(let i=0;i<records.length;i++)for(let j=i+1;j<records.length;j++){
-  const legs=[records[i],records[j]],product=Math.round(legs[0].sp*1000)*Math.round(legs[1].sp*1000)/1e6;
+ function add(legs){
+  // Preserve every decimal in the frozen SP, including supported 4-place
+  // quotes. Convert the exact decimal product to Number only once.
+  let scaled=1n,places=0;
+  for(const r of legs){const [whole,fraction='']=String(r.sp).split('.');
+   scaled*=BigInt(whole+fraction);places+=fraction.length;}
+  const digits=String(scaled).padStart(places+1,'0');
+  const product=Number(places?digits.slice(0,-places)+'.'+digits.slice(-places):digits);
   options.push({legs:legs.map(r=>({eventId:r.eventId,matchNum:r.matchNum,market:r.market,...(r.market==='HHAD'?{handicap:r.handicap}:{}),selection:r.selection,sp:r.sp})),product,
    confidence:legs.some(r=>r.confidence==='低')?'低':legs.some(r=>r.confidence==='中')?'中':'高'});
  }
- // Same two legs may occupy one band only; never alter an original direction.
+ for(let i=0;i<records.length;i++)for(let j=i+1;j<records.length;j++){
+  if(size===2)add([records[i],records[j]]);
+  else for(let k=j+1;k<records.length;k++)add([records[i],records[j],records[k]]);
+ }
+ // The same set of legs may occupy one band only; never alter a frozen direction.
  const used=new Set();return [2.5,5,10].map(band=>{
   const v=options.filter(o=>o.product>=band&&!used.has(o)).sort((a,b)=>({高:0,中:1,低:2}[a.confidence]-{高:0,中:1,低:2}[b.confidence])||a.product-b.product)[0];
   if(v)used.add(v);return v?{band,...v}:{band,legs:[],product:null,confidence:null};
