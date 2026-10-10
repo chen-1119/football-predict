@@ -7,6 +7,8 @@ const {day}=require('../../src/services/publishedForecastPolicy.cjs');
 const check=(v,c)=>{if(!v)throw Object.assign(Error('REVIEWED_ANALYSIS_'+c),{code:'REVIEWED_ANALYSIS_'+c});};
 const text=(v,n=500)=>typeof v==='string'&&v.length>0&&v.length<=n&&!/[\x00-\x08\ufffd]/.test(v);
 const safeUrl=v=>{try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password;}catch{return false;}};
+const draftSupportsHandicap=d=>d.version===3;
+const scoreDirection=(s,line)=>s[0]+line===s[1]?'d':s[0]+line>s[1]?'h':'a';
 function validateDraft(d,asOf){
  check((d?.version===1&&d.reportKind==='weekday-2000-selected-two'&&d.predictionScope==='chat-only research')
   ||(d?.version===2&&d.reportKind==='evidence-backed-prematch'&&d.predictionScope==='reviewed-online-reference')
@@ -16,7 +18,7 @@ function validateDraft(d,asOf){
    &&sha(d.originalArchive)===d.originalArchiveSha256,'ORIGINAL_ARCHIVE');
   let original;try{original=JSON.parse(d.originalArchive);}catch{check(false,'ORIGINAL_ARCHIVE');}
   check(original?.version===1&&['morning-1100-review-and-early','weekday-2000-selected-two','weekday-2100-full',
-   'weekend-2100-selected-two','weekend-2200-full'].includes(original.reportKind)
+   'weekend-2100-selected-two','weekend-2200-full','on-demand-prematch-supplement'].includes(original.reportKind)
    &&['chat-only research','chat-only manual research'].includes(original.predictionScope)
    &&original.businessDate===d.businessDate&&original.frozenAt===d.frozenAt
    &&Array.isArray(original.singles)&&hash(original.singles.map(r=>({...r,classification:'manual-prematch-research'})))===hash(d.singles),'ORIGINAL_BINDING');
@@ -26,14 +28,14 @@ function validateDraft(d,asOf){
  const seen=new Set();
  for(const r of d.singles){
   check(/^\d{1,20}$/.test(r.eventId)&&!seen.has(r.eventId),'EVENT');seen.add(r.eventId);
-  check(r.businessDate===d.businessDate&&['h','d','a'].includes(r.selection)&&r.market==='HAD'&&r.handicap===null,'MARKET');
+  check(r.businessDate===d.businessDate&&['h','d','a'].includes(r.selection)&&((r.market==='HAD'&&r.handicap===null)||(draftSupportsHandicap(d)&&r.market==='HHAD'&&Number.isSafeInteger(r.handicap)&&r.handicap!==0&&Math.abs(r.handicap)<=12)),'MARKET');
   check(r.formalEligible===false&&r.modelVersion===null&&r.modelProbability===null&&r.classification==='manual-prematch-research','HONEST_SOURCE');
   check(text(r.reason)&&safeUrl(r.analysisUrl)&&['高','中','低'].includes(r.confidence),'EVIDENCE');
   if(d.version===2)check(Array.isArray(r.evidenceKeys)&&r.evidenceKeys.length>0&&r.evidenceKeys.length<=4
    &&new Set(r.evidenceKeys).size===r.evidenceKeys.length&&r.evidenceKeys.every(k=>/^team-evidence-[a-f0-9]{64}$/.test(k))&&r.confidence==='低','EVIDENCE_KEYS');
   check(Array.isArray(r.teams)&&r.teams.length===2&&r.teams.every(v=>text(v,100))&&Array.isArray(r.orderedTeamIds)&&r.orderedTeamIds.length===2&&r.orderedTeamIds.every(v=>Number.isSafeInteger(v)&&v>0),'TEAMS');
   check(Array.isArray(r.scores)&&r.scores.length===2&&new Set(r.scores.map(v=>JSON.stringify(v))).size===2,'SCORES');
-  for(const s of r.scores)check(Array.isArray(s)&&s.length===2&&s.every(v=>Number.isInteger(v)&&v>=0&&v<=15)&&(s[0]===s[1]?'d':s[0]>s[1]?'h':'a')===r.selection,'SCORE_DIRECTION');
+  for(const s of r.scores)check(Array.isArray(s)&&s.length===2&&s.every(v=>Number.isInteger(v)&&v>=0&&v<=15)&&scoreDirection(s,r.market==='HHAD'?r.handicap:0)===r.selection,'SCORE_DIRECTION');
   check(Number.isFinite(r.sp)&&r.sp>1&&r.sp<1000&&Date.parse(d.frozenAt)<Date.parse(r.kickoff),'ORIGINAL_PRICE_CLOCK');
  }
  return true;
@@ -49,9 +51,15 @@ function make(draft,{matches,snapshot,trustRegistry,asOf,evidenceByEvent={}}){
   const raw=endpoints[0].payload.value.matchInfoList.flatMap(g=>g.subMatchList).filter(m=>String(m.matchId)===r.eventId);
   check(raw.length===1&&[raw[0].homeTeamId,raw[0].awayTeamId].every((v,i)=>String(v)===String(r.orderedTeamIds[i]))
    &&[input.homeTeamName,input.awayTeamName].every((v,i)=>v===r.teams[i])&&identity.identity.matchNo===r.matchNum,'ORDERED_TEAMS');
-  const joined=had.joinOfficialHad([input],snapshot,{now:Date.parse(asOf),trustRegistry}).current[0];
-  const quote=had.signedLiveHadQuoteForMatch(joined,Date.parse(asOf),Date.parse(identity.saleCutoff),{trustRegistry});check(quote,'SIGNED_PRICE');
-  const sp=quote.odds[{h:'odds1',d:'oddsX',a:'odds2'}[r.selection]];
+  let quote,sp,quoteObservedAt,quoteHash;
+  if(r.market==='HHAD'){
+   quote=require('./reviewedHandicapQuote.cjs').reviewedHandicapQuote(input,endpoints[0],{asOf,trustRegistry,line:r.handicap});
+   check(quote,'SIGNED_HHAD_PRICE');sp=quote.odds[r.selection];quoteObservedAt=quote.observedAt;quoteHash=quote.receiptHash;
+  }else{
+   const joined=had.joinOfficialHad([input],snapshot,{now:Date.parse(asOf),trustRegistry}).current[0];
+   quote=had.signedLiveHadQuoteForMatch(joined,Date.parse(asOf),Date.parse(identity.saleCutoff),{trustRegistry});check(quote,'SIGNED_PRICE');
+   sp=quote.odds[{h:'odds1',d:'oddsX',a:'odds2'}[r.selection]];quoteObservedAt=quote.at;quoteHash=quote.receipt.receiptHash;
+  }
   let evidenceAdoption;
   if(draft.version===2){
    const packets=evidenceByEvent[r.eventId];check(Array.isArray(packets)&&packets.length===r.evidenceKeys.length
@@ -65,10 +73,10 @@ function make(draft,{matches,snapshot,trustRegistry,asOf,evidenceByEvent={}}){
   }
   return {eventId:r.eventId,eventVersion:identity.identity.eventVersion,businessDate:r.businessDate,matchNum:r.matchNum,
    homeTeamId:input.homeTeamId,awayTeamId:input.awayTeamId,homeTeamName:r.teams[0],awayTeamName:r.teams[1],
-   market:'HAD',selection:r.selection,sp,originalSp:r.sp,scores:r.scores,confidence:r.confidence,reason:r.reason,
+   market:r.market,...(r.market==='HHAD'?{handicap:r.handicap}:{}),selection:r.selection,sp,originalSp:r.sp,scores:r.scores,confidence:r.confidence,reason:r.reason,
    analysisUrl:r.analysisUrl,limitations:['完整近5场双源未核实','首发未确认','500 SP未核实；采用官方报价'],
    ...(evidenceAdoption?{evidenceAdoption,evidenceHashes:evidenceAdoption.evidenceHashes}:{}),
-   cutoffAt:identity.saleCutoff,quoteObservedAt:quote.at,quoteHash:quote.receipt.receiptHash,
+   cutoffAt:identity.saleCutoff,quoteObservedAt,quoteHash,
    publicationMethod:'reviewed-editorial',modelVersion:null,modelProbability:null,formalEligible:false};
  });
  return seal({version:'reviewed-analysis-publication-v1',createdAt:asOf,businessDate:draft.businessDate,
@@ -78,7 +86,7 @@ function combinations(records){
  const options=[];
  for(let i=0;i<records.length;i++)for(let j=i+1;j<records.length;j++){
   const legs=[records[i],records[j]],product=Math.round(legs[0].sp*1000)*Math.round(legs[1].sp*1000)/1e6;
-  options.push({legs:legs.map(r=>({eventId:r.eventId,matchNum:r.matchNum,market:r.market,selection:r.selection,sp:r.sp})),product,
+  options.push({legs:legs.map(r=>({eventId:r.eventId,matchNum:r.matchNum,market:r.market,...(r.market==='HHAD'?{handicap:r.handicap}:{}),selection:r.selection,sp:r.sp})),product,
    confidence:legs.some(r=>r.confidence==='低')?'低':legs.some(r=>r.confidence==='中')?'中':'高'});
  }
  // Same two legs may occupy one band only; never alter an original direction.

@@ -3012,8 +3012,14 @@ quiesce_managed_maintenance_for_sqlite_snapshot() {
   for unit in "${MANAGED_TIMERS[@]}" football-cleanup.service football-monitor.service football-daily-prematch.service football-postgres-backup.service; do
     if state="$(systemctl is-active "$unit" 2>/dev/null)"; then status=0; else status=$?; fi
     case "$state" in
-      active|activating|deactivating|reloading)
-        [ "$status" -eq 0 ] || return 1
+      active|reloading)
+        [ "$status" -eq 0 ] || { printf 'maintenance state/status conflict: %s %s %s\n' "$unit" "$state" "$status" >&2; return 1; }
+        systemctl stop "$unit" >/dev/null 2>&1 || return 1
+        ;;
+      activating|deactivating)
+        # is-active returns 3 for transitional oneshot states. Stop the exact
+        # managed unit, then require the unchanged inactive/failed proof below.
+        [ "$status" -eq 3 ] || { printf 'maintenance transition/status conflict: %s %s %s\n' "$unit" "$state" "$status" >&2; return 1; }
         systemctl stop "$unit" >/dev/null 2>&1 || return 1
         ;;
       inactive|failed) [ "$status" -eq 3 ] || return 1 ;;

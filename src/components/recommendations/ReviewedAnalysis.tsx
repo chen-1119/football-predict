@@ -1,5 +1,6 @@
 import type { ReviewedAnalysis as Data, ReviewedAnalysisRecord } from '../../services/recommendationCenterView';
 const label={h:'主胜',d:'平局',a:'客胜'};
+export const reviewedLabel=(r:{market:'HAD'|'HHAD';handicap?:number;selection:'h'|'d'|'a'})=>r.market==='HHAD'?`${{h:'让胜',d:'让平',a:'让负'}[r.selection]}(${r.handicap!>0?'+':''}${r.handicap})`:label[r.selection];
 export function ReviewedMatchPrice({record,language}:{record:ReviewedAnalysisRecord;language:'zh'|'en'}){
  return <><strong className="compact-sp" data-publication-method="reviewed-editorial">{record.sp.toFixed(2)}</strong><small className="compact-sp-note">{language==='zh'?'发布时官方 SP · 非即时价':'Official SP at publication · Not live'}</small></>;
 }
@@ -7,7 +8,7 @@ export function ReviewedMatchStatus({record,now,language}:{record:ReviewedAnalys
  return now>=Date.parse(record.cutoffAt)?(language==='zh'?'已发布 · 待核赛果':'Published · Result pending'):(language==='zh'?'已发布 · 待开赛':'Published · Upcoming');
 }
 export function ReviewedMatchPick({record,now}:{record:ReviewedAnalysisRecord;now?:number}){
- return <div className="compact-pick" data-publication-method="reviewed-editorial"><small>赛前综合分析 · 人工审核</small><strong>{label[record.selection]} · SP {record.sp.toFixed(2)}</strong>
+ return <div className="compact-pick" data-publication-method="reviewed-editorial"><small>赛前综合分析 · 人工审核</small><strong>{reviewedLabel(record)} · SP {record.sp.toFixed(2)}</strong>
   <small>{record.scores.map(s=>s.join('-')).join(' / ')} · {record.confidence}信心{typeof now==='number'&&now>=Date.parse(record.cutoffAt)?' · 已截止冻结':''}</small>
   <details><summary>依据</summary><p>{record.reason}</p><p>{record.limitations.join('；')}</p>
    {record.evidence&&<p>已绑定 {record.evidence.hashes.length} 份官方资料，仅单源；未核实：{record.evidence.missing.join('、')}。资料用于人工审核，未作为已训练的概率因子。</p>}
@@ -17,6 +18,6 @@ export function ReviewedAnalysisPanel({data,tab,now,failed}:{data?:Data;tab:stri
  const today=new Date(now+8*3600000).toISOString().slice(0,10);
  if(failed||!data?.records.length||data.businessDate!==today||tab==='three')return null;
  return <section className="rc-paper" aria-label="赛前综合分析" data-publication-hash={data.publicationHash}><header><h2>{tab==='two'?'精选2串1':'赛前综合分析'}</h2><small>人工审核 · 未校准参考</small></header>
-  {tab==='single'?<div className="rc-paper__records">{data.records.map(r=><article className="rc-paper__record" key={r.eventId}><strong>{r.matchNum} {r.homeTeamName} vs {r.awayTeamName}</strong><ReviewedMatchPick record={r} now={now}/></article>)}</div>:<div>{data.combos.map(c=><article key={c.band} className="rc-paper__record"><strong>≥{c.band} 档</strong>{c.legs.length?<p>{c.legs.map(l=>`${l.matchNum} ${label[l.selection]} ${l.sp.toFixed(2)}`).join(' × ')} = {c.product?.toFixed(4)} · {c.confidence}信心</p>:<p>无合适组合</p>}</article>)}<p>含相同场次的组合风险集中；组合赔率不等于命中概率。</p></div>}
+  {tab==='single'?<div className="rc-paper__records">{data.records.map(r=><article className="rc-paper__record" key={r.eventId}><strong>{r.matchNum} {r.homeTeamName} vs {r.awayTeamName}</strong><ReviewedMatchPick record={r} now={now}/></article>)}</div>:<div>{data.combos.map(c=><article key={c.band} className="rc-paper__record"><strong>≥{c.band} 档</strong>{c.legs.length?<p>{c.legs.map(l=>`${l.matchNum} ${reviewedLabel(l)} ${l.sp.toFixed(2)}`).join(' × ')} = {c.product?.toFixed(4)} · {c.confidence}信心</p>:<p>无合适组合</p>}</article>)}<p>含相同场次的组合风险集中；组合赔率不等于命中概率。</p></div>}
  </section>;
 }

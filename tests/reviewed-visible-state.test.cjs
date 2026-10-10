@@ -10,3 +10,9 @@ test('published record is upcoming before cutoff, result pending at and after cu
 test('missing adoption states no published pick without claiming collection failure',()=>{const html=render(lane.TrainedMatchPick,{record:null,language:'zh'});a.match(html,/暂无推荐/);a.match(html,/赛程与赔率更新单独显示/);a.doesNotMatch(html,/待验证|球队模型 · 未校准参考/);});
 test('reviewed record is visible without trained parameters',()=>{const html=render(lane.TrainedMatchPick,{record:null,reviewed:record,now:Date.parse('2030-01-01T09:00:00Z'),language:'zh'});a.match(html,/人工审核/);a.match(html,/客胜/);a.match(html,/1\.76/);a.doesNotMatch(html,/暂无推荐|待验证/);});
 test('English publication status does not imply settled result',()=>{a.match(render(ui.ReviewedMatchStatus,{record,now:Date.parse(record.cutoffAt),language:'en'}),/Published · Result pending/);});
+
+test('HHAD label keeps signed line and never calls handicap draw ordinary draw',()=>{
+ const html=render(ui.ReviewedMatchPick,{record:{...record,market:'HHAD',handicap:-1,selection:'d',scores:[[1,0],[2,1]]}});
+ a.match(html,/让平\(-1\)/);a.doesNotMatch(html,/>平局/);a.match(html,/1-0/);
+});
+test('positive handicap label retains plus sign',()=>{a.match(render(ui.ReviewedMatchPick,{record:{...record,market:'HHAD',handicap:1,selection:'a',scores:[[0,2],[1,3]]}}),/让负\(\+1\)/);});
