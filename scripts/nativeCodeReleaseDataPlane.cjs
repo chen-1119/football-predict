@@ -90,6 +90,32 @@ function leaseCurrent(session) {
   assert(entry && entry.bytes > 0 && entry.bytes <= 32 * 1024 * 1024, 'lease current bound');
   return require('../server/dataGenerationStore.cjs').readGenerationFile(context, 'matches-current.json', { parseJson: true });
 }
+// Ordinary readers may serve the immutable previous generation while the
+// normal publisher finishes its PostgreSQL projection. A code cutover must
+// wait for the actual current pointer to match before pausing that publisher.
+function assertCodeCurrentPublication(session, storeDir = STORE) {
+  const generations = require('../server/dataGenerationStore.cjs');
+  const same = require('./codeReleaseAcceptance.cjs').assertSamePublication;
+  assert.equal(session.identity?.mode, 'active-generation');
+  same(session.publication?.context?.pointer, session.identity);
+  const held = generations.acquirePointerCommitLock({
+    lockDir: generations.storePaths(storeDir).pointerLockDir, timeoutMs: 10000, staleMs: 60000 });
+  try {
+    // Resolve both immutable generations under the real pointer lock. A
+    // malformed pointer, missing generation or altered payload is never busy.
+    const current = generations.resolveCurrentGeneration({ storeDir });
+    const fields = ['generationId', 'manifestHash', 'sourceCycleId', 'committedAt'];
+    if (fields.every(field => current.pointer[field] === session.identity[field])) return;
+    const previous = generations.resolvePreviousGeneration({ storeDir });
+    same(previous.pointer, session.identity);
+    assert.notEqual(current.pointer.generationId, previous.pointer.generationId, 'code current publication identity invalid');
+    assert(Date.parse(current.pointer.committedAt) > Date.parse(previous.pointer.committedAt),
+      'code current publication clock invalid');
+    const error = new Error('current generation awaits its natural PostgreSQL projection before cutover');
+    error.code = 'NATIVE_CURRENT_PUBLICATION_PENDING';
+    throw error;
+  } finally { held.release(); }
+}
 // A reader briefly competes with the normal publisher/retention pointer lock.
 // Retry the complete read session, never reuse its old PostgreSQL snapshot.
 // This is preparation while live services remain running. The fresh transition
@@ -112,11 +138,13 @@ async function retryLeaseRead(operation, delay = ms => new Promise(resolve => se
     catch (error) {
       const busy = error?.code === 'POINTER_LOCK_TIMEOUT'
         || error?.code === 'NATIVE_RESULT_ARCHIVE_PENDING'
+        || error?.code === 'NATIVE_CURRENT_PUBLICATION_PENDING'
         || error?.message === 'native receipt read barrier busy; retry after projection completes';
       if (!busy || attempt === 61) throw error;
       lastError = error;
       lastReason = error.code === 'POINTER_LOCK_TIMEOUT' ? 'pointer-lock-busy'
-        : error.code === 'NATIVE_RESULT_ARCHIVE_PENDING' ? 'result-archive-pending' : 'projection-receipt-barrier-busy';
+        : error.code === 'NATIVE_RESULT_ARCHIVE_PENDING' ? 'result-archive-pending'
+          : error.code === 'NATIVE_CURRENT_PUBLICATION_PENDING' ? 'current-publication-pending' : 'projection-receipt-barrier-busy';
       const elapsedMs = elapsed(), remaining = 600_000 - elapsedMs;
       report({ version: 'code-release-preparation-wait-v1', attempt, elapsedMs,
         remainingMs: Math.max(0, remaining), reason: lastReason,
@@ -242,6 +270,7 @@ async function captureLeaseInputOnce(state, directory) {
     await session.client.query("SET LOCAL statement_timeout = '8000ms'");
     const archiveRows = await session.client.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' ORDER BY match_id LIMIT 513");
     const archiveReadiness = await readCodeCutoverArchiveAuthority(session.client, archiveRows.rows.map(row => row.payload), Date.now());
+    assertCodeCurrentPublication(session);
     // The lease and seed must describe the same PostgreSQL-bound immutable
     // generation. The mutable APP projection may have different cutoff clocks.
     driver().write(path.join(directory, 'code-lease-current.json'), current);
@@ -262,6 +291,9 @@ async function seed(state, directory) {
     const leaseInput = driver().read(path.join(directory, 'code-lease-input.json'));
     assert.equal(leaseInput.sha, state.sha);
     require('./codeReleaseAcceptance.cjs').assertSamePublication(leaseInput.identity, session.identity);
+    // A move after capture fails before candidate copying. The original lease
+    // and its 900-second clock are never refreshed inside the paused phase.
+    assertCodeCurrentPublication(session);
     const store = path.join(directory, 'code-seed-store');
     const generation = await driver().copyGenerationAsService(session.identity, store);
     const proof = { ok: true, sha: state.sha, seed: true, dataPlane: 'code-only', store,
@@ -348,7 +380,7 @@ function retireSeed(sha) {
   d.write(path.join(directory, 'code-seed-retired.json'), { ...intent, removed: true, completedAt: new Date().toISOString() });
   return { ok: true, bytes, removed: true };
 }
-module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, captureLeaseInput, retryLeaseRead, assertResultArchivesReady, assertCodeCutoverArchivesReady, readCodeCutoverArchiveAuthority, assertCodeArchiveCoverageClock, verifyCodeCutoverCompletionClock };
+module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, assertCodeCurrentPublication, captureLeaseInput, retryLeaseRead, assertResultArchivesReady, assertCodeCutoverArchivesReady, readCodeCutoverArchiveAuthority, assertCodeArchiveCoverageClock, verifyCodeCutoverCompletionClock };
 if (require.main === module) {
   (async () => {
     assert.equal(process.argv.length, 4); const action = process.argv[2], sha = process.argv[3];
