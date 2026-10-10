@@ -441,6 +441,7 @@ const blockedEntries = entries.filter((entry) => {
     || runtimeMutableSourceEntries.includes(normalized);
 });
 const requiredEntries = [
+  "tests/emergency-code-activation.test.cjs",
   "src/services/prematchV3FeedbackLoop.cjs",
   "scripts/registerPrematchV3Parameters.cjs",
   "tests/prematch-v3-feedback-loop.test.cjs",

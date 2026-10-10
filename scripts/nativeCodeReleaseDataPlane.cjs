@@ -50,6 +50,10 @@ async function verifySchema(state) {
 async function tryAllocate(sha, directory) {
   const candidateRoot = path.resolve(__dirname, '..');
   const plan = policy.classify(policy.capture(LIVE), policy.capture(candidateRoot));
+  const authorizationFile = path.join(candidateRoot, 'deploy/light-server/code-release-activation-authorization.json');
+  const emergency = fs.existsSync(authorizationFile)
+    ? require('./releaseTransitionLease.cjs').readEmergencyCodeAuthorization(authorizationFile,
+      { at: new Date().toISOString(), dataPlane: plan.mode }) : null;
   if (plan.mode !== 'code-only') return null;
   const d = driver(), oldIdentity = d.readOldRuntimeIdentity();
   assert.equal(oldIdentity.bundleMarker, oldIdentity.liveMarker, 'code release requires completed baseline');
@@ -61,6 +65,7 @@ async function tryAllocate(sha, directory) {
     candidateDatabase: 'football', candidateOid: before.databases.football, archiveDatabase: null,
     accessSuffix: sha.slice(0, 12) + '_' + Math.floor(Date.now() / 1000),
     legacyBaselineSha256: null, key: crypto.randomBytes(32).toString('hex'), createdAt: new Date().toISOString() };
+  if (emergency) state.emergencyActivationAuthorizationHash = emergency.authorizationHash;
   state.schemaCatalogHash = (await verifySchema(state)).catalogHash;
   const capacity = require('./nativeReleaseCapacity.cjs').assertNativeReleaseCapacity('code-only');
   fs.mkdirSync(path.dirname(directory), { recursive: true, mode: 0o700 }); d.secureDirectory(path.dirname(directory));
@@ -152,6 +157,12 @@ async function captureLeaseInput(state, directory) {
 }
 async function captureLeaseInputOnce(state, directory) {
   assert.equal(state.dataPlane, 'code-only');
+  if (state.emergencyActivationAuthorizationHash) {
+    const authorization = require('./releaseTransitionLease.cjs').readEmergencyCodeAuthorization(
+      path.join(__dirname, '../deploy/light-server/code-release-activation-authorization.json'),
+      { at: new Date().toISOString(), dataPlane: state.dataPlane });
+    assert.equal(authorization.authorizationHash, state.emergencyActivationAuthorizationHash, 'emergency activation authorization changed');
+  }
   const old = driver().readOldRuntimeIdentity();
   assert.equal(old.bundleMarker, state.oldSha); assert.equal(old.liveMarker, state.oldSha);
   const source = pool(state, 'football', state.oldDatabaseOid); let session;

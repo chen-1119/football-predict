@@ -476,7 +476,7 @@ function verifyReleaseWindowPreflight() {
     const end = deploy.indexOf("  if (!nativeFullRelease) {", start); assert.ok(start >= 0 && end > start);
     for (const outcome of ["open", "closed", "throws"]) {
       const calls = [];
-      const context = { dryRun: false, releaseWindowPreflight: null, nativeFullRelease: false,
+      const context = { dryRun: false, releaseWindowPreflight: null, nativeFullRelease: false, emergencyCodeAuthorization: null,
         fail: message => { throw new Error(message); }, require: name => {
           if (name === "./runReleaseWindowPreflight.cjs") return { runLiveReleaseWindowPreflight: ({ stage, nativeFullRelease }) => {
             assert.equal(stage, "before-upload"); assert.equal(nativeFullRelease, false); calls.push("window");

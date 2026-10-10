@@ -94,7 +94,7 @@ test('near cutoff rejects instead of extending or disabling the code lease', () 
 test('signed native upload preparation does not acquire a match window; legacy does', () => {
   const source = read('scripts/deployReleaseBundle.cjs'), begin = source.indexOf('  // Reject a closed window before the archive scan'), end = source.indexOf('  if (!nativeFullRelease) {', begin);
   for (const nativeFullRelease of [true, false]) {
-    const calls = [], context = { dryRun: false, activateOnly:false, nativeFullRelease, releaseWindowPreflight: null,
+    const calls = [], context = { dryRun: false, activateOnly:false, nativeFullRelease, emergencyCodeAuthorization:null, releaseWindowPreflight: null,
       fail: m => { throw new Error(m); }, require: name => name.includes('Window')
         ? { runLiveReleaseWindowPreflight: () => { calls.push('window'); return { ok: false }; } }
         : { runLiveArchivePreflight: () => { calls.push('archive'); return { report: { ok: true } }; } } };
@@ -106,7 +106,7 @@ test('signed native upload preparation does not acquire a match window; legacy d
 test('closed activation minimum exits before archive scan or remote sequence consumption',()=>{
  const source=read('scripts/deployReleaseBundle.cjs'),begin=source.indexOf('  // Reject a closed window before the archive scan'),end=source.indexOf('  if (!nativeFullRelease) {',begin);
  for(const ok of [false,true]){
-  const calls=[],context={dryRun:false,activateOnly:true,nativeFullRelease:true,releaseWindowPreflight:null,
+  const calls=[],context={dryRun:false,activateOnly:true,nativeFullRelease:true,emergencyCodeAuthorization:null,releaseWindowPreflight:null,
    fail:m=>{throw Error(m);},require:name=>name.includes('Window')?{runLiveReleaseWindowPreflight:options=>{a.equal(options.activationMinimum,true);a.equal(options.nativeFullRelease,true);calls.push('minimum');return {ok,readyToCutover:false,windowPreauthorized:false};}}:{runLiveArchivePreflight:()=>{calls.push('archive');return {report:{ok:true}};}}};
   const run=()=>vm.runInNewContext(source.slice(begin,end),context);
   if(ok){run();a.deepEqual(calls,['minimum','archive']);a.equal(context.releaseWindowPreflight.readyToCutover,false);}else{a.throws(run);a.deepEqual(calls,['minimum']);}
