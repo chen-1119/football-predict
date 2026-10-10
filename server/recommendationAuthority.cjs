@@ -15,6 +15,7 @@ const TRAINED_ONLY_POLICY = Object.freeze({
 });
 const VERSION = 'recommendation-publication-authority-v1';
 const trustedAuthorities = new WeakSet();
+const trustedAuthoritySummaries = new WeakMap();
 const authorityPayloads = new WeakMap();
 const retiredCurrentAuthority = Symbol('retired-current-publication-authority');
 const retiredProjectionTokens = new WeakSet();
@@ -320,13 +321,26 @@ const isRetiredCurrentProjection = match => {
 
 function summarizeAuthority(authority) {
   if (!isTrustedAuthority(authority)) return null;
-  return {
+  const summary = freeze({
     version: VERSION, mode: authority.mode, legacyCurrentEnabled: false,
     businessDate: authority.businessDate, updatedAt: authority.updatedAt, observedAt: authority.observedAt,
     currentBusinessDate: authority.currentBusinessDate, publicationState: authority.publicationState,
     availableForCurrentDay: authority.availableForCurrentDay,
     activeValidation: authority.activeValidation,
-  };
+  });
+  return summary;
+}
+
+// Public JSON cannot mint this context. The summary and every row must come
+// from the same successful authority read, including when the snapshot is empty.
+function isTrustedCurrentAuthorityProjection(rows, summary) {
+  const snapshot = object(summary) ? trustedAuthoritySummaries.get(summary) : null;
+  if (!snapshot || !isTrustedAuthority(snapshot.authority) || !Array.isArray(rows)
+    || rows.length !== snapshot.tokens.size || rows.length > 512) return false;
+  const actual = new Set(rows.map(row => row?.[retiredCurrentAuthority]));
+  return actual.size === rows.length && rows.every(row => isRetiredCurrentProjection(row)
+    && row[retiredCurrentAuthority].authority === snapshot.authority
+    && snapshot.tokens.has(row[retiredCurrentAuthority]));
 }
 
 function projectRetiredCurrent(match, authority) {
@@ -350,8 +364,21 @@ function projectRetiredCurrent(match, authority) {
   };
 }
 
+function projectCurrentAuthoritySnapshot(rows, authority) {
+  check(isTrustedAuthority(authority) && Array.isArray(rows) && rows.length <= 512, 'CURRENT_SNAPSHOT_INVALID');
+  const projected = rows.map(row => projectRetiredCurrent(row, authority));
+  const recommendationAuthority = summarizeAuthority(authority);
+  // Capture exact membership before lifecycle/list/detail normalizers spread the
+  // rows. A subset, duplicate, JSON copy, or a second RR read cannot reuse it.
+  trustedAuthoritySummaries.set(recommendationAuthority, {
+    authority, tokens: new Set(projected.map(row => row?.[retiredCurrentAuthority])),
+  });
+  return { rows: projected, recommendationAuthority };
+}
+
 module.exports = {
   TRAINED_ONLY_POLICY, isTrustedPolicy, readPublicationAuthority,
   isTrustedAuthority, summarizeAuthority, projectRetiredCurrent,
   isRetiredCurrentProjection, getAuthorityCenterPayload,
+  isTrustedCurrentAuthorityProjection, projectCurrentAuthoritySnapshot,
 };

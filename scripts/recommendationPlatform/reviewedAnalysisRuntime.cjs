@@ -69,14 +69,24 @@ async function readPublication(c,k,asOf){
  deadline(v.record,ack.createdAt);p.check(Date.parse(ack.createdAt)>=Date.parse(v.storedAt)&&Date.parse(ack.createdAt)-Date.parse(v.storedAt)<=30000&&Date.parse(ack.createdAt)<=Date.parse(asOf),'ACK_CLOCK');
  return {v,ack};
 }
-async function projection(c,businessDate,asOf){
+async function projection(c,businessDate,asOf,{historical=false}={}){
  const allKeys=await keys(c,businessDate);
  if(!allKeys.length)return {version:'reviewed-analysis-view-v1',businessDate,updatedAt:asOf,records:[],combos:[],threeCombos:[],formalEligible:false};
- const publications=[];for(const k of allKeys)publications.push(await readPublication(c,k,asOf));
+ const publications=[];for(const k of allKeys){const publication=await readPublication(c,k,asOf);
+  if(historical){const {v,ack}=publication,ns=require('../../src/services/prematchV3Clock.cjs').epochNanoseconds;
+   const created=ns(v.createdAt),stored=ns(v.storedAt),observed=ns(ack.createdAt);
+   p.check(v.version==='reviewed-analysis-freeze-v1'
+   &&ack.version==='reviewed-analysis-ack-v1'&&key(v.draft)===k&&v.record.businessDate===businessDate
+   &&v.createdAt===v.record.createdAt&&created!==null&&stored!==null&&observed!==null
+   &&created<stored&&stored<=observed,'HISTORY_IDENTITY');}
+  publications.push(publication);}
+ // History recovers frozen singles only. No combo was independently frozen in
+ // these records, so never backdate a clock or create a purported original combo.
+ const combos=(records,size)=>historical?[]:p.combinations(records.filter(r=>Date.parse(asOf)<Date.parse(r.cutoffAt)),size);
  if(publications.length===1){const {v,ack}=publications[0];return p.seal({version:'reviewed-analysis-view-v1',businessDate,updatedAt:asOf,createdAt:v.record.createdAt,commitObservedAt:ack.createdAt,
   publicationHash:v.record.contentHash,draftHash:v.record.draftHash,originalFrozenAt:v.record.originalFrozenAt,
-  records:v.record.records,combos:p.combinations(v.record.records.filter(r=>Date.parse(asOf)<Date.parse(r.cutoffAt))),
-  threeCombos:p.combinations(v.record.records.filter(r=>Date.parse(asOf)<Date.parse(r.cutoffAt)),3),formalEligible:false});}
+  records:v.record.records,combos:combos(v.record.records,2),
+  threeCombos:combos(v.record.records,3),formalEligible:false});}
  publications.sort((a,b)=>Date.parse(a.v.record.createdAt)-Date.parse(b.v.record.createdAt));
  const records=publications.flatMap(({v,ack})=>v.record.records.map(r=>({...r,publicationCreatedAt:v.record.createdAt,publicationCommitObservedAt:ack.createdAt})));
  p.check(records.length<=32&&new Set(records.map(r=>r.eventId)).size===records.length,'DAILY_RECORD_BOUND');
@@ -84,7 +94,17 @@ async function projection(c,businessDate,asOf){
  return p.seal({version:'reviewed-analysis-view-v1',businessDate,updatedAt:asOf,createdAt:last.v.record.createdAt,
   commitObservedAt:last.ack.createdAt,publicationHash:p.hash(publications.map(x=>x.v.record.contentHash)),
   draftHash:p.hash(publications.map(x=>x.v.record.draftHash)),originalFrozenAt:publications[0].v.record.originalFrozenAt,
-  records,combos:p.combinations(records.filter(r=>Date.parse(asOf)<Date.parse(r.cutoffAt))),
-  threeCombos:p.combinations(records.filter(r=>Date.parse(asOf)<Date.parse(r.cutoffAt)),3),formalEligible:false});
+  records,combos:combos(records,2),threeCombos:combos(records,3),formalEligible:false});
 }
-module.exports={publish,projection,deadline};
+async function readLatestHistory(c,beforeDay,asOf){
+ const now=Date.parse(asOf),day=require('../../src/services/publishedForecastPolicy.cjs').day;
+ p.check(/^\d{4}-\d{2}-\d{2}$/.test(beforeDay)&&Number.isFinite(now)&&beforeDay<=day(now),'HISTORY_CLOCK');
+ const found=(await c.query(`SELECT artifact_key FROM football.private_model_artifacts
+  WHERE artifact_version=$1 AND artifact_key LIKE $2 AND artifact_key < $3 ORDER BY artifact_key DESC LIMIT 1`,
+  ['reviewed-analysis-freeze-v1','reviewed-analysis-%','reviewed-analysis-'+beforeDay+'-'])).rows;
+ p.check(Array.isArray(found)&&found.length<=1,'HISTORY_BOUND');if(!found.length)return null;
+ const matched=/^reviewed-analysis-(\d{4}-\d{2}-\d{2})-(?:selected-two|batch-[a-f0-9]{64})$/.exec(found[0].artifact_key);
+ p.check(matched&&matched[1]<beforeDay&&day(Date.parse(matched[1]+'T00:00:00+08:00'))===matched[1],'HISTORY_KEY');
+ return projection(c,matched[1],asOf,{historical:true});
+}
+module.exports={publish,projection,deadline,readLatestHistory};

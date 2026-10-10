@@ -6,6 +6,8 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const { createRequire } = require('node:module');
 const authority = require('../server/recommendationAuthority.cjs');
+const dual = require('../src/services/dualMarketDecisionBinding.cjs');
+const parity = require('../server/recommendationProjectionParity.cjs');
 
 const NOW = Date.parse('2026-10-10T13:18:07.000Z');
 const UPDATED = '2026-10-10T13:17:00.000Z';
@@ -292,12 +294,33 @@ test('native preparation verifies authority on the existing client before persis
   assert.ok(read > 0 && verified > read && verified < body.indexOf("'code-lease-current.json'"));
 });
 
+test('the existing center endpoint can read a bounded prior reviewed day in its same RR snapshot', async () => {
+  const db = database(), payload = await projectionReader().readPostgresRecommendationCenter(db.pool, { ...options, includeReviewedHistory: true });
+  assert.deepEqual(clone(payload), { recommendationCenter: center() });
+  const history = db.calls.find(call => call.text.includes('artifact_key < $3'));
+  assert.ok(history); assert.match(history.text, /ORDER BY artifact_key DESC LIMIT 1$/);
+  assert.deepEqual(clone(history.values), ['reviewed-analysis-freeze-v1', 'reviewed-analysis-%', 'reviewed-analysis-2026-10-10-']);
+  assert.equal(db.connections, 1); assert.equal(db.releases, 1); assert.equal(db.calls.at(-1).text, 'COMMIT');
+  const failed = database({ failAt: 'artifact_key < $3' });
+  await assert.rejects(projectionReader().readPostgresRecommendationCenter(failed.pool, { ...options, includeReviewedHistory: true }),
+    { code: 'POSTGRES_REQUIRED_READ_UNAVAILABLE' });
+  rolledBack(failed);
+  const source = fs.readFileSync(require.resolve('../server/index.cjs'), 'utf8');
+  const route = source.slice(source.indexOf('if (url.pathname === "/api/v1/daily-featured-combos")'), source.indexOf('if (url.pathname === "/api/v1/model/evaluation")'));
+  assert.match(route, /includeReviewedHistory: true/);
+  assert.match(route, /hasRecommendationAccess\(req, url\)/);
+});
+
 function coverageReader(read, parityOk = true) {
   const source = fs.readFileSync(require.resolve('../server/index.cjs'), 'utf8');
-  const body = source.slice(source.indexOf('const buildCurrentRecommendationCoverage = async'), source.indexOf('const buildPublicV1Health = async'));
+  const body = source.slice(source.indexOf('const recommendationCoverageOddsTripletValid ='), source.indexOf('const buildPublicV1Health = async'));
   const module = { exports: {} };
+  class FixedDate extends Date { static now() { return NOW; } }
   vm.runInNewContext(`${body}\nmodule.exports = buildCurrentRecommendationCoverage;`, {
-    module, Date, currentRecommendationPolicy: authority.TRAINED_ONLY_POLICY,
+    module, Date: FixedDate, currentRecommendationPolicy: authority.TRAINED_ONLY_POLICY,
+    isTrustedPolicy: authority.isTrustedPolicy,
+    isTrustedCurrentAuthorityProjection: authority.isTrustedCurrentAuthorityProjection,
+    verifyDualMarketDecisionBinding: dual.verifyDualMarketDecisionBinding,
     resolveBasePublication: () => ({ identity: publication }),
     readCurrentMatchesDetailed: async input => {
       assert.equal(input.recommendationAuthorityPolicy, authority.TRAINED_ONLY_POLICY);
@@ -308,17 +331,17 @@ function coverageReader(read, parityOk = true) {
     compactMatchForList: row => row,
     normalizeMatchForDetailPayload: row => row,
     enforceCurrentMatchRecommendationEvidence: row => row,
-    buildRecommendationProjectionParityAudit: pairs => {
+    buildRecommendationProjectionParityAudit: (pairs, options) => {
       assert.equal(pairs.length, read.rows.length);
-      return { ok: parityOk };
+      const result = parity.buildRecommendationProjectionParityAudit(pairs, options);
+      return parityOk ? result : { ...result, ok: false };
     },
-    recommendationCoverageOfficialMarketAvailable: () => false,
   });
   return module.exports();
 }
 
 test('actual health coverage consumes verified authority integrity and still enforces projection parity', async () => {
-  const db = database(), read = await projectionReader().readPostgresCurrentAuthoritySnapshot(db.pool, options);
+  const db = database({ current: [trainedMatch()] }), read = await projectionReader().readPostgresCurrentAuthoritySnapshot(db.pool, options);
   const health = await coverageReader(read);
   assert.equal(health.coverageOk, true);
   assert.equal(health.publicationAuthority, read.recommendationAuthority);
@@ -328,6 +351,119 @@ test('actual health coverage consumes verified authority integrity and still enf
   const unverified = { ...read, recommendationAuthority: { ...read.recommendationAuthority, activeValidation: { ok: false } } };
   assert.equal((await coverageReader(unverified)).coverageOk, false);
   assert.equal((await coverageReader({ rows: [match()], recommendationAuthority: null })).coverageOk, false);
+});
+
+function trainedMatch(id) {
+  return { ...match(id), predictionMeta: { trainingVersion: 'integration-training-v1', trainingSignature: 'integration-signed-training' } };
+}
+function hhadOnlyMatch(id) {
+  return { ...trainedMatch(id), handicapOddsSource: 'sporttery:HHAD', handicapLine: '-1',
+    handicapOdds: { odds1: 3, oddsX: 3, odds2: 3 } };
+}
+function dualMatch(id = '2041872') {
+  const row = { ...hhadOnlyMatch(id), oddsSource: 'sporttery:HAD', odds: { odds1: 3, oddsX: 3, odds2: 3 } };
+  const market = { odds: row.odds, observedAt: UPDATED, receivedAt: UPDATED, provenanceHash: 'a'.repeat(64) };
+  const feature = { sourceMatchId: row.sourceMatchId, kickoffTime: row.kickoffTime, sourceCycleId: 'coverage-cycle',
+    capturedAt: UPDATED, cutoffTime: row.buyEndTime, modelGeneratedAt: UPDATED,
+    modelVersion: 'coverage-model', calibrationVersion: 'coverage-calibration',
+    market: { had: market, hhad: { ...market, handicapLine: -1 } },
+    modelOutputs: { unifiedSelection: { market: 'HAD', code: '1' }, hhad: { unifiedPosterior: { home: 50, draw: 30, away: 20 } } } };
+  feature.hash = dual.predictionFeatureSnapshotHash(feature);
+  const binding = { version: dual.DUAL_MARKET_DECISION_BINDING_VERSION, decisionSnapshotVersion: 'candidate-decision-snapshot-v2',
+    sourceCycleId: feature.sourceCycleId, featureSnapshot: feature, featureSnapshotHash: feature.hash,
+    sourceClocks: { capturedAt: UPDATED, decisionAt: UPDATED, cutoffTime: row.buyEndTime, modelGeneratedAt: UPDATED,
+      hadObservedAt: UPDATED, hadReceivedAt: UPDATED, hhadObservedAt: UPDATED, hhadReceivedAt: UPDATED },
+    strategyVersions: { predictionPolicy: 'coverage-policy', prompt: 'coverage-prompt', model: feature.modelVersion,
+      calibration: feature.calibrationVersion, hhadCompanion: 'hhad-companion-shadow-v2' },
+    had: { poolCode: 'HAD', code: '1', odds: 3, modelProbability: 0.5, marketProbability: 1 / 3 },
+    hhad: { poolCode: 'HHAD', code: '1', odds: 3, handicapLine: -1, modelProbability: 0.5, marketProbability: 1 / 3 },
+    hashes: Object.fromEntries(['policyHash', 'hadMarketProvenanceHash', 'hhadMarketProvenanceHash', 'strategyHash',
+      'revisionHash', 'exposureHash', 'pairHash'].map(key => [key, 'a'.repeat(64)])) };
+  binding.bindingHash = dual.hashDualMarketDecisionBinding(binding);
+  row.predictionMeta.dualMarketDecision = binding;
+  assert.deepEqual(dual.verifyDualMarketDecisionBinding(row).blockers, []);
+  return row;
+}
+
+test('real RR authority retires HHAD-only dispositions but retains raw deficits and real dual binding checks', async () => {
+  const db = database({ current: [hhadOnlyMatch('2041870'), hhadOnlyMatch('2041871'), dualMatch()] });
+  const read = await projectionReader().readPostgresCurrentAuthoritySnapshot(db.pool, options);
+  const result = await coverageReader(read);
+  committed(db);
+  assert.equal(result.coverageOk, true);
+  assert.equal(result.legacyCoverageOk, false);
+  assert.equal(result.dualMarketAtomicCoverageOk, false);
+  for (const [key, value] of Object.entries({ scheduledMatches: 3, missingDispositionMatches: 3,
+    retiredDispositionMatches: 3, effectiveMissingDispositionMatches: 0, hhadMarketMatches: 3,
+    hhadBoundDirectionMatches: 1, hhadMissingDirectionMatches: 2, retiredHhadOnlyDirectionMatches: 2,
+    effectiveHhadMissingDirectionMatches: 0, dualMarketEligibleMatches: 1, dualMarketAtomicMatches: 1,
+    dualMarketAtomicMissingMatches: 0 })) assert.equal(result[key], value, key);
+  assert.equal(result.publicationAuthority.activeValidation.reviewed.openRecords, 0);
+  assert.equal(result.publicationAuthority.activeValidation.trained.openRecords, 0);
+  assert.ok(read.rows.every(row => row.predictions.length === 0 && row.archivedPreMatchPrediction === undefined));
+  const remote = require('../scripts/verifyRemoteRecommendationParity.cjs');
+  assert.equal(remote.validateRemoteRecommendationCoverage(clone(result), { policy: authority.TRAINED_ONLY_POLICY, nowMs: NOW }).valid, true);
+});
+
+for (const [name, mutate] of [
+  ['copied summary', read => ({ ...read, recommendationAuthority: clone(read.recommendationAuthority) })],
+  ['JSON rows', read => ({ ...read, rows: clone(read.rows) })],
+  ['partial rows', read => ({ ...read, rows: read.rows.slice(0, 1) })],
+  ['empty subset', read => ({ ...read, rows: [] })],
+  ['duplicate row', read => ({ ...read, rows: [read.rows[0], read.rows[0]] })],
+]) test(`health rejects ${name} as retirement authority`, async () => {
+  const read = await projectionReader().readPostgresCurrentAuthoritySnapshot(database({ current: [hhadOnlyMatch('2041870'), hhadOnlyMatch('2041871')] }).pool, options);
+  const result = await coverageReader(mutate(read));
+  assert.equal(result.coverageOk, false);
+  assert.equal(result.retiredDispositionMatches, 0);
+  assert.equal(result.retiredHhadOnlyDirectionMatches, 0);
+});
+
+test('health rejects authority and rows from different RR reads even when public summaries agree', async () => {
+  const reader = projectionReader(), db = () => database({ current: [hhadOnlyMatch('2041870')] });
+  const first = await reader.readPostgresCurrentAuthoritySnapshot(db().pool, options);
+  const second = await reader.readPostgresCurrentAuthoritySnapshot(db().pool, options);
+  assert.deepEqual(clone(first.recommendationAuthority), clone(second.recommendationAuthority));
+  assert.equal((await coverageReader({ ...first, rows: second.rows })).coverageOk, false);
+  const normalized = { ...first, rows: first.rows.map(row => ({ ...row })) };
+  assert.equal((await coverageReader(normalized)).coverageOk, true, 'normal object-spread lifecycle projection preserves the exact snapshot');
+});
+
+test('only a genuinely read empty current snapshot can claim empty engineering coverage', async () => {
+  const read = await projectionReader().readPostgresCurrentAuthoritySnapshot(database({ current: [] }).pool, options);
+  assert.equal((await coverageReader(read)).coverageOk, true);
+  assert.equal((await coverageReader(clone(read))).coverageOk, false);
+  assert.equal((await coverageReader({ rows: [], recommendationAuthority: null })).coverageOk, false,
+    'trusted runtime policy must not turn an unknown authority into an empty success');
+});
+
+for (const [name, mutate] of [
+  ['missing binding', row => { delete row.predictionMeta.dualMarketDecision; }],
+  ['HAD direction disagreement', row => { row.predictionMeta.dualMarketDecision.had.code = '2'; }],
+  ['HHAD direction disagreement', row => { row.predictionMeta.dualMarketDecision.hhad.code = '2'; }],
+  ['HAD SP disagreement', row => { row.predictionMeta.dualMarketDecision.had.odds = 3.01; }],
+  ['HHAD line disagreement', row => { row.predictionMeta.dualMarketDecision.hhad.handicapLine = 1; }],
+  ['different event', row => { row.sourceMatchId = 'different-event'; }],
+  ['different kickoff', row => { row.kickoffTime = '2026-10-10T14:30:00.000Z'; }],
+  ['source provenance hash disagreement', row => { row.predictionMeta.dualMarketDecision.hashes.hhadMarketProvenanceHash = 'b'.repeat(64); }],
+]) test(`verified retirement still rejects actual dual-market ${name}`, async () => {
+  const row = dualMatch(); mutate(row);
+  // Rehashing a changed claim cannot bypass source, feature, event and SP binding.
+  if (row.predictionMeta.dualMarketDecision) row.predictionMeta.dualMarketDecision.bindingHash = dual.hashDualMarketDecisionBinding(row.predictionMeta.dualMarketDecision);
+  const read = await projectionReader().readPostgresCurrentAuthoritySnapshot(database({ current: [row] }).pool, options);
+  const result = await coverageReader(read);
+  assert.equal(result.coverageOk, false);
+  assert.equal(result.dualMarketAtomicMissingMatches, 1);
+  assert.equal(result.effectiveHhadMissingDirectionMatches, 1);
+  assert.ok(Object.keys(result.dualMarketBindingBlockerCounts).length > 0);
+});
+
+test('trusted retirement still rejects missing training lineage', async () => {
+  const row = hhadOnlyMatch(); delete row.predictionMeta.trainingSignature;
+  const read = await projectionReader().readPostgresCurrentAuthoritySnapshot(database({ current: [row] }).pool, options);
+  const result = await coverageReader(read);
+  assert.equal(result.trainingCoverageOk, false);
+  assert.equal(result.coverageOk, false);
 });
 
 test('public list, detail and center routes explicitly carry the same trusted runtime policy', () => {

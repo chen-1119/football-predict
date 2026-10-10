@@ -27,7 +27,7 @@ test('sealed mixed-market three legs retain exact source direction, signed line,
  const b=body(),before=JSON.stringify(b),parsed=parse(b);assert.equal(parsed.threeCombos[0].product,7.478625);assert.equal(parsed.threeCombos[0].confidence,'低');
  assert.deepEqual(parsed.threeCombos[0].legs,b.threeCombos[0].legs);assert.equal(parsed.threeCombos[0].legs[1].handicap,-1);assert.equal(parsed.threeCombos[0].legs[2].handicap,2);assert.equal(JSON.stringify(b),before);
 });
-test('old sealed views without optional threeCombos remain readable as an empty three-leg lane',()=>{const b=body();delete b.threeCombos;const parsed=parse(b);assert.deepEqual(parsed.threeCombos,[]);assert.equal(parsed.combos.length,1);assert.match(render(parsed,'three'),/暂无未截止的3串1组合/);});
+test('old sealed views without optional threeCombos remain readable without inventing a three-leg lane',()=>{const b=body();delete b.threeCombos;const parsed=parse(b);assert.deepEqual(parsed.threeCombos,[]);assert.equal(parsed.combos.length,1);assert.match(render(parsed,'three'),/暂无已保存的3串1组合/);});
 test('decimal prices multiply exactly without three-digit truncation or large-product float rejection',()=>{
  for(const [prices,expected] of [[[1.2345,2,3],7.407],[[266.45,136.55,459.65],16723789.538375]]){
   const b=body();b.records=b.records.slice(0,3).map((r,i)=>({...r,sp:prices[i]}));b.combos=[];b.threeCombos=[combo(b.records,2.5)];b.threeCombos[0].product=expected;
@@ -84,14 +84,39 @@ test('rendered price multiplication retains all frozen decimal precision',()=>{
  const b=body();b.records=b.records.slice(0,3).map((r,i)=>({...r,sp:[1.2345,2,3][i]}));b.combos=[];b.threeCombos=[{...combo(b.records,5),product:7.407}];
  const html=render(parse(b),'three');assert.match(html,/1\.2345.*2\.00.*3\.00.*= 7\.407/);assert.doesNotMatch(html,/1\.23 ×|7\.4100/);
 });
-test('both tabs filter all legs at the current render clock without rewriting the stored view',()=>{
+test('both tabs retain saved combos after cutoff as closed history without rewriting the stored view',()=>{
  const b=body();b.records[2].cutoffAt='2030-01-01T09:45:00.000Z';b.records[1].cutoffAt='2030-01-01T10:00:00.000Z';const data=parse(b),before=JSON.stringify(data);
- assert.match(render(data,'three',Date.parse('2030-01-01T09:44:59.999Z')),/data-reviewed-combo-band/);
- for(const stamp of ['2030-01-01T09:45:00.000Z','2030-01-01T09:59:00.000Z']){const now=Date.parse(stamp);assert.doesNotMatch(render(data,'three',now),/data-reviewed-combo-band/);assert.match(render(data,'three',now),/已截止场次/);assert.match(render(data,'two',now),/data-reviewed-combo-band/);}
- const after=Date.parse('2030-01-01T10:00:00.000Z');assert.doesNotMatch(render(data,'two',after),/data-reviewed-combo-band/);assert.match(render(data,'single',after),/已截止冻结/);assert.equal(JSON.stringify(data),before);
+ assert.match(render(data,'three',Date.parse('2030-01-01T09:44:59.999Z')),/data-reviewed-combo-state="open"/);
+ for(const stamp of ['2030-01-01T09:45:00.000Z','2030-01-01T09:59:00.000Z']){const now=Date.parse(stamp);assert.match(render(data,'three',now),/data-reviewed-combo-state="closed"/);assert.match(render(data,'three',now),/已停售.*不作为当前推荐/);assert.match(render(data,'two',now),/data-reviewed-combo-state="open"/);}
+ const after=Date.parse('2030-01-01T10:00:00.000Z');assert.match(render(data,'two',after),/data-reviewed-combo-state="closed"/);assert.match(render(data,'single',after),/已截止冻结/);assert.equal(JSON.stringify(data),before);
 });
-test('a read failure, different day, or invalid cutoff cannot expose an active combo',()=>{
- const data=parse(body());assert.equal(render(data,'three',Date.parse(updatedAt),true),'');assert.equal(render(data,'three',Date.parse('2030-01-02T09:00:00Z')),'');data.records[2].cutoffAt='invalid';assert.doesNotMatch(render(data,'three'),/data-reviewed-combo-band/);
+test('a prior day keeps saved combos as history while failures, future days and invalid cutoffs cannot expose a combo',()=>{
+ const data=parse(body());assert.equal(render(data,'three',Date.parse(updatedAt),true),'');assert.equal(render(data,'three',Date.parse('2029-12-31T09:00:00Z')),'');
+ const html=render(data,'three',Date.parse('2030-01-02T09:00:00Z'));assert.match(html,/data-reviewed-combo-state="historical"/);assert.match(html,/2030-01-01 竞彩日.*历史记录，非今日新荐/);assert.match(html,/已停售/);assert.doesNotMatch(html,/data-reviewed-combo-state="open"/);
+ data.records[2].cutoffAt='invalid';assert.doesNotMatch(render(data,'three'),/data-reviewed-combo-band/);
+});
+
+const historyAt='2030-01-01T16:00:01.000Z';
+function historyBody(){return {...body(),updatedAt:historyAt,records:Array.from({length:27},(_,i)=>record(i)),combos:[],threeCombos:[]};}
+function historyEnvelope(history=reviewed.seal(historyBody())){
+ const zero={published:0,settled:0,won:0,lost:0,pending:0,void:0,disputed:0,hitRate:null};
+ return {recommendationCenter:{version:'recommendation-center-v1',businessDate:'2030-01-02',updatedAt:historyAt,inputAsOf:null,resultAsOf:null,lanes:{},current:[],previews:[],todayCombos:[],todayDualResearch:[],overlapDecisionIds:[],excludedCorruptRecords:0,modelValidation:'unvalidated',
+  reviewedAnalysis:{version:'reviewed-analysis-view-v1',businessDate:'2030-01-02',updatedAt:historyAt,formalEligible:false,records:[],combos:[],threeCombos:[]},reviewedAnalysisHistory:history,
+  review:{singles:[],combos:[],limit:50,statistics:{single:zero,two:zero,three:zero},definition:'Synthetic frozen history'}}};
+}
+test('actual center parser accepts 27 original history singles without replacing the current day or manufacturing combos',()=>{
+ const response=historyEnvelope(),before=JSON.stringify(response),parsed=view.parseRecommendationCenter(response);
+ assert.equal(parsed.businessDate,'2030-01-02');assert.equal(parsed.reviewedAnalysis.records.length,0);assert.equal(parsed.reviewedAnalysisHistory.businessDate,businessDate);assert.equal(parsed.reviewedAnalysisHistory.records.length,27);
+ assert.deepEqual(parsed.reviewedAnalysisHistory.combos,[]);assert.deepEqual(parsed.reviewedAnalysisHistory.threeCombos,[]);assert.equal(JSON.stringify(response),before);
+ for(const tab of ['single','two','three']){const text=center(parsed,Date.parse(historyAt),tab);assert.match(text,/历史推荐/);assert.match(text,/2030-01-01/);assert.match(text,/27 场原冻结记录/);assert.doesNotMatch(text,/今日推荐|信心|暂无可展示的组合|暂时没有可展示的推荐/);if(tab==='single'){assert.match(text,/Home 26/);assert.match(text,/已截止冻结/);}else assert.match(text,new RegExp(`未找到该竞彩日已保存的原${tab==='two'?2:3}串1组合`));}
+});
+test('history rejects incorrect clocks, day, seal, missing records and retroactively assembled combos',()=>{
+ for(const mutate of [b=>{b.businessDate='2030-01-02';},b=>{b.updatedAt=updatedAt;},b=>{b.records=[];},b=>{b.combos=[{band:2.5,product:null,confidence:null,legs:[]}];},b=>{b.threeCombos=[{band:5,product:null,confidence:null,legs:[]}];}]){const b=historyBody();mutate(b);assert.throws(()=>view.parseRecommendationCenter(historyEnvelope(reviewed.seal(b))));}
+ const response=historyEnvelope();response.recommendationCenter.reviewedAnalysisHistory.records[0].sp=9;assert.throws(()=>view.parseRecommendationCenter(response),/seal/);
+});
+test('current reviewed records take precedence over history when present',()=>{
+ const data=view.parseRecommendationCenter(historyEnvelope());data.reviewedAnalysis=parse(body());data.reviewedAnalysisHistory.records[0].homeTeamName='HISTORY ONLY';
+ const text=center(data,Date.parse(historyAt),'single');assert.match(text,/4 场原冻结记录/);assert.doesNotMatch(text,/HISTORY ONLY|27 场原冻结记录/);
 });
 
 function center(data,now,tab){

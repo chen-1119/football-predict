@@ -89,6 +89,9 @@ function controlledPool(v,{failCommit=false}={}){
   if(sql.includes('clock_timestamp'))return {rows:[{now:fixture.stamp(++clock)}]};
   if(sql.includes('match_snapshots')){a.match(sql,/LIMIT 513/);return {rows:v.matches.map(payload=>({payload}))};}
   const active=pending||rows;
+  if(sql.includes('artifact_key < $3'))return {rows:[...active.values()].filter(row=>row.artifact_version===args[0]
+   &&row.artifact_key.startsWith(args[1].slice(0,-1))&&row.artifact_key<args[2]).sort((a,b)=>b.artifact_key.localeCompare(a.artifact_key))
+   .slice(0,1).map(row=>({artifact_key:row.artifact_key}))};
   if(sql.startsWith('SELECT artifact_key FROM football.private_model_artifacts'))return {rows:[...active.keys()].filter(k=>k===args[0]||(k.startsWith(args[1].slice(0,-1))&&active.get(k).artifact_version===args[2])).sort().slice(0,33).map(artifact_key=>({artifact_key}))};
   if(sql.startsWith('INSERT INTO football.private_model_artifacts')){const [key,version,generated,updated,json,sha,bytes]=args;a.ok(!active.has(key));active.set(key,{artifact_key:key,artifact_version:version,generated_at:generated,updated_at:updated,payload_json:json,payload_sha256:sha,payload_bytes:bytes});return {rows:[]};}
   if(sql.includes('WHERE artifact_key=$1'))return {rows:active.has(args[0])?[active.get(args[0])]:[]};throw Error('unexpected SQL');
@@ -106,6 +109,41 @@ test('unknown COMMIT retains original without producing ACK or public recommenda
  const v=setup(),runtime=controlledRuntime(v),db=controlledPool(v,{failCommit:true});
  await a.rejects(runtime.publish(v.draft,{pool:db.pool,expectedDraftHash:p.hash(v.draft)}),{code:'LEAGUE_MODEL_COMMIT_UNKNOWN'});
  a.equal(db.rows().size,1);await a.rejects(runtime.projection(db.client,v.draft.businessDate,fixture.stamp(fixture.NOW+1000)),/ACK_MISSING/);
+});
+
+test('read-only recent history recovers exact frozen singles at the real clock without manufacturing original combos',async()=>{
+ const v=setup(),runtime=controlledRuntime(v),db=controlledPool(v);
+ await runtime.publish(batch(v,[0,1]),{pool:db.pool,expectedDraftHash:p.hash(batch(v,[0,1]))});
+ await runtime.publish(batch(v,[2],'weekday-2100-full'),{pool:db.pool,expectedDraftHash:p.hash(batch(v,[2],'weekday-2100-full'))});
+ const before=[...db.rows()].map(([key,row])=>[key,row.payload_json]),start=db.log.length;
+ const now=fixture.stamp(fixture.NOW+48*3600e3),view=await runtime.readLatestHistory(db.client,'2026-09-19',now);
+ a.equal(view.businessDate,'2026-09-17');a.equal(view.updatedAt,now);a.equal(view.records.length,3);
+ a.deepEqual(JSON.parse(JSON.stringify(view.combos)),[]);a.deepEqual(JSON.parse(JSON.stringify(view.threeCombos)),[]);
+ const stored=before.filter(([key])=>!key.endsWith('-ack')).flatMap(([,json])=>JSON.parse(json).record.records);
+ a.deepEqual(JSON.parse(JSON.stringify(view.records.map(({publicationCreatedAt,publicationCommitObservedAt,...row})=>{void publicationCreatedAt;void publicationCommitObservedAt;return row;}))),stored);
+ a.deepEqual([...db.rows()].map(([key,row])=>[key,row.payload_json]),before);
+ a.ok(db.log.slice(start).every(sql=>sql.trim().startsWith('SELECT')));
+ a.equal(viewModule().parseReviewedAnalysis(view,view.businessDate,now).records.length,3);
+ const zero={published:0,settled:0,won:0,lost:0,pending:0,void:0,disputed:0,hitRate:null};
+ const api={ok:true,recommendationCenter:{version:'recommendation-center-v1',businessDate:'2026-09-19',updatedAt:now,
+  inputAsOf:null,resultAsOf:null,lanes:{},current:[],previews:[],todayCombos:[],todayDualResearch:[],overlapDecisionIds:[],excludedCorruptRecords:0,modelValidation:'unvalidated',
+  reviewedAnalysis:{version:'reviewed-analysis-view-v1',businessDate:'2026-09-19',updatedAt:now,formalEligible:false,records:[],combos:[],threeCombos:[]},
+  reviewedAnalysisHistory:view,review:{singles:[],combos:[],limit:50,statistics:{single:zero,two:zero,three:zero},definition:'Original frozen history'}}};
+ const parsed=viewModule().parseRecommendationCenter(api);
+ a.equal(parsed.businessDate,'2026-09-19');a.equal(parsed.reviewedAnalysis.records.length,0);
+ a.equal(parsed.reviewedAnalysisHistory.records.length,3);a.equal(parsed.reviewedAnalysisHistory.combos.length,0);
+ a.equal(await runtime.readLatestHistory(db.client,'2026-09-17',now),null,'today is never relabeled as prior history');
+ await a.rejects(runtime.readLatestHistory(db.client,'2026-09-20',now),/HISTORY_CLOCK/);
+});
+
+for(const [name,change] of [
+ ['missing ACK',(db,key)=>db.rows().delete(key+'-ack')],
+ ['changed original bytes',(db,key)=>{db.rows().get(key).payload_json+=' ';}],
+ ['future ACK',(db,key)=>{const row=db.rows().get(key+'-ack'),payload=JSON.parse(row.payload_json);payload.createdAt='2027-01-01T00:00:00Z';const {contentHash,...body}=payload;void contentHash;const json=JSON.stringify(p.seal(body));Object.assign(row,{payload_json:json,payload_sha256:p.sha(json),payload_bytes:Buffer.byteLength(json)});}],
+ ['wrong historical path',(db,key)=>{const moved=key.replace('2026-09-17','2026-09-16'),row=db.rows().get(key),ack=db.rows().get(key+'-ack');db.rows().delete(key);db.rows().delete(key+'-ack');db.rows().set(moved,{...row,artifact_key:moved});db.rows().set(moved+'-ack',{...ack,artifact_key:moved+'-ack'});}]
+])test('historical reviewed read still rejects '+name,async()=>{
+ const v=setup(),runtime=controlledRuntime(v),db=controlledPool(v),saved=await runtime.publish(v.draft,{pool:db.pool,expectedDraftHash:p.hash(v.draft)});
+ change(db,saved.key);await a.rejects(runtime.readLatestHistory(db.client,'2026-09-19',fixture.stamp(fixture.NOW+48*3600e3)));
 });
 
 function batch(v,indices=[0],kind='morning-1100-review-and-early'){

@@ -181,6 +181,7 @@ export interface RecommendationCenterData {
   prdPaper?:PrdPaperDirectionsData;
   leagueBaseline?:LeagueBaselineDirections;
   reviewedAnalysis?:ReviewedAnalysis;
+  reviewedAnalysisHistory?:ReviewedAnalysis;
   dailyBulletin?:DailyBulletin;
 }
 export interface LeagueBaselineDirection {
@@ -252,6 +253,15 @@ export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedA
   });
  };
  return {businessDate,updatedAt,createdAt:paperClock(v.createdAt).text,publicationHash:paperHex(v.publicationHash),records,combos:parseCombos(combos,2),threeCombos:parseCombos(threeCombos,3)};
+}
+export function parseReviewedAnalysisHistory(value:unknown,currentBusinessDate:string,centerUpdatedAt:string):ReviewedAnalysis{
+ const v=object(value),businessDate=date(v.businessDate),updatedAt=paperClock(v.updatedAt);
+ if(businessDate>=currentBusinessDate||updatedAt.ns<paperClock(centerUpdatedAt).ns)throw Error('Reviewed history clock');
+ const history=parseReviewedAnalysis(v,businessDate,updatedAt.text);
+ // The history endpoint replays original single freezes at the actual read
+ // clock. It does not reconstruct unpersisted combinations from past prices.
+ if(!history.records.length||history.combos.length||history.threeCombos.length)throw Error('Reviewed history records');
+ return history;
 }
 export interface LeagueBaselineDirections {businessDate:string;updatedAt:string;records:LeagueBaselineDirection[];blocked:number}
 export function parseLeagueBaseline(value:unknown,businessDate:string,updatedAt:string):LeagueBaselineDirections{
@@ -903,6 +913,7 @@ export function parseRecommendationCenter(response:unknown):RecommendationCenter
   if(Object.hasOwn(x,'prdPaper'))result.prdPaper=parsePrdPaperDirections(x.prdPaper,result.businessDate,result.updatedAt);
   if(Object.hasOwn(x,'leagueBaseline'))result.leagueBaseline=parseLeagueBaseline(x.leagueBaseline,result.businessDate,result.updatedAt);
   if(Object.hasOwn(x,'reviewedAnalysis'))result.reviewedAnalysis=parseReviewedAnalysis(x.reviewedAnalysis,result.businessDate,result.updatedAt);
+  if(Object.hasOwn(x,'reviewedAnalysisHistory'))result.reviewedAnalysisHistory=parseReviewedAnalysisHistory(x.reviewedAnalysisHistory,result.businessDate,result.updatedAt);
   if(Object.hasOwn(x,'strategySwitch')){
     const s=object(x.strategySwitch);
     if(s.version!=='trained-strategy-switch-v1'||s.activeReferenceStrategy!=='league-trained-baseline-v1'||s.legacyPublicationEnabled!==false||s.legacyFallbackEnabled!==false||s.formalEligible!==false||result.current.length||result.previews.length||result.todayCombos.length||result.todayDualResearch?.length)throw new Error('Invalid trained strategy switch');

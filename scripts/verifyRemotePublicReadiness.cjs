@@ -7,6 +7,8 @@ const {
 } = require("./hhadCompanionPublicContract.cjs");
 const { evaluateFallbackReadiness } = require("./fallbackReadiness.cjs");
 const { shadowObservationAuditValid } = require("../src/services/candidateCaptureState.cjs");
+const { TRAINED_ONLY_POLICY } = require("../server/recommendationAuthority.cjs");
+const { validateRemoteRecommendationCoverage } = require("./verifyRemoteRecommendationParity.cjs");
 
 const baseUrl = new URL(process.env.REMOTE_BASE_URL || process.env.PUBLIC_BASE_URL || process.env.VERIFY_BASE_URL || "http://127.0.0.1:8788");
 const requireHealthy = process.env.REMOTE_REQUIRE_HEALTHY === "1";
@@ -468,34 +470,15 @@ const run = async () => {
     servingMode: health.body?.status?.servingMode || null
   });
   const recommendationCoverage = health.body?.data?.recommendations || {};
-  const recommendationProjectionParity = recommendationCoverage.projectionParity || {};
-  pushCheck(checks, "scheduled matches have an explicit BEST or WATCH disposition and atomically bound HHAD directions",
-    recommendationCoverage.version === "current-recommendation-coverage-v6"
-      && recommendationCoverage.coverageOk === true
+  const recommendationCoverageValidation = validateRemoteRecommendationCoverage(recommendationCoverage,
+    { policy: TRAINED_ONLY_POLICY, nowMs: Date.now() });
+  pushCheck(checks, "published recommendation lanes, effective dispositions and atomic HHAD bindings are valid",
+    recommendationCoverageValidation.valid
       && health.body?.status?.recommendationCoverageOk === true
-      && health.body?.status?.recommendationProjectionParityOk === true
-      && Number(recommendationCoverage.missingDispositionMatches || 0) === 0
-      && Number(recommendationCoverage.publicationDispositionMatches || 0)
-        === Number(recommendationCoverage.scheduledMatches || 0)
-      && Number(recommendationCoverage.bestDirectionMatches || 0)
-        + Number(recommendationCoverage.watchMatches || 0)
-        === Number(recommendationCoverage.scheduledMatches || 0)
-      && Number(recommendationCoverage.missingDirectionMatches || 0)
-        === Number(recommendationCoverage.watchMatches || 0)
-      && Number(recommendationCoverage.hhadMissingDirectionMatches || 0) === 0
-      && Number(recommendationCoverage.dualMarketAtomicMissingMatches || 0) === 0
-      && Number(recommendationCoverage.hhadBoundDirectionMatches || 0)
-        === Number(recommendationCoverage.hhadMarketMatches || 0)
-      && Number(recommendationCoverage.dualMarketAtomicMatches || 0)
-        === Number(recommendationCoverage.dualMarketEligibleMatches || 0)
-      && recommendationCoverage.dualMarketAtomicCoverageOk === true
-      && recommendationProjectionParity.version === "current-list-detail-recommendation-parity-v1"
-      && recommendationProjectionParity.scope === "same-current-read-model-list-detail-projection"
-      && recommendationProjectionParity.disclosure === "aggregate-counts-only"
-      && Number(recommendationProjectionParity.mismatchRows || 0) === 0
-      && recommendationProjectionParity.ok === true, {
+      && health.body?.status?.recommendationProjectionParityOk === true, {
       recommendationCoverageOk: health.body?.status?.recommendationCoverageOk ?? null,
       recommendationProjectionParityOk: health.body?.status?.recommendationProjectionParityOk ?? null,
+      validation: recommendationCoverageValidation,
       ...recommendationCoverage
     });
   const trainingAsset = health.body?.model?.trainingAsset || {};

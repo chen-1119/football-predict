@@ -25,6 +25,103 @@ function fixture() {
 }
 const validate = body => remote.validateRemoteRetirementReceipt(body, { policy: TRAINED_ONLY_POLICY, nowMs: NOW });
 
+function coverageFixture() {
+  return { version: 'current-recommendation-coverage-v6', publicationAuthority: fixture().recommendationAuthority,
+    scheduledMatches: 50, bestDirectionMatches: 0, watchMatches: 0, missingDirectionMatches: 50,
+    publicationDispositionMatches: 0, missingDispositionMatches: 50,
+    trainingBackedMatches: 50, trainingCoverageOk: true,
+    hhadMarketMatches: 12, hhadBoundDirectionMatches: 10, hhadMissingDirectionMatches: 2, hhadOnlyMarketMatches: 2,
+    dualMarketEligibleMatches: 10, dualMarketAtomicMatches: 10, dualMarketAtomicMissingMatches: 0,
+    retiredDispositionMatches: 50, retiredHhadOnlyDirectionMatches: 2,
+    effectiveMissingDispositionMatches: 0, effectiveHhadMissingDirectionMatches: 0,
+    coverageOk: true, legacyCoverageOk: false, dualMarketAtomicCoverageOk: false,
+    projectionParity: { version: 'current-list-detail-recommendation-parity-v1',
+      scope: 'same-current-read-model-list-detail-projection', disclosure: 'aggregate-counts-only', mismatchRows: 0, ok: true } };
+}
+const validateCoverage = value => remote.validateRemoteRecommendationCoverage(value, { policy: TRAINED_ONLY_POLICY, nowMs: NOW });
+
+test('aggregate coverage validates the complete authority without fabricating a current row set', () => {
+  const value = coverageFixture(), before = JSON.stringify(value);
+  assert.equal(remote.validateRemoteAuthoritySummary(value.publicationAuthority, { policy: TRAINED_ONLY_POLICY, nowMs: NOW }).valid, true);
+  assert.equal(validateCoverage(value).valid, true);
+  assert.equal(JSON.stringify(value), before);
+  assert.equal(value.hhadMissingDirectionMatches, 2); assert.equal(value.missingDispositionMatches, 50);
+  assert.equal(value.dualMarketAtomicCoverageOk, false, 'the raw legacy diagnostic remains visible');
+  assert.equal(remote.validateRemoteRecommendationCoverage(value, { policy: { ...TRAINED_ONLY_POLICY }, nowMs: NOW }).valid, false);
+});
+
+test('legacy aggregate coverage retains strict raw dispositions and supports old responses without new counters', () => {
+  const value = coverageFixture(); delete value.publicationAuthority;
+  for (const field of ['retiredDispositionMatches', 'retiredHhadOnlyDirectionMatches', 'effectiveMissingDispositionMatches', 'effectiveHhadMissingDirectionMatches']) delete value[field];
+  assert.equal(validateCoverage(value).valid, false);
+  Object.assign(value, { bestDirectionMatches: 48, watchMatches: 2, missingDirectionMatches: 2,
+    publicationDispositionMatches: 50, missingDispositionMatches: 0, hhadBoundDirectionMatches: 12,
+    hhadMissingDirectionMatches: 0, legacyCoverageOk: true, dualMarketAtomicCoverageOk: true });
+  assert.equal(validateCoverage(value).valid, true);
+  Object.assign(value, { retiredDispositionMatches: 0, retiredHhadOnlyDirectionMatches: 0,
+    effectiveMissingDispositionMatches: 0, effectiveHhadMissingDirectionMatches: 0 });
+  assert.equal(validateCoverage(value).valid, true);
+});
+
+for (const [name, mutate] of [
+  ['authority missing', v => { delete v.publicationAuthority; }],
+  ['retirement flag alone', v => { v.publicationAuthority = { legacyCurrentEnabled: false, activeValidation: { ok: true } }; }],
+  ['authority bad mode', v => { v.publicationAuthority.mode = 'legacy'; }],
+  ['authority stale observation', v => { v.publicationAuthority.observedAt = stamp(-60001); }],
+  ['authority future clock', v => { v.publicationAuthority.observedAt = stamp(1); }],
+  ['authority invalid lane totals', v => { v.publicationAuthority.activeValidation.reviewed.openRecords = 3; }],
+  ['unavailable lane with records', v => { v.publicationAuthority.activeValidation.reviewed.status = 'unavailable'; }],
+  ['missing effective counter', v => { delete v.effectiveHhadMissingDirectionMatches; }],
+  ['negative counter', v => { v.retiredHhadOnlyDirectionMatches = -1; }],
+  ['string counter', v => { v.retiredDispositionMatches = '50'; }],
+  ['unbounded counter', v => { v.scheduledMatches = 513; }],
+  ['retirement overcounts raw absence', v => { v.retiredDispositionMatches = 51; }],
+  ['HHAD-only exemption exceeds HHAD-only rows', v => { v.retiredHhadOnlyDirectionMatches = 3; }],
+  ['uncovered raw disposition', v => { v.retiredDispositionMatches = 49; v.effectiveMissingDispositionMatches = 1; }],
+  ['false effective zero', v => { v.retiredHhadOnlyDirectionMatches = 1; }],
+  ['raw HHAD count drift', v => { v.hhadBoundDirectionMatches = 11; }],
+  ['actual dual-market binding failure', v => { v.dualMarketAtomicMatches = 9; v.dualMarketAtomicMissingMatches = 1; v.hhadBoundDirectionMatches = 9; v.hhadMissingDirectionMatches = 3; }],
+  ['training missing', v => { v.trainingBackedMatches = 49; }],
+  ['training false', v => { v.trainingCoverageOk = false; }],
+  ['projection mismatch', v => { v.projectionParity.mismatchRows = 1; }],
+  ['projection false', v => { v.projectionParity.ok = false; }],
+  ['server coverage false', v => { v.coverageOk = false; }],
+  ['raw dual atomic diagnostic drift', v => { v.dualMarketAtomicCoverageOk = true; }],
+  ['legacy raw diagnostic falsified', v => { v.legacyCoverageOk = true; }],
+]) test('aggregate coverage rejects ' + name, () => {
+  const value = coverageFixture(); mutate(value); assert.equal(validateCoverage(value).valid, false);
+});
+
+test('zero currently open records are only an integrity readiness observation', () => {
+  const value = coverageFixture(), receipt = value.publicationAuthority;
+  receipt.activeValidation.reviewed.openRecords = 0; receipt.activeValidation.reviewed.closedRecords = 2;
+  assert.equal(validateCoverage(value).valid, true);
+  assert.equal(receipt.activeValidation.reviewed.openRecords, 0);
+  Object.assign(receipt, { businessDate: '2026-10-09', updatedAt: '2026-10-09T04:00:00.000Z', publicationState: 'stale', availableForCurrentDay: false });
+  assert.equal(validateCoverage(value).valid, true);
+});
+
+test('actual public readiness block uses complete aggregate validation and retains both health gates', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../scripts/verifyRemotePublicReadiness.cjs'), 'utf8');
+  const begin = source.indexOf('  const recommendationCoverage = health.body?.data?.recommendations || {};');
+  const end = source.indexOf('  const trainingAsset =', begin);
+  assert.ok(begin >= 0 && end > begin);
+  class Clock extends Date { static now() { return NOW; } }
+  const run = (coverage, status = {}) => {
+    const checks = [];
+    vm.runInNewContext(source.slice(begin, end), { checks, health: { body: { data: { recommendations: coverage },
+      status: { recommendationCoverageOk: true, recommendationProjectionParityOk: true, ...status } } },
+      TRAINED_ONLY_POLICY, Date: Clock, validateRemoteRecommendationCoverage: remote.validateRemoteRecommendationCoverage,
+      pushCheck: (out, name, ok, evidence) => out.push({ name, ok, evidence }) });
+    assert.equal(checks.length, 1); return checks[0];
+  };
+  assert.equal(run(coverageFixture()).ok, true);
+  assert.equal(run(coverageFixture(), { recommendationCoverageOk: false }).ok, false);
+  assert.equal(run(coverageFixture(), { recommendationProjectionParityOk: false }).ok, false);
+  const invalid = coverageFixture(); delete invalid.publicationAuthority;
+  assert.equal(run(invalid).ok, false);
+});
+
 test('local policy plus complete top-level and row receipt can retire scheduled BEST continuity only', () => {
   const body = fixture();
   assert.equal(remote.scheduledWithoutBestIds(body.rows, NOW).length, 1);

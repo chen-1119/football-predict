@@ -16,13 +16,23 @@ Repeated deterministic replay may reuse a bounded cache of four results and at m
 
 Only the current public projection clears retired legacy `predictions`. It retains original archives and marks their state as `valid`, `missing` or `none`. Any existing invalid archive still fails validation. Raw PostgreSQL rows, internal settlement readers and historical readers are unchanged.
 
+When the current center has no reviewed records, its existing authenticated endpoint can also return `reviewedAnalysisHistory` for the single most recent stored day before the center's business date. This is read through the same read-only transaction, replaying original freezes, signed sources and committed ACKs at the actual clock. It does not modify today's center, authority or coverage counts. The separate history field preserves the original day and singles and carries empty combo arrays: reviewed freeze records never independently stored those derived combinations, so the reader cannot claim newly reconstructed combinations were original historical publications.
+
 An in-process private token survives ordinary server object spreads and prevents the public projector from restoring a retired legacy direction from an archive. The browser's public marker only suppresses legacy reference/model fallback paths; it cannot authorize a server gate. Reviewed and trained recommendations retain their own existing publication and cutoff rules.
 
 Remote verification accepts retirement only when the protected current response carries a complete, recent authority receipt, every row agrees with that receipt and current predictions are empty. Existing archives and list/detail identity, direction and SP comparisons remain independently checked. Match-level flags alone retain strict verification.
 
+## Health coverage and public readiness
+
+The health reader binds the complete current snapshot to the authority produced by the same repeatable-read transaction. Its private summary and exact row-token membership must agree after normal server projections. Copied summaries, JSON rows, omitted or duplicated rows, and rows from a separate transaction cannot authorize retired coverage. A genuinely empty snapshot is distinguished from a removed subset; missing authority under the trusted production policy fails closed.
+
+Raw BEST/WATCH and HHAD missing counts remain visible. `retiredDispositionMatches` counts absent legacy dispositions; `retiredHhadOnlyDirectionMatches` counts absent legacy HHAD-only directions. The two `effectiveMissing*` counters subtract only these verified retired requirements. `legacyCoverageOk` and `dualMarketAtomicCoverageOk` preserve their raw meanings and may remain false while engineering readiness is true.
+
+Engineering readiness still requires training lineage on every scheduled row, valid actual HAD/HHAD atomic bindings on every eligible dual-market row, no effective missing requirements, and list/detail projection parity. Public readiness checks the complete authority summary, freshness, bounded integer counts and exact raw/retired/effective relationships. No authority retains strict legacy requirements. This does not create recommendations: reviewed/trained record and open counts remain unchanged, including zero open records and stale business days.
+
 ## Verification and operations
 
-The focused tests cover trusted and copied policies, real freeze/ACK replay, changed SP/directions/hashes, missing ACKs, as-of refresh gaps, midnight, preserved archives, read-only transaction boundaries, browser fallback suppression and remote receipts. New tests are required by `verifyReleaseVerifierContracts.cjs` and are included in both release archive lists.
+The focused tests cover trusted and copied policies, real freeze/ACK replay, changed SP/directions/hashes, missing ACKs, as-of refresh gaps, midnight, preserved archives, read-only transaction boundaries, browser fallback suppression and remote receipts. Coverage tests run the actual server coverage function, actual dual-market validator and actual remote coverage check together, including the retired HHAD-only case and rejection after rehashing altered event, clock, direction, SP, line or provenance claims. These tests are required by `verifyReleaseVerifierContracts.cjs` and are included in both release archive lists.
 
 Code release preparation also requires the actual current generation pointer to match the PostgreSQL snapshot on all four publication identity fields. An intact newer current generation whose intact previous generation exactly matches PostgreSQL is a bounded preparation wait while normal publishers remain running. Corrupt or inconsistent generations fail immediately. The seed checks again before copying, and the final current-pointer check remains mandatory; neither check refreshes the original 900-second cutover lease.
 

@@ -221,8 +221,7 @@ const applyCurrentRecommendationAuthority = async (client, rows, options = {}) =
   const verified = await authority.readPublicationAuthority(client, {
     policy: options.recommendationAuthorityPolicy, asOf: new Date().toISOString(),
   });
-  return { rows: rows.map(row => authority.projectRetiredCurrent(row, verified)),
-    recommendationAuthority: authority.summarizeAuthority(verified) };
+  return authority.projectCurrentAuthoritySnapshot(rows, verified);
 };
 
 const readPostgresCurrentAuthoritySnapshot = async (pool, options = {}) => {
@@ -249,7 +248,13 @@ const readPostgresRecommendationCenter = async (pool, options = {}) => {
       const verified = await authority.readPublicationAuthority(client, {
         policy: options.recommendationAuthorityPolicy, asOf: new Date().toISOString(),
       });
-      return authority.getAuthorityCenterPayload(verified);
+      const payload = authority.getAuthorityCenterPayload(verified);
+      if (options.includeReviewedHistory === true && !payload.recommendationCenter.reviewedAnalysis?.records?.length) {
+        const history = await require('../scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs')
+          .readLatestHistory(client, payload.recommendationCenter.businessDate, new Date().toISOString());
+        if (history) return { ...payload, recommendationCenter: { ...payload.recommendationCenter, reviewedAnalysisHistory: history } };
+      }
+      return payload;
     }
     const rows = await client.query('SELECT payload FROM football.daily_featured_combo_state WHERE id=1');
     return rows.rows[0]?.payload || null;

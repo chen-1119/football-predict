@@ -10,7 +10,7 @@ const { publicFixture, publicOverview } = require("./publicProduct.cjs");
 const zlib = require("node:zlib");
 const { readStorageMode, retiredSqliteStatus } = require("./storageMode.cjs");
 const storageMode = readStorageMode();
-const { TRAINED_ONLY_POLICY, isTrustedPolicy, isRetiredCurrentProjection } = require('./recommendationAuthority.cjs');
+const { TRAINED_ONLY_POLICY, isTrustedPolicy, isRetiredCurrentProjection, isTrustedCurrentAuthorityProjection } = require('./recommendationAuthority.cjs');
 const currentRecommendationPolicy = storageMode.postgresOnly ? TRAINED_ONLY_POLICY : null;
 const { publicationRefreshBlocked, nativePublicationReadError, publicationTransitionHealth } = require("./publicationRefreshPolicy.cjs");
 const { sendStaticFileResponse } = require("./staticFileResponse.cjs");
@@ -8344,6 +8344,8 @@ const buildCurrentRecommendationCoverage = async () => {
   ]);
   const currentRows = Array.isArray(currentRead.rows) ? currentRead.rows : [];
   const publicationAuthority = currentRead.recommendationAuthority || null;
+  const trustedAuthorityProjection = isTrustedPolicy(currentRecommendationPolicy)
+    && isTrustedCurrentAuthorityProjection(currentRows, publicationAuthority);
   const projectionCheckedAtMs = Date.now();
   const projectionParity = buildRecommendationProjectionParityAudit(
     currentRows.map((match) => ({
@@ -8368,6 +8370,8 @@ const buildCurrentRecommendationCoverage = async () => {
   let hhadOnlyMarketMatches = 0;
   let dualMarketEligibleMatches = 0;
   let dualMarketAtomicMatches = 0;
+  let retiredDispositionMatches = 0;
+  let retiredHhadOnlyDirectionMatches = 0;
   const dualMarketBindingBlockerCounts = {};
 
   for (const match of scheduled) {
@@ -8392,6 +8396,8 @@ const buildCurrentRecommendationCoverage = async () => {
         hhadOnlyMarketMatches += 1;
         if (hhadOnlyRecommendationDirectionValid(match)) {
           hhadBoundDirectionMatches += 1;
+        } else if (trustedAuthorityProjection) {
+          retiredHhadOnlyDirectionMatches += 1;
         }
       } else {
         dualMarketEligibleMatches += 1;
@@ -8424,6 +8430,8 @@ const buildCurrentRecommendationCoverage = async () => {
       }
     } else if (String(best?.tipCode || "").toUpperCase() === "WATCH") {
       watchMatches += 1;
+    } else if (trustedAuthorityProjection) {
+      retiredDispositionMatches += 1;
     }
   }
 
@@ -8436,6 +8444,10 @@ const buildCurrentRecommendationCoverage = async () => {
   const trainingCoverageOk = trainingBackedMatches === scheduledMatches;
   const dualMarketAtomicCoverageOk = hhadMissingDirectionMatches === 0
     && dualMarketAtomicMissingMatches === 0;
+  const effectiveMissingDispositionMatches = missingDispositionMatches - retiredDispositionMatches;
+  const effectiveHhadMissingDirectionMatches = hhadMissingDirectionMatches - retiredHhadOnlyDirectionMatches;
+  const legacyCoverageOk = missingDispositionMatches === 0 && trainingCoverageOk
+    && dualMarketAtomicCoverageOk && projectionParity.ok;
   return {
     version: "current-recommendation-coverage-v6",
     publicationAuthority,
@@ -8448,11 +8460,15 @@ const buildCurrentRecommendationCoverage = async () => {
     watchMatches,
     publicationDispositionMatches,
     missingDispositionMatches,
+    retiredDispositionMatches,
+    effectiveMissingDispositionMatches,
     trainingBackedMatches,
     trainingInputSufficientMatches,
     hhadMarketMatches,
     hhadBoundDirectionMatches,
     hhadMissingDirectionMatches,
+    retiredHhadOnlyDirectionMatches,
+    effectiveHhadMissingDirectionMatches,
     hhadOnlyMarketMatches,
     dualMarketEligibleMatches,
     dualMarketAtomicMatches,
@@ -8482,9 +8498,15 @@ const buildCurrentRecommendationCoverage = async () => {
     projectionParity,
     trainingCoverageOk,
     dualMarketAtomicCoverageOk,
-    coverageOk: publicationAuthority
-      ? publicationAuthority.activeValidation?.ok === true && projectionParity.ok
-      : missingDispositionMatches === 0 && trainingCoverageOk && dualMarketAtomicCoverageOk && projectionParity.ok
+    legacyCoverageOk,
+    // This is engineering readiness for the enabled publication contract.
+    // Keep the missing legacy directions visible; do not invent BEST/WATCH
+    // rows or claim a reviewed/trained record is currently open.
+    coverageOk: effectiveMissingDispositionMatches === 0 && effectiveHhadMissingDirectionMatches === 0
+      && trainingCoverageOk && dualMarketAtomicMissingMatches === 0 && projectionParity.ok
+      && (isTrustedPolicy(currentRecommendationPolicy)
+        ? trustedAuthorityProjection && publicationAuthority?.activeValidation?.ok === true
+        : !publicationAuthority)
   };
 };
 
@@ -11677,6 +11699,7 @@ const handleApi = async (req, res, url) => {
     const payload = await readPostgresRecommendationCenter(postgresPool, {
       publicationIdentity: resolveBasePublication().identity,
       recommendationAuthorityPolicy: currentRecommendationPolicy,
+      includeReviewedHistory: true,
     });
     if (!payload) return sendJson(res, { ok: false, error: "combo update pending" }, 503);
     return sendJson(res, { ok: true, ...payload });
