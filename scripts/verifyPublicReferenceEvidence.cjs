@@ -11,6 +11,38 @@ const { compactPredictionSnapshotAudit } = require("../server/predictionSnapshot
 const clone = (v) => JSON.parse(JSON.stringify(v));
 let checks = 0;
 const check = (name, fn) => { fn(); checks++; };
+const oldDigest = value => require("node:crypto").createHash("sha256").update(JSON.stringify(value)).digest("hex");
+for (const value of [[], [null, true, false, 0, -0, NaN, Infinity],
+  ["中文", "😀", "\ud800", "\n", '"', "\\"],
+  [{ b: 2, a: 1 }, { a: undefined, nested: [1, null] }],
+  Array(4), [undefined, () => {}, Symbol("omitted")],
+  [new Date("2026-10-11T00:00:00Z"), { toJSON: key => ({ originalIndex: key }) }],
+  [null, ...Array.from({ length: 12 }, () => ({ toJSON: key => key }))]]) {
+  check("partitioned array digest preserves the native byte contract", () => {
+    assert.equal(digest(value), oldDigest(value));
+  });
+}
+check("an array's own toJSON retains native behavior", () => {
+  const value = [1, 2]; value.toJSON = key => ({ key, replacement: true });
+  assert.equal(digest(value), oldDigest(value));
+});
+check("array mutation during serialization keeps the original length", () => {
+  const make = () => { const value = [{ toJSON() { value.length = 1; return "first"; } }, 2, 3]; return value; };
+  assert.equal(digest(make()), oldDigest(make()));
+});
+check("invalid bigint and cyclic arrays are not silently hashed", () => {
+  assert.throws(() => digest([1n]), TypeError);
+  const value = []; value.push(value); assert.throws(() => digest(value), TypeError);
+});
+check("large companion sets are serialized one item at a time", () => {
+  const value = Array.from({ length: 250 }, (_, index) => ({ index, evidence: "x".repeat(8192) }));
+  const expected = oldDigest(value), original = JSON.stringify;
+  JSON.stringify = function (input, ...args) {
+    assert.notEqual(input, value, "whole archive must never be materialized");
+    return original(input, ...args);
+  };
+  try { assert.equal(digest(value), expected); } finally { JSON.stringify = original; }
+});
 const at = "2026-09-07T01:00:00.000Z";
 const match = {
   id: "sporttery_991001", sourceMatchId: "991001", status: "SCHEDULED", businessDate: "2026-09-07",

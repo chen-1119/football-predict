@@ -1,5 +1,4 @@
 "use strict";
-const { createHash } = require("node:crypto");
 
 const VERSION = "public-reference-archive-v2";
 const { collectPublicReferenceEvidence } = require("../src/services/publicReferenceEvidence.cjs");
@@ -19,10 +18,10 @@ const buildPublicReferenceArchive = (snapshot) => {
     version: VERSION,
     source: "sporttery:public-reference-decisions",
     sourceUpdatedAt: snapshot.updatedAt || null,
-    contentHash: createHash("sha256").update(JSON.stringify(rows)).digest("hex"),
+    contentHash: digest(rows),
     rows,
     evidence,
-    evidenceContentHash: createHash("sha256").update(JSON.stringify(evidence)).digest("hex"),
+    evidenceContentHash: digest(evidence),
     lastRecordedAt: Number.isFinite(lastRecordedTime) ? new Date(lastRecordedTime).toISOString() : null,
     retentionDays: snapshot.retentionDays ?? null,
   };
