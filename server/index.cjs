@@ -131,6 +131,7 @@ const {
   readPublicationJson,
   resolveServingPublication,
   resolveServingPublicationForSqliteIdentity,
+  resolveCommittedPostgresPublication,
   selectFastResultReceiptDuringPairTransition,
   sqlitePublicationMatches,
 } = require("./dataGenerationBundle.cjs");
@@ -655,10 +656,11 @@ const resolveBasePublication = ({ coldStartPairIdentity = null } = {}) => {
       ? cachedSqlitePublicationIdentity()
       : null;
   const publication = pairedProjection?.available === true
-    ? resolveServingPublicationForSqliteIdentity({
+    ? (shouldPreferPostgresRead() ? resolveCommittedPostgresPublication : resolveServingPublicationForSqliteIdentity)({
         storeDir,
         publicDataDir: dataDir,
         sqliteIdentity: pairedProjection.publication,
+        postgresIdentity: pairedProjection.publication,
         allowPrevious: true,
       })
     : resolveServingPublication({

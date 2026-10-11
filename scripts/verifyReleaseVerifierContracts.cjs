@@ -60,6 +60,12 @@ check('code releases separate PG migration and model work before signing',()=>{
   for(const file of ['scripts/releaseDataPlanePolicy.cjs','scripts/nativeCodeReleaseDataPlane.cjs','tests/code-data-release.test.cjs','scripts/verifyCodeReleaseShell.cjs','scripts/verifyCodeReleasePostgresIsolation.cjs'])
     for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+file+'"'));
 });
+check('committed PostgreSQL reads survive multiple raw advances without weakening code cutover affinity',()=>{
+  const file='tests/postgres-committed-publication.test.cjs';
+  const child=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# skipped 0$/m);
+  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+file+'"'));
+});
 check('online capacity observation precedes allocation and signing',()=>{
   const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/release-capacity-preflight.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:10000,maxBuffer:1048576});
   assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 10$/m);assert.match(child.stdout,/^# skipped 0$/m);
