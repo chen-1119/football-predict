@@ -41,6 +41,36 @@ function verifyReleaseWorkerCodeRepair() {
     new vm.Script(source);assert(!source.includes('systemctl\",[\"start'));assert(source.includes('repairPreparationAllowed'));
     const original=p.buildWorkerCodeRepairProbe.toString();assert(original.includes('base.ok?base:'));
   });
+  // Exercise the actual serialized collector/evaluator in the same VM context
+  // as the native entry. fs.readdirSync returns a host-realm Array here.
+  for(const variant of ['exact','extra-migration','no-journal']) check(()=>{
+    const crypto=require('node:crypto'), now=Date.now(), hexHash=b=>crypto.createHash('sha256').update(b).digest('hex');
+    const start=new Date(now-60000).toISOString(),end=new Date(now-2000).toISOString();
+    const localAuth=JSON.parse(JSON.stringify(auth));
+    localAuth.createdAt=new Date(now-600000).toISOString();localAuth.expiresAt=new Date(now+3600000).toISOString();
+    const files=new Map();for(const row of localAuth.files){const b=Buffer.from('old:'+row.path);files.set('/opt/football-predict/'+row.path,b);row.beforeSha256=hexHash(b);}
+    for(const row of localAuth.dataContract){const b=Buffer.from('unchanged:'+row.path);files.set('/opt/football-predict/'+row.path,b);row.sha256=hexHash(b);}
+    for(const name of ['.release-bundle-sha256','.release-live-complete'])files.set('/opt/football-predict/'+name,Buffer.from(localAuth.baseRuntimeSha256+'\n'));
+    const status={pid:42,checkedAt:new Date(now-1000).toISOString(),ok:false,phase:'failed',lastCycle:{ok:false,phase:'official-result-failed',startedAt:start,finishedAt:end,errorCode:'SYNC_WORKER_COMMAND_FAILED',error:'node scripts/syncData.cjs exited with 1'}};
+    files.set('/var/lib/football-predict/sync-worker-status.json',Buffer.from(JSON.stringify(status)));
+    files.set('/proc/42/cmdline',Buffer.from('/opt/node/bin/node\0/opt/football-predict/scripts/runSyncWorker.cjs\0'));
+    const fixtureFs={realpathSync:file=>file,readlinkSync:()=>'/opt/football-predict',openSync:file=>{assert(files.has(file));return file;},closeSync:()=>{},
+      constants:{O_RDONLY:0,O_NOFOLLOW:0},readFileSync:(file,encoding)=>encoding?files.get(file).toString():files.get(file),
+      fstatSync:file=>({isFile:()=>true,nlink:1,size:files.get(file).length,ino:1,mtimeMs:1,ctimeMs:1}),
+      lstatSync:file=>{if(file.startsWith('/var/lib/football-release/'))throw Object.assign(Error('absent'),{code:'ENOENT'});return {isDirectory:()=>true,isSymbolicLink:()=>false};},
+      readdirSync:()=>variant==='extra-migration'?['001_core.sql','002_unknown.sql']:['001_core.sql']};
+    const fixtureChild={execFileSync:(cmd,args)=>{
+      if(cmd==='systemctl')return 'ActiveState=active\nMainPID=42\nExecMainStartTimestamp='+new Date(now-3600000).toUTCString()+'\n';
+      assert.equal(cmd,'/usr/bin/journalctl');assert(args.includes('--lines=4'));
+      return variant==='no-journal'?'':JSON.stringify({_SYSTEMD_UNIT:'football-sync-worker.service',_PID:'43',MESSAGE:'Invalid string length',__REALTIME_TIMESTAMP:String((now-2050)*1000)})+'\n';
+    }};
+    const fixtureRequire=name=>name==='node:fs'?fixtureFs:name==='node:child_process'?fixtureChild:name==='node:path'?path.posix:require(name);
+    const output=[],fixtureProcess={exitCode:0};
+    new vm.Script(p.buildWorkerCodeRepairProbe(localAuth)).runInNewContext({require:fixtureRequire,process:fixtureProcess,console:{log:line=>output.push(line)},Date});
+    assert.equal(output.length,1);const report=JSON.parse(output[0]);
+    assert.equal(report.ok,variant==='exact',JSON.stringify(report));assert.equal(report.workerHealthy,false);assert.equal(report.readyToCutover,false);assert.equal(report.productionWrites,0);
+    assert.equal(fixtureProcess.exitCode,variant==='exact'?0:1);
+  });
   check(()=>{
     const root=path.resolve(__dirname,'..'),native=fs.readFileSync(path.join(root,'deploy/light-server/release-native.sh'),'utf8');
     const client=fs.readFileSync(path.join(root,'scripts/deployReleaseBundle.cjs'),'utf8');
