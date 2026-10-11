@@ -100,7 +100,9 @@ function collectWorkerCodeRepair(auth, worker) {
   const before = identity(), hash = b => crypto.createHash('sha256').update(b).digest('hex');
   const files = auth.files.map(row => ({path:row.path,sha256:hash(plain(row.path))}));
   const dataContract = auth.dataContract.map(row => ({path:row.path,sha256:hash(plain(row.path).toString('utf8').replace(/\r\n/g,'\n'))}));
-  const migrationNames = fs.readdirSync(root+'/server/postgres/migrations').sort();
+  // Native runs this reader in a VM realm. Copy the host fs array into the
+  // reader's realm before the exact array comparison; names still must match.
+  const migrationNames = Array.from(fs.readdirSync(root+'/server/postgres/migrations')).sort();
   const cycle = worker.status.lastCycle;
   const lines = cp.execFileSync('/usr/bin/journalctl', ['--unit=football-sync-worker.service',
     '--since='+cycle.startedAt, '--until='+cycle.finishedAt, '--grep=^Invalid string length$',
