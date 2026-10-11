@@ -333,7 +333,12 @@ check('fixed hypothesis lineage survives competing retrospective winners before 
   const result = require('./verifyCandidateRevisionLineage.cjs').verifyCandidateRevisionLineage();
   assert.equal(result.ok, true); assert.ok(result.checks >= 11);
 });
-const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/services/apiFootballDiagnostics.d.cts',
+check('incident-bound worker code repair retains failure and actual cutover gates', () => {
+  const result=require('./verifyReleaseWorkerCodeRepair.cjs').verifyReleaseWorkerCodeRepair();
+  assert.equal(result.ok,true);assert.ok(result.checks>=30);assert.equal(result.productionWrites,0);
+});
+const collectorEntries = ['scripts/releaseWorkerCodeRepair.cjs','scripts/verifyReleaseWorkerCodeRepair.cjs',
+  'src/services/apiFootballDiagnostics.cjs', 'src/services/apiFootballDiagnostics.d.cts',
   'scripts/productionFixtureIsolationContract.cjs', 'scripts/verifyProductionFixtureIsolationContract.cjs',
   'scripts/verifyProductionFixtureIsolation.cjs',
   'scripts/readCandidatePublicObservations.cjs', 'scripts/verifyCandidatePublicObservations.cjs',

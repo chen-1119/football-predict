@@ -210,7 +210,7 @@ const extractSection = (text, name, nextName = null) => {
   return String(text || "").slice(bodyStart, end >= 0 ? end : undefined).trim();
 };
 
-const buildRemotePreflightCommand = (expectedRecoveryHelperSha256, rotationContractReady) => [
+const buildRemotePreflightCommand = (expectedRecoveryHelperSha256, rotationContractReady, workerCodeRepairProbe = null) => [
   "set -euo pipefail",
   `test -x ${shellQuote(remoteEntrypoint)} || { echo "release-entrypoint-missing"; exit 20; }`,
   `test -d ${shellQuote(remoteDir)} && test -w ${shellQuote(remoteDir)} || { echo "release-incoming-not-writable"; exit 21; }`,
@@ -225,7 +225,7 @@ const buildRemotePreflightCommand = (expectedRecoveryHelperSha256, rotationContr
   "case \"$entrypoint_check\" in *\"appPresent=1\"*) ;; *) echo \"app-dir-missing\"; exit 22 ;; esac",
   "test ! -e /var/lib/football-release/reference-repairs/current && test ! -L /var/lib/football-release/reference-repairs/current || { echo 'release-reference-repair-recovery-pending'; exit 28; }",
   "systemctl is-active football-predict >/dev/null || { echo \"service-inactive\"; exit 23; }",
-  `sudo -n /opt/node-v22.22.1/bin/node -e ${shellQuote(buildReadOnlyWorkerProbe())} || { echo "release-worker-preflight-rejected"; exit 27; }`,
+  `sudo -n /opt/node-v22.22.1/bin/node -e ${workerCodeRepairProbe ? shellQuote(workerCodeRepairProbe) : shellQuote(buildReadOnlyWorkerProbe())} || { echo "release-worker-preflight-rejected"; exit 27; }`,
   `if test "$recovery_helper_sha" = ${shellQuote(expectedRecoveryHelperSha256)}; then echo "recoveryHelperRotationRequired=0"; elif test ${shellQuote(rotationContractReady ? "1" : "0")} = "1"; then echo "recoveryHelperRotationRequired=1"; else echo "release-recovery-helper-mismatch"; exit 26; fi`,
   `echo "recoveryHelperRotationContractReady=${rotationContractReady ? "1" : "0"}"`,
   "echo preflight-ok"
@@ -521,9 +521,32 @@ if (newerWorkspaceFiles.length && !allowStaleBundle) {
 
 const releaseRunId = actualSha256;
 const expectedRecoveryHelperSha256 = recoveryHelperInspection.sha256;
+// This separate route is available only from the verified signed full archive.
+// Keep the original failed-worker report in the result; this authorizes repair
+// preparation only and leaves all native/final/cutover checks in place.
+let workerCodeRepairProbe = null;
+const workerCodeRepairEntry = 'deploy/light-server/worker-code-repair-authorization.json';
+if (bundleInspection.entries.some(entry => entry.replace(/^\.\//, '') === workerCodeRepairEntry)) {
+  if (!nativeFullRelease || frontendOnly) fail('worker code repair requires signed native full source');
+  const authorization = inspectBundleEntryBytes(bundlePath, workerCodeRepairEntry);
+  const policy = inspectBundleEntryBytes(bundlePath, 'scripts/releaseWorkerCodeRepair.cjs');
+  if (!authorization.ok || authorization.bytes > 16384 || !policy.ok
+    || policy.sha256 !== crypto.createHash('sha256').update(fs.readFileSync(path.join(rootDir,'scripts/releaseWorkerCodeRepair.cjs'))).digest('hex'))
+    fail('signed worker code repair policy unavailable');
+  try {
+    const repair = require('./releaseWorkerCodeRepair.cjs');
+    const auth = repair.candidateAuthorization(rootDir, JSON.parse(authorization.content.toString('utf8')));
+    for (const row of auth.files) {
+      const file=inspectBundleEntryBytes(bundlePath,row.path);
+      if (!file.ok || file.sha256 !== row.afterSha256) throw new Error('signed repair target differs');
+    }
+    workerCodeRepairProbe = repair.buildWorkerCodeRepairProbe(auth);
+  } catch (error) { fail('signed worker code repair authorization rejected',{reason:error.message}); }
+}
 const remotePreflightCommand = buildRemotePreflightCommand(
   expectedRecoveryHelperSha256,
-  !frontendOnly && recoveryHelperRotationContract.ok === true
+  !frontendOnly && recoveryHelperRotationContract.ok === true,
+  workerCodeRepairProbe
 );
 const remoteBundlePath = remoteJoin(remoteDir, `${actualSha256}.tgz`);
 const remoteShaPath = remoteJoin(remoteDir, `${actualSha256}.sha256`);
