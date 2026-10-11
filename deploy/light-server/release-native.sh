@@ -88,7 +88,9 @@ run_native_release() {
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/validateNativeReleasePolicy.cjs" "$TRUSTED_SOURCE_DIR/deploy/light-server/native-release-policy.json"
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseSequencePreflight.cjs"
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/verifyDeploymentConfig.cjs"
-  "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseWorkerPreflight.cjs"
+  # The optional incident authorization is read only from this trusted signed
+  # source. Without it the original worker preparation policy runs unchanged.
+  "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseWorkerCodeRepair.cjs" "$TRUSTED_SOURCE_DIR"
   NATIVE_PLANNED_CODE="$("$NODE_HOME/bin/node" -e 'const p=require(process.argv[1]);console.log(p.classify(p.capture(process.argv[2]),p.capture(process.argv[3])).mode === "code-only" ? "1" : "0")' "$TRUSTED_SOURCE_DIR/scripts/releaseDataPlanePolicy.cjs" "$APP_DIR" "$TRUSTED_SOURCE_DIR")"
   [[ "$NATIVE_PLANNED_CODE" =~ ^[01]$ ]]
   CODE_EMERGENCY_AUTHORIZATION="$TRUSTED_SOURCE_DIR/deploy/light-server/code-release-activation-authorization.json"
