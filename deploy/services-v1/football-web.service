@@ -1,0 +1,27 @@
+[Unit]
+Description=Football independent server-rendered frontend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=football
+Group=football
+WorkingDirectory=/opt/football-services/web/current
+Environment=NODE_ENV=production
+Environment=HOSTNAME=127.0.0.1
+Environment=PORT=3100
+Environment=FOOTBALL_READ_API_ORIGIN=http://127.0.0.1:8790
+ExecStart=/opt/node-v22.22.1/bin/node apps/web/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+MemoryMax=512M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

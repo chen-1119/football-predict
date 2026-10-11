@@ -1,0 +1,28 @@
+[Unit]
+Description=Football independent collector %i
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=football
+Group=football
+WorkingDirectory=/opt/football-services/collector/current
+EnvironmentFile=/etc/football-predict/env
+EnvironmentFile=/etc/football-predict/services-v1.env
+Environment=FOOTBALL_SERVICE_LAYOUT=separated-v1
+ExecStart=/opt/node-v22.22.1/bin/node services/tasks/run.cjs %i
+Restart=on-failure
+RestartPreventExitStatus=75
+RestartSec=30
+TimeoutStopSec=45
+MemoryMax=6G
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/football-predict
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

@@ -264,17 +264,29 @@ export function parseReviewedAnalysisHistory(value:unknown,currentBusinessDate:s
  if(!history.records.length||history.combos.length||history.threeCombos.length)throw Error('Reviewed history records');
  if(Object.hasOwn(v,'comboArchive')){
   const archive=object(v.comboArchive),source=object(archive.source),original=object(archive.view);
-  paperKeys(archive,['version','businessDate','source','view',...(Object.hasOwn(archive,'firstVersion')?['firstVersion']:[])]);
-  paperKeys(source,['receiptSha256','intentSha256','releaseSha256','observedAt','viewJsonSha256','productionWrites']);
-  for(const key of ['receiptSha256','intentSha256','releaseSha256','viewJsonSha256'])paperHex(source[key]);
+  const committed=archive.version==='reviewed-committed-combo-archive-v1';
+  if(committed){
+   paperKeys(archive,['version','businessDate','createdAt','settlementEligible','source','view','contentHash']);
+   paperKeys(source,['kind','artifactKey','generationId','committedAt','observedAt','viewJsonSha256']);
+   const {contentHash,...body}=archive;
+   const stateHash=reviewedAnalysisPublicHash({records:original.records,publicationHash:original.publicationHash,draftHash:original.draftHash,combos:original.combos,threeCombos:original.threeCombos??[]});
+   prdPaperPublicHash({...body,view:null});reviewedAnalysisPublicHash(original);
+   if(source.kind!=='postgres-committed-view'||archive.settlementEligible!==false||paperHex(contentHash)!==boundedPublicHash(body,35*512,35*16384)
+    ||source.artifactKey!==`reviewed-combo-view-${businessDate}-${stateHash}`||!/^g-[a-f0-9]{64}$/.test(text(source.generationId))
+    ||paperClock(source.committedAt).ns>paperClock(source.observedAt).ns||paperClock(archive.createdAt).ns!==paperClock(source.observedAt).ns)throw Error('Reviewed committed archive identity');
+  }else{
+   paperKeys(archive,['version','businessDate','source','view',...(Object.hasOwn(archive,'firstVersion')?['firstVersion']:[])]);
+   paperKeys(source,['receiptSha256','intentSha256','releaseSha256','observedAt','viewJsonSha256','productionWrites']);
+   for(const key of ['receiptSha256','intentSha256','releaseSha256','viewJsonSha256'])paperHex(source[key]);
+  }
   const observed=paperClock(source.observedAt),published=paperClock(original.updatedAt);
-  if(archive.version!=='reviewed-combo-history-archive-v1'||archive.businessDate!==businessDate||source.productionWrites!==0
+  if((!committed&&(archive.version!=='reviewed-combo-history-archive-v1'||source.productionWrites!==0))||archive.businessDate!==businessDate
    ||published.ns>observed.ns||observed.ns>updatedAt.ns||sha256Text(JSON.stringify(original))!==source.viewJsonSha256
    ||paperHex(original.publicationHash)!==paperHex(v.publicationHash)||paperHex(original.draftHash)!==paperHex(v.draftHash))throw Error('Reviewed combo archive binding');
   const saved=parseReviewedAnalysis(original,businessDate,published.text),originalRecords=list(original.records);
   if(originalRecords.length!==list(v.records).length||originalRecords.some((r,i)=>prdPaperPublicHash(r)!==prdPaperPublicHash(list(v.records)[i]))
-   ||!saved.combos.some(c=>c.legs.length)||saved.threeCombos.length
-   ||saved.combos.some(c=>c.legs.some(l=>paperClock(saved.records.find(r=>r.eventId===l.eventId)!.cutoffAt).ns<=observed.ns)))throw Error('Reviewed combo archive records');
+   ||(!saved.combos.some(c=>c.legs.length)&&!(committed&&saved.threeCombos.some(c=>c.legs.length)))||(!committed&&saved.threeCombos.length)
+   ||[...saved.combos,...saved.threeCombos].some(c=>c.legs.some(l=>paperClock(saved.records.find(r=>r.eventId===l.eventId)!.cutoffAt).ns<=observed.ns)))throw Error('Reviewed combo archive records');
   history.comboArchive={observedAt:observed.text,view:saved};
   if(Object.hasOwn(archive,'firstVersion')){
    const first=object(archive.firstVersion),provenance=object(first.source),{contentHash,...body}=first;
