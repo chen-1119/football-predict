@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const { createRepository, date, cursor, limit, validateIdentity } = require('../services/read-api/repository.cjs');
 const { createServer } = require('../services/read-api/server.cjs');
 const { createAuthorization, loopbackOrigin } = require('../services/read-api/authorization.cjs');
-const { loadFixtures } = require('../apps/web/lib/data.cjs');
+const { readOnlyPool } = require('../services/read-api/readOnlyPool.cjs');
+const { loadFixtures, loadMatch } = require('../apps/web/lib/data.cjs');
 const { rolePlan } = require('../services/tasks/roles.cjs');
 const { runTask } = require('../services/tasks/run.cjs');
 const { plan } = require('../services/release/componentPolicy.cjs');
@@ -35,6 +36,17 @@ test('read API uses one read-only committed database snapshot, with no raw point
   assert(!db.calls.some(row => /\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\b/i.test(row.sql)));
   assert(!db.calls.some(row => /SELECT payload\s+FROM/.test(row.sql)));
 });
+test('dedicated pool enforces read-only defaults before account or repository SQL and discards a failed connection', async () => {
+  const calls = [], released = [];
+  const client = { query: async sql => { calls.push(sql); return { rows: [] }; }, release: error => released.push(error) };
+  const wrapped = readOnlyPool({ connect: async () => client, end: async () => {} });
+  await wrapped.query('SELECT token_hash FROM football.account_sessions LIMIT 1');
+  assert.deepEqual(calls, ['SET default_transaction_read_only=on', 'SELECT token_hash FROM football.account_sessions LIMIT 1']);
+  assert.equal(released.length, 1);
+  const failed = new Error('read-only setup failed');
+  const broken = readOnlyPool({ connect: async () => ({ query: async () => { throw failed; }, release: error => released.push(error) }), end: async () => {} });
+  await assert.rejects(broken.connect(), failed); assert.equal(released.at(-1), failed);
+});
 test('pagination is bounded and pinned to the database generation and exact date', async () => {
   const db = pool([{ id: 'one', fixture: match }, { id: 'two', fixture: match }]);
   const repo = createRepository({ pool: db, now: () => NOW });
@@ -44,6 +56,31 @@ test('pagination is bounded and pinned to the database generation and exact date
   await assert.rejects(repo.fixtures({ date: '2026-10-12', cursor: page.nextCursor }), { code: 'INVALID_CURSOR' });
   const changed = Buffer.from(JSON.stringify({ generation: 'g-' + 'b'.repeat(64), date: null, id: 'one' })).toString('base64url');
   await assert.rejects(repo.fixtures({ cursor: changed }), { code: 'CURSOR_GENERATION_CHANGED' });
+});
+test('every stored provider fixture link resolves its exact detail without granting a suffix alias', async t => {
+  for (const prefix of ['sporttery', 'fivehundred']) {
+    const fixture = { ...match, id: prefix + '_2041866' };
+    const db = pool();
+    const connect = db.connect;
+    db.connect = async () => {
+      const client = await connect(), query = client.query.bind(client);
+      return { ...client, query: async (sql, args) => /WHERE match_id=\$1/.test(sql)
+        ? { rows: args[0] === fixture.id ? [{ fixture }] : [] } : query(sql, args) };
+    };
+    const api = createServer({ repository: createRepository({ pool: db, now: () => NOW }) });
+    await new Promise(resolve => api.listen(0, '127.0.0.1', resolve));
+    t.after(() => new Promise(resolve => { api.close(resolve); api.closeAllConnections(); }));
+    const base = 'http://127.0.0.1:' + api.address().port;
+    const detail = await fetch(base + '/api/v2/matches/' + fixture.id);
+    assert.equal(detail.status, 200); assert.equal((await detail.json()).match.id, fixture.id);
+    const alternate = (prefix === 'sporttery' ? 'fivehundred' : 'sporttery') + '_2041866';
+    assert.equal((await fetch(base + '/api/v2/matches/' + alternate)).status, 404);
+    const value = await loadMatch(fixture.id, { fetchImpl: async url => fetch(base + new URL(url).pathname) });
+    assert.equal(value.match.id, fixture.id);
+    const wrongIdentity = { ok: true, storage: 'postgres', match: { ...fixture, id: alternate } };
+    assert.equal(await loadMatch(fixture.id, { fetchImpl: async () => new Response(JSON.stringify(wrongIdentity), { headers: { 'content-type': 'application/json' } }) }), null);
+  }
+  await assert.rejects(createRepository({ pool: pool(), now: () => NOW }).match('fivehundred_2041867'), { code: 'FIXTURE_IDENTITY_MISMATCH' });
 });
 test('an unavailable projection cannot be replaced with files or an empty success response', async () => {
   const db = pool([], Object.assign(new Error('failed source'), { code: '57014' }));

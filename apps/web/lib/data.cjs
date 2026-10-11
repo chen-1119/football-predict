@@ -46,13 +46,13 @@ async function loadFixtures(query = {}, { fetchImpl = fetch, now = Date.now } = 
     return { ok: false, matches: [], availability: 'unavailable', stale: true };
   }
 }
-async function loadMatch(id) {
-  if (!/^sporttery_[1-9]\d{0,14}$/.test(id)) return null;
+async function loadMatch(id, { fetchImpl = fetch } = {}) {
+  if (!/^(?:sporttery|fivehundred)_\d{1,20}$/.test(id)) return null;
   try {
-    const response = await fetch(origin() + '/api/v2/matches/' + id, { cache: 'no-store', redirect: 'error', headers: headers(), signal: AbortSignal.timeout(7000) });
+    const response = await fetchImpl(origin() + '/api/v2/matches/' + id, { cache: 'no-store', redirect: 'error', headers: headers(), signal: AbortSignal.timeout(7000) });
     if (!response.ok) return null;
     const value = await body(response);
-    return value.ok === true && value.storage === 'postgres' ? value : null;
+    return value.ok === true && value.storage === 'postgres' && value.match?.id === id ? value : null;
   } catch { return null; }
 }
 async function loadRecommendations(cookie) {

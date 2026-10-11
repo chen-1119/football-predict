@@ -77,11 +77,14 @@ function createRepository({ pool, now = Date.now, readAuthority = authority.read
       });
     },
     async match(id) {
-      if (!/^sporttery_[1-9]\d{0,14}$/.test(id)) fail('INVALID_MATCH_ID');
+      if (!/^(?:sporttery|fivehundred)_\d{1,20}$/.test(id)) fail('INVALID_MATCH_ID');
       return snapshot(async client => {
         const rows = (await client.query(`SELECT ${DTO_SQL} AS fixture FROM football.match_snapshots
           WHERE match_id=$1 AND dataset IN ('current','history')
-          ORDER BY CASE dataset WHEN 'current' THEN 0 ELSE 1 END LIMIT 1`, [id])).rows;
+          ORDER BY CASE dataset WHEN 'current' THEN 0 ELSE 1 END, kickoff_time DESC LIMIT 1`, [id])).rows;
+        // Links retain the stored provider ID. A matching numeric suffix is
+        // not an alias grant and must never substitute another event row.
+        if (rows.length > 1 || (rows[0] && rows[0].fixture?.id !== id)) fail('FIXTURE_IDENTITY_MISMATCH');
         return { ok: true, match: rows[0] ? publicFixture(rows[0].fixture, now()) : null };
       });
     },

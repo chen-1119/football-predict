@@ -24,7 +24,7 @@ function createServer({ repository, authorize = async () => false, maxConcurrent
       else if (url.pathname === '/api/v2/fixtures') {
         for (const key of url.searchParams.keys()) if (!['date', 'limit', 'cursor'].includes(key) || url.searchParams.getAll(key).length !== 1) return send(res, 400, { ok: false, error: 'INVALID_QUERY' });
         result = await repository.fixtures(Object.fromEntries(url.searchParams));
-      } else if (/^\/api\/v2\/matches\/sporttery_[1-9]\d*$/.test(url.pathname)) {
+      } else if (/^\/api\/v2\/matches\/(?:sporttery|fivehundred)_\d{1,20}$/.test(url.pathname)) {
         if (url.search) return send(res, 400, { ok: false, error: 'INVALID_QUERY' });
         result = await repository.match(url.pathname.split('/').at(-1));
         if (!result.match) return send(res, 404, result);
@@ -42,7 +42,7 @@ function createServer({ repository, authorize = async () => false, maxConcurrent
 }
 async function main() {
   const { createPostgresPool } = require('../../server/postgresStore.cjs');
-  const pool = createPostgresPool({ max: 4, min: 0, applicationName: 'football-separated-read-api', queryTimeoutMillis: 6000 });
+  const pool = require('./readOnlyPool.cjs').readOnlyPool(createPostgresPool({ max: 4, min: 0, applicationName: 'football-separated-read-api', queryTimeoutMillis: 6000 }));
   const { createRepository } = require('./repository.cjs');
   const { createAuthorization } = require('./authorization.cjs');
   const server = createServer({ repository: createRepository({ pool }), authorize: createAuthorization({ pool }) });
