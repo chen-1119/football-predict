@@ -30,6 +30,7 @@ async function loadFixtures(query = {}, { fetchImpl = fetch, now = Date.now } = 
   const params = new URLSearchParams(query), key = params.toString();
   try {
     const response = await fetchImpl(origin() + '/api/v2/fixtures' + (key ? '?' + key : ''), { cache: 'no-store', redirect: 'error', headers: headers(), signal: AbortSignal.timeout(7000) });
+    if (response.status === 409) return { ok: false, matches: [], availability: 'generation-changed', stale: true };
     if (!response.ok) throw new Error('API_UNAVAILABLE');
     const value = await body(response);
     if (value.ok !== true || !Array.isArray(value.matches) || value.matches.length > 100 || value.storage !== 'postgres' || !value.publication?.generationId) throw new Error('API_CONTRACT');

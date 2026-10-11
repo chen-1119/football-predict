@@ -109,6 +109,13 @@ test('blocked or malformed account session cannot fall back to a valid shared co
   assert.equal(bridgeCalls, 0);
   assert.equal(await auth({ headers: {} }), true); assert.equal(bridgeCalls, 1);
 });
+test('a changed generation requires restarting pagination and cannot reuse a cached cursor page', async () => {
+  const value = { ok: true, matches: [match], storage: 'postgres', publication: { generationId: 'g-' + digest } };
+  const query = { cursor: 'old-cursor-page' };
+  await loadFixtures(query, { fetchImpl: async () => new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } }), now: () => NOW });
+  const changed = await loadFixtures(query, { fetchImpl: async () => new Response('{"error":"CURSOR_GENERATION_CHANGED"}', { status: 409, headers: { 'content-type': 'application/json' } }), now: () => NOW + 1 });
+  assert.equal(changed.availability, 'generation-changed'); assert.equal(changed.ok, false); assert.equal(changed.matches.length, 0);
+});
 test('auth bridge does not send credentials to arbitrary origins', () => {
   for (const value of ['https://example.com', 'http://user:pw@127.0.0.1:8788', 'http://127.0.0.1:8788/path', 'http://127.0.0.1:8788?x=1']) assert.throws(() => loopbackOrigin(value));
   assert.equal(loopbackOrigin('http://127.0.0.1:8788'), 'http://127.0.0.1:8788');

@@ -10,6 +10,7 @@ export default async function Home({ searchParams }) {
   return <><div className="heading"><div><p className="eyebrow">中国体彩竞彩足球</p><h1>比赛赛程</h1></div><span>{today} 北京时间</span></div>
     {result.stale && <p className="notice">{result.availability === 'last-committed-snapshot' ? '更新暂时未完成，保留上次已读取的赛程。下列赔率已过期。' : result.ok ? '赛程批次较旧，请留意每场报价时间和停售时间。' : '赛程读取暂时不可用，请查看原站。'}</p>}
     {result.publication && <p className="updated">赛程入库时间：{time(result.publication.committedAt)} · 本页读取：{time(result.observedAt)}</p>}
+    {result.availability === 'generation-changed' && <p className="notice">赛程批次已经更新。<Link href={query.date ? '/?date=' + encodeURIComponent(query.date) : '/'}>返回第一页读取新批次</Link>，避免混用两批数据。</p>}
     <section className="fixtures" aria-label="比赛赛程">{result.matches.map(match => <article className="fixture" key={match.id}>
       <div className="fixture-meta"><span>{match.matchNo || '编号待核'} · {match.businessDate || '竞彩日待核'}</span><span>{match.leagueName}</span></div>
       <h2><Link href={'/matches/' + match.id}>{match.homeTeamName} <span className="versus">vs</span> {match.awayTeamName}</Link></h2>
