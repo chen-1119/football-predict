@@ -791,6 +791,8 @@ const requiredEntries = [
   "scripts/verifyQaAccessOperator.cjs",
   "scripts/verifyReleaseTransactionSafety.cjs",
   "scripts/releaseWorkerPreflight.cjs",
+  "scripts/releaseWorkerCodeRepair.cjs",
+  "scripts/verifyReleaseWorkerCodeRepair.cjs",
   "scripts/runReleaseWorkerPreflight.cjs",
   "scripts/releaseWorkspaceFreshness.cjs",
   "scripts/verifyReleaseWorkspaceFreshness.cjs",
