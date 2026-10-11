@@ -2,7 +2,7 @@
 
 const { createPostgresPool } = require("../server/postgresStore.cjs");
 const { publicationIdentityFromMeta } = require("../server/postgresProjectionStore.cjs");
-const { sqlitePublicationMatches, resolveServingPublicationForSqliteIdentity,
+const { sqlitePublicationMatches, resolveCommittedPostgresPublication,
   acquireGenerationReadLease } = require("../server/dataGenerationBundle.cjs");
 
 // Sort only narrow keys. Sorting payload::text detoasts the retained training
@@ -68,8 +68,8 @@ async function readPostgresModelInput(options = {}) {
     if (options.publicationIdentity && !sqlitePublicationMatches(identity, options.publicationIdentity)) {
       throw new Error("model input PostgreSQL publication mismatch");
     }
-    const publication = resolveServingPublicationForSqliteIdentity({ storeDir: options.storeDir,
-      publicDataDir: options.publicDataDir, sqliteIdentity: identity, allowPrevious: true });
+    const publication = resolveCommittedPostgresPublication({ storeDir: options.storeDir,
+      publicDataDir: options.publicDataDir, postgresIdentity: identity });
     if (!publication.context || !sqlitePublicationMatches(publication.identity, identity)) {
       throw new Error("model input immutable generation mismatch");
     }

@@ -4,6 +4,7 @@ const { parentPort, workerData } = require("node:worker_threads");
 const {
   acquireGenerationReadLease,
   resolveServingPublication,
+  resolveCommittedPostgresPublication,
   resolveServingPublicationForSqliteIdentity,
   sqlitePublicationMatches,
 } = require("./dataGenerationBundle.cjs");
@@ -41,16 +42,12 @@ const resolvePrimaryPairedPublication = async () => {
         && sqlitePublicationMatches(postgres.publication, workerData.cachedPostgresIdentity)) {
         return null;
       }
-      // The pairing helper compares immutable publication identities. It is
-      // intentionally storage-agnostic even though its historical name says
-      // SQLite; using the PostgreSQL identity here keeps the application on
-      // the previous complete generation until the production primary read
-      // projection has committed the same generation.
-      return resolveServingPublicationForSqliteIdentity({
+      // Read only the generation named by the committed primary projection,
+      // even if more than two raw file generations have since been published.
+      return resolveCommittedPostgresPublication({
         storeDir: workerData.storeDir,
         publicDataDir: workerData.publicDataDir,
-        sqliteIdentity: postgres.publication,
-        allowPrevious: true,
+        postgresIdentity: postgres.publication,
       });
     } finally {
       await pool.end();

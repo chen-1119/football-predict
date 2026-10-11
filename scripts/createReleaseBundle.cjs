@@ -887,6 +887,7 @@ const requiredEntries = [
   "scripts/releaseDataPlanePolicy.cjs",
   "scripts/nativeCodeReleaseDataPlane.cjs",
   "tests/code-data-release.test.cjs",
+  "tests/postgres-committed-publication.test.cjs",
   "scripts/verifyCodeReleaseShell.cjs",
   "scripts/codeReleaseAcceptance.cjs",
   "scripts/verifyStagedCodeRelease.cjs",

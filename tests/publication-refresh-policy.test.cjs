@@ -30,7 +30,7 @@ test('read failure marker survives the frontend fetch error and marks a cold pag
  const fs=require('fs'),vm=require('vm'),source=fs.readFileSync(require('path').join(__dirname,'../src/components/Navbar.tsx'),'utf8');
  const start=source.indexOf('  const publicationTransition = [');const end=source.indexOf('  const dataStatusLabel =',start);
  const logic=source.slice(start,end).replace('const dataStatus: DataStatus','const dataStatus');
- const evaluate=(dataSync,currentUser={id:'qa'})=>vm.runInNewContext(logic+'; dataStatus',{dataSync,currentUser});
+ const evaluate=(dataSync,currentUser={id:'qa'})=>vm.runInNewContext(logic+'; dataStatus',{dataSync,currentUser,isAccessVerified:Boolean(currentUser)});
  assert.equal(evaluate({error:'HTTP 503 [POSTGRES_PUBLICATION_TRANSITION]',currentLoaded:false,currentCount:0}),'syncing');
  assert.equal(evaluate({error:'HTTP 503 [POSTGRES_REQUIRED_READ_UNAVAILABLE]',currentLoaded:false,currentCount:0}),'error');
  assert.equal(evaluate({error:'HTTP 503 [POSTGRES_PUBLICATION_TRANSITION]'},null),'locked');
@@ -43,7 +43,7 @@ test('resolver polls only identity before commit, then validates the advanced ge
   const message=await new Promise((resolve,reject)=>{
    vm.runInNewContext(code,{require(name){
     if(name==='node:worker_threads')return {parentPort:{postMessage:resolve},workerData:{requirePostgresPair:true,cachedPostgresIdentity:cached,ownerPid:1}};
-    if(name==='./dataGenerationBundle.cjs')return {sqlitePublicationMatches:(a,b)=>a.generationId===b.generationId&&a.manifestHash===b.manifestHash,resolveServingPublicationForSqliteIdentity:()=>{validations++;return {identity:current,context:{generationId:current.generationId}};},acquireGenerationReadLease:()=>{leases++;return {path:'temporary-test-lease'};}};
+    if(name==='./dataGenerationBundle.cjs')return {sqlitePublicationMatches:(a,b)=>a.generationId===b.generationId&&a.manifestHash===b.manifestHash,resolveCommittedPostgresPublication:()=>{validations++;return {identity:current,context:{generationId:current.generationId}};},acquireGenerationReadLease:()=>{leases++;return {path:'temporary-test-lease'};}};
     if(name==='./sqliteStore.cjs')return {};
     if(name==='./postgresStore.cjs')return {postgresEnabled:()=>true,createPostgresPool:()=>({end:async()=>{}})};
     if(name==='./postgresProjectionStore.cjs')return {readPostgresPublicationIdentity:async()=>({available:true,publication:current})};

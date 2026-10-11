@@ -1351,6 +1351,69 @@ const sqlitePublicationMatches = (sqliteIdentity, publicationIdentityInput) => {
     && sqliteIdentity?.committedAt === expected.committedAt;
 };
 
+// PostgreSQL projection_meta is the committed read authority. Raw file
+// publishers may advance more than once before the projection transaction
+// commits; current.json / previous.json therefore cannot identify that read
+// snapshot. Resolve only its exact retained immutable generation. The commit
+// clock comes from the same PostgreSQL metadata read, not a raw pointer clock.
+const resolveCommittedPostgresPublication = ({
+  storeDir,
+  publicDataDir,
+  postgresIdentity,
+  validatePayloadSemantics = true,
+}) => {
+  if (typeof validatePayloadSemantics !== "boolean") {
+    fail("PUBLICATION_OPTION_INVALID", "validatePayloadSemantics must be boolean");
+  }
+  if (postgresIdentity?.mode !== "active-generation"
+      || !GENERATION_ID_PATTERN.test(String(postgresIdentity.generationId || ""))
+      || !/^[a-f0-9]{64}$/.test(String(postgresIdentity.manifestHash || ""))
+      || postgresIdentity.generationId !== `g-${postgresIdentity.manifestHash}`
+      || typeof postgresIdentity.sourceCycleId !== "string"
+      || !postgresIdentity.sourceCycleId.trim()
+      || postgresIdentity.sourceCycleId.length > 2048
+      || typeof postgresIdentity.committedAt !== "string"
+      || !Number.isFinite(Date.parse(postgresIdentity.committedAt))
+      || new Date(postgresIdentity.committedAt).toISOString() !== postgresIdentity.committedAt) {
+    fail("POSTGRES_PUBLICATION_IDENTITY_INVALID", "committed PostgreSQL publication identity is incomplete or invalid");
+  }
+  const paths = storePaths(storeDir);
+  assertCleanupRootsSafe(paths);
+  const generationDir = path.join(paths.generationsDir, postgresIdentity.generationId);
+  if (!safeGenerationCandidate({ generationsDir: paths.generationsDir,
+    candidatePath: generationDir, generationId: postgresIdentity.generationId })) {
+    fail("POSTGRES_PUBLICATION_GENERATION_UNSAFE", "committed PostgreSQL generation is absent or unsafe");
+  }
+  const manifestPath = path.join(generationDir, "manifest.json");
+  const stat = fs.lstatSync(manifestPath);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > 2 * 1024 * 1024) {
+    fail("POSTGRES_PUBLICATION_MANIFEST_UNSAFE", "committed PostgreSQL manifest is unsafe");
+  }
+  const resolved = resolveGeneration({ storeDir, generationId: postgresIdentity.generationId,
+    manifestHash: postgresIdentity.manifestHash, sourceCycleId: postgresIdentity.sourceCycleId });
+  // Every payload SHA is verified above. Also reject linked parent directories;
+  // an exact hash outside the immutable store is not a retained generation.
+  for (const entry of resolved.manifest.files) {
+    for (let directory = path.dirname(path.join(generationDir, entry.path));
+      directory !== generationDir; directory = path.dirname(directory)) {
+      const parent = fs.lstatSync(directory);
+      if (!parent.isDirectory() || parent.isSymbolicLink()
+          || !sameResolvedPath(fs.realpathSync(directory), directory)) {
+        fail("POSTGRES_PUBLICATION_GENERATION_UNSAFE", "committed PostgreSQL payload directory is unsafe");
+      }
+    }
+  }
+  const pointer = Object.freeze({ schemaVersion: 1,
+    generationId: postgresIdentity.generationId, manifestHash: postgresIdentity.manifestHash,
+    sourceCycleId: postgresIdentity.sourceCycleId, committedAt: postgresIdentity.committedAt });
+  const context = Object.freeze({ ...resolved, pointer, pointerPath: null });
+  if (validatePayloadSemantics) validateGenerationBundle(context);
+  return Object.freeze({ mode: "active-generation", context, publicDataDir: path.resolve(publicDataDir),
+    identity: publicationIdentity({ mode: "active-generation", context }),
+    pairing: Object.freeze({ version: "postgres-committed-publication-pair-v1",
+      reason: "exact-committed-postgres-generation", clockAuthority: "postgres-projection-meta" }) });
+};
+
 const resolveServingPublicationForSqliteIdentity = ({
   storeDir,
   publicDataDir,
@@ -1417,6 +1480,7 @@ module.exports = {
   readPublicationJson,
   resolveActivePublication,
   resolveServingPublication,
+  resolveCommittedPostgresPublication,
   resolveServingPublicationForSqliteIdentity,
   safeGenerationCandidate,
   selectFastResultReceiptDuringPairTransition,
