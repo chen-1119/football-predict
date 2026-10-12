@@ -45,6 +45,17 @@ TLS, frozen/ACK and natural synchronization verification. It is not proof that
 a new database source batch has already been committed.
 # Retained final image after a verified recovery OOM
 
+The incident serving-core observer is a separately signed read-only tool. It
+uses the original native health assessment, unchanged schema checks, an actual
+readonly repeatable-read PG session, complete immutable generation validation
+and the exact signed repair pair under the pointer lock. It retains the ordinary
+worker observation and its active-raw-versus-committed-PG blockers as failed;
+only those exact signed tuple differences may be pending at code admission.
+Neither worker readiness, new source freshness nor natural cycle acceptance is
+promoted. Candidate core admission remains the original full verifier. A new
+successful natural cycle and real PG advancement are still required for data
+update delivery and the independent full-runtime gate.
+
 The recovery coordinator can prepare a new isolated build from the exact final
 tree recorded by the original recovery transaction, only after its independently
 signed previous continuation unit reports `oom-kill`, has no PID or remaining
