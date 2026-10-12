@@ -88,4 +88,4 @@ function validateFirstVersion(first,history,asOf){
  }
  return true;
 }
-module.exports={restoreArchivedCombos,validateArchive,validateFirstVersion};
+module.exports={restoreArchivedCombos,validateArchive,validateFirstVersion,exactProduct};

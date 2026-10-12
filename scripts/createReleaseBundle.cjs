@@ -267,6 +267,7 @@ const excludes = [
   "logs",
   "coverage",
   ".vite",
+  ".next",
   "*.log",
   ...runtimeMutableSourceEntries,
   ...sensitiveTarExcludes
@@ -441,6 +442,23 @@ const blockedEntries = entries.filter((entry) => {
     || runtimeMutableSourceEntries.includes(normalized);
 });
 const requiredEntries = [
+  "services/read-api/server.cjs",
+  "services/read-api/repository.cjs",
+  "services/read-api/authorization.cjs",
+  "services/tasks/run.cjs",
+  "services/release/writerHandoverTransaction.cjs",
+  "tests/writer-handover-transaction.test.cjs",
+  "services/tasks/roles.cjs",
+  "services/tasks/team.cjs",
+  "services/tasks/settlement.cjs",
+  "services/release/componentPolicy.cjs",
+  "scripts/buildServiceArtifact.cjs",
+    "scripts/buildSeparatedWeb.cjs",
+  "scripts/planServiceRelease.cjs",
+  "tests/service-separation-v1.test.cjs",
+    "services/recommendation/comboArchive.cjs",
+    "services/tasks/combo-archive.cjs",
+    "tests/committed-combo-archive.test.cjs",
   "tests/emergency-code-activation.test.cjs",
   "tests/code-cutover-archive-horizon.test.cjs",
   "src/services/prematchV3FeedbackLoop.cjs",
