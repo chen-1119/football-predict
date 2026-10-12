@@ -147,6 +147,17 @@ async function verifyFrontendReleaseConsumers() {
       });
       assert.equal(mismatch.ok, false); assert.deepEqual(mismatch.calls, ["signature", "actual-inventory"]);
       assert.match(mismatch.error, /actual-archive-source-evidence-mismatch/);
+      const historicalGrant = path.join(source, "deploy/light-server/code-release-activation-authorization.json");
+      fs.writeFileSync(historicalGrant, JSON.stringify({ expiresAt: "2000-01-01T00:00:00.000Z", historical: true }));
+      const inertTar = spawnSync("tar", ["-czf", bundlePath, "-C", source, "./src", "./deploy"], { encoding: "utf8", windowsHide: true });
+      assert.equal(inertTar.status, 0, inertTar.stderr);
+      const inertEvidence = await archive.captureReleaseArchiveSourceEvidence(bundlePath);
+      Object.assign(base, { sha256: inertEvidence.archiveSha256, bytes: inertEvidence.archiveBytes,
+        entries: inertEvidence.archiveEntryCount, archiveSourceEvidence: inertEvidence });
+      base.frontendAuthorization.candidateInventorySha256 = inertEvidence.inventorySha256;
+      fs.writeFileSync(bundlePath + ".sha256", inertEvidence.archiveSha256 + "\n");
+      assertWindowRoute("UI retains historical full grant inertly and verifies all bytes", await route(), true, ["signature", "actual-inventory"]);
+      assertWindowRoute("non-native full cannot execute the historical grant", await route(asFull), false, ["signature"], /emergency activation requires signed native code release/);
     } finally {
       const current = fs.lstatSync(fixture); assert.equal(current.dev, original.dev); assert.equal(current.ino, original.ino);
       assert.equal(current.isSymbolicLink(), false); assert.equal(fs.realpathSync(fixture), fixture); fs.rmSync(fixture, { recursive: true });

@@ -438,7 +438,9 @@ if (!frontendOnly && bundleInspection.entries.some(entry => entry.replace(/^\.\/
 // an emergency release. The native allocator must still prove code-only.
 let emergencyCodeAuthorization = null;
 const emergencyAuthorizationEntry = "deploy/light-server/code-release-activation-authorization.json";
-if (bundleInspection.entries.some(entry => entry.replace(/^\.\//, "") === emergencyAuthorizationEntry)) {
+// A UI source archive retains the completed full baseline's inert members.
+// Only a full activation can execute an emergency activation instruction.
+if (!frontendOnly && bundleInspection.entries.some(entry => entry.replace(/^\.\//, "") === emergencyAuthorizationEntry)) {
   if (!nativeFullRelease || frontendOnly) fail("emergency activation requires signed native code release");
   const authorization = inspectBundleEntryBytes(bundlePath, emergencyAuthorizationEntry);
   if (!authorization.ok || authorization.bytes > 4096) fail("signed emergency activation authorization unavailable");
