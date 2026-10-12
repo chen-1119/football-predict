@@ -33,6 +33,12 @@ function verifyReleaseWorkerCodeRepair() {
   const writerWorker={...pairWorker,status:{...pairWorker.status,lastCycle:{...pairWorker.status.lastCycle,error:'npm run postgres:sync exited with 1'}}};
   const writerExtra={...pairExtra,files:writerAuth.files.map(r=>({path:r.path,sha256:r.beforeSha256})),journal:[{...pairExtra.journal[0],message:'  "error": "Query read timeout",'}]};
   check(()=>{const r=run(writerAuth,writerWorker,writerExtra);assert.equal(r.ok,true);assert.equal(r.workerHealthy,false);assert.equal(r.readyToCutover,false);assert.equal(r.productionWrites,0);});
+  check(()=>{const recovered={...writerWorker,status:{...writerWorker.status,lastCycle:{...writerWorker.status.lastCycle,ok:true}}};
+    const selection=p.selectWorkerCodeRepairPreparation(writerAuth,recovered,()=>{throw Error('inactive incident must not be read');});
+    assert.equal(selection.useRepair,false);assert.equal(selection.report.ok,true);assert.equal(selection.report.readyToCutover,false);});
+  check(()=>{const selection=p.selectWorkerCodeRepairPreparation(writerAuth,writerWorker,()=>writerExtra);assert.equal(selection.useRepair,true);assert.equal(selection.report.workerHealthy,false);});
+  check(()=>{const selection=p.selectWorkerCodeRepairPreparation(writerAuth,writerWorker,()=>({...writerExtra,journal:[]}));assert.equal(selection.useRepair,false);assert.equal(selection.report.ok,false);});
+  check(()=>{const selection=p.selectWorkerCodeRepairPreparation(writerAuth,{...writerWorker,processMatches:false},()=>writerExtra);assert.equal(selection.useRepair,false);assert.equal(selection.report.ok,false);});
   for(const key of ['rawCurrent','rawPrevious'])check(()=>{const x=JSON.parse(JSON.stringify(writerAuth));x.publication.committed={...x.publication[key]};const e={...writerExtra,publication:x.publication};assert.equal(run(x,writerWorker,e).ok,true);x.publication.committed.sourceCycleId='different';assert.equal(run(x,writerWorker,e).ok,false);});
   for(const change of [e=>e.journal[0].message='fetch failed',e=>e.journal[0].timestampMs=now-120000,e=>e.files[0].sha256=hex(8),e=>e.publication={...e.publication,databaseOid:'other'},e=>e.recoveryPending=true])
     check(()=>{const e=JSON.parse(JSON.stringify(writerExtra));change(e);assert.equal(run(writerAuth,writerWorker,e).ok,false);});
@@ -93,11 +99,11 @@ function verifyReleaseWorkerCodeRepair() {
   check(()=>{
     const source=p.buildWorkerCodeRepairProbe({...auth,createdAt:new Date(Date.now()-1000).toISOString(),expiresAt:new Date(Date.now()+3600000).toISOString()});
     new vm.Script(source);assert(!source.includes('systemctl\",[\"start'));assert(source.includes('repairPreparationAllowed'));
-    const original=p.buildWorkerCodeRepairProbe.toString();assert(original.includes('base.ok?base:'));
+    const original=p.buildWorkerCodeRepairProbe.toString();assert(original.includes('selectWorkerCodeRepairPreparation'));
   });
   // Exercise the actual serialized collector/evaluator in the same VM context
   // as the native entry. fs.readdirSync returns a host-realm Array here.
-  for(const variant of ['exact','extra-migration','no-journal','writer-exact','writer-aligned','snapshot-exact','snapshot-aligned']) check(()=>{
+  for(const variant of ['exact','extra-migration','no-journal','writer-exact','writer-aligned','writer-recovered','snapshot-exact','snapshot-aligned']) check(()=>{
     const crypto=require('node:crypto'), now=Date.now(), hexHash=b=>crypto.createHash('sha256').update(b).digest('hex');
     const start=new Date(now-60000).toISOString(),end=new Date(now-2000).toISOString();
     const localAuth=JSON.parse(JSON.stringify(variant.startsWith('writer')?writerAuth:variant.startsWith('snapshot')?snapshotAuth:auth));
@@ -107,6 +113,7 @@ function verifyReleaseWorkerCodeRepair() {
     for(const row of localAuth.dataContract){const b=Buffer.from('unchanged:'+row.path);files.set('/opt/football-predict/'+row.path,b);row.sha256=hexHash(b);}
     for(const name of ['.release-bundle-sha256','.release-live-complete'])files.set('/opt/football-predict/'+name,Buffer.from(localAuth.baseRuntimeSha256+'\n'));
     const status={pid:42,checkedAt:new Date(now-1000).toISOString(),ok:false,phase:'failed',lastCycle:{ok:false,phase:'official-result-failed',startedAt:start,finishedAt:end,errorCode:'SYNC_WORKER_COMMAND_FAILED',error:variant.startsWith('writer')?'npm run postgres:sync exited with 1':variant.startsWith('snapshot')?'npm run datastore:generation exited with 1':'node scripts/syncData.cjs exited with 1'}};
+    if(variant==='writer-recovered'){status.ok=true;status.phase='official-result';status.lastCycle.ok=true;}
     if(localAuth.publication)for(const name of ['current','previous'])files.set('/var/lib/football-predict/data-generations/'+name+'.json',Buffer.from(JSON.stringify({schemaVersion:1,...localAuth.publication[name==='current'?'rawCurrent':'rawPrevious']})));
     files.set('/var/lib/football-predict/sync-worker-status.json',Buffer.from(JSON.stringify(status)));
     files.set('/proc/42/cmdline',Buffer.from('/opt/node/bin/node\0/opt/football-predict/scripts/runSyncWorker.cjs\0'));
@@ -117,6 +124,7 @@ function verifyReleaseWorkerCodeRepair() {
       readdirSync:()=>variant==='extra-migration'?['001_core.sql','002_unknown.sql']:['001_core.sql']};
     const fixtureChild={execFileSync:(cmd,args)=>{
       if(cmd==='systemctl')return 'ActiveState=active\nMainPID=42\nExecMainStartTimestamp='+new Date(now-3600000).toUTCString()+'\n';
+      assert.notEqual(variant,'writer-recovered','healthy native probe must not collect the old incident');
       if(cmd==='/usr/sbin/runuser'){const c=localAuth.publication.committed;return JSON.stringify({databaseOid:localAuth.publication.databaseOid,readOnly:'on',meta:{data_publication_mode:c.mode,data_generation_id:c.generationId,manifest_hash:c.manifestHash,data_generation_source_cycle_id:c.sourceCycleId,committed_at:c.committedAt}});}
       assert.equal(cmd,'/usr/bin/journalctl');assert(args.includes('--lines=4'));
       return variant==='no-journal'?'':JSON.stringify({_SYSTEMD_UNIT:'football-sync-worker.service',_PID:'43',MESSAGE:variant.startsWith('writer')?'  "error": "Query read timeout",':variant.startsWith('snapshot')?'  "error": "source file size changed before staging: model-evaluation.json",':'Invalid string length',__REALTIME_TIMESTAMP:String((now-2050)*1000)})+'\n';
@@ -126,7 +134,7 @@ function verifyReleaseWorkerCodeRepair() {
     new vm.Script(p.buildWorkerCodeRepairProbe(localAuth)).runInNewContext({require:fixtureRequire,process:fixtureProcess,console:{log:line=>output.push(line)},Date});
     assert.equal(output.length,1);const report=JSON.parse(output[0]);
     const accepted=!['extra-migration','no-journal'].includes(variant);
-    assert.equal(report.ok,accepted,JSON.stringify(report));assert.equal(report.workerHealthy,false);assert.equal(report.readyToCutover,false);assert.equal(report.productionWrites,0);
+    assert.equal(report.ok,accepted,JSON.stringify(report));if(variant!=='writer-recovered')assert.equal(report.workerHealthy,false);assert.equal(report.readyToCutover,false);assert.equal(report.productionWrites,0);
     assert.equal(fixtureProcess.exitCode,accepted?0:1);
   });
   check(()=>{

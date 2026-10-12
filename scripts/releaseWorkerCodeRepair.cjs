@@ -110,6 +110,16 @@ function evaluateWorkerCodeRepair(auth, worker, observed) {
   return result;
 }
 
+function selectWorkerCodeRepairPreparation(auth, worker, readIncident) {
+  const base = evaluateWorkerPreflight(worker);
+  // Once a genuine publication has recovered, use the unchanged ordinary
+  // affinity route. An inactive incident must not pin its earlier PG batch.
+  if (base.ok) return { useRepair: false, report: base };
+  if (typeof readIncident !== 'function') throw new Error('incident observation reader required');
+  const report = evaluateWorkerCodeRepair(auth, worker, readIncident(auth, worker));
+  return { useRepair: report.ok && report.repairPreparationAllowed === true, report };
+}
+
 function collectWorkerCodeRepair(auth, worker) {
   const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
   const assert = require('node:assert/strict'), cp = require('node:child_process');
@@ -186,13 +196,13 @@ function candidateAuthorization(root, auth) {
 function buildWorkerCodeRepairProbe(auth) {
   validateWorkerCodeRepairAuthorization(auth, Date.now());
   return "'use strict';\nconst TARGETS="+JSON.stringify(TARGETS)+",PAIR_TARGETS="+JSON.stringify(PAIR_TARGETS)+",WRITER_TARGETS="+JSON.stringify(WRITER_TARGETS)+",SNAPSHOT_TARGETS="+JSON.stringify(SNAPSHOT_TARGETS)+",DATA_FILES="+JSON.stringify(DATA_FILES)+";\n"
-    + [evaluateWorkerPreflight,collectWorkerPreflight,validateRepairPublication,validateWorkerCodeRepairAuthorization,evaluateWorkerCodeRepair,collectWorkerCodeRepair].map(fn=>fn.toString()).join('\n')
-    + '\ntry {const auth='+JSON.stringify(auth)+';const worker=collectWorkerPreflight();const base=evaluateWorkerPreflight(worker);'
-    + 'const report=base.ok?base:evaluateWorkerCodeRepair(auth,worker,collectWorkerCodeRepair(auth,worker));console.log(JSON.stringify(report));if(!report.ok)process.exitCode=1;}'
+    + [evaluateWorkerPreflight,collectWorkerPreflight,validateRepairPublication,validateWorkerCodeRepairAuthorization,evaluateWorkerCodeRepair,collectWorkerCodeRepair,selectWorkerCodeRepairPreparation].map(fn=>fn.toString()).join('\n')
+    + '\ntry {const auth='+JSON.stringify(auth)+';const worker=collectWorkerPreflight();'
+    + 'const {report}=selectWorkerCodeRepairPreparation(auth,worker,collectWorkerCodeRepair);console.log(JSON.stringify(report));if(!report.ok)process.exitCode=1;}'
     + "catch {console.log(JSON.stringify({version:'worker-code-repair-preparation-v1',ok:false,workerHealthy:false,repairPreparationAllowed:false,blockers:['worker-code-repair-probe-unavailable'],readyToCutover:false,productionWrites:0}));process.exitCode=1;}";
 }
 
-module.exports={AUTH_ENTRY,TARGETS,PAIR_TARGETS,WRITER_TARGETS,SNAPSHOT_TARGETS,DATA_FILES,validateRepairPublication,validateWorkerCodeRepairAuthorization,evaluateWorkerCodeRepair,collectWorkerCodeRepair,candidateAuthorization,buildWorkerCodeRepairProbe};
+module.exports={AUTH_ENTRY,TARGETS,PAIR_TARGETS,WRITER_TARGETS,SNAPSHOT_TARGETS,DATA_FILES,validateRepairPublication,validateWorkerCodeRepairAuthorization,evaluateWorkerCodeRepair,selectWorkerCodeRepairPreparation,collectWorkerCodeRepair,candidateAuthorization,buildWorkerCodeRepairProbe};
 if(require.main===module) {
   try {
     if(process.argv.length!==3)throw Error('exact signed source root required');

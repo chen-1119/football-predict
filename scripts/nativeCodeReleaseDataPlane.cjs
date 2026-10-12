@@ -68,8 +68,12 @@ async function tryAllocate(sha, directory) {
   if (emergency) state.emergencyActivationAuthorizationHash = emergency.authorizationHash;
   const repairFile=path.join(candidateRoot,'deploy/light-server/worker-code-repair-authorization.json');
   if(fs.existsSync(repairFile)) {
-    const repair=require('./releaseWorkerCodeRepair.cjs').candidateAuthorization(candidateRoot,JSON.parse(fs.readFileSync(repairFile)));
-    if(['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4'].includes(repair.version)) {
+    const policy=require('./releaseWorkerCodeRepair.cjs');
+    const repair=policy.candidateAuthorization(candidateRoot,JSON.parse(fs.readFileSync(repairFile)));
+    const selection=policy.selectWorkerCodeRepairPreparation(repair,
+      require('./releaseWorkerPreflight.cjs').collectWorkerPreflight(),policy.collectWorkerCodeRepair);
+    assert.equal(selection.report.ok,true,'worker preparation changed before allocation');
+    if(selection.useRepair && ['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4'].includes(repair.version)) {
       assert.equal(repair.baseRuntimeSha256,state.oldSha);
       assert.equal(repair.publication.databaseOid,state.oldDatabaseOid);
       state.committedGenerationRepairAuthorizationHash=crypto.createHash('sha256').update(fs.readFileSync(repairFile)).digest('hex');
