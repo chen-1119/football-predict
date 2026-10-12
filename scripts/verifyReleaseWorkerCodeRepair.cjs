@@ -14,6 +14,42 @@ function verifyReleaseWorkerCodeRepair() {
     files:auth.files.map(row=>({path:row.path,sha256:row.beforeSha256})),dataContract:auth.dataContract,migrationNames:['001_core.sql'],
     journal:[{unit:'football-sync-worker.service',pid:'43',message:'Invalid string length',timestampMs:Date.parse('2026-10-11T10:14:59Z')}]};
   const run=(a=auth,w=observation,e=extra)=>p.evaluateWorkerCodeRepair(a,w,e);
+  const now=Date.now(), identity=(n,ago)=>({mode:'active-generation',generationId:'g-'+hex(n),manifestHash:hex(n),
+    sourceCycleId:'cycle-'+n,committedAt:new Date(now-ago).toISOString()});
+  const pairAuth={...auth,version:'worker-code-repair-v2',reason:'postgres-committed-generation-pairing',
+    createdAt:new Date(now-600000).toISOString(),expiresAt:new Date(now+3600000).toISOString(),
+    files:p.PAIR_TARGETS.map(name=>({path:name,beforeSha256:hex(2),afterSha256:hex(3)})),
+    publication:{databaseOid:'42',committed:identity(1,3600000),rawPrevious:identity(2,1800000),rawCurrent:identity(3,900000)}};
+  const pairWorker={...observation,checkedAt:new Date(now).toISOString(),serviceBefore:{...service,ExecMainStartTimestamp:new Date(now-7200000).toUTCString()},
+    serviceAfter:{...service,ExecMainStartTimestamp:new Date(now-7200000).toUTCString()},
+    status:{...observation.status,checkedAt:new Date(now-1000).toISOString(),lastCycle:{...observation.status.lastCycle,
+      startedAt:new Date(now-60000).toISOString(),finishedAt:new Date(now-2000).toISOString()}}};
+  const pairExtra={...extra,files:pairAuth.files.map(r=>({path:r.path,sha256:r.beforeSha256})),publication:pairAuth.publication,
+    journal:[{unit:'football-sync-worker.service',pid:'43',timestampMs:now-2050,
+      message:'SQLite publication identity matches neither the serving generation nor its immutable previous generation'}]};
+  check(()=>{const r=run(pairAuth,pairWorker,pairExtra);assert.equal(r.ok,true);assert.equal(r.workerHealthy,false);assert.equal(r.readyToCutover,false);});
+  for(const patch of [{publication:{...pairAuth.publication,databaseOid:'bad'}},
+    {publication:{...pairAuth.publication,committed:pairAuth.publication.rawCurrent}},
+    {publication:{...pairAuth.publication,rawPrevious:pairAuth.publication.rawCurrent}},
+    {publication:{...pairAuth.publication,rawCurrent:{...pairAuth.publication.rawCurrent,manifestHash:hex(6)}}},
+    {publication:{...pairAuth.publication,rawPrevious:{...pairAuth.publication.rawPrevious,committedAt:'not-a-clock'}}},
+    {files:pairAuth.files.slice(1)}, {reason:'ignore-database-divergence'}, {expiresAt:new Date(now-1).toISOString()}, {bypass:true}])
+    check(()=>assert.equal(run({...pairAuth,...patch},pairWorker,pairExtra).ok,false));
+  for(const patch of [{publication:{...pairAuth.publication,databaseOid:'43'}}, {journal:extra.journal}])
+    check(()=>assert.equal(run(pairAuth,pairWorker,{...pairExtra,...patch}).ok,false));
+  const code=require('./nativeCodeReleaseDataPlane.cjs');
+  const state={dataPlane:'code-only',oldSha:pairAuth.baseRuntimeSha256,oldDatabaseOid:'42',committedGenerationRepairAuthorizationHash:hex(9)};
+  const session={identity:pairAuth.publication.committed,publication:{context:{pointer:pairAuth.publication.committed},pairing:{reason:'exact-committed-postgres-generation'}}};
+  const admit=(s=state,se=session,c=pairAuth.publication.rawCurrent,pr=pairAuth.publication.rawPrevious,h=hex(9))=>
+    code.assertRepairPair(s,se,{pointer:c},{pointer:pr},pairAuth,h);
+  check(()=>{const r=admit();assert.equal(r.productionWrites,0);assert.equal(r.reason,'exact-signed-incident-pair');});
+  for(const s of [{...state,dataPlane:'database'},{...state,oldSha:hex(7)},{...state,oldDatabaseOid:'43'},
+    {...state,committedGenerationRepairAuthorizationHash:hex(7)}]) check(()=>assert.throws(()=>admit(s)));
+  check(()=>assert.throws(()=>admit(state,{...session,identity:pairAuth.publication.rawPrevious})));
+  check(()=>assert.throws(()=>admit(state,{...session,publication:{...session.publication,pairing:{reason:'previous'}}})));
+  check(()=>assert.throws(()=>admit(state,session,pairAuth.publication.rawPrevious)));
+  check(()=>assert.throws(()=>admit(state,session,pairAuth.publication.rawCurrent,pairAuth.publication.committed)));
+  check(()=>assert.throws(()=>admit(state,session,pairAuth.publication.rawCurrent,pairAuth.publication.rawPrevious,hex(6))));
   check(()=>{const r=run();assert.equal(r.ok,true);assert.equal(r.repairPreparationAllowed,true);assert.equal(r.workerHealthy,false);
     assert.equal(r.workerReport.ok,false);assert.deepEqual(r.workerReport.blockers,['worker-official-recovery-unproven']);assert.equal(r.readyToCutover,false);assert.equal(r.productionWrites,0);});
   check(()=>assert.equal(run(auth,{...observation,status:{...observation.status,ok:false,phase:'failed'}}).ok,true));

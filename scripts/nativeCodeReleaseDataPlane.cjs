@@ -66,6 +66,15 @@ async function tryAllocate(sha, directory) {
     accessSuffix: sha.slice(0, 12) + '_' + Math.floor(Date.now() / 1000),
     legacyBaselineSha256: null, key: crypto.randomBytes(32).toString('hex'), createdAt: new Date().toISOString() };
   if (emergency) state.emergencyActivationAuthorizationHash = emergency.authorizationHash;
+  const repairFile=path.join(candidateRoot,'deploy/light-server/worker-code-repair-authorization.json');
+  if(fs.existsSync(repairFile)) {
+    const repair=require('./releaseWorkerCodeRepair.cjs').candidateAuthorization(candidateRoot,JSON.parse(fs.readFileSync(repairFile)));
+    if(repair.version==='worker-code-repair-v2') {
+      assert.equal(repair.baseRuntimeSha256,state.oldSha);
+      assert.equal(repair.publication.databaseOid,state.oldDatabaseOid);
+      state.committedGenerationRepairAuthorizationHash=crypto.createHash('sha256').update(fs.readFileSync(repairFile)).digest('hex');
+    }
+  }
   state.schemaCatalogHash = (await verifySchema(state)).catalogHash;
   const capacity = require('./nativeReleaseCapacity.cjs').assertNativeReleaseCapacity('code-only');
   fs.mkdirSync(path.dirname(directory), { recursive: true, mode: 0o700 }); d.secureDirectory(path.dirname(directory));
@@ -115,6 +124,37 @@ function assertCodeCurrentPublication(session, storeDir = STORE) {
     error.code = 'NATIVE_CURRENT_PUBLICATION_PENDING';
     throw error;
   } finally { held.release(); }
+}
+function assertRepairPair(state, session, current, previous, authorization, authorizationHash) {
+  const repair=require('./releaseWorkerCodeRepair.cjs');
+  repair.validateWorkerCodeRepairAuthorization(authorization,Date.now());
+  assert.equal(authorization.version,'worker-code-repair-v2');
+  assert.equal(authorizationHash,state.committedGenerationRepairAuthorizationHash);
+  assert.equal(authorization.baseRuntimeSha256,state.oldSha);
+  assert.equal(authorization.publication.databaseOid,state.oldDatabaseOid);
+  assert.equal(state.dataPlane,'code-only');
+  const same=require('./codeReleaseAcceptance.cjs').assertSamePublication;
+  same(authorization.publication.committed,session.identity);
+  same(session.publication?.context?.pointer,session.identity);
+  assert.equal(session.publication?.pairing?.reason,'exact-committed-postgres-generation');
+  same(authorization.publication.rawCurrent,current.pointer);
+  same(authorization.publication.rawPrevious,previous.pointer);
+  return {version:'signed-committed-generation-repair-pair-v1',reason:'exact-signed-incident-pair',
+    committed:session.identity,rawCurrent:current.pointer,rawPrevious:previous.pointer,productionWrites:0};
+}
+function assertCodePublicationForState(state,session,storeDir=STORE,pointerLockHandle=null) {
+  if(!state.committedGenerationRepairAuthorizationHash) return assertCodeCurrentPublication(session,storeDir);
+  // Only the incident-bound, signed code-only route can retain the exact PG
+  // commit while unaccepted raw generations await repair. Neither pointer nor
+  // database metadata is changed; ordinary cutovers retain the affinity gate.
+  const file=path.join(__dirname,'../deploy/light-server/worker-code-repair-authorization.json');
+  const bytes=fs.readFileSync(file),authorization=JSON.parse(bytes),generations=require('../server/dataGenerationStore.cjs');
+  require('./releaseWorkerCodeRepair.cjs').candidateAuthorization(path.resolve(__dirname,'..'),authorization);
+  const held=pointerLockHandle||generations.acquirePointerCommitLock({lockDir:generations.storePaths(storeDir).pointerLockDir,timeoutMs:10000,staleMs:60000});
+  try {
+    return assertRepairPair(state,session,generations.resolveCurrentGeneration({storeDir}),
+      generations.resolvePreviousGeneration({storeDir}),authorization,crypto.createHash('sha256').update(bytes).digest('hex'));
+  } finally {if(!pointerLockHandle)held.release();}
 }
 // A reader briefly competes with the normal publisher/retention pointer lock.
 // Retry the complete read session, never reuse its old PostgreSQL snapshot.
@@ -270,12 +310,13 @@ async function captureLeaseInputOnce(state, directory) {
     await session.client.query("SET LOCAL statement_timeout = '8000ms'");
     const archiveRows = await session.client.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' ORDER BY match_id LIMIT 513");
     const archiveReadiness = await readCodeCutoverArchiveAuthority(session.client, archiveRows.rows.map(row => row.payload), Date.now());
-    assertCodeCurrentPublication(session);
+    const incidentPair=assertCodePublicationForState(state,session);
     // The lease and seed must describe the same PostgreSQL-bound immutable
     // generation. The mutable APP projection may have different cutoff clocks.
     driver().write(path.join(directory, 'code-lease-current.json'), current);
     const proof = { sha: state.sha, identity: session.identity,
-      currentHash: crypto.createHash('sha256').update(JSON.stringify(current)).digest('hex'), capturedAt: new Date().toISOString(), archiveReadiness };
+      currentHash: crypto.createHash('sha256').update(JSON.stringify(current)).digest('hex'), capturedAt: new Date().toISOString(), archiveReadiness,
+      ...(incidentPair?{incidentPair}:{}) };
     driver().write(path.join(directory, 'code-lease-input.json'), proof);
     return { ok: true, identity: session.identity, productionWrites: 0 };
   } finally { if (session) await session.close(); await source.end(); }
@@ -293,7 +334,7 @@ async function seed(state, directory) {
     require('./codeReleaseAcceptance.cjs').assertSamePublication(leaseInput.identity, session.identity);
     // A move after capture fails before candidate copying. The original lease
     // and its 900-second clock are never refreshed inside the paused phase.
-    assertCodeCurrentPublication(session);
+    assertCodePublicationForState(state,session);
     const store = path.join(directory, 'code-seed-store');
     const generation = await driver().copyGenerationAsService(session.identity, store);
     const proof = { ok: true, sha: state.sha, seed: true, dataPlane: 'code-only', store,
@@ -380,7 +421,7 @@ function retireSeed(sha) {
   d.write(path.join(directory, 'code-seed-retired.json'), { ...intent, removed: true, completedAt: new Date().toISOString() });
   return { ok: true, bytes, removed: true };
 }
-module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, assertCodeCurrentPublication, captureLeaseInput, retryLeaseRead, assertResultArchivesReady, assertCodeCutoverArchivesReady, readCodeCutoverArchiveAuthority, assertCodeArchiveCoverageClock, verifyCodeCutoverCompletionClock };
+module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, assertCodeCurrentPublication, assertCodePublicationForState, assertRepairPair, captureLeaseInput, retryLeaseRead, assertResultArchivesReady, assertCodeCutoverArchivesReady, readCodeCutoverArchiveAuthority, assertCodeArchiveCoverageClock, verifyCodeCutoverCompletionClock };
 if (require.main === module) {
   (async () => {
     assert.equal(process.argv.length, 4); const action = process.argv[2], sha = process.argv[3];

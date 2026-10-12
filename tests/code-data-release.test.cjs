@@ -260,10 +260,11 @@ test('seed refuses a pointer advance before any candidate copy or lease refresh'
 test('current affinity is checked before durable capture and copying; final affinity remains exact', () => {
   const source = fs.readFileSync(path.join(root,'scripts/nativeCodeReleaseDataPlane.cjs'),'utf8');
   const capture = source.slice(source.indexOf('async function captureLeaseInputOnce'),source.indexOf('async function seed'));
-  a(capture.indexOf('assertCodeCurrentPublication(session)') > capture.indexOf('readCodeCutoverArchiveAuthority(session.client'));
-  a(capture.indexOf('assertCodeCurrentPublication(session)') < capture.indexOf("'code-lease-current.json'"));
+  a(capture.indexOf('assertCodePublicationForState(state,session)') > capture.indexOf('readCodeCutoverArchiveAuthority(session.client'));
+  a(capture.indexOf('assertCodePublicationForState(state,session)') < capture.indexOf("'code-lease-current.json'"));
   const seed = source.slice(source.indexOf('async function seed'),source.indexOf('async function candidateAccess'));
-  a(seed.indexOf('assertCodeCurrentPublication(session)') < seed.indexOf('copyGenerationAsService'));
+  a(seed.indexOf('assertCodePublicationForState(state,session)') < seed.indexOf('copyGenerationAsService'));
+  a(source.includes('if(!state.committedGenerationRepairAuthorizationHash) return assertCodeCurrentPublication(session,storeDir)'));
   a(!seed.includes('retryLeaseRead')); a(!seed.includes('code-transition-lease'));
   const final = fs.readFileSync(path.join(root,'scripts/nativeReleaseDataPlane.cjs'),'utf8');
   a(final.includes('assertSamePublication(seed.identity, session.identity)'));
