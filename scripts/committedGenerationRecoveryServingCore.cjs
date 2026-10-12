@@ -12,7 +12,21 @@ function assessServingRepair({healthReport,healthPublication,identity,pair,worke
   assert.deepEqual([...workerObservation.blockers].sort(),expected.sort(),'unexpected worker publication blocker');assert.equal(workerObservation.ready,expected.length===0);
   return{ok:true,verifier:'signed-committed-generation-code-recovery-core-v1',servingCommittedPublicationAccepted:true,originalWorkerReadiness:workerObservation.ready,originalWorkerBlockers:workerObservation.blockers,naturalCycleAcceptance:false,newSourceFreshnessAccepted:false,productionDataWrites:0};
 }
-async function verify(dir){
+async function verifyCommittedArchives({session,generations,archive,releaseSha}){
+  const manifest=archive.fixedManifest(),lineage=archive.fixedAuthority(),sourceIds=new Set(manifest.baseline.records.map(r=>String(r.sourceMatchId)));
+  assert.equal(sourceIds.size,601);
+  await session.client.query("SET LOCAL statement_timeout = '120s'");
+  const pg=await session.client.query('SELECT id,dataset,match_id,source_match_id,payload::text AS payload FROM football.match_snapshots WHERE source_match_id=ANY($1::text[])',[[...sourceIds]]);
+  const postgresRows=pg.rows.map(r=>archive.archiveObservation({rowId:r.id,dataset:r.dataset,matchId:r.match_id,sourceMatchIdColumn:r.source_match_id,match:JSON.parse(r.payload)}));
+  const context=session.publication.context,generationRows=[];
+  for(const [name,dataset]of [['matches-current.json','current'],['matches-history.json','history']]){
+    const document=generations.readGenerationFile(context,name,{parseJson:true}),matches=Array.isArray(document)?document:document?.matches;assert(Array.isArray(matches));
+    for(const match of matches)if(sourceIds.has(String(match?.sourceMatchId)))generationRows.push(archive.archiveObservation({dataset,match}));
+  }
+  return archive.evaluateSignedBaselineRows({manifest,lineage,generationRows,postgresRows,postgresIdentity:session.identity,generationPointer:context.pointer,releaseSha});
+}
+async function verify(dir,mode='core'){
+  assert(['core','archives'].includes(mode));
   assert.equal(process.platform,'linux');assert.equal(process.getuid(),0);
   const controller=require(dir+'/controller.cjs'),p=controller.load(dir);assert.equal(p.servingCoreVersion,'signed-committed-generation-serving-core-v1');
   const bytes=fs.readFileSync(dir+'/serving-core.cjs');assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),p.servingCoreSha256);
@@ -34,9 +48,10 @@ async function verify(dir){
     const transaction=(await session.client.query("SELECT current_setting('transaction_read_only') AS readonly,current_setting('transaction_isolation') AS isolation")).rows[0];assert.equal(transaction.readonly,'on');assert.equal(transaction.isolation,'repeatable read');
     const pair=code.assertRepairPair(state,session,generations.resolveCurrentGeneration({storeDir:STORE}),generations.resolvePreviousGeneration({storeDir:STORE}),p.externalWorker,p.externalWorkerSha256);
     const result=assessServingRepair({healthReport,healthPublication:healthReport.storage.publication,identity:session.identity,pair,workerObservation:originalWorkerObservation});
+    const archives=mode==='archives'?await verifyCommittedArchives({session,generations,archive:module('scripts/verifyReleaseArchiveSuccessor.cjs'),releaseSha:p.targetSha256}):null;
     const after=await fetchHealth(),afterReport=core.assessHealth(after);assert.equal(afterReport.ok,true);same(afterReport.storage.publication,session.identity);await session.guardedFinals();
-    return{...result,checkedAt:new Date().toISOString(),target:p.targetSha256,authorizationId:p.id,readonlyTransaction:transaction,storage:healthReport.storage,projectionCounts:healthReport.projectionCounts,signedPair:pair,originalWorkerObservation,scope:'Serving API, schema and exact signed committed PG pair accepted for code recovery. The unchanged worker observation stays pending until natural raw-to-PG convergence. No new quotes, training or recommendation adoption is claimed.'};
+    return{...result,archives,checkedAt:new Date().toISOString(),target:p.targetSha256,authorizationId:p.id,readonlyTransaction:transaction,storage:healthReport.storage,projectionCounts:healthReport.projectionCounts,signedPair:pair,originalWorkerObservation,scope:'Serving API, schema and exact signed committed PG pair accepted for code recovery. The unchanged worker observation stays pending until natural raw-to-PG convergence. No new quotes, training or recommendation adoption is claimed.'};
   }finally{await session?.close();held?.release();await pool.end();}
 }
-module.exports={assessServingRepair,verify};
-if(require.main===module){assert.equal(process.argv.length,3);verify(path.resolve(process.argv[2])).then(r=>console.log(JSON.stringify(r))).catch(e=>{console.error(JSON.stringify({ok:false,error:String(e.message).slice(0,500),productionDataWrites:0}));process.exitCode=1;});}
+module.exports={assessServingRepair,verifyCommittedArchives,verify};
+if(require.main===module){assert([3,4].includes(process.argv.length));verify(path.resolve(process.argv[2]),process.argv[3]||'core').then(r=>console.log(JSON.stringify(r))).catch(e=>{console.error(JSON.stringify({ok:false,error:String(e.message).slice(0,500),productionDataWrites:0}));process.exitCode=1;});}

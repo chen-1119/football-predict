@@ -35,3 +35,8 @@ for(const [name,api,worker,cgroup]of [['stopped',1,1,0],['api-active',0,1,0],['w
  const bash=process.platform==='win32'?'D:/app/Git/bin/bash.exe':'/usr/bin/bash',r=require('node:child_process').spawnSync(bash,['--noprofile','--norc'],{input:body,encoding:'utf8',windowsHide:true});a.equal(r.status,name==='stopped'?0:1,r.stderr);
 });
 test('original failed lease and source files are preserved, no file overlay controller',()=>{const source=fs.readFileSync(root+'/scripts/committedGenerationRecoveryController.cjs','utf8');a(source.includes("'/first-attempt-'+name"));a(source.includes("fs.renameSync(stateDir+'/'+name"));a(source.includes('verifiedSignedFull:true'));a(source.includes('original full controller active'));a(!source.includes('pg_dump'));a(!source.includes('UPDATE football.projection_meta'));a(!source.includes('fs.writeFileSync(APP+'));});
+test('committed archive verifier retains the original full baseline and candidate gates',()=>{
+ const source=fs.readFileSync(root+'/scripts/committedGenerationRecoveryServingCore.cjs','utf8');
+ a(source.includes('archive.evaluateSignedBaselineRows'));a(source.includes('generationPointer:context.pointer'));a(source.includes('session.publication.context'));a(source.includes('postgresIdentity:session.identity'));
+ a(!source.includes('UPDATE football.'));a(!source.includes('resolveCurrentGeneration({storeDir:STORE}).pointer'));
+});
