@@ -23,6 +23,7 @@ test('BestTips honors login return tab, keeps query state through tab changes an
 async function center(){
  const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();
  const view=compile('../src/services/recommendationCenterView.ts',require),data=view.parseRecommendationCenter({recommendationCenter:p.state.view});
+ const publishedResults=compile('../src/services/publishedMatchRecommendation.ts',require);
  let now=p.now,index=0,interval,cleanup,props={selectedTab:'two'};const state=[];let mounted=false;
  class Clock extends Date{static now(){return now;}}
  const mod=compile('../src/components/recommendations/RecommendationCenter.tsx',id=>{
@@ -35,6 +36,7 @@ async function center(){
   if(id==='./MarketComparison')return{MarketComparison:()=>null};
   if(id==='./DualResearchV2')return{DualResearchV2:()=>null};
   if(id.endsWith('/recommendationCenterView'))return view;
+  if(id.endsWith('/publishedMatchRecommendation'))return publishedResults;
   if(id.endsWith('/TeamBadge'))return{TeamBadge:()=>null};if(id.endsWith('/FollowButton'))return{FollowButton:()=>null};
   if(id==='lucide-react'||id.endsWith('.css'))return{};throw Error(id);
  },{Date:Clock,window:{setInterval:fn=>{interval=fn;return 1;},clearInterval:()=>{interval=null;}}});
@@ -57,6 +59,6 @@ test('source freshness failure stays distinct from SP floor failure and retains 
  h.data.todayCombos=[{combo:{...preview,frozenAt:new Date(h.initialNow).toISOString()},settlement:{state:'PENDING'}}];assert.equal(combos(h.render()).length,1);assert.equal(combos(h.render())[0].props.combo.id,preview.id);h.stop();
 });
 test('genuinely fresh empty pool keeps its candidate shortage or SP-floor explanation',async()=>{
- const h=await center();h.data.previews=[];h.data.lanes.combos.candidateCount=1;assert.match(words(h.render()),/当前可用1场，2串1需要2场/);assert.doesNotMatch(words(h.render()),/报价已超过15分钟/);
+ const h=await center();h.data.previews=[];h.data.lanes.combos.candidateCount=1;assert.match(words(h.render()),/本轮通过筛选的候选为1场，2串1需要2场不同比赛/);assert.doesNotMatch(words(h.render()),/报价已超过15分钟/);
  h.data.lanes.combos.candidateCount=3;assert.match(words(h.render()),/今日无合格组合/);assert.match(words(h.render()),/SP≥2.50/);h.stop();
 });

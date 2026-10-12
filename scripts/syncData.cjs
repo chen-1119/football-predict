@@ -3136,8 +3136,21 @@ const TEAM_KEY_ALIASES = Object.freeze({
   "哈萨克": "kazakhstan",
 });
 
+// Exact senior identities present in the signed historical training seed.
+// Qualified club/youth/women names must not borrow these national histories.
+const SENIOR_NATIONAL_TEAM_KEY_ALIASES = Object.freeze({
+  "塞浦路斯": "cyprus",
+  "拉脱维亚": "latvia",
+  "北爱尔兰": "northern ireland",
+  "格鲁吉亚": "georgia",
+  "黑山": "montenegro",
+  "亚美尼亚": "armenia",
+});
+const SENIOR_NATIONAL_TEAM_KEYS = new Set(Object.values(SENIOR_NATIONAL_TEAM_KEY_ALIASES));
+
 const CURRENT_TEAM_KEY_ALIASES = Object.freeze({
   ...FREE_FOOTBALL_TEAM_ALIASES,
+  ...SENIOR_NATIONAL_TEAM_KEY_ALIASES,
   "\u963f\u6839\u5ef7": "argentina",
   "\u51b0\u5c9b": "iceland",
   "\u8461\u8404\u7259": "portugal",
@@ -3263,13 +3276,13 @@ const CURRENT_TEAM_KEY_ALIASES = Object.freeze({
   "\u591a\u4f26\u591a": "toronto",
 });
 
-function normalizedTeamKey(teamName) {
+function normalizedTeamKey(teamName, preserveClubMarkers = false) {
   return normText(teamName)
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/&/g, " and ")
-    .replace(/\b(fc|cf|afc|sc|club)\b/g, " ")
+    .replace(/\b(fc|cf|afc|sc|club)\b/g, preserveClubMarkers ? "$&" : " ")
     .replace(/[^a-z0-9\u4e00-\u9fff]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
@@ -3277,7 +3290,12 @@ function normalizedTeamKey(teamName) {
 
 function teamKey(teamName) {
   const key = normalizedTeamKey(teamName);
-  return CURRENT_TEAM_KEY_ALIASES[key] || TEAM_KEY_ALIASES[key] || key;
+  const resolved = CURRENT_TEAM_KEY_ALIASES[key] || TEAM_KEY_ALIASES[key] || key;
+  if (SENIOR_NATIONAL_TEAM_KEYS.has(resolved)) {
+    const qualifiedKey = normalizedTeamKey(teamName, true);
+    if (qualifiedKey !== key) return qualifiedKey;
+  }
+  return resolved;
 }
 
 function pairKey(homeTeam, awayTeam) {

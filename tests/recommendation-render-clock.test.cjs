@@ -7,6 +7,7 @@ function compile(file,requireFn){const module={exports:{}};vm.runInNewContext(ts
 test('incoming lane timestamp between timer ticks stays visible without accepting future inputs',async()=>{
   const p=memoryPorts(),runtime=createRuntime(p,{validators});await runtime.publishingCycle();
   const V=compile(require.resolve('../src/services/recommendationCenterView.ts'),require);let data=V.parseRecommendationCenter({recommendationCenter:p.state.view});
+  const publishedResults=compile(require.resolve('../src/services/publishedMatchRecommendation.ts'),require);
   const original=Date.now;let now=p.now,index=0;const state=[];
   Date.now=()=>now;
   try{
@@ -22,6 +23,7 @@ test('incoming lane timestamp between timer ticks stays visible without acceptin
       if(id==='../FollowButton')return {FollowButton:()=>null};
     if(id==='../TeamBadge')return{TeamBadge:()=>null};
       if(id==='../../services/recommendationCenterView')return V;
+      if(id==='../../services/publishedMatchRecommendation')return publishedResults;
       if(id==='lucide-react')return{};if(id.endsWith('.css'))return{};throw Error(id);
     });
     const hasCombo=node=>!!node&&typeof node==='object'&&(node.type?.name==='ComboCard'||Object.values(node).some(value=>Array.isArray(value)?value.some(hasCombo):hasCombo(value)));
