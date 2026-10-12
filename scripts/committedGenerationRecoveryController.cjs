@@ -75,17 +75,17 @@ async function activate(dir){
   const p=load(dir);assert.equal(fs.existsSync(dir+'/activation-started.json'),false);regular(dir+'/prepared.json');const fresh=await inspect(p);save(dir+'/activation-started.json',{checkedAt:new Date().toISOString(),fresh});
   const baseline=RELEASE+'/source-baselines/'+p.targetSha256;assert.equal(fs.existsSync(p.sourceDir),false);fs.mkdirSync(p.sourceDir,{mode:0o700});run('/usr/bin/tar',['-xzf',baseline+'/original.tgz','-C',p.sourceDir,'--no-same-owner','--no-same-permissions'],{timeout:60000});normalize(p.sourceDir);
   const m=JSON.parse(read(baseline+'/manifest.json',1048576));for(const r of m.archiveSourceEvidence.inventory.entries.filter(r=>r.kind==='file'))assert.equal(hashFile(p.sourceDir+'/'+r.path),r.sha256);
-  const stateDir=RELEASE+'/native/'+p.targetSha256;for(const name of ['code-transition-lease.json','code-lease-current.json','code-lease-input.json']){const original=read(stateDir+'/'+name,16*1048576);fs.writeFileSync(dir+'/original-'+name,original,{flag:'wx',mode:0o600});}
+  const stateDir=RELEASE+'/native/'+p.targetSha256;for(const name of ['code-transition-lease.json','code-lease-current.json','code-lease-input.json']){if(fs.existsSync(stateDir+'/'+name)){const original=read(stateDir+'/'+name,16*1048576);fs.writeFileSync(dir+'/original-'+name,original,{flag:'wx',mode:0o600});}else save(dir+'/previous-attempt-missing-'+name,{observedAt:new Date().toISOString(),name,absent:true});}
   fs.writeFileSync(dir+'/original-recovery-phase',read(RELEASE+'/recovery/current/phase',128),{flag:'wx',mode:0o600});
   if(p.externalAuthorizationVersion){
     assert.equal(hashFile(dir+'/engine.cjs'),p.engineSha256);
     const stateFile=stateDir+'/state.json',original=read(stateFile);assert.equal(policy.digest(original),p.originalNativeStateSha256);fs.writeFileSync(dir+'/original-native-state.json',original,{flag:'wx',mode:0o600});
-    const state=JSON.parse(original);state.emergencyActivationAuthorizationHash=p.externalEmergencySha256;state.committedGenerationRepairAuthorizationHash=p.externalWorkerSha256;state.coldRecoveryAuthorizationId=p.id;
+    const state=JSON.parse(original);state.emergencyActivationAuthorizationHash=p.externalEmergencyAuthorizationHash;state.committedGenerationRepairAuthorizationHash=p.externalWorkerSha256;state.coldRecoveryAuthorizationId=p.id;
     const next=stateFile+'.cold-recovery-'+p.id;fs.writeFileSync(next,JSON.stringify(state)+'\n',{flag:'wx',mode:0o600});const fd=fs.openSync(next,'r');try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.renameSync(next,stateFile);
   }
   // A fresh, explicitly authorized recovery transition is a separate attempt.
   // Preserve the first attempt's expired clocks instead of silently extending it.
-  for(const name of ['code-transition-lease.json','code-lease-current.json','code-lease-input.json'])fs.renameSync(stateDir+'/'+name,dir+'/first-attempt-'+name);
+  for(const name of ['code-transition-lease.json','code-lease-current.json','code-lease-input.json'])if(fs.existsSync(stateDir+'/'+name))fs.renameSync(stateDir+'/'+name,dir+'/first-attempt-'+name);
   const script=policy.renderScript(read(p.sourceDir+'/deploy/light-server/release-from-bundle.sh',1048576).toString(),read(p.sourceDir+'/deploy/light-server/release-native.sh',1048576).toString(),p);
   fs.writeFileSync(dir+'/continue-full.sh',script,{flag:'wx',mode:0o600});run('/usr/bin/bash',['-n',dir+'/continue-full.sh']);
   const log=fs.openSync(dir+'/continuation.log','wx',0o600);let result;try{result=cp.spawnSync('/usr/bin/bash',[dir+'/continue-full.sh',p.sourceDir],{cwd:p.sourceDir,env:{PATH:'/opt/node-v22.22.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',NODE_PATH:APP+'/node_modules',BUNDLE_SHA256:p.targetSha256,PUBLIC_BASE_URL:'https://134.175.132.183',LC_ALL:'C',TZ:'UTC'},stdio:['ignore',log,log],timeout:920000,killSignal:'SIGTERM'});}finally{fs.closeSync(log);}
