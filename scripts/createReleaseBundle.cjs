@@ -793,6 +793,7 @@ const requiredEntries = [
   "scripts/releaseWorkerPreflight.cjs",
   "scripts/releaseWorkerCodeRepair.cjs",
   "scripts/verifyReleaseWorkerCodeRepair.cjs",
+  "tests/official-model-artifact-isolation.test.cjs",
   "scripts/runReleaseWorkerPreflight.cjs",
   "scripts/releaseWorkspaceFreshness.cjs",
   "scripts/verifyReleaseWorkspaceFreshness.cjs",

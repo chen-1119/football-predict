@@ -78,7 +78,10 @@ const COMMAND_CALLER_FUNCTIONS = deepFreeze({
     "994b5f575e5f8141fc06500fee5a2e036db26d6f3b4248673f462cdd97f701eb", "50b4a036b586195589da6e7b56c11c6a1daa40cc8d183f8af039bc8415e42ff5",
     // Same runCycle plus the literal PostgreSQL supplementary evidence job.
     // No command adapter, argument grammar or source-closure exemption changes.
-    "bc5de663a3c33c468d9062d6b8eec3be88c4c4202a173e1aaae7af2d74147678"],
+    "bc5de663a3c33c468d9062d6b8eec3be88c4c4202a173e1aaae7af2d74147678",
+    // Same literal commands; generation and model writers share the existing
+    // artifact permit. No new command grammar or source closure exemptions.
+    "7cb92d576c07496fda1d70a17eb8d7e42467f7d36864b50859a1e3f6e12b18e7"],
 });
 const UNIT_SOURCE_HASHES = Object.freeze({
   "football-daily-prematch.service": "9e6af93d56635ed0940590b4a027e02ab5310080e53b2873775b520f46796d8a",

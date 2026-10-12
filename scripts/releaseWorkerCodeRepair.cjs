@@ -8,7 +8,8 @@ const TARGETS = ['server/publicReferenceArchive.cjs', 'src/services/publicRefere
 const PAIR_TARGETS = ['scripts/postgresRuntimeReadSession.cjs', 'scripts/postgresModelInput.cjs',
   'server/dataGenerationBundle.cjs', 'server/publicationResolverWorker.cjs', 'server/index.cjs', ...TARGETS];
 const WRITER_TARGETS = ['scripts/runSyncWorker.cjs', 'scripts/postgresProjectionSync.cjs',
-  'scripts/releaseWorkerCodeRepair.cjs', 'scripts/nativeCodeReleaseDataPlane.cjs'];
+  'scripts/releaseWorkerCodeRepair.cjs', 'scripts/nativeCodeReleaseDataPlane.cjs',
+  'scripts/frontendRuntimeBoundary.cjs'];
 const SNAPSHOT_TARGETS = [...WRITER_TARGETS];
 const DATA_FILES = ['server/postgresStore.cjs', 'server/storageMode.cjs',
   'deploy/light-server/candidate-revision-transition.json', 'deploy/light-server/native-release-policy.json',
