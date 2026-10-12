@@ -67,6 +67,12 @@ function renderScript(shell,native,p){
   tail=replaceOnce(tail,'  start_release_sync_write_barrier\n','  assert_continuation_old_stopped\n  quiesce_native_auxiliary_writers\n  assert_native_cutover_processes_drained\n');
   assert.equal(tail.split('\n  quiesce_native_auxiliary_writers\n').length,3);
   tail=tail.split('\n  quiesce_native_auxiliary_writers\n').join('\n  quiesce_continuation_writers\n');
+  // This cold path never starts an HTTP-backed sync barrier: the old service
+  // and every football writer are positively stopped instead. Do not demand
+  // ownership of an uncreated barrier when leaving candidate or final stages.
+  const barrierExit='stop_release_sync_write_barrier clean';
+  assert.equal(tail.split(barrierExit).length,3,'two normal barrier exits required');
+  tail=tail.split(barrierExit).join('assert_continuation_old_stopped; quiesce_continuation_writers; assert_native_cutover_processes_drained');
   assert(tail.includes('run_trusted_candidate_verifier'));assert(tail.includes('native_data final'));
   assert(tail.includes('native_code_verify_cutover_lease "$CODE_CUTOVER_POST_SWAP_MARGIN_SECONDS"'));
   assert(tail.includes('mv "$APP_DIR" "$BACKUP_DIR"'));assert(tail.includes('mv "$NEXT_DIR" "$APP_DIR"'));
