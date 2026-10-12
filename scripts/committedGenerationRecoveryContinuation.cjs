@@ -6,6 +6,10 @@ const assert=require('node:assert/strict'),crypto=require('node:crypto');
 const VERSION='committed-generation-full-recovery-continuation-v1';
 const HASH=/^[a-f0-9]{64}$/;
 const digest=value=>crypto.createHash('sha256').update(value).digest('hex');
+function verifySignedBytes(bytes,signature,publicKey){
+  const key=crypto.createPublicKey(publicKey);assert.equal(key.asymmetricKeyType,'rsa');assert(key.asymmetricKeyDetails.modulusLength>=3072);
+  assert(crypto.verify('sha256',bytes,key,signature),'untrusted signed full material');return true;
+}
 function requireHash(value){assert.match(value||'',HASH);}
 function validateAuthorization(p,now=Date.now()){
   assert.equal(p.version,VERSION);assert.equal(p.site,'football-predict');assert.equal(p.channel,'production');
@@ -126,4 +130,4 @@ run_recovery_tail() {
   // it never edits the expired first-attempt lease in place.
   return setup+prefix+'\n'+functions+'\n'+initialize+tail+'\nrun_recovery_tail\n';
 }
-module.exports={VERSION,digest,validateAuthorization,validateObservation,renderScript};
+module.exports={VERSION,digest,verifySignedBytes,validateAuthorization,validateObservation,renderScript};

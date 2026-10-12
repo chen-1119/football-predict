@@ -26,7 +26,7 @@ async function inspect(p){
   for(const name of ['seed-accepted.json','candidate-access-intent.json','final-accepted.json'])assert.equal(fs.existsSync(RELEASE+'/native/'+p.targetSha256+'/'+name),false,'continuation must be before candidate seed: '+name);
   const baseline=RELEASE+'/source-baselines/'+p.targetSha256;
   const m=JSON.parse(read(baseline+'/manifest.json',1048576));assert.equal(m.ok,true);assert.equal(m.releaseSequence,p.targetSequence);assert.equal(m.sha256,p.targetSha256);assert.equal(hashFile(baseline+'/manifest.json'),p.manifestSha256);
-  assert.equal(hashFile(baseline+'/original.tgz'),p.targetSha256);assert(crypto.verify('sha256',read(baseline+'/manifest.json',1048576),read(baseline+'/manifest.sig',16384),read('/etc/football-release/signing-public.pem',16384)));
+  assert.equal(hashFile(baseline+'/original.tgz'),p.targetSha256);policy.verifySignedBytes(read(baseline+'/manifest.json',1048576),read(baseline+'/manifest.sig',16384),read('/etc/football-release/signing-public.pem',16384));
   assert.equal(fs.realpathSync(p.buildDir),p.buildDir);const bs=fs.lstatSync(p.buildDir);assert(bs.isDirectory()&&!bs.isSymbolicLink());
   const buildProcesses=cp.spawnSync('/usr/bin/pgrep',['-u','football-build'],{encoding:'utf8',timeout:5000});assert.equal(buildProcesses.status,1,'build user not quiescent');
   const sourceRows=m.archiveSourceEvidence.inventory.entries.filter(r=>r.kind==='file'&&!r.path.startsWith('.release-model-assets/')&&!r.path.startsWith('.release-prebuilt/')&&!r.path.startsWith('public/')&&!r.path.startsWith('dist/'));
