@@ -7,11 +7,14 @@ const AUTH_ENTRY = 'deploy/light-server/worker-code-repair-authorization.json';
 const TARGETS = ['server/publicReferenceArchive.cjs', 'src/services/publicReferenceEvidence.cjs'];
 const PAIR_TARGETS = ['scripts/postgresRuntimeReadSession.cjs', 'scripts/postgresModelInput.cjs',
   'server/dataGenerationBundle.cjs', 'server/publicationResolverWorker.cjs', 'server/index.cjs', ...TARGETS];
+const WRITER_TARGETS = ['scripts/runSyncWorker.cjs', 'scripts/postgresProjectionSync.cjs',
+  'scripts/releaseWorkerCodeRepair.cjs', 'scripts/nativeCodeReleaseDataPlane.cjs'];
+const SNAPSHOT_TARGETS = [...WRITER_TARGETS];
 const DATA_FILES = ['server/postgresStore.cjs', 'server/storageMode.cjs',
   'deploy/light-server/candidate-revision-transition.json', 'deploy/light-server/native-release-policy.json',
   'deploy/light-server/recommendation-schema-bridge.cjs'];
 
-function validateRepairPublication(value) {
+function validateRepairPublication(value, allowAligned = false) {
   const assert = require('node:assert/strict');
   assert.deepEqual(Object.keys(value).sort(), ['committed','databaseOid','rawCurrent','rawPrevious']);
   assert.match(value.databaseOid || '', /^[1-9][0-9]*$/);
@@ -24,25 +27,31 @@ function validateRepairPublication(value) {
     assert(Number.isFinite(Date.parse(row.committedAt)) && new Date(row.committedAt).toISOString()===row.committedAt);
   }
   assert.notEqual(value.rawCurrent.generationId,value.rawPrevious.generationId);
-  assert.notEqual(value.committed.generationId,value.rawCurrent.generationId);
-  assert.notEqual(value.committed.generationId,value.rawPrevious.generationId);
-  assert(Date.parse(value.committed.committedAt)<Date.parse(value.rawPrevious.committedAt)
-    && Date.parse(value.rawPrevious.committedAt)<Date.parse(value.rawCurrent.committedAt));
+  const aligned = [value.rawCurrent,value.rawPrevious].find(r=>r.generationId===value.committed.generationId);
+  assert(Date.parse(value.rawPrevious.committedAt)<Date.parse(value.rawCurrent.committedAt));
+  if(allowAligned && aligned) assert.deepEqual(value.committed,aligned);
+  else {
+    assert.notEqual(value.committed.generationId,value.rawCurrent.generationId);
+    assert.notEqual(value.committed.generationId,value.rawPrevious.generationId);
+    assert(Date.parse(value.committed.committedAt)<Date.parse(value.rawPrevious.committedAt));
+  }
   return value;
 }
 function validateWorkerCodeRepairAuthorization(auth, now) {
   const assert = require('node:assert/strict');
   const sha = value => assert.match(value || '', /^[a-f0-9]{64}$/);
-  const pair = auth.version === 'worker-code-repair-v2';
+  const writer = auth.version === 'worker-code-repair-v3';
+  const snapshot = auth.version === 'worker-code-repair-v4';
+  const pair = auth.version === 'worker-code-repair-v2' || writer || snapshot;
   assert.deepEqual(Object.keys(auth).sort(), ['version','reason','createdAt','expiresAt','baseRuntimeSha256','files','dataContract',...(pair?['publication']:[])].sort());
-  assert.equal(auth.version, pair ? 'worker-code-repair-v2' : 'worker-code-repair-v1');
-  assert.equal(auth.reason, pair ? 'postgres-committed-generation-pairing' : 'reference-array-string-limit');
-  if(pair) validateRepairPublication(auth.publication);
+  assert.equal(auth.version, snapshot ? 'worker-code-repair-v4' : writer ? 'worker-code-repair-v3' : pair ? 'worker-code-repair-v2' : 'worker-code-repair-v1');
+  assert.equal(auth.reason, snapshot ? 'model-artifact-generation-snapshot-race' : writer ? 'postgres-source-file-assembly-timeout' : pair ? 'postgres-committed-generation-pairing' : 'reference-array-string-limit');
+  if(pair) validateRepairPublication(auth.publication,snapshot || writer);
   sha(auth.baseRuntimeSha256);
   const start = Date.parse(auth.createdAt), end = Date.parse(auth.expiresAt);
   assert(Number.isFinite(now) && Number.isFinite(start) && Number.isFinite(end)
     && start <= now + 5000 && now < end && end > start && end - start <= 2 * 3600000, 'repair authorization clock');
-  assert.deepEqual(auth.files.map(row => row.path), pair ? PAIR_TARGETS : TARGETS);
+  assert.deepEqual(auth.files.map(row => row.path), snapshot ? SNAPSHOT_TARGETS : writer ? WRITER_TARGETS : pair ? PAIR_TARGETS : TARGETS);
   for (const row of auth.files) {
     assert.deepEqual(Object.keys(row).sort(), ['afterSha256','beforeSha256','path']);
     sha(row.beforeSha256); sha(row.afterSha256); assert.notEqual(row.beforeSha256, row.afterSha256);
@@ -77,7 +86,9 @@ function evaluateWorkerCodeRepair(auth, worker, observed) {
     const start = Date.parse(cycle?.startedAt), end = Date.parse(cycle?.finishedAt);
     assert.equal(cycle?.ok, false); assert.equal(cycle?.phase, 'official-result-failed');
     assert.equal(cycle?.errorCode, 'SYNC_WORKER_COMMAND_FAILED');
-    assert.equal(cycle?.error, 'node scripts/syncData.cjs exited with 1');
+    const writer = auth.version === 'worker-code-repair-v3';
+    const snapshot = auth.version === 'worker-code-repair-v4';
+    assert.equal(cycle?.error, snapshot ? 'npm run datastore:generation exited with 1' : writer ? 'npm run postgres:sync exited with 1' : 'node scripts/syncData.cjs exited with 1');
     assert(Number.isFinite(start) && Number.isFinite(end) && start <= end && end <= now
       && now - end <= 3600000 && start >= Date.parse(worker.serviceAfter.ExecMainStartTimestamp), 'failed cycle clock');
     assert.equal(observed.runtimeSha256, auth.baseRuntimeSha256);
@@ -87,10 +98,10 @@ function evaluateWorkerCodeRepair(auth, worker, observed) {
     assert.deepEqual(observed.dataContract, auth.dataContract);
     const migrations = auth.dataContract.filter(row => row.path.startsWith('server/postgres/migrations/')).map(row => row.path.split('/').at(-1));
     assert.deepEqual(observed.migrationNames, migrations);
-    if(auth.version==='worker-code-repair-v2') assert.deepEqual(observed.publication,auth.publication);
+    if(['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4'].includes(auth.version)) assert.deepEqual(observed.publication,auth.publication);
     assert(Array.isArray(observed.journal) && observed.journal.length > 0 && observed.journal.length <= 4);
     assert(observed.journal.some(row => row.unit === 'football-sync-worker.service'
-      && /^[1-9][0-9]*$/.test(row.pid || '') && row.message === (auth.version==='worker-code-repair-v2'
+      && /^[1-9][0-9]*$/.test(row.pid || '') && row.message === (snapshot ? '  "error": "source file size changed before staging: model-evaluation.json",' : writer ? '  "error": "Query read timeout",' : auth.version==='worker-code-repair-v2'
         ? 'SQLite publication identity matches neither the serving generation nor its immutable previous generation' : 'Invalid string length')
       && row.timestampMs >= start && row.timestampMs <= end), 'exact failure absent from current failed-cycle journal');
     result.ok = true; result.repairPreparationAllowed = true;
@@ -129,7 +140,7 @@ function collectWorkerCodeRepair(auth, worker) {
   // reader's realm before the exact array comparison; names still must match.
   const migrationNames = Array.from(fs.readdirSync(root+'/server/postgres/migrations')).sort();
   const cycle = worker.status.lastCycle;
-  const message = auth.version==='worker-code-repair-v2'
+  const message = auth.version==='worker-code-repair-v4' ? '  "error": "source file size changed before staging: model-evaluation.json",' : auth.version==='worker-code-repair-v3' ? '  "error": "Query read timeout",' : auth.version==='worker-code-repair-v2'
     ? 'SQLite publication identity matches neither the serving generation nor its immutable previous generation' : 'Invalid string length';
   const lines = cp.execFileSync('/usr/bin/journalctl', ['--unit=football-sync-worker.service',
     '--since='+cycle.startedAt, '--until='+cycle.finishedAt, '--grep=^'+message+'$',
@@ -139,7 +150,7 @@ function collectWorkerCodeRepair(auth, worker) {
       timestampMs:Number(row.__REALTIME_TIMESTAMP)/1000};
   }) : [];
   let publication;
-  if(auth.version==='worker-code-repair-v2') {
+  if(['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4'].includes(auth.version)) {
     const keys=['data_publication_mode','data_generation_id','manifest_hash','data_generation_source_cycle_id','committed_at'];
     const sql="BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SELECT json_build_object('databaseOid',(SELECT oid::text FROM pg_database WHERE datname=current_database()),'readOnly',current_setting('transaction_read_only'),'meta',(SELECT json_object_agg(key,value) FROM football.projection_meta WHERE key IN ('data_publication_mode','data_generation_id','manifest_hash','data_generation_source_cycle_id','committed_at'))); ROLLBACK;";
     const output=cp.execFileSync('/usr/sbin/runuser',['-u','postgres','--','/usr/bin/psql','-X','-qAt','-v','ON_ERROR_STOP=1','-d','football','-c',sql],
@@ -149,7 +160,7 @@ function collectWorkerCodeRepair(auth, worker) {
     const pointer=name=>{const file='/var/lib/football-predict/data-generations/'+name+'.json';
       assert.equal(fs.realpathSync(path.dirname(file)),path.dirname(file));const fd=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
       try {const s=fs.fstatSync(fd);assert(s.isFile()&&s.nlink===1&&s.size<8192);const bytes=fs.readFileSync(fd),after=fs.fstatSync(fd);assert(s.ino===after.ino&&s.size===bytes.length&&s.mtimeMs===after.mtimeMs);const row=JSON.parse(bytes);assert.equal(row.schemaVersion,1);return {mode:'active-generation',...Object.fromEntries(['generationId','manifestHash','sourceCycleId','committedAt'].map(k=>[k,row[k]]))};}finally{fs.closeSync(fd);}};
-    publication=validateRepairPublication({databaseOid:pg.databaseOid,committed,rawCurrent:pointer('current'),rawPrevious:pointer('previous')});
+    publication=validateRepairPublication({databaseOid:pg.databaseOid,committed,rawCurrent:pointer('current'),rawPrevious:pointer('previous')},['worker-code-repair-v3','worker-code-repair-v4'].includes(auth.version));
   }
   assert.deepEqual(identity(), before, 'runtime identity changed during incident read');
   const afterWorker=collectWorkerPreflight();
@@ -173,14 +184,14 @@ function candidateAuthorization(root, auth) {
 
 function buildWorkerCodeRepairProbe(auth) {
   validateWorkerCodeRepairAuthorization(auth, Date.now());
-  return "'use strict';\nconst TARGETS="+JSON.stringify(TARGETS)+",PAIR_TARGETS="+JSON.stringify(PAIR_TARGETS)+",DATA_FILES="+JSON.stringify(DATA_FILES)+";\n"
+  return "'use strict';\nconst TARGETS="+JSON.stringify(TARGETS)+",PAIR_TARGETS="+JSON.stringify(PAIR_TARGETS)+",WRITER_TARGETS="+JSON.stringify(WRITER_TARGETS)+",SNAPSHOT_TARGETS="+JSON.stringify(SNAPSHOT_TARGETS)+",DATA_FILES="+JSON.stringify(DATA_FILES)+";\n"
     + [evaluateWorkerPreflight,collectWorkerPreflight,validateRepairPublication,validateWorkerCodeRepairAuthorization,evaluateWorkerCodeRepair,collectWorkerCodeRepair].map(fn=>fn.toString()).join('\n')
     + '\ntry {const auth='+JSON.stringify(auth)+';const worker=collectWorkerPreflight();const base=evaluateWorkerPreflight(worker);'
     + 'const report=base.ok?base:evaluateWorkerCodeRepair(auth,worker,collectWorkerCodeRepair(auth,worker));console.log(JSON.stringify(report));if(!report.ok)process.exitCode=1;}'
     + "catch {console.log(JSON.stringify({version:'worker-code-repair-preparation-v1',ok:false,workerHealthy:false,repairPreparationAllowed:false,blockers:['worker-code-repair-probe-unavailable'],readyToCutover:false,productionWrites:0}));process.exitCode=1;}";
 }
 
-module.exports={AUTH_ENTRY,TARGETS,PAIR_TARGETS,DATA_FILES,validateRepairPublication,validateWorkerCodeRepairAuthorization,evaluateWorkerCodeRepair,collectWorkerCodeRepair,candidateAuthorization,buildWorkerCodeRepairProbe};
+module.exports={AUTH_ENTRY,TARGETS,PAIR_TARGETS,WRITER_TARGETS,SNAPSHOT_TARGETS,DATA_FILES,validateRepairPublication,validateWorkerCodeRepairAuthorization,evaluateWorkerCodeRepair,collectWorkerCodeRepair,candidateAuthorization,buildWorkerCodeRepairProbe};
 if(require.main===module) {
   try {
     if(process.argv.length!==3)throw Error('exact signed source root required');

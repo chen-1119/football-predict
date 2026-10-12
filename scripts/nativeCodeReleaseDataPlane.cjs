@@ -69,7 +69,7 @@ async function tryAllocate(sha, directory) {
   const repairFile=path.join(candidateRoot,'deploy/light-server/worker-code-repair-authorization.json');
   if(fs.existsSync(repairFile)) {
     const repair=require('./releaseWorkerCodeRepair.cjs').candidateAuthorization(candidateRoot,JSON.parse(fs.readFileSync(repairFile)));
-    if(repair.version==='worker-code-repair-v2') {
+    if(['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4'].includes(repair.version)) {
       assert.equal(repair.baseRuntimeSha256,state.oldSha);
       assert.equal(repair.publication.databaseOid,state.oldDatabaseOid);
       state.committedGenerationRepairAuthorizationHash=crypto.createHash('sha256').update(fs.readFileSync(repairFile)).digest('hex');
@@ -128,7 +128,7 @@ function assertCodeCurrentPublication(session, storeDir = STORE) {
 function assertRepairPair(state, session, current, previous, authorization, authorizationHash) {
   const repair=require('./releaseWorkerCodeRepair.cjs');
   repair.validateWorkerCodeRepairAuthorization(authorization,Date.now());
-  assert.equal(authorization.version,'worker-code-repair-v2');
+  assert(['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4'].includes(authorization.version));
   assert.equal(authorizationHash,state.committedGenerationRepairAuthorizationHash);
   assert.equal(authorization.baseRuntimeSha256,state.oldSha);
   assert.equal(authorization.publication.databaseOid,state.oldDatabaseOid);

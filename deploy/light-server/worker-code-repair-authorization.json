@@ -1,44 +1,29 @@
 {
-  "version": "worker-code-repair-v2",
-  "reason": "postgres-committed-generation-pairing",
-  "createdAt": "2026-10-12T08:18:37.108Z",
-  "expiresAt": "2026-10-12T10:18:37.108Z",
-  "baseRuntimeSha256": "e3a6855b19b143377973bb2364aba7d8ec8d7d3a5601522dc59635e180ede9d1",
+  "version": "worker-code-repair-v3",
+  "reason": "postgres-source-file-assembly-timeout",
+  "createdAt": "2026-10-12T15:50:44.777Z",
+  "expiresAt": "2026-10-12T17:50:44.777Z",
+  "baseRuntimeSha256": "c30e9926c67b638a60ab637cfc803d6d60fa275ad536a19a26adc4d66a2f21f4",
   "files": [
     {
-      "path": "scripts/postgresRuntimeReadSession.cjs",
-      "beforeSha256": "7f904af709315b79cad744047a71415191dd8b66993555b0116df8648fd85f96",
-      "afterSha256": "4b19adf14e5d3b6bfeb84d459fa9f6dd48c1c5452cf43f47e2d3d00f14dfd69a"
+      "path": "scripts/runSyncWorker.cjs",
+      "beforeSha256": "4573a7617f13c88a93da38788b77e47cc22335713b2a7917cc732735ceb06b05",
+      "afterSha256": "f58a6cc431c1766e8ac7cc64c0e232fb6316d2e30b1cf85687b94f27091323d0"
     },
     {
-      "path": "scripts/postgresModelInput.cjs",
-      "beforeSha256": "5c220130de110e494ad3806f8761c534272d48ed8065344e5e18b968ee62cfd6",
-      "afterSha256": "5cd282db9f6e2a544d61e69a88d1a0614f11c9c359a5e0c6197878fd8e030314"
+      "path": "scripts/postgresProjectionSync.cjs",
+      "beforeSha256": "5b13461703d455f57163b42b79e82bf0753cb982901b7b3a974aca234c27b0f7",
+      "afterSha256": "b04a5e5688fb463a4155725b64448a458c47ef110687c636f56a1ae647b9d919"
     },
     {
-      "path": "server/dataGenerationBundle.cjs",
-      "beforeSha256": "ec71dc899154f1f8e0a2f3cc736469a673df8e22574d8b7e1dc449612c34f45b",
-      "afterSha256": "4396044f151dfceda48d1deb8ef1830eda01db80850bdcbb6b9711ae272d9672"
+      "path": "scripts/releaseWorkerCodeRepair.cjs",
+      "beforeSha256": "785f416cff29da6681013d0a48437da4e2334fdd630c8197f1b67a16bbb8d0a9",
+      "afterSha256": "eabfbc69ee5281379f7648271133164ed3f9bf6783e1aa4fbde9e56b053568b8"
     },
     {
-      "path": "server/publicationResolverWorker.cjs",
-      "beforeSha256": "eb41b2fa10212333cf21750e1726b536c97beedbfbe2a2199001bb1a358ecbc3",
-      "afterSha256": "79671f02c307abba0eb7a9c52ade56d247abb34b0e46cc92c6995b8520a9e99d"
-    },
-    {
-      "path": "server/index.cjs",
-      "beforeSha256": "c638d08e0769608b7118a78473e15579fbd012f89d3d0935a6d8503ecb599ece",
-      "afterSha256": "b4dc0e4757675af7b0a77705bdfd663b8cf701f52fa28b429caec6f0f5c71669"
-    },
-    {
-      "path": "server/publicReferenceArchive.cjs",
-      "beforeSha256": "7a098884cfddd6704f53486ce47529f8bc48cff21da5297bb1cefc60f2aea2f0",
-      "afterSha256": "b2f1988e415776c31f156fafecba5352bc2e60f1cf07374011a7ff413069da94"
-    },
-    {
-      "path": "src/services/publicReferenceEvidence.cjs",
-      "beforeSha256": "dd641232a959bf11bf01385d263744707746c303b2beefc93b5c5fad20970aed",
-      "afterSha256": "0734cc562a0996884d639682053c10a42a2002dda7c543237f4a60588ec69a8f"
+      "path": "scripts/nativeCodeReleaseDataPlane.cjs",
+      "beforeSha256": "bb83b750e0326761626d09d85c77e4729f72c70ea25bd18f240b330786ab6605",
+      "afterSha256": "7c5ad40c98973df90e8dfa55b70fbc203547437efe3c609ee5cd4a3c4a04c0ee"
     }
   ],
   "dataContract": [
@@ -123,24 +108,24 @@
     "databaseOid": "28598409",
     "committed": {
       "mode": "active-generation",
-      "generationId": "g-d9229561c59b61e978fda01a313c4886501f8fc8e7f5f85b12eb5ad0dd953d65",
-      "manifestHash": "d9229561c59b61e978fda01a313c4886501f8fc8e7f5f85b12eb5ad0dd953d65",
-      "sourceCycleId": "sporttery-full-sync:2026-10-11T00:27:07.899Z",
-      "committedAt": "2026-10-11T00:35:11.349Z"
+      "generationId": "g-9abe72dc27b5ece697da5a0198623d7a796e3a3c6a686fab2ac932555691a431",
+      "manifestHash": "9abe72dc27b5ece697da5a0198623d7a796e3a3c6a686fab2ac932555691a431",
+      "sourceCycleId": "sporttery-full-sync:2026-10-12T14:35:45.934Z",
+      "committedAt": "2026-10-12T14:44:00.831Z"
     },
     "rawCurrent": {
       "mode": "active-generation",
-      "generationId": "g-15a78effddb840443de943a33e212660ced285195e595a0b7838ff05a6a027a4",
-      "manifestHash": "15a78effddb840443de943a33e212660ced285195e595a0b7838ff05a6a027a4",
-      "sourceCycleId": "sporttery-full-sync:2026-10-11T13:30:26.949Z",
-      "committedAt": "2026-10-11T13:39:18.433Z"
+      "generationId": "g-4cbce50594e5c429f5f96ddede0f2f88c2b29541f487dde0d63717279e3d1ef1",
+      "manifestHash": "4cbce50594e5c429f5f96ddede0f2f88c2b29541f487dde0d63717279e3d1ef1",
+      "sourceCycleId": "sporttery-full-sync:2026-10-12T15:20:46.428Z",
+      "committedAt": "2026-10-12T15:27:23.610Z"
     },
     "rawPrevious": {
       "mode": "active-generation",
-      "generationId": "g-61ddde2730ae366f6689d50ebb4e1a6ecd33a3153e8ae322a4a0148f6135bdce",
-      "manifestHash": "61ddde2730ae366f6689d50ebb4e1a6ecd33a3153e8ae322a4a0148f6135bdce",
-      "sourceCycleId": "sporttery-full-sync:2026-10-11T01:01:24.492Z",
-      "committedAt": "2026-10-11T01:10:14.183Z"
+      "generationId": "g-9abe72dc27b5ece697da5a0198623d7a796e3a3c6a686fab2ac932555691a431",
+      "manifestHash": "9abe72dc27b5ece697da5a0198623d7a796e3a3c6a686fab2ac932555691a431",
+      "sourceCycleId": "sporttery-full-sync:2026-10-12T14:35:45.934Z",
+      "committedAt": "2026-10-12T14:44:00.831Z"
     }
   }
 }
