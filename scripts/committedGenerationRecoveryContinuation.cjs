@@ -59,7 +59,7 @@ function renderScript(shell,native,p){
   shell=shell.replace(/\r\n/g,'\n');native=native.replace(/\r\n/g,'\n');
   const shellCut='\nrequire_cmd npm\n';assert.equal(shell.split(shellCut).length,2);
   const nativeCut='\nrun_native_release() {';assert.equal(native.split(nativeCut).length,2);
-  const prefix=shell.slice(0,shell.indexOf(shellCut));
+  let prefix=shell.slice(0,shell.indexOf(shellCut));
   const functions=native.slice(0,native.indexOf(nativeCut));
   const anchor='\n  validate_build_artifacts\n  normalize_validated_artifact_modes "$BUILD_DIR"\n  validate_build_artifacts\n';assert.equal(native.split(anchor).length,2);
   let tail=native.slice(native.indexOf(anchor)+1);assert(tail.endsWith('}\n'));
@@ -90,6 +90,7 @@ RELEASE_SITE=football-predict
 RELEASE_CHANNEL=production
 RELEASE_SEQUENCE=${p.targetSequence}
 `;
+  let keeperDiagnostic='';
   if(p.servingCoreVersion){
     const dir=p.sourceDir.slice(0,-7),liveCore=tail.match(/^  run_as_service_user_with_runtime_env env VERIFY_BASE_URL=[\s\S]*?^    "\$NODE_HOME\/bin\/node" "\$APP_DIR\/scripts\/verifyNativeDeploymentCore\.cjs"$/m);
     assert(liveCore,'exact original live core command required');
@@ -98,8 +99,22 @@ RELEASE_SEQUENCE=${p.targetSequence}
     // RR session. Candidate verification and the later natural-cycle gate stay
     // unchanged. Never select the uncommitted raw head for serving archives.
     tail=replaceOnce(tail,liveCore[0]+'\n'+archiveCommand,`  "$NODE_HOME/bin/node" '${dir}/serving-core.cjs' '${dir}' archives`);
+    const keeperFunction='wait_for_release_candidate_heartbeat_keeper_healthy() {';
+    // Preserve the original failed control bytes before its normal cleanup.
+    // The original result is returned unchanged; no failure is retried here.
+    prefix=replaceOnce(prefix,keeperFunction,'original_wait_for_release_candidate_heartbeat_keeper_healthy() {');
+    keeperDiagnostic=`
+wait_for_release_candidate_heartbeat_keeper_healthy() {
+  if original_wait_for_release_candidate_heartbeat_keeper_healthy; then return 0; fi
+  if [ -n "${'${RELEASE_HEARTBEAT_KEEPER_CONTROL_FILE:-}'}" ] && [ -f "$RELEASE_HEARTBEAT_KEEPER_CONTROL_FILE" ]; then
+    "$NODE_HOME/bin/node" '${dir}/serving-core.cjs' '${dir}' keeper-failure "$RELEASE_HEARTBEAT_KEEPER_CONTROL_FILE" || true
+  fi
+  return 1
+}
+`;
   }
   const initialize=`
+${keeperDiagnostic}
 PRIMARY_READ_SOURCE=postgres
 TRANSACTION_VERSION=4
 RECOVERY_ACTIVE=1

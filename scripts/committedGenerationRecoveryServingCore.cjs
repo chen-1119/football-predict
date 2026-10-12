@@ -25,6 +25,24 @@ async function verifyCommittedArchives({session,generations,archive,releaseSha})
   }
   return archive.evaluateSignedBaselineRows({manifest,lineage,generationRows,postgresRows,postgresIdentity:session.identity,generationPointer:context.pointer,releaseSha});
 }
+function withBoundPointerPair(generations,storeDir,current,previous,check){
+  const paths=generations.storePaths(storeDir),held=generations.acquirePointerCommitLock({lockDir:paths.pointerLockDir,timeoutMs:10000,staleMs:60000});
+  try{
+    assert.deepEqual(generations.readPointer(paths.currentPointer),current.pointer,'current pointer moved after immutable validation');
+    assert.deepEqual(generations.readPointer(paths.previousPointer),previous.pointer,'previous pointer moved after immutable validation');
+    const value=check();assert(!value?.then,'pointer pair assertion must be synchronous');return value;
+  }finally{held.release();}
+}
+function preserveHeartbeatFailure(dir,file){
+  assert.equal(process.platform,'linux');assert.equal(process.getuid(),0);
+  const p=require(dir+'/controller.cjs').load(dir,true);assert.equal(crypto.createHash('sha256').update(fs.readFileSync(dir+'/serving-core.cjs')).digest('hex'),p.servingCoreSha256);
+  assert.match(file,/^\/run\/football-release-heartbeat\.[A-Za-z0-9]{6}\/keeper-status\.json$/);
+  const parent=fs.lstatSync(path.dirname(file));assert(parent.isDirectory()&&!parent.isSymbolicLink());
+  const fd=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);let bytes;
+  try{const before=fs.fstatSync(fd);assert(before.isFile()&&before.nlink===1&&before.size<=1048576);bytes=fs.readFileSync(fd);const after=fs.fstatSync(fd);assert.equal(bytes.length,before.size);assert.equal(before.ino,after.ino);assert.equal(before.mtimeMs,after.mtimeMs);}finally{fs.closeSync(fd);}
+  const value=JSON.parse(bytes),out=dir+'/heartbeat-failure-control.json';assert.equal(value.instanceId,'football-release-'+p.targetSha256.slice(0,12)+'-release-heartbeat-keeper-4.service');
+  fs.writeFileSync(out,bytes,{flag:'wx',mode:0o600});return{preserved:true,path:out,sha256:crypto.createHash('sha256').update(bytes).digest('hex'),state:value.state,reason:value.reason||value.failure?.reason||null};
+}
 async function verify(dir,mode='core'){
   assert(['core','archives'].includes(mode));
   assert.equal(process.platform,'linux');assert.equal(process.getuid(),0);
@@ -38,20 +56,26 @@ async function verify(dir,mode='core'){
   module('scripts/releaseWorkerCodeRepair.cjs').candidateAuthorization(APP,p.externalWorker);
   const state=JSON.parse(fs.readFileSync(RELEASE+'/native/'+p.targetSha256+'/state.json'));assert.equal(state.sha,p.targetSha256);assert.equal(state.dataPlane,'code-only');assert.equal(state.coldRecoveryAuthorizationId,p.id);assert.equal(state.committedGenerationRepairAuthorizationHash,p.externalWorkerSha256);assert.equal(state.emergencyActivationAuthorizationHash,p.externalEmergencyAuthorizationHash);
   await code.verifySchema(state);
-  const Pool=module('scripts/nativeReleasePostgresTransport.cjs').NativeReleasePostgresPool,pool=new Pool({database:'football',databaseOid:state.oldDatabaseOid,clusterId:state.clusterId});let session,held;
+  const Pool=module('scripts/nativeReleasePostgresTransport.cjs').NativeReleasePostgresPool,pool=new Pool({database:'football',databaseOid:state.oldDatabaseOid,clusterId:state.clusterId});let session;
   const fetchHealth=async()=>{const res=await fetch('http://127.0.0.1:8788/api/v1/health',{signal:AbortSignal.timeout(15000)});assert.equal(res.status,200);return res.json();};
   try{
     const before=await fetchHealth(),healthReport=core.assessHealth(before);assert.equal(healthReport.ok,true);
     const originalWorkerObservation=await module('scripts/postgresWorkerObservation.cjs').readPostgresWorkerObservation({storeDir:STORE,publicDataDir:APP+'/public/data',pool,validationStep:{ok:true},generationStep:{ok:true},projectionStep:{ok:true}});
-    held=generations.acquirePointerCommitLock({lockDir:generations.storePaths(STORE).pointerLockDir,timeoutMs:10000,staleMs:60000});
-    session=await module('scripts/postgresRuntimeReadSession.cjs').openPostgresRuntimeReadSession({pool,storeDir:STORE,publicDataDir:APP+'/public/data',protectReceipt:true,pointerLockHandle:held});await session.guardedFinals();
+    // The session owns a retained-generation read lease and a shared PG receipt
+    // barrier. Never hold the global pointer writer lock across large file
+    // hashing, archive queries or HTTP calls: the normal heartbeat reader also
+    // needs a brief lease acquisition under that lock.
+    session=await module('scripts/postgresRuntimeReadSession.cjs').openPostgresRuntimeReadSession({pool,storeDir:STORE,publicDataDir:APP+'/public/data',protectReceipt:true});await session.guardedFinals();
     const transaction=(await session.client.query("SELECT current_setting('transaction_read_only') AS readonly,current_setting('transaction_isolation') AS isolation")).rows[0];assert.equal(transaction.readonly,'on');assert.equal(transaction.isolation,'repeatable read');
-    const pair=code.assertRepairPair(state,session,generations.resolveCurrentGeneration({storeDir:STORE}),generations.resolvePreviousGeneration({storeDir:STORE}),p.externalWorker,p.externalWorkerSha256);
+    const current=generations.resolveCurrentGeneration({storeDir:STORE}),previous=generations.resolvePreviousGeneration({storeDir:STORE});
+    const checkPair=()=>code.assertRepairPair(state,session,current,previous,p.externalWorker,p.externalWorkerSha256);
+    const pair=withBoundPointerPair(generations,STORE,current,previous,checkPair);
     const result=assessServingRepair({healthReport,healthPublication:healthReport.storage.publication,identity:session.identity,pair,workerObservation:originalWorkerObservation});
     const archives=mode==='archives'?await verifyCommittedArchives({session,generations,archive:module('scripts/verifyReleaseArchiveSuccessor.cjs'),releaseSha:p.targetSha256}):null;
     const after=await fetchHealth(),afterReport=core.assessHealth(after);assert.equal(afterReport.ok,true);same(afterReport.storage.publication,session.identity);await session.guardedFinals();
+    assert.deepEqual(withBoundPointerPair(generations,STORE,current,previous,checkPair),pair);
     return{...result,archives,checkedAt:new Date().toISOString(),target:p.targetSha256,authorizationId:p.id,readonlyTransaction:transaction,storage:healthReport.storage,projectionCounts:healthReport.projectionCounts,signedPair:pair,originalWorkerObservation,scope:'Serving API, schema and exact signed committed PG pair accepted for code recovery. The unchanged worker observation stays pending until natural raw-to-PG convergence. No new quotes, training or recommendation adoption is claimed.'};
-  }finally{await session?.close();held?.release();await pool.end();}
+  }finally{await session?.close();await pool.end();}
 }
-module.exports={assessServingRepair,verifyCommittedArchives,verify};
-if(require.main===module){assert([3,4].includes(process.argv.length));verify(path.resolve(process.argv[2]),process.argv[3]||'core').then(r=>console.log(JSON.stringify(r))).catch(e=>{console.error(JSON.stringify({ok:false,error:String(e.message).slice(0,500),productionDataWrites:0}));process.exitCode=1;});}
+module.exports={assessServingRepair,verifyCommittedArchives,withBoundPointerPair,preserveHeartbeatFailure,verify};
+if(require.main===module){if(process.argv[3]==='keeper-failure'){assert.equal(process.argv.length,5);console.log(JSON.stringify(preserveHeartbeatFailure(path.resolve(process.argv[2]),process.argv[4])));}else{assert([3,4].includes(process.argv.length));verify(path.resolve(process.argv[2]),process.argv[3]||'core').then(r=>console.log(JSON.stringify(r))).catch(e=>{console.error(JSON.stringify({ok:false,error:String(e.message).slice(0,500),productionDataWrites:0}));process.exitCode=1;});}}
