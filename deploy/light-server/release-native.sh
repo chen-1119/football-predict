@@ -13,7 +13,15 @@ native_exit() {
   stop_candidate || { log "native failure: candidate could not be stopped; recovery retained"; exit 1; }
   stop_release_candidate_heartbeat_keeper || { log "native failure: heartbeat keeper remains; recovery retained"; exit 1; }
   stop_release_sync_write_barrier || { log "native failure: sync barrier remains; recovery retained"; exit 1; }
+  if [ "${NATIVE_CODE_RELEASE:-0}" = 1 ] && [ "${RECOVERY_ACTIVE:-0}" = 1 ]; then
+    native_data drop-candidate-access || { CODE_READER_RETIRE_FAILED=1; log "code release reader retirement failed; restoring service and retaining evidence"; }
+  fi
   cleanup_release_static_attestations || true
+  # Only this process's pause may be removed here. A pre-existing override
+  # remains an operator/recovery concern, never an invitation to delete it.
+  if [ "${RELEASE_FAST_WATCHER_PAUSE_OVERRIDE_ACTIVE:-0}" = 1 ]; then
+    remove_release_fast_watcher_pause_override || { CODE_PAUSE_RETIRE_FAILED=1; log "native failure: owned watcher pause cleanup failed; attempting fixed recovery with durable ownership"; }
+  fi
   if [ "${RECOVERY_ACTIVE:-0}" = "1" ]; then
     if [ "${SWAP_STARTED:-0}" != "1" ] && [ "${NATIVE_NEXT_CREATED:-0}" = "1" ]; then
       [ "$NEXT_DIR" = "/opt/football-predict.next" ] && [ ! -L "$NEXT_DIR" ] || exit 1
@@ -23,6 +31,13 @@ native_exit() {
     # rename before APP was exchanged. It never restores SQLite/model data.
     "$NODE_HOME/bin/node" /usr/local/libexec/football-release-recovery.cjs || exit 1
   fi
+  [ "${CODE_READER_RETIRE_FAILED:-0}" != 1 ] || exit 1
+  [ "${CODE_PAUSE_RETIRE_FAILED:-0}" != 1 ] || exit 1
+  # A successful fixed recovery leaves no build process or recovery consumer
+  # using this disposable candidate copy. Preserve it on every stop/recovery
+  # or quiescence failure; remove only the existing guarded BUILD_DIR.
+  assert_build_user_quiescent || { log "native failure: build user is not quiescent; build tree retained"; exit 1; }
+  cleanup_build_tree || { log "native failure: isolated build tree could not be cleaned; failure retained"; exit 1; }
   release_stage_observe finish error
   [ "$status" -ne 0 ] || status=1
   exit "$status"
@@ -74,11 +89,23 @@ run_native_release() {
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseSequencePreflight.cjs"
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/verifyDeploymentConfig.cjs"
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseWorkerPreflight.cjs"
+  NATIVE_PLANNED_CODE="$("$NODE_HOME/bin/node" -e 'const p=require(process.argv[1]);console.log(p.classify(p.capture(process.argv[2]),p.capture(process.argv[3])).mode === "code-only" ? "1" : "0")' "$TRUSTED_SOURCE_DIR/scripts/releaseDataPlanePolicy.cjs" "$APP_DIR" "$TRUSTED_SOURCE_DIR")"
+  [[ "$NATIVE_PLANNED_CODE" =~ ^[01]$ ]]
+  CODE_EMERGENCY_AUTHORIZATION="$TRUSTED_SOURCE_DIR/deploy/light-server/code-release-activation-authorization.json"
+  CODE_EMERGENCY_ACTIVE=0
+  if [ -e "$CODE_EMERGENCY_AUTHORIZATION" ] || [ -L "$CODE_EMERGENCY_AUTHORIZATION" ]; then
+    [ "$NATIVE_PLANNED_CODE" = 1 ] || { log "emergency authorization refuses database migration"; return 1; }
+    "$NODE_HOME/bin/node" -e 'require(process.argv[1]).readEmergencyCodeAuthorization(process.argv[2], {at:new Date().toISOString(),dataPlane:"code-only"})' \
+      "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" "$CODE_EMERGENCY_AUTHORIZATION"
+    CODE_EMERGENCY_ACTIVE=1
+  fi
+  if [ "$NATIVE_PLANNED_CODE" != 1 ]; then
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" probe \
     --current "$APP_DIR/public/data/matches-current.json" --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
     --verifier-runtime-max-seconds "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" \
     --preverify-refresh-budget-seconds "$((CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS + NATIVE_CANDIDATE_PREPARATION_SECONDS))" \
     --atomic-swap-margin-seconds "$CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS"
+  fi
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/verifyCandidateArtifactSeed.cjs"
   rotate_fixed_recovery_helper
   install_fixed_qa_access_operator
@@ -93,6 +120,8 @@ run_native_release() {
   NATIVE_RELEASE_KIND="${native_state[0]}"
   NATIVE_CANDIDATE_DATABASE="${native_state[1]}"
   NATIVE_ARCHIVE_DATABASE="${native_state[2]}"
+  NATIVE_CODE_RELEASE="$("$NODE_HOME/bin/node" -e 'console.log(require(process.argv[1]).dataPlane === "code-only" ? "1" : "0")' "$NATIVE_STATE_DIR/state.json")"
+  [ "$NATIVE_CODE_RELEASE" = "$NATIVE_PLANNED_CODE" ] || { log "data contract changed during allocation"; return 1; }
   [ "$NATIVE_RELEASE_KIND" = runtime-only ] || {
     log "signed 013 research migration requires the existing PostgreSQL-only runtime"
     return 1
@@ -100,11 +129,13 @@ run_native_release() {
   if [ "$NATIVE_RELEASE_KIND" = runtime-only ]; then NATIVE_CANDIDATE_DATABASE=-; NATIVE_ARCHIVE_DATABASE=-; fi
   TRANSACTION_VERSION=4
   PRIMARY_READ_SOURCE=postgres
-  initialize_release_recovery_snapshot
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
+    initialize_release_recovery_snapshot
+    TIMER_STATE_DIRTY=1
+    quiesce_managed_maintenance_for_sqlite_snapshot
+  fi
   ensure_build_user
   assert_build_user_quiescent
-  TIMER_STATE_DIRTY=1
-  quiesce_managed_maintenance_for_sqlite_snapshot
   release_stage_observe begin candidate-build
   cleanup_build_tree
   install -d -o root -g root -m 0700 "$BUILD_DIR"
@@ -116,6 +147,7 @@ run_native_release() {
   # Hold a database snapshot through dump, independent restore and full row
   # comparison. The production HTTP process and official worker remain live.
   native_seed_log="$NATIVE_STATE_DIR/seed.log"
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
   native_data seed >"$native_seed_log" 2>&1
   native_materialize_candidate
   # Candidate reconciliation itself verifies the exact PostgreSQL schema, so
@@ -132,18 +164,62 @@ run_native_release() {
   restart_worker_if_needed
   native_data import-ledgers
   native_data build-access
+  fi
   NATIVE_BUILD_ENV_FILE="$NATIVE_STATE_DIR/build.env"
   chown -hR "$BUILD_USER:$BUILD_USER" "$BUILD_DIR"
   install -d -o "$BUILD_USER" -g "$BUILD_USER" -m 0700 "$BUILD_HOME"
   prebuilt_status=0
   verify_and_normalize_prebuilt_dist || prebuilt_status="$?"
   [ "$prebuilt_status" = 0 ] || [ "$prebuilt_status" = 2 ]
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    [ "$PREBUILT_DIST_VALIDATED" = 1 ] || { log "code release requires signed prebuilt dist"; return 1; }
+  fi
   run_build_step npm-ci env PATH="$PATH" HOME="$BUILD_HOME" npm_config_cache="${BUILD_HOME}/.npm" NODE_ENV=development "$NODE_HOME/bin/npm" ci --include=dev --ignore-scripts
   run_build_step postgres-migration-plan env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production "$NODE_HOME/bin/node" scripts/verifyPostgresMigrationPlan.cjs
   if [ "$PREBUILT_DIST_VALIDATED" != 1 ]; then run_build_step application-build env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production "$NODE_HOME/bin/npm" run build; fi
-  run_candidate_model_artifact_catchup "$CANDIDATE_STORE_DIR" "$CANDIDATE_STORE_DIR/retired-sqlite-must-not-open.db"
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
+    run_candidate_model_artifact_catchup "$CANDIDATE_STORE_DIR" "$CANDIDATE_STORE_DIR/retired-sqlite-must-not-open.db"
+  fi
   run_build_step npm-prune env PATH="$PATH" HOME="$BUILD_HOME" npm_config_cache="${BUILD_HOME}/.npm" NODE_ENV=production "$NODE_HOME/bin/npm" prune --omit=dev --ignore-scripts
   assert_build_user_quiescent
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    # Dependency installation has finished with NO database credential. Hold
+    # the existing bounded writer barrier only for the snapshot/read-only
+    # candidate checks. The public service continues to serve requests.
+    # Start the lease BEFORE stopping any publisher. Time spent preparing the
+    # package/dependencies is excluded, but a boundary crossed while seeded or
+    # checked normally rejects this candidate. A separately signed, short-lived
+    # code-only authorization may ignore schedule windows; lifetime, snapshot,
+    # data/archives, ownership and rollback checks remain mandatory.
+    CODE_CUTOVER_POST_SWAP_MARGIN_SECONDS=300
+    CANDIDATE_TRANSITION_LEASE="$NATIVE_STATE_DIR/code-transition-lease.json"
+    NODE_PATH="$APP_DIR/node_modules" "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/nativeCodeReleaseDataPlane.cjs" lease-input "$BUNDLE_SHA256"
+    CODE_CUTOVER_STARTED_SECONDS=$SECONDS
+    local code_emergency_args=()
+    if [ "$CODE_EMERGENCY_ACTIVE" = 1 ]; then
+      code_emergency_args=(--emergency-authorization "$CODE_EMERGENCY_AUTHORIZATION" --data-plane code-only)
+    fi
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" create \
+      --current "$NATIVE_STATE_DIR/code-lease-current.json" --lease "$CANDIDATE_TRANSITION_LEASE" \
+      --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
+      --verifier-runtime-max-seconds 300 --preverify-refresh-budget-seconds 570 --atomic-swap-margin-seconds 30 "${code_emergency_args[@]}"
+    # Code preparation has not touched live services or maintenance. Only a
+    # granted cutover lease may open the recoverable service transaction.
+    # A closed window/build rejection therefore exits without restarting APP.
+    initialize_release_recovery_snapshot
+    TIMER_STATE_DIRTY=1
+    quiesce_managed_maintenance_for_sqlite_snapshot
+    stop_worker_for_release_window
+    pause_current_fast_watcher_for_live_prebuild
+    start_release_sync_write_barrier "$APP_DIR"
+    native_data seed >"$native_seed_log" 2>&1
+    native_materialize_candidate
+    seed_candidate_model_artifacts
+    candidate_ai_state_status=0
+    copy_regular_file_nofollow "$LIVE_STORE_DIR/ai-arena-state.json" "$CANDIDATE_STORE_DIR/ai-arena-state.json" || candidate_ai_state_status="$?"
+    [ "$candidate_ai_state_status" = 0 ] || [ "$candidate_ai_state_status" = 2 ]
+    chown -hR "$BUILD_USER:$BUILD_USER" "$BUILD_DIR"
+  fi
   validate_build_artifacts
   normalize_validated_artifact_modes "$BUILD_DIR"
   validate_build_artifacts
@@ -154,9 +230,11 @@ run_native_release() {
   validate_build_artifacts "$NEXT_DIR"
   verify_worker_write_permissions "$NEXT_DIR"
   prepare_release_static_attestations
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
   run_candidate_refresh_step native-deadline-refresh env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production \
     SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" PUBLIC_DATA_DIR="$NEXT_DIR/public/data" DATA_GENERATION_PUBLIC_DATA_DIR="$NEXT_DIR/public/data" \
     "$NODE_HOME/bin/node" scripts/captureCandidateProspectiveDeadline.cjs --deadline-only
+  fi
   fix_app_permissions "$NEXT_DIR"
   # The deadline refresh is followed by root ownership normalization. Restore
   # the service write directories before accepting and exchanging this tree.
@@ -173,10 +251,14 @@ run_native_release() {
     WRITE_LEGACY_STATIC_PAYLOADS=0 MIRROR_PUBLISHED_DATA_TO_DIST=0 SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" "$NODE_HOME/bin/node" server/index.cjs
   wait_for_health "http://${HOST}:${CANDIDATE_PORT}" native-candidate 90 2 service
   NODE_PATH="$APP_DIR/node_modules" "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/verifyReleaseArchiveSuccessor.cjs" candidate "$BUNDLE_SHA256" "$CANDIDATE_STORE_DIR"
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
   "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/releaseTransitionLease.cjs" create --current "$NEXT_DIR/public/data/matches-current.json" \
     --lease "$CANDIDATE_TRANSITION_LEASE" --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
     --verifier-runtime-max-seconds "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" --preverify-refresh-budget-seconds "$CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS" \
     --atomic-swap-margin-seconds "$CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS"
+  else
+    native_code_verify_cutover_lease 300
+  fi
   release_stage_observe end candidate-build ok
   release_stage_observe begin candidate-readiness
   run_trusted_candidate_verifier env PATH="$PATH" HOME="$BUILD_HOME" ADMIN_TOKEN="$CANDIDATE_ADMIN_TOKEN" ACCESS_CODE_ADMIN_TOKEN="$CANDIDATE_ADMIN_TOKEN" \
@@ -187,6 +269,7 @@ run_native_release() {
   release_stage_observe end candidate-readiness ok
   stop_candidate
   assert_build_user_quiescent
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then stop_release_sync_write_barrier clean; fi
   native_data drop-candidate-access
   cleanup_build_tree
   snapshot_app_tree_identity "$RECOVERY_DIR" new-app "$NEXT_DIR" /opt/football-predict.next
@@ -199,9 +282,16 @@ run_native_release() {
   systemctl daemon-reload
   write_recovery_phase host-config-applied
   wait_for_health "http://${HOST}:${PORT}" native-before-stop 90 2 service
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then native_code_verify_cutover_lease 300; fi
   quiesce_managed_maintenance_for_sqlite_snapshot
   stop_worker_for_release_window
-  pause_current_fast_watcher_for_live_prebuild
+  if [ "${RELEASE_FAST_WATCHER_PAUSE_OVERRIDE_ACTIVE:-0}" = 1 ]; then
+    # The code lane already owns this pause from its immutable seed capture.
+    # Preserve it until the stopped window; do not try to install it twice.
+    assert_release_fast_watcher_pause_guard
+  else
+    pause_current_fast_watcher_for_live_prebuild
+  fi
   start_release_sync_write_barrier
   stop_service_for_release_window
   quiesce_native_auxiliary_writers
@@ -211,15 +301,21 @@ run_native_release() {
   # the serving database immediately before the new application can start.
   # A durable intent lets cold recovery remove an empty 014 table and its
   # migration row together if this release is rolled back.
-  "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/deploy/light-server/recommendation-schema-bridge.cjs" live "$BUNDLE_SHA256"
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/deploy/light-server/recommendation-schema-bridge.cjs" live "$BUNDLE_SHA256"
+  fi
   "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/candidateReleaseContinuity.cjs" snapshot \
     --revision-transition "$NEXT_DIR/deploy/light-server/candidate-revision-transition.json" \
     --registry "$LIVE_STORE_DIR/model-artifacts/candidate-prospective-registry.json" --output "$RECOVERY_DIR/candidate-release-continuity-before.json" \
     --bundle-sha256 "$BUNDLE_SHA256" --release-sequence "$RELEASE_SEQUENCE"
   release_stage_observe begin stopped-window
   native_data final
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    native_code_verify_cutover_lease "$CODE_CUTOVER_POST_SWAP_MARGIN_SECONDS"
+  else
   "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/releaseTransitionLease.cjs" verify --current "$NEXT_DIR/public/data/matches-current.json" \
     --lease "$CANDIDATE_TRANSITION_LEASE" --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" --required-margin-seconds "$POST_SWAP_TRANSITION_START_BUDGET_SECONDS"
+  fi
   RUNTIME_ENV_DIRTY=1
   install -o root -g football -m 0640 "$RECOVERY_DIR/native-mode/runtime-env/env" "$RUNTIME_ENV_FILE"
   sync -f "$RUNTIME_ENV_FILE"
@@ -237,11 +333,36 @@ run_native_release() {
   verify_worker_write_permissions "$APP_DIR"
   restart_service_if_needed
   wait_for_health "http://${HOST}:${PORT}" native-post-swap 120 2 service
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    [ "$((SECONDS - CODE_CUTOVER_STARTED_SECONDS))" -lt 900 ]
+    if [ "$CODE_EMERGENCY_ACTIVE" = 1 ]; then
+      native_code_verify_cutover_lease 30 "$APP_DIR"
+    else
+      verify_post_swap_transition_window 30 code-service-handover
+    fi
+  fi
   release_stage_observe end stopped-window ok
   native_finish_readiness
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/nativeCodeReleaseDataPlane.cjs" retire-seed "$BUNDLE_SHA256" \
+      || log "accepted code release: disposable seed retained; inspect retirement receipt before retrying cleanup"
+  fi
+}
+
+native_code_verify_cutover_lease() {
+  [ "$NATIVE_CODE_RELEASE" = 1 ]
+  [ "$((SECONDS - CODE_CUTOVER_STARTED_SECONDS))" -lt "$((900 - $1))" ] || { log "code cutover preparation exceeded its bounded lease"; return 1; }
+  local code_root="${2:-$NEXT_DIR}" emergency_args=()
+  if [ "${CODE_EMERGENCY_ACTIVE:-0}" = 1 ]; then
+    emergency_args=(--emergency-authorization "$CODE_EMERGENCY_AUTHORIZATION" --data-plane code-only)
+  fi
+  "$NODE_HOME/bin/node" "$code_root/scripts/releaseTransitionLease.cjs" verify \
+    --current "$code_root/public/data/matches-current.json" --lease "$CANDIDATE_TRANSITION_LEASE" \
+    --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" --required-margin-seconds "$1" "${emergency_args[@]}"
 }
 
 native_finish_readiness() {
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
   if ! prepare_release_enrichment_reuse_request; then
     log "native enrichment reuse unavailable; full enrichment remains required"
     clear_release_enrichment_reuse_request
@@ -257,10 +378,18 @@ native_finish_readiness() {
   release_stage_observe end worker-enrichment-wait ok
   systemctl restart "$SERVICE_NAME"
   wait_for_health "http://${HOST}:${PORT}" native-post-worker 180 2 service
+  fi
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    assert_release_stopped_code_worker
+  fi
   refresh_candidate_capture_heartbeat_for_readiness "$APP_DIR" "$APP_DIR"
+  if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
   freeze_worker_for_readiness "$WORKER_RELEASE_STARTED_AT" "$LIVE_STORE_DIR/sync-worker-status.json"
   wait_for_frozen_worker_children_to_drain "$WORKER_FROZEN_MAIN_PID"
   start_release_candidate_heartbeat_keeper
+  else
+  start_release_candidate_heartbeat_keeper stopped-code
+  fi
   clear_release_worker_priority_request
   clear_release_enrichment_reuse_request
   release_stage_observe begin post-swap-readiness
@@ -286,13 +415,29 @@ native_finish_readiness() {
   fi
   wait_for_release_candidate_heartbeat_keeper_healthy
   stop_release_candidate_heartbeat_keeper clean
-  resume_worker_after_readiness
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    WORKER_RELEASE_STARTED_AT="$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')"
+    start_worker_for_live_release
+  else
+    resume_worker_after_readiness
+  fi
   if [ -n "$PUBLIC_BASE_URL" ]; then
     run_as_service_user_with_runtime_env env REMOTE_BASE_URL="$PUBLIC_BASE_URL" REMOTE_REQUIRE_HEALTHY=0 \
       REMOTE_REQUIRE_SQLITE=0 REMOTE_REQUIRE_POSTGRES_ONLY=1 REMOTE_REQUIRED_READ_SOURCE=postgres REMOTE_REQUIRE_SYNC_WORKER=1 \
       "$NODE_HOME/bin/node" "$APP_DIR/scripts/verifyRemotePublicReadiness.cjs"
   fi
   release_stage_observe begin finalization
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    # The 300s post-swap reserve belongs to the original 900s lease. Check
+    # that same clock after all final probes, without comparing a newly
+    # running worker's legitimate generation against the preparation input.
+    [ "$((SECONDS - CODE_CUTOVER_STARTED_SECONDS))" -lt 900 ]
+    NODE_PATH="$APP_DIR/node_modules" "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/nativeCodeReleaseDataPlane.cjs" complete-clock "$BUNDLE_SHA256"
+    # Durable engineering receipt explicitly leaves new input/model adoption
+    # pending. A later read-only observer must prove the new natural cycle;
+    # neither HTTP 200 nor this code acceptance promotes a model or forecast.
+    "$NODE_HOME/bin/node" "$APP_DIR/scripts/codeReleaseAcceptance.cjs" write "$BUNDLE_SHA256" "$WORKER_RELEASE_STARTED_AT"
+  fi
   write_recovery_phase readiness-passed
   restore_native_auxiliary_states_after_readiness
   enable_managed_timers_after_readiness

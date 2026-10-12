@@ -6,7 +6,7 @@ const { projectSignalRows, readMarketSignalRows } = require('../collectors/marke
 const { CONTRACT, COPY_SOURCE, buildWarehouseSpReceipt, validReceipt, warehouseQuoteForMatch } = require('../src/services/warehouseLotterySp.cjs');
 const { evaluateForecast } = require('../src/services/publishedForecastPolicy.cjs');
 const { attachProspectiveForecastInputs, forecastInputFor } = require('../src/services/prospectiveForecastInput.cjs');
-const { makeDecision, validDecision } = require('../scripts/recommendationPlatform/decision.cjs');
+const { makeDecision, validDecision, chooseCombo, freezeCombo } = require('../scripts/recommendationPlatform/decision.cjs');
 const { createRuntime } = require('../scripts/recommendationPlatform/runtime.cjs');
 const { NOW, match, publication, validators, memoryPorts } = require('./recommendationFixture.cjs');
 const stamp = ms => new Date(ms).toISOString();
@@ -25,6 +25,23 @@ function fallbackMatch(id = 1, clock = NOW, row = acquiredRow(id, clock)) {
   return match(id, clock, { oddsSource: '500.com:HAD', externalSignals: projectSignalRows([row])[0].signal });
 }
 const evaluate = m => evaluateForecast(m, { now: NOW, publication: publication(NOW) });
+function copiedOnlyPorts(clock=NOW){
+  const ports=memoryPorts(),transaction=ports.transaction;ports.now=clock;
+  ports.transaction=(lane,fn)=>transaction(lane,repo=>{
+    repo.currentInputs=async()=>({current:await repo.current(),markets:[],receiptHashes:new Set()});
+    return fn(repo);
+  });return ports;
+}
+function seedHistoricalCopied(ports,{frozen=false}={}){
+  // Historical replay uses the original pure decision/receipt contract, not a
+  // bypass of the new runtime's signed acquisition/opening admission gate.
+  const now=ports.now,decisions=ports.current.map(m=>makeDecision(m,{now,publication:publication(now)}).decision);
+  assert(decisions.every(validDecision));ports.state.decisions=decisions;
+  const previews=[2,3].map(size=>chooseCombo(decisions,size,now));assert(previews.every(Boolean));
+  ports.state.lanes.publish={status:'ok',lastAttemptAt:stamp(now),lastSuccessAt:stamp(now),inputAsOf:stamp(now)};
+  ports.state.lanes.combos={status:'ok',lastAttemptAt:stamp(now),lastSuccessAt:stamp(now),inputAsOf:stamp(now),previews:frozen?[]:previews};
+  if(frozen){ports.state.combos=previews.map(p=>freezeCombo(p,now));assert(ports.state.combos.every(Boolean));}
+}
 
 test('new native HAD extraction is explicitly marked, HHAD is not', () => {
   assert.equal(acquiredRow().payload.lotterySpContract, CONTRACT);
@@ -141,17 +158,24 @@ test('current-cycle input never borrows a receipt from the frozen parent', () =>
   const [attached]=attachProspectiveForecastInputs([old],[fresh],NOW);assert.equal(evaluate(attached).eligible,false);
 });
 test('0 direct official odds, 3 audited copied SPs produce both combinations', async () => {
-  const ports=memoryPorts();ports.current=[1,2,3].map(i=>fallbackMatch(i));
-  const runtime=createRuntime(ports,{validators});const result=await runtime.publishingCycle();
-  assert.equal(result.combinations.ok,true);assert.equal(ports.state.view.previews.length,2);
+  const ports=copiedOnlyPorts();ports.current=[1,2,3].map(i=>fallbackMatch(i));seedHistoricalCopied(ports);
+  const runtime=createRuntime(ports,{validators});const result=await runtime.view();
+  assert.equal(result.ok,true);assert.equal(ports.state.view.previews.length,2);
   assert.deepEqual(ports.state.view.previews.map(c=>c.size),[2,3]);
   assert.ok(ports.state.view.previews.every(c=>c.rawTotalOdds>=(c.size===2?2.5:5)&&c.legs.every(d=>d.quoteSource===COPY_SOURCE)));
 });
 test('all-reference copied-source combinations freeze and retain provenance immutably', async () => {
-  const ports=memoryPorts();ports.now=Date.parse('2026-09-17T13:00:00Z');ports.current=[1,2,3].map(i=>fallbackMatch(i,ports.now));
-  const runtime=createRuntime(ports,{validators});await runtime.publishingCycle();assert.equal(ports.state.combos.length,2);
+  const ports=copiedOnlyPorts(Date.parse('2026-09-17T13:00:00Z'));ports.current=[1,2,3].map(i=>fallbackMatch(i,ports.now));seedHistoricalCopied(ports,{frozen:true});
+  const runtime=createRuntime(ports,{validators});await runtime.view();assert.equal(ports.state.combos.length,2);
   const before=structuredClone(ports.state.combos);ports.now+=1000;ports.current=[1,2,3].map(i=>fallbackMatch(i,ports.now));
   await runtime.publishingCycle();assert.deepEqual(ports.state.combos,before);
+});
+test('new copied-only publication cannot borrow the old receipt contract for the opening request clock',async()=>{
+  const ports=copiedOnlyPorts();ports.current=[1,2,3].map(i=>fallbackMatch(i));
+  const result=await createRuntime(ports,{validators}).publishingCycle();
+  assert.equal(result.publication.ok,true);assert.equal(ports.state.decisions.length,0);
+  assert.equal(ports.state.combos.length,0);assert.equal(ports.state.view.previews.length,0);
+  assert(ports.state.issues.some(i=>i.reason==='opening-clock-invalid'));
 });
 test('500 observed final is not promoted to official settlement by a price receipt', async () => {
   const ports=memoryPorts();ports.current=[1,2,3].map(i=>fallbackMatch(i));const runtime=createRuntime(ports,{validators});await runtime.publishingCycle();

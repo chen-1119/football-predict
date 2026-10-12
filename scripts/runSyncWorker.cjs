@@ -8,6 +8,7 @@ const { readPointer, storePaths } = require("../server/dataGenerationStore.cjs")
 const { apiFootballRuntimePolicyFor } = require("../src/services/apiFootballRuntimePolicy.cjs");
 const { runFootballDataFixtureRetry } = require("./footballDataFixtureRetry.cjs");
 const { runOpenFootballObservationSchedule } = require("./openFootballObservationSchedule.cjs");
+const { openingAtForBusinessDate } = require("../src/services/sportteryOpeningPolicy.cjs");
 const { shadowObservationAuditValid } = require("../src/services/candidateCaptureState.cjs");
 const {
   evaluateReleaseEnrichmentReuseRequest,
@@ -2566,6 +2567,7 @@ const describeCycleStages = () => ([
       "sync:api-football",
       "sync:weather",
       "sync:openfootball-observations",
+      "sync:team-evidence",
       "sync:football-data-fixtures",
       "sync:football-data-results",
       "sync:open-research",
@@ -3526,6 +3528,9 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_500_DETAILS_SYNC === "1", "sync:500:details"));
     enrichmentSteps.push(await runEnrichment(apiFootballRuntimePolicy.enabled, "sync:api-football"));
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_WEATHER_SYNC !== "0", "sync:weather"));
+    // Independent append-only PostgreSQL evidence; no legacy file rewrite or
+    // implicit model promotion. Per-source cadence and retries live in the job.
+    enrichmentSteps.push(await runEnrichment(storageMode.postgresOnly && process.env.ENABLE_TEAM_EVIDENCE_SYNC !== "0", "sync:team-evidence"));
     // Private community receipts do not feed the publication planner. They
     // retain a visible slow-step result but cannot trigger base reconstruction.
     const communityReceiptStep = await runOpenFootballObservationSchedule({
@@ -4090,6 +4095,31 @@ const relaySnapshotChanged = (baseline, current) => Boolean(
   && current.token !== baseline?.token
 );
 
+// A sleep may end at the next Beijing opening boundary. This is only a wake
+// hint: the next cycle still acquires its normal locks and checks sale, source,
+// model and release admission. A running cycle is never interrupted here.
+const scheduledCycleWake = (delayMs, nowMs) => {
+  const intervalDeadlineMs = nowMs + Math.max(0, Number(delayMs || 0));
+  if (!Number.isSafeInteger(nowMs) || !Number.isFinite(new Date(nowMs + 8 * 3600000).getTime())) {
+    return { deadlineMs: intervalDeadlineMs, openingAt: null };
+  }
+  let businessDate = new Date(nowMs + 8 * 3600000).toISOString().slice(0, 10);
+  let openingAt = openingAtForBusinessDate(businessDate);
+  let openingMs = Date.parse(openingAt || "");
+  // Strictly future makes an exact-boundary restart or the next wait after an
+  // opening wake use tomorrow, rather than spin repeatedly with a zero delay.
+  if (openingMs <= nowMs) {
+    const nextDay = new Date(nowMs + 8 * 3600000 + 24 * 3600000);
+    if (!Number.isFinite(nextDay.getTime())) return { deadlineMs: intervalDeadlineMs, openingAt: null };
+    businessDate = nextDay.toISOString().slice(0, 10);
+    openingAt = openingAtForBusinessDate(businessDate);
+    openingMs = Date.parse(openingAt || "");
+  }
+  return Number.isSafeInteger(openingMs) && openingMs > nowMs && openingMs <= intervalDeadlineMs
+    ? { deadlineMs: openingMs, openingAt }
+    : { deadlineMs: intervalDeadlineMs, openingAt: null };
+};
+
 const waitForNextCycle = async (delayMs, options = {}) => {
   const enabled = options.enabled ?? relayWakeEnabled;
   const pollMs = Math.max(100, Number(options.pollMs || relayWakePollMs));
@@ -4098,7 +4128,8 @@ const waitForNextCycle = async (delayMs, options = {}) => {
   const now = options.now || Date.now;
   const baseline = options.baseline || readFingerprint();
   const startedAtMs = now();
-  const deadlineMs = startedAtMs + Math.max(0, Number(delayMs || 0));
+  const scheduledWake = scheduledCycleWake(delayMs, startedAtMs);
+  const deadlineMs = scheduledWake.deadlineMs;
   const externalWake = options.wakePromise
     ? Promise.resolve(options.wakePromise).then(
         (value) => ({ external: true, value }),
@@ -4176,10 +4207,11 @@ const waitForNextCycle = async (delayMs, options = {}) => {
   }
 
   return {
-    reason: "interval-elapsed",
+    reason: scheduledWake.openingAt ? "sporttery-eleven-opening" : "interval-elapsed",
     waitedMs: Math.max(0, now() - startedAtMs),
     baseline,
-    current: enabled ? readFingerprint() : null
+    current: enabled ? readFingerprint() : null,
+    ...(scheduledWake.openingAt ? { openingAt: scheduledWake.openingAt } : {})
   };
 };
 
@@ -4331,7 +4363,7 @@ const main = async () => {
           releaseDrain: diagnostic,
           error: diagnostic.reason,
           errorCode: diagnostic.code,
-          nextWakeAt: new Date(Date.now() + releaseCycleRetryMs).toISOString(),
+          nextWakeAt: new Date(scheduledCycleWake(releaseCycleRetryMs, Date.now()).deadlineMs).toISOString(),
         });
         cycleWake = await waitForNextCycle(releaseCycleRetryMs, {
           enabled: false,
@@ -4563,7 +4595,7 @@ const main = async () => {
         cycle: completedCycle,
       });
       const nextWakeAt = loop
-        ? new Date(Date.now() + (relayCatchupRequired ? 0 : loopDelayMs)).toISOString()
+        ? new Date(scheduledCycleWake(relayCatchupRequired ? 0 : loopDelayMs, Date.now()).deadlineMs).toISOString()
         : null;
       writeWorkerStatus({
         ok: true,
@@ -4647,7 +4679,7 @@ const main = async () => {
         Date.now(),
         { fromCompletion: postDeadlineCooldown || nextCadence.mode === "hot" },
       );
-      const nextWakeAt = loop ? new Date(Date.now() + loopDelayMs).toISOString() : null;
+      const nextWakeAt = loop ? new Date(scheduledCycleWake(loopDelayMs, Date.now()).deadlineMs).toISOString() : null;
       const failure = {
         type: "sync-worker-failed",
         ok: false,
@@ -4804,6 +4836,7 @@ module.exports = {
   runCandidateProspectiveDeadlineCapture,
   runBenchmarkProspectiveDeadlineCapture,
   runWithSharedSlowArtifactLock,
+  scheduledCycleWake,
   startCandidateProspectiveDeadlineHeartbeat,
   startBenchmarkProspectiveDeadlineCapture,
   summarizeWorkerError,

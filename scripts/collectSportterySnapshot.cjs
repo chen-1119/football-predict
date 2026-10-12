@@ -63,7 +63,7 @@ const relayMethodsInput = Object.prototype.hasOwnProperty.call(process.env, "SPO
   : Object.prototype.hasOwnProperty.call(process.env, "SPORTTERY_METHODS")
     ? process.env.SPORTTERY_METHODS
     : "concern,live,result,all";
-const methods = /^(none|current-only|initial-only)$/i.test(String(relayMethodsInput).trim())
+const methods = /^(none|current-only|initial-only|schedule-only)$/i.test(String(relayMethodsInput).trim())
   ? []
   : relayMethodsInput
     .split(",")
@@ -71,6 +71,15 @@ const methods = /^(none|current-only|initial-only)$/i.test(String(relayMethodsIn
     .filter(Boolean);
 
 const nowIso = () => new Date().toISOString();
+
+const initialEndpointDefinitions = ({ skipInitial = false, methodsInput = "" } = {}) => {
+  if (skipInitial) return [];
+  const current = { id: "current", method: "current", url: CURRENT_URL, tab: "concern" };
+  // Current carries both schedule and prices. Preserve its entire signed body;
+  // the downstream projection/publication policy decides which fields to use.
+  if (String(methodsInput).trim().toLowerCase() === "schedule-only") return [current];
+  return [{ id: "calculator", method: "calculator", url: CALCULATOR_URL, tab: "concern" }, current];
+};
 
 const sha256Buffer = (value) => crypto
   .createHash("sha256")
@@ -596,10 +605,7 @@ const main = async () => {
   const errors = [];
   const proxy = outboundProxy();
   const attestationSigner = loadCollectorAttestationSigner();
-  const initial = skipInitialEndpoints ? [] : [
-    { id: "calculator", method: "calculator", url: CALCULATOR_URL, tab: "concern" },
-    { id: "current", method: "current", url: CURRENT_URL, tab: "concern" },
-  ];
+  const initial = initialEndpointDefinitions({ skipInitial: skipInitialEndpoints, methodsInput: relayMethodsInput });
 
   for (const endpoint of initial) {
     try {
@@ -719,6 +725,7 @@ module.exports = {
   createSourceCycleId,
   fetchEndpoint,
   finiteEnvNumber,
+  initialEndpointDefinitions,
   loadCollectorAttestationSigner,
   parseCurlResponseHeaders,
   providerObservationFromPayload,

@@ -53,7 +53,8 @@ async function verify(pool){
       await q('INSERT INTO football.match_snapshots(id,dataset,source_match_id,kickoff_time,payload) VALUES($1,$2,$3,$4,$5::jsonb)',
         [fresh.id,'current',fresh.sourceMatchId,fresh.kickoffTime,JSON.stringify(attached)]);
     }
-    const runtime=createRuntime(postgresPorts(mappedPool,()=>now),{validators:{isFinal:()=>false,isVoid:()=>false}});
+    // Keep the original collector/legacy compatibility contract independently of cutover.
+    const runtime=createRuntime({...postgresPorts(mappedPool,()=>now),trainedOnly:false,prdPaperPool:null},{validators:{isFinal:()=>false,isVoid:()=>false}});
     const copied=await runtime.combos();check(()=>assert.equal(copied.ok,true));
     check(()=>assert.equal(copied.value.candidateCount,3));
     check(()=>assert.deepEqual(copied.value.previews.map(c=>c.size),[2,3]));

@@ -133,6 +133,27 @@
   color: var(--text-1, #f0f4f8);
 }
 
+/* Expanded evidence is a full-width section. A details wrapper must not
+   reactivate the legacy score-card grid or its empty 260px second track. */
+.match-detail-v4__cockpit > .recommendation-detail-secondary-evidence[open] {
+  grid-column: 1 / -1;
+}
+
+.match-detail-v4__cockpit > .recommendation-detail-secondary-evidence > .recommendation-score-card {
+  display: block;
+  margin: 12px 0 0;
+}
+
+.match-detail-v4__cockpit > .recommendation-detail-secondary-evidence .recommendation-score-list {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+}
+
+.match-detail-v4__cockpit > .recommendation-detail-secondary-evidence .recommendation-score-option span,
+.match-detail-v4__cockpit > .recommendation-detail-secondary-evidence .recommendation-score-option em {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .match-detail-v4__cockpit > .recommendation-overview-card,
 .match-detail-v4__cockpit > .recommendation-score-card {
   display: block;

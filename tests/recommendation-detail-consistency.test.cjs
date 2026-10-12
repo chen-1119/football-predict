@@ -19,7 +19,8 @@ const Facts=compile('../src/components/predictions/RecommendationEvidenceFacts.t
  if(id.endsWith('.css'))return{};throw Error(id);
 }).RecommendationEvidenceFacts;
 const qualityNote=compile('../src/components/recommendations/SelectionQualityNote.tsx',id=>{
- if(id==='react/jsx-runtime')return jsx;throw Error(id);
+ if(id==='react/jsx-runtime')return jsx;
+ if(id.endsWith('/publishedDetailPresentation'))return presentation;throw Error(id);
 });
 const Pick=compile('../src/components/recommendations/PublishedMatchPick.tsx',id=>{
  if(id==='react/jsx-runtime')return jsx;
@@ -97,7 +98,7 @@ test('standard draw X maps to draw, never to a handicap draw or unconditional al
  const {row}=fixture.fixtures[0],decision={...row.decision,tipCode:'X',modelProbability:.5,probabilities:{'1':.3,X:.5,'2':.2},handicapAnalysis:{tipCode:'1'}};
  const data=presentation.publishedDetailPresentation(decision,[{home:1,away:0,label:'misleading',probability:25},{home:0,away:0,label:'untrusted-label',probability:20}]);
  assert.equal(data.primaryScore.label,'0-0');assert.equal(data.probabilities.draw,50);assert.equal(data.alternativeScore.label,'1-0');
- assert.match(words(Facts({match:fixture.fixtures[0].match,publishedDecision:decision,language:'zh',supplementaryModel:false})),/平局 · 50.0%/);
+ assert.match(words(Facts({match:fixture.fixtures[0].match,publishedDecision:decision,language:'zh',supplementaryModel:false})),/平局 · 无条件概率 50.0%/);
 });
 test('score selection rejects invented/invalid rows, ranks existing rows and never mutates input',()=>{
  const {row}=fixture.fixtures[0],scores=[{home:2,away:0,label:'2-0',probability:5},{home:1,away:0,label:'1-0',probability:10},{home:3,away:0,label:'3-0',probability:NaN},{home:-1,away:-2,label:'bad',probability:99},{home:1.5,away:0,label:'bad',probability:99}];

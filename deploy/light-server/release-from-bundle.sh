@@ -10,6 +10,10 @@ WORKER_SERVICE_NAME="${WORKER_SERVICE_NAME:-football-sync-worker}"
 NODE_HOME="${NODE_HOME:-/opt/node-v22.22.1}"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8788}"
+# r829's restored API validated its immutable publication in 150961ms.
+# Keep startup bounded while allowing that measured warmup and two probes.
+# This is not a lease extension; all transition and identity gates still apply.
+readonly FAST_WATCHER_RESTART_HEALTH_SECONDS=180
 CANDIDATE_PORT="${CANDIDATE_PORT:-8789}"
 KEEP_BACKUP="${KEEP_BACKUP:-1}"
 PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-}"
@@ -186,8 +190,12 @@ MANAGED_CONFIG_PATHS=(
   /etc/nginx/sites-available/football-predict
   /etc/nginx/sites-enabled/default
   /etc/nginx/sites-enabled/football-predict
+  /etc/systemd/system/football-postgres-backup.service
+  /etc/systemd/system/football-postgres-backup.timer
+  /usr/local/sbin/football-postgres-backup-v2
+  /etc/systemd/journald.conf.d/football-retention.conf
 )
-MANAGED_TIMERS=(football-cleanup.timer football-monitor.timer football-daily-prematch.timer football-featured-combo.timer)
+MANAGED_TIMERS=(football-cleanup.timer football-monitor.timer football-daily-prematch.timer football-featured-combo.timer football-postgres-backup.timer)
 MANAGED_STATE_UNITS=(
   football-predict.service football-sync-worker.service nginx.service
   football-market-collector.service football-featured-combo.service
@@ -745,6 +753,11 @@ write_release_fast_watcher_pause_override() {
       printf 'release fast watcher pause refuses a pre-existing runtime override\n' >&2
       return 1
     }
+  if [ "${TRANSACTION_VERSION:-3}" = 4 ]; then
+    [ "$RUNTIME_ENV_FILE" = /etc/football-predict/env ] || return 1
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/deploy/light-server/football-release-recovery.cjs" \
+      --record-fast-watcher-pause "$BUNDLE_SHA256" || return 1
+  fi
   install -d -o root -g root -m 0755 -- "$RELEASE_FAST_WATCHER_PAUSE_DROPIN_DIR" || return 1
   [ -d "$RELEASE_FAST_WATCHER_PAUSE_DROPIN_DIR" ] \
     && [ ! -L "$RELEASE_FAST_WATCHER_PAUSE_DROPIN_DIR" ] \
@@ -958,7 +971,7 @@ pause_current_fast_watcher_for_live_prebuild() {
   systemctl is-active --quiet "$SERVICE_NAME" && return 1
   wait_for_current_service_cgroup_reclaimed "$old_control_group" || return 1
   systemctl start "$SERVICE_NAME" || return 1
-  wait_for_health "http://${HOST}:${PORT}" "release-fast-watcher-paused" 120 2 service || return 1
+  wait_for_health "http://${HOST}:${PORT}" "release-fast-watcher-paused" "$FAST_WATCHER_RESTART_HEALTH_SECONDS" 2 service || return 1
   assert_release_fast_watcher_pause_guard || return 1
   # Keep the root-owned override installed for the whole live-prebuild window.
   # Restart=always may replace the old process at any point; every replacement
@@ -980,7 +993,7 @@ restore_release_fast_watcher_after_failed_pre_swap() {
     else
       systemctl start "$SERVICE_NAME" || return 1
     fi
-    wait_for_health "http://${HOST}:${PORT}" "release-fast-watcher-restored" 120 2 service || return 1
+    wait_for_health "http://${HOST}:${PORT}" "release-fast-watcher-restored" "$FAST_WATCHER_RESTART_HEALTH_SECONDS" 2 service || return 1
     assert_release_fast_watcher_process_state 1 || return 1
     assert_release_fast_watcher_health_state 1 || return 1
   fi
@@ -1592,6 +1605,7 @@ restore_managed_config_after_rollback() {
   done <"$manifest"
   sync -f /etc/systemd/system
   systemctl daemon-reload || return 1
+  systemctl try-restart systemd-journald.service || return 1
   if command -v nginx >/dev/null 2>&1; then
     nginx -t || return 1
     if systemctl cat nginx >/dev/null 2>&1 && systemctl is-active --quiet nginx; then
@@ -2631,11 +2645,11 @@ verify_and_normalize_prebuilt_dist() {
 
 validate_build_artifacts() {
   local artifact_root="${1:-$BUILD_DIR}"
-  node - "$artifact_root" "${PUBLIC_DATA_CACHE_FILES[*]}" "${PUBLIC_ROOT_CACHE_FILES[*]}" <<'NODE'
+  node - "$artifact_root" "${PUBLIC_DATA_CACHE_FILES[*]}" "${PUBLIC_ROOT_CACHE_FILES[*]}" "${NATIVE_CODE_RELEASE:-0}" "${NATIVE_STATE_DIR:-}/seed-accepted.json" "$BUNDLE_SHA256" "${TRUSTED_SOURCE_DIR:-}/scripts/nativeSnapshotCopyProof.cjs" <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
 
-const [buildRoot, dataNamesRaw, rootNamesRaw] = process.argv.slice(2);
+const [buildRoot, dataNamesRaw, rootNamesRaw, nativeCodeRelease, seedProof, releaseSha, snapshotProofHelper] = process.argv.slice(2);
 const nodeModulesRoot = path.join(buildRoot, "node_modules");
 const distRoot = path.join(buildRoot, "dist");
 const historicalTrainingRoot = path.join(buildRoot, ".release-model-assets");
@@ -2767,7 +2781,10 @@ const inspectOptionalData = (relative) => {
   if (!fs.existsSync(target)) return;
   const info = fs.lstatSync(target);
   if (!safeOptionalDataFile(relative, info)) {
-    fail(`unsafe whitelisted data file: ${relative}`);
+    // Original limits still apply to every unproven candidate data file.
+    if (nativeCodeRelease !== "1" || relative !== "public/data/prediction-snapshots.json") fail(`unsafe whitelisted data file: ${relative}`);
+    const proof = require(snapshotProofHelper).verify({ artifactRoot: buildRoot, relative, seedProof, releaseSha });
+    if (proof.ok !== true) fail(`unproven native generation copy: ${relative}`);
   }
 };
 for (const name of dataNamesRaw.split(" ").filter(Boolean)) inspectOptionalData(`public/data/${name}`);
@@ -2992,18 +3009,24 @@ quiesce_managed_timers_for_config_change() {
 
 quiesce_managed_maintenance_for_sqlite_snapshot() {
   local unit state status
-  for unit in "${MANAGED_TIMERS[@]}" football-cleanup.service football-monitor.service football-daily-prematch.service; do
+  for unit in "${MANAGED_TIMERS[@]}" football-cleanup.service football-monitor.service football-daily-prematch.service football-postgres-backup.service; do
     if state="$(systemctl is-active "$unit" 2>/dev/null)"; then status=0; else status=$?; fi
     case "$state" in
-      active|activating|deactivating|reloading)
-        [ "$status" -eq 0 ] || return 1
+      active|reloading)
+        [ "$status" -eq 0 ] || { printf 'maintenance state/status conflict: %s %s %s\n' "$unit" "$state" "$status" >&2; return 1; }
+        systemctl stop "$unit" >/dev/null 2>&1 || return 1
+        ;;
+      activating|deactivating)
+        # is-active returns 3 for transitional oneshot states. Stop the exact
+        # managed unit, then require the unchanged inactive/failed proof below.
+        [ "$status" -eq 3 ] || { printf 'maintenance transition/status conflict: %s %s %s\n' "$unit" "$state" "$status" >&2; return 1; }
         systemctl stop "$unit" >/dev/null 2>&1 || return 1
         ;;
       inactive|failed) [ "$status" -eq 3 ] || return 1 ;;
       *) return 1 ;;
     esac
   done
-  for unit in "${MANAGED_TIMERS[@]}" football-cleanup.service football-monitor.service football-daily-prematch.service; do
+  for unit in "${MANAGED_TIMERS[@]}" football-cleanup.service football-monitor.service football-daily-prematch.service football-postgres-backup.service; do
     if state="$(systemctl is-active "$unit" 2>/dev/null)"; then status=0; else status=$?; fi
     case "$state" in
       inactive|failed) [ "$status" -eq 3 ] || return 1 ;;
@@ -3027,11 +3050,13 @@ install_systemd_units() {
   if [ -f "${deploy_root}/football-sync-worker.service" ] && [ ! -L "${deploy_root}/football-sync-worker.service" ]; then
     install_managed_file "${deploy_root}/football-sync-worker.service" /etc/systemd/system/football-sync-worker.service || return 1
   fi
-  for unit in football-cleanup.service football-cleanup.timer football-monitor.service football-monitor.timer; do
+  for unit in football-cleanup.service football-cleanup.timer football-monitor.service football-monitor.timer football-postgres-backup.service football-postgres-backup.timer; do
     if [ -f "${deploy_root}/${unit}" ] && [ ! -L "${deploy_root}/${unit}" ]; then
       install_managed_file "${deploy_root}/${unit}" "/etc/systemd/system/${unit}" || return 1
     fi
   done
+  install_managed_file "${deploy_root}/football-postgres-backup.sh" /usr/local/sbin/football-postgres-backup-v2 || return 1
+  install_managed_file "${deploy_root}/football-journald-retention.conf" /etc/systemd/journald.conf.d/football-retention.conf || return 1
 }
 
 install_nginx_config() {
@@ -4546,6 +4571,9 @@ stop_worker_for_release_window() {
   fi
   if systemctl cat "$WORKER_SERVICE_NAME" >/dev/null 2>&1 && systemctl is-active --quiet "$WORKER_SERVICE_NAME"; then
     log "pause ${WORKER_SERVICE_NAME} for release window"
+    if [ "${NATIVE_CODE_RELEASE:-0}" = 1 ]; then
+      "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseOwnedWorkerStop.cjs" capture "$BUNDLE_SHA256" || return 1
+    fi
     WORKER_STOPPED_FOR_SWAP=1
     systemctl stop "$WORKER_SERVICE_NAME" >/dev/null 2>&1 || return 1
     systemctl is-active --quiet "$WORKER_SERVICE_NAME" && return 1
@@ -5493,6 +5521,9 @@ release_candidate_heartbeat_keeper_is_healthy() {
   local control_file="$RELEASE_HEARTBEAT_KEEPER_CONTROL_FILE"
   local heartbeat_file="$LIVE_STORE_DIR/candidate-prospective-capture-status.json"
   local main_pid max_age_seconds
+  if [ "${RELEASE_HEARTBEAT_WORKER_MODE:-frozen}" = stopped-code ]; then
+    assert_release_stopped_code_worker || return 1
+  fi
   [ -n "$unit" ] && [ -n "$control_file" ] || return 1
   systemctl is-active --quiet "$unit" || return 1
   main_pid="$(systemctl show "$unit" --property=MainPID --value 2>/dev/null || true)"
@@ -6942,14 +6973,60 @@ verify_live_sqlite_publication_identity() {
     "$NODE_HOME/bin/node" "$verifier"
 }
 
+assert_release_stopped_code_worker() {
+  local state cgroup events
+  [ "${NATIVE_CODE_RELEASE:-0}" = 1 ] || return 1
+  [ "${WORKER_FROZEN_FOR_READINESS:-0}" = 0 ] || return 1
+  # Query service fields together; MainPID zero alone never proves quiescence.
+  state="$(systemctl show "$WORKER_SERVICE_NAME" --property=LoadState --property=ActiveState --property=SubState --property=MainPID --property=ControlPID --property=ControlGroup)" || return 1
+  [ "$(printf '%s\n' "$state" | grep -c '^LoadState=loaded$')" = 1 ] || return 1
+  if [ "$(printf '%s\n' "$state" | grep -c '^ActiveState=inactive$')" = 1 ]; then
+    [ "$(printf '%s\n' "$state" | grep -c '^SubState=dead$')" = 1 ] || return 1
+  else
+    # Preserve the systemd timeout failure. Only this release's durable stop
+    # intent plus unchanged invocation, zero PIDs/jobs and empty cgroup/proc
+    # evidence can prove the writer drained; unknown failures remain rejected.
+    [ "$(printf '%s\n' "$state" | grep -c '^ActiveState=failed$')" = 1 ] || return 1
+    [ "$(printf '%s\n' "$state" | grep -c '^SubState=failed$')" = 1 ] || return 1
+    [ -f "${NATIVE_STATE_DIR:-}/owned-worker-stop-intent.json" ] || return 1
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseOwnedWorkerStop.cjs" verify "$BUNDLE_SHA256" || return 1
+  fi
+  [ "$(printf '%s\n' "$state" | grep -c '^MainPID=0$')" = 1 ] || return 1
+  [ "$(printf '%s\n' "$state" | grep -c '^ControlPID=0$')" = 1 ] || return 1
+  [ "$(printf '%s\n' "$state" | grep -c '^ControlGroup=')" = 1 ] || return 1
+  cgroup="$(printf '%s\n' "$state" | sed -n 's/^ControlGroup=//p')"
+  case "$WORKER_SERVICE_NAME" in
+    football-sync-worker|football-sync-worker.service) ;;
+    *) return 1 ;;
+  esac
+  [ -z "$cgroup" ] || [ "$cgroup" = /system.slice/football-sync-worker.service ] || return 1
+  cgroup=/sys/fs/cgroup/system.slice/football-sync-worker.service
+  [ ! -L "$cgroup" ] || return 1
+  if [ -e "$cgroup" ]; then
+    [ -d "$cgroup" ] && [ ! -L "$cgroup/cgroup.events" ] && [ -f "$cgroup/cgroup.events" ] || return 1
+    events="$(cat "$cgroup/cgroup.events")" || return 1
+    [ "$(printf '%s\n' "$events" | grep -c '^populated 0$')" = 1 ] || return 1
+    [ "$(printf '%s\n' "$events" | grep -c '^populated ')" = 1 ] || return 1
+  fi
+}
+
 start_release_candidate_heartbeat_keeper() {
   local unit runtime_dir control_file status_file attempt max_attempts
   local -a properties=()
   [ -z "${RELEASE_HEARTBEAT_KEEPER_UNIT:-}" ] || return 1
+  case "${1:-frozen}" in
+    stopped-code)
+      assert_release_stopped_code_worker || return 1
+      ;;
+    frozen)
   [ "${WORKER_FROZEN_FOR_READINESS:-0}" = "1" ] || {
     printf 'release heartbeat keeper requires a readiness-frozen sync worker\n' >&2
     return 1
   }
+      ;;
+    *) return 1 ;;
+  esac
+  RELEASE_HEARTBEAT_WORKER_MODE="${1:-frozen}"
   [ -f "$APP_DIR/scripts/runReleaseCandidateHeartbeatKeeper.cjs" ] \
     && [ ! -L "$APP_DIR/scripts/runReleaseCandidateHeartbeatKeeper.cjs" ] || return 1
   runtime_dir="$(mktemp -d /run/football-release-heartbeat.XXXXXX)" || return 1
@@ -7802,6 +7879,7 @@ install_systemd_units "$NEXT_DIR" \
 install_nginx_config "$NEXT_DIR" \
   || abort_before_swap "trusted pre-swap nginx config reload failed"
 systemctl daemon-reload || abort_before_swap "pre-swap systemd daemon reload failed"
+systemctl try-restart systemd-journald.service || abort_before_swap "managed journal retention reload failed"
 write_recovery_phase "host-config-applied" \
   || abort_before_swap "recovery phase update failed after pre-swap host config"
 wait_for_health "http://${HOST}:${PORT}" "post-preswap-nginx-reload" 90 2 service \

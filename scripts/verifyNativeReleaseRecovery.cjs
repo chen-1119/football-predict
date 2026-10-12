@@ -123,4 +123,19 @@ for (const [name, mutate] of [
     checks.push({ name: "HTTP health alone cannot finalize native recovery; retry keeps advanced data and native mode", ok: true });
   } finally { cleanup(f); }
 }
+for (const phase of ['prepared','committed']) {
+  const f=fixture(phase,true,'runtime-only');
+  try {
+    const bundleSha=fs.readFileSync(path.join(f.current,'bundle-sha256'),'utf8').trim();
+    write(path.join(f.current,'watcher-pause-intent.json'),JSON.stringify({version:1,bundleSha256:bundleSha,priorOverridesAbsent:true}));
+    const env=mapped(f.root,'/run/football-release-fast-watcher-pause.env');
+    const drop=mapped(f.root,'/run/systemd/system/football-predict.service.d/90-release-fast-watcher-pause.conf');
+    write(env,'RELAY_FAST_WATCHER_ENABLED=0\n');
+    write(drop,'[Service]\nEnvironmentFile=\nEnvironmentFile=/etc/football-predict/env\nEnvironmentFile=/run/football-release-fast-watcher-pause.env\n');
+    // Fresh recovery CLI has no shell ownership flags: only durable intent.
+    const result=runRecovery(f);assert.equal(result.status,0,result.stderr);
+    assert.equal(fs.existsSync(env),false);assert.equal(fs.existsSync(drop),false);assert.equal(fs.existsSync(f.current),false);
+    checks.push({name:'fresh cold recovery removes durable watcher pause: '+phase,ok:true});
+  } finally {cleanup(f);}
+}
 console.log(JSON.stringify({ ok: true, checks, scope: "actual recovery CLI and filesystem with mocked systemd/database identity; not a real database rename rehearsal", productionWrites: 0 }));

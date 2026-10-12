@@ -29,7 +29,8 @@ async function verify(pool){
       await q(fs.readFileSync(path.join(__dirname,'../server/postgres/migrations/',migration),'utf8'));
     for(const [key,value] of Object.entries({data_publication_mode:'generation',data_generation_id:'test-generation',manifest_hash:'a'.repeat(64),data_generation_source_cycle_id:'test-source',committed_at:new Date(now).toISOString()}))await q('INSERT INTO football.projection_meta(key,value) VALUES($1,$2)',[key,value]);
     await Promise.all([1,2,3].map(id=>write(fixture(id))));
-    const runtime=createRuntime(postgresPorts(mappedPool,()=>now),{dualResearchEnabled:true,validators:{isFinal:r=>r.testOfficial===true&&r.status==='FINISHED',isVoid:r=>r.testOfficial===true&&r.resultDisposition==='VOID'}});
+    // Explicit historical compatibility exercise; the production default is trained-only.
+    const runtime=createRuntime({...postgresPorts(mappedPool,()=>now),trainedOnly:false,prdPaperPool:null},{dualResearchEnabled:true,validators:{isFinal:r=>r.testOfficial===true&&r.status==='FINISHED',isVoid:r=>r.testOfficial===true&&r.resultDisposition==='VOID'}});
     const first=await runtime.publishingCycle();check(()=>assert.equal(first.publication.ok,true));check(()=>assert.equal(first.dualResearch.ok,true));check(()=>assert.equal(first.combinations.ok,true));check(()=>assert.equal(first.projection.ok,true));
     check(()=>assert.equal((first.publication.value.decisionIds).length,3));
     const frozen=(await q('SELECT payload FROM football.recommendation_combo_records ORDER BY size')).rows;
@@ -187,6 +188,29 @@ async function verify(pool){
       await assert.rejects(q('UPDATE football.recommendation_dual_research_v2_records SET payload=payload'),{code:'23000'});checks++;
       await assert.rejects(q('DELETE FROM football.recommendation_dual_research_v2_records'),{code:'23000'});checks++;
     }finally{researchClient.release();}
+    const beforeCutover=(await q('SELECT id,payload FROM football.recommendation_decisions ORDER BY id')).rows;
+    const beforeCombos=(await q('SELECT payload FROM football.recommendation_combo_records ORDER BY id')).rows;
+    // This legacy fixture deliberately lacks independent model artifact tables.
+    // Exercise its real SQL publication constraint without invoking their views.
+    const switchedPorts={...postgresPorts(mappedPool,()=>now),prdPaperPool:null};
+    const switched=createRuntime(switchedPorts);
+    check(()=>assert.equal(postgresPorts(mappedPool).trainedOnly,true));
+    const newPublish=await switched.publish(),newCombos=await switched.combos(),switchedView=await switched.view();
+    check(()=>assert.equal(newPublish.ok,true));check(()=>assert.equal(newCombos.ok,true));check(()=>assert.equal(switchedView.ok,true));
+    check(()=>assert.deepEqual(newPublish.value.decisionIds,[]));
+    // Missing registry schema is a real blocked model cycle, recorded in the
+    // installed publish lane, never an unsupported league-baseline lane.
+    switchedPorts.prdPaperPool=mappedPool;
+    const blockedModel=await switched.leagueBaseline();check(()=>assert.equal(blockedModel.ok,false));
+    const modelLane=(await q("SELECT payload FROM football.recommendation_lanes WHERE lane='publish'")).rows[0].payload;
+    check(()=>assert.equal(modelLane.status,'error'));check(()=>assert.equal(modelLane.legacyRetired,true));
+    check(()=>assert.equal(modelLane.errorCode,'LEAGUE_MODEL_CYCLE_FAILED'));
+    const afterCutover=(await q('SELECT id,payload FROM football.recommendation_decisions ORDER BY id')).rows;
+    const afterCombos=(await q('SELECT payload FROM football.recommendation_combo_records ORDER BY id')).rows;
+    check(()=>assert.deepEqual(afterCutover,beforeCutover));check(()=>assert.deepEqual(afterCombos,beforeCombos));
+    const cutoverView=(await q('SELECT payload FROM football.daily_featured_combo_state WHERE id=1')).rows[0].payload.recommendationCenter;
+    check(()=>assert.equal(cutoverView.strategySwitch.legacyFallbackEnabled,false));
+    check(()=>assert.deepEqual(cutoverView.current,[]));check(()=>assert.deepEqual(cutoverView.previews,[]));
     return {ok:true,checks,schema,scope:'disposable-test-schema',productionRowsWritten:0};
   }finally{await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);}
 }

@@ -1,0 +1,7 @@
+# Code release worker stop ownership
+
+r824 passed the large-snapshot and candidate checks, then rolled back after the stopped-window checkpoint. The systemd journal proves its stop request timed out at 45 seconds and killed the old worker, leaving `failed/timeout`; the strict stopped-worker guard rejected that state. Production remained r822, and no reviewed predictions were imported.
+
+Code-only releases now create a root-protected, create-only, fsynced stop intent before their own stop request. It binds the release, verifier bytes, exact unit, active invocation, PID and both wall/monotonic clocks. The normal inactive/dead path is unchanged. A failed unit is accepted as physically drained only for the exact owned timeout, unchanged invocation, zero main/control PID, no job, no live original PID, empty cgroup and no process in that cgroup or descendants. Unit state is sampled twice and cgroup checks repeated. The intent expires with the existing 900-second budget. Unowned, other, expired, restarted or populated failures remain rejected.
+
+No reset-failed, extra kill, worker restart, sync, database migration, or probability change is introduced. The timeout remains observable. This fixes release recognition of an already terminated writer; it does not fix or disguise the worker shutdown latency itself. Existing native data consistency and all readiness checks continue. A later natural worker cycle remains necessary for full runtime acceptance.

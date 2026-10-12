@@ -42,7 +42,7 @@ test('HAD missing with a complete HHAD collection record explains the separate m
  const x=buildDataCoverage({targetRows:[fixture],singles:[],now:NOW,lanes:{publish:{publication:publication(NOW)}}});
  assert.equal(x.publishableCount,0);assert.equal(x.qualifiedCount,0);
  assert.equal(x.missing[0].reasonCode,'official-had-quote-unavailable');
- assert.equal(x.missing[0].reasonText,'普通胜平负 SP 缺失；让球盘有采集记录，但当前没有可发布的独立让球推荐');
+ assert.equal(x.missing[0].reasonText,'胜平负报价未通过发布核验；让球盘有采集记录，但当前没有可发布的独立让球推荐');
  assert.equal(JSON.stringify(fixture),before);
 });
 
@@ -53,7 +53,7 @@ test('an old HHAD observation and recent relay receipt use the same source-neutr
    handicapOddsReceivedAt:new Date(NOW).toISOString(),handicapOddsUpdatedAt:new Date(NOW).toISOString()});
  const x=buildDataCoverage({targetRows:[fixture],singles:[],now:NOW,lanes:{publish:{publication:publication(NOW)}}});
  assert.equal(x.missing[0].reasonCode,'official-had-quote-unavailable');
- assert.equal(x.missing[0].reasonText,'普通胜平负 SP 缺失；让球盘有采集记录，但当前没有可发布的独立让球推荐');
+ assert.equal(x.missing[0].reasonText,'胜平负报价未通过发布核验；让球盘有采集记录，但当前没有可发布的独立让球推荐');
  assert.equal(x.publishableCount,0);
 });
 
@@ -63,7 +63,7 @@ test('a complete 500 HHAD collection record gets the same source-neutral wording
    handicapOddsPoolCode:'HHAD',handicapOddsObservedAt:new Date(NOW).toISOString()});
  const x=buildDataCoverage({targetRows:[fixture],singles:[],now:NOW,lanes:{publish:{publication:publication(NOW)}}});
  assert.equal(x.missing[0].reasonCode,'official-had-quote-unavailable');
- assert.equal(x.missing[0].reasonText,'普通胜平负 SP 缺失；让球盘有采集记录，但当前没有可发布的独立让球推荐');
+ assert.equal(x.missing[0].reasonText,'胜平负报价未通过发布核验；让球盘有采集记录，但当前没有可发布的独立让球推荐');
  assert.equal(x.publishableCount,0);
 });
 
@@ -81,7 +81,30 @@ test('incomplete or mislabeled HHAD never claims a collected handicap quote',()=
    const fixture=match(9,NOW,{...base,...patch});
    const x=buildDataCoverage({targetRows:[fixture],singles:[],now:NOW,lanes:{publish:{publication:publication(NOW)}}});
    assert.equal(x.missing[0].reasonCode,'official-had-quote-unavailable');
-   assert.equal(x.missing[0].reasonText,'赛前 SP 尚未取得或已过期，暂未入选');
+   assert.equal(x.missing[0].reasonText,'胜平负报价未通过发布核验，暂未入选');
+ }
+});
+
+test('present but stale, future or unsigned HAD quotes are not described as missing',()=>{
+ for(const patch of [
+   {oddsUpdatedAt:new Date(NOW-16*60000).toISOString()},
+   {oddsUpdatedAt:new Date(NOW+1).toISOString()},
+   {oddsSource:'sporttery:HAD:signed-live'},
+ ])for(const withHhad of [false,true]){
+   const fixture=match(12,NOW,{...patch,...(withHhad?{
+     handicapLine:-1,handicapOdds:{odds1:3.2,oddsX:3.5,odds2:1.8},
+     handicapOddsSource:'sporttery:HHAD',handicapOddsObservedAt:new Date(NOW).toISOString(),
+   }:{})});
+   const before=JSON.stringify(fixture);
+   const x=buildDataCoverage({targetRows:[fixture],singles:[],now:NOW,lanes:{publish:{publication:publication(NOW)}}});
+   assert.deepEqual(fixture.odds,{odds1:1.8,oddsX:3.5,odds2:4.5});
+   assert.equal(x.missing[0].reasonCode,'official-had-quote-unavailable');
+   assert.equal(x.missing[0].reasonText,withHhad
+     ?'胜平负报价未通过发布核验；让球盘有采集记录，但当前没有可发布的独立让球推荐'
+     :'胜平负报价未通过发布核验，暂未入选');
+   assert.equal(x.targetCount,1);assert.equal(x.publishableCount,0);assert.equal(x.qualifiedCount,0);
+   assert.equal(x.unqualifiedCount,1);assert.equal(x.missingTotal,1);
+   assert.equal(JSON.stringify(fixture),before);
  }
 });
 

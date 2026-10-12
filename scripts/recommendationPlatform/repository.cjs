@@ -1,8 +1,12 @@
 'use strict';
 const { hash } = require('../../src/services/publishedForecastPolicy.cjs');
+const { TRAINED_ONLY_POLICY } = require('../../server/recommendationAuthority.cjs');
 
 class Repository {
-  constructor(client) { this.client=client; }
+  constructor(client,{clock=Date.now,readOfficialSnapshot=()=>require('./liveOfficialHandicap.cjs').readLiveOfficialSnapshot(),trustRegistry}={}) {
+    this.client=client;this.clock=clock;this.readOfficialSnapshot=readOfficialSnapshot;
+    this.trustRegistry=trustRegistry||process.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH||require('node:path').resolve(__dirname,'../../deploy/light-server/collector-trust-registry.json');
+  }
   async current() { return (await this.client.query("SELECT payload FROM football.match_snapshots WHERE dataset='current'")).rows.map(r=>r.payload); }
   async todayTargets(businessDate) {
     if(typeof businessDate!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(businessDate)||new Date(businessDate+'T00:00:00Z').toISOString().slice(0,10)!==businessDate)
@@ -20,9 +24,22 @@ class Repository {
   async currentInputs(now) {
     const current=await this.current();
     const signals=await require('../../collectors/market/signalBridge.cjs').readMarketSignalRows(this.client,{allowEmpty:true});
-    const joined=require('./currentInputs.cjs').joinCurrentMarket(current,signals,now);
-    const {joinOfficialHandicap,readLiveOfficialSnapshot}=require('./liveOfficialHandicap.cjs');
-    return {...joined,current:joinOfficialHandicap(joined.current,readLiveOfficialSnapshot(),{now,trustRegistry:process.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH||require('node:path').resolve(__dirname,'../../deploy/light-server/collector-trust-registry.json')})};
+    // SQL awaits and the file read can span a collector renewal. Never use a
+    // start-of-call clock to label subsequently acquired bytes as future data.
+    // Capture the actual completion clock; every later policy rechecks it.
+    const snapshot=this.readOfficialSnapshot(),capturedAt=this.clock();
+    if(!Number.isSafeInteger(now)||!Number.isSafeInteger(capturedAt)||capturedAt<now)
+      throw Object.assign(new Error('Input capture clock invalid'),{code:'INPUT_CAPTURE_CLOCK_INVALID'});
+    const joined=require('./currentInputs.cjs').joinCurrentMarket(current,signals,capturedAt);
+    const hadAudit={},audit={};
+    const had=require('./liveOfficialHad.cjs').joinOfficialHad(joined.current,snapshot,{now:capturedAt,trustRegistry:this.trustRegistry,audit:hadAudit});
+    const withHandicap=require('./liveOfficialHandicap.cjs').joinOfficialHandicap(had.current,snapshot,{now:capturedAt,trustRegistry:this.trustRegistry,audit});
+    const next=require('../../src/services/sportteryOpeningPolicy.cjs').filterNewOpeningMarkets(withHandicap,snapshot,
+      {asOf:new Date(capturedAt).toISOString(),trustRegistry:this.trustRegistry});
+    const receiptHashes=new Set([...joined.receiptHashes,...had.receiptHashes]);
+    return {...joined,receiptHashes,current:next,inputKnowledgeAt:new Date(capturedAt).toISOString(),inputCapture:{
+      version:'current-input-capture-v2',startedAt:new Date(now).toISOString(),capturedAt:new Date(capturedAt).toISOString(),
+      currentHash:hash(current),marketSignalHash:hash(signals),joinedInputHash:hash(next),officialHandicap:audit,officialHad:hadAudit}};
   }
   async publication() { const {readPostgresPublicationIdentity}=require('../../server/postgresProjectionStore.cjs'); const value=await readPostgresPublicationIdentity(this.client); if(!value.available)throw Object.assign(new Error('Publication unavailable'),{code:'SOURCE_UNAVAILABLE'});return value.publication; }
   async insertDecision(d) {
@@ -128,15 +145,23 @@ class Repository {
     await this.client.query(`INSERT INTO football.daily_featured_combo_state(id,payload) VALUES(1,$1::jsonb)
       ON CONFLICT(id) DO UPDATE SET payload=(CASE WHEN jsonb_typeof(football.daily_featured_combo_state.payload)='object' THEN football.daily_featured_combo_state.payload ELSE '{}'::jsonb END) || EXCLUDED.payload`,[JSON.stringify({recommendationCenter:center})]);
   }
+  async leagueBaselineProjection(businessDate,asOf) {
+    const trust=require('../../src/services/collectorAttestation.cjs').loadCollectorTrustRegistry(this.trustRegistry);
+    return require('./leagueBaselineRuntime.cjs').projection(this.client,businessDate,asOf,trust);
+  }
+  async prdPaperProjection(businessDate,{asOf}={}) {
+    const trustRegistry=require('../../src/services/collectorAttestation.cjs').loadCollectorTrustRegistry(this.trustRegistry);
+    return require('./prdPaperRepository.cjs').readPrdPaperProjection(this.client, { businessDate, asOf, trustRegistry });
+  }
 }
 function postgresPorts(pool, clock=Date.now) {
   const {withPostgresTransaction}=require('../../server/postgresStore.cjs');
-  return {clock,supportsResearchV2:true,async transaction(lane,action){
+  return {clock,trainedOnly:TRAINED_ONLY_POLICY.trainedOnly,supportsResearchV2:true,prdPaperPool:pool,async transaction(lane,action){
     for(let attempt=0;attempt<3;attempt++){
       try{return await withPostgresTransaction(pool,async client=>{
         await client.query("SELECT set_config('lock_timeout','3000',true),set_config('statement_timeout','20000',true)");
         await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[`recommendation-center:${lane}`]);
-        return action(new Repository(client));
+        return action(new Repository(client,{clock}));
       });}catch(error){if(!['40001','40P01'].includes(error.code)||attempt===2)throw error;}
     }
   }};

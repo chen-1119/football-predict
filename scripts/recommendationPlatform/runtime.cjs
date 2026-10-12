@@ -5,39 +5,65 @@ const {key,collectResults,settleDecision,settleHandicapDecision,settleSupplement
 const {validCombo}=require('./comboSelections.cjs');
 const {day,time,hash}=require('../../src/services/publishedForecastPolicy.cjs');
 const {buildHandicapCalibration}=require('../../src/services/handicapCalibration.cjs');
-const {selectionQuality,prospectiveRiskReasons,isQualifiedSelection}=require('../../src/services/recommendationSelectionQuality.cjs');
+const {selectionQuality,publishedSelectionQuality,prospectiveRiskReasons,isQualifiedSelection}=require('../../src/services/recommendationSelectionQuality.cjs');
 const {classifyOutcomeResearch}=require('../../src/services/outcomeCategoryResearch.cjs');
 const {conflictForDecision}=require('../../src/services/recommendationCrossTrackConflict.cjs');
 const {buildPublishedScoreDistribution}=require('../../src/services/publishedScoreDistribution.cjs');
+const {evaluateEvidencePriceRecommendation}=require('../../src/services/evidencePriceRecommendationPolicy.cjs');
 const {buildQualityReport}=require('./qualityReport.cjs');
 const {buildDataCoverage}=require('../dataCoverage.cjs');
 const {createDualResearchRecord}=require('./dualChoiceResearch.cjs');
 const {createDualResearchV2Record,validDualResearchV2Record,settleDualResearchV2}=require('./dualChoiceResearchV2.cjs');
 const {officialResultValidators,resultAllowsCalibration}=require('./officialResults.cjs');
+const openingPolicy=require('../../src/services/sportteryOpeningPolicy.cjs');
 
 function freshPublication(p,now){return p && /^[a-f0-9]{64}$/.test(p.manifestHash||'') && typeof p.generationId==='string' && p.generationId.length>0 && Number.isFinite(time(p.committedAt)) && now>=time(p.committedAt) && now-time(p.committedAt)<=15*60000;}
 function requireBeforeCutoff(records,now){if(records.some(d=>now>=time(d.cutoffTime)))throw Object.assign(new Error('Cutoff crossed'),{code:'DEADLINE_CROSSED'});}
-async function assessInputs(repo,publication,now){
+function completedInputClock(inputs,startedAt,clock){
+  const now=clock(),known=inputs.inputKnowledgeAt===undefined?startedAt:time(inputs.inputKnowledgeAt);
+  if(!Number.isSafeInteger(now)||now<startedAt||!Number.isFinite(known)||known<startedAt||known>now
+    ||(inputs.inputKnowledgeAt!==undefined&&inputs.inputKnowledgeAt!==new Date(known).toISOString())
+    ||(inputs.inputCapture&&(!['current-input-capture-v1','current-input-capture-v2'].includes(inputs.inputCapture.version)
+      ||time(inputs.inputCapture.startedAt)!==startedAt||time(inputs.inputCapture.capturedAt)!==known)))
+    throw Object.assign(new Error('Input capture clock invalid'),{code:'INPUT_CAPTURE_CLOCK_INVALID'});
+  return now;
+}
+async function assessInputs(repo,publication,now,clock){
+  const startedAt=now;
+  const dailyOpening=openingPolicy.assessOpening({businessDate:day(now),asOf:new Date(now).toISOString()});
+  if(!dailyOpening.eligible)return {decisions:[],issues:[],currentInputs:[],attempted:0,assessmentAt:now,inputAsOf:null,
+    openingStatus:{version:openingPolicy.VERSION,status:'waiting-opening',...dailyOpening},
+    handicapCalibration:buildHandicapCalibration([],new Map(),day(now),{asOf:now})};
   const committed=time(publication?.committedAt);
   if(!publication || !/^[a-f0-9]{64}$/.test(publication.manifestHash||'') || !publication.generationId
     || !Number.isFinite(committed) || committed>now)throw Object.assign(new Error('Valid committed input required'),{code:'SOURCE_STALE'});
   const inputs=repo.currentInputs?await repo.currentInputs(now):{current:await repo.current(),receiptHashes:new Set()};
   const [historical,rawHeads]=await Promise.all([repo.latest(),repo.resultHeads()]);
+  now=completedInputClock(inputs,startedAt,clock);
   const calibrationHeads=new Map(rawHeads.filter(e=>validResultEvent(e)&&resultAllowsCalibration(e)).map(e=>[e.eventKey,e]));
-  const handicapCalibration=buildHandicapCalibration(historical.filter(validDecision),calibrationHeads,day(now),{asOf:now});
-  const assessed=evaluateCurrent(inputs.current,{now,publication,handicapCalibration});
+  const handicapCalibration=buildHandicapCalibration(historical.filter(d=>validDecision(d,{trustRegistry:repo.trustRegistry})),calibrationHeads,day(now),{asOf:now});
+  const assessed=evaluateCurrent(inputs.current,{now,publication,handicapCalibration,inputCapture:inputs.inputCapture,trustRegistry:repo.trustRegistry});
+  const admitted=[];let openingBlocked=0;
+  for(const decision of assessed.decisions){
+    const gate=openingPolicy.assessDecisionOpening(decision,new Date(now).toISOString(),{trustRegistry:repo.trustRegistry});
+    if(gate.eligible)admitted.push(decision);
+    else{openingBlocked++;assessed.issues.push({sourceMatchId:decision.sourceMatchId,reason:gate.reason});}
+  }
+  assessed.decisions=admitted;
   // A full model publication is not a quote clock. An older generation may
   // supply a still-valid prospective model ONLY with a fresh, independently
   // acquired exact-event receipt in this transaction. Model/cutoff policy is
   // unchanged. No receipt means the original 15-minute source gate still holds.
-  if(!freshPublication(publication,now)){
+  if(!freshPublication(publication,now)&&!(openingBlocked&&admitted.length===0)){
     const fresh=assessed.decisions.filter(d=>inputs.receiptHashes.has(d.quoteProvenance?.receiptHash));
     if(!fresh.length)throw Object.assign(new Error('Fresh input required'),{code:'SOURCE_STALE'});
     for(const d of assessed.decisions)if(!fresh.includes(d))assessed.issues.push({sourceMatchId:d.sourceMatchId,reason:'source-stale'});
     assessed.decisions=fresh;
   }
   const quoteTimes=assessed.decisions.map(d=>time(d.quoteObservedAt));
-  return {...assessed,currentInputs:inputs.current,handicapCalibration,attempted:inputs.current.length,inputAsOf:quoteTimes.length?new Date(Math.min(...quoteTimes)).toISOString():publication.committedAt};
+  return {...assessed,currentInputs:inputs.current,handicapCalibration,attempted:inputs.current.length,assessmentAt:now,
+    openingStatus:{version:openingPolicy.VERSION,status:openingBlocked?'waiting-opening-quotes':'opening-ready',...dailyOpening,blockedCount:openingBlocked},
+    ...(inputs.inputCapture?{inputCapture:inputs.inputCapture}:{}),inputAsOf:quoteTimes.length?new Date(Math.min(...quoteTimes)).toISOString():publication.committedAt};
 }
 /** Bind the exact current inputs inside the caller's transaction. The source
  * may have advanced since the separate single-publication transaction ended.
@@ -50,7 +76,7 @@ async function bindCurrentDecisions(repo, decisions, clock) {
     const item=await repo.savepoint(async()=>{
       requireBeforeCutoff([d],clock());
       const stored=byId.get(d.decisionId)||await repo.insertDecision(d);
-      if(!validDecision(stored)||stored.decisionId!==d.decisionId||stored.inputHash!==d.inputHash)
+      if(!validDecision(stored,{trustRegistry:repo.trustRegistry})||stored.decisionId!==d.decisionId||stored.inputHash!==d.inputHash)
         throw Object.assign(new Error('Decision read-back mismatch'),{code:'DECISION_BINDING_INVALID'});
       return stored;
     });
@@ -62,6 +88,32 @@ async function bindCurrentDecisions(repo, decisions, clock) {
 /** Each action commits independently. Never call all lanes inside one outer DB transaction. */
 function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_DUAL_RESEARCH==='1',dualResearchV2Enabled=process.env.ENABLE_DUAL_RESEARCH_V2!=='0'}={}){
   const clock=ports.clock || Date.now;
+  async function leagueBaseline(){
+    if(!ports.prdPaperPool)return {enabled:false};
+    let value;try{value=await require('./leagueBaselineRuntime.cjs').run({pool:ports.prdPaperPool,trustRegistry:ports.prdPaperTrustRegistry});}
+    catch(e){value={enabled:true,status:'blocked',errorCode:/^LEAGUE_MODEL_[A-Z_]+$/.test(e.code||'')?e.code:'LEAGUE_MODEL_CYCLE_FAILED',formalEligible:false};}
+    // The installed lane constraint admits publish/combos/settlement/view.
+    // The trained publisher owns the existing publish lane after cutover.
+    return stage(ports.trainedOnly?'publish':'league-baseline',async()=>{if(value.errorCode)throw Object.assign(new Error('Trained publisher failed'),{code:value.errorCode});return {...value,
+      ...(ports.trainedOnly?{strategy:'league-trained-baseline-v1',legacyRetired:true,decisionIds:[]}:{}),modelStatus:value.status,
+      reasons:value.reasons||[]};});
+  }
+  async function prdPaper(){
+    if(ports.trainedOnly)return {enabled:false,reason:'replaced-by-league-trained-publisher'};
+    if(!ports.prdPaperPool)return {enabled:false};
+    const attemptAt=clock(),policy=require('./prdPaperRuntime.cjs');
+    let value,error=null;
+    // Run independently after the old publication transaction has released its
+    // client. The production worker reserves a listener client in this pool.
+    try{value=await policy.runPrdPaperCycle({pool:ports.prdPaperPool,trustRegistry:ports.prdPaperTrustRegistry});}
+    catch(e){error=policy.errorCode(e);value={enabled:true,status:'blocked',attempted:0,created:0,acknowledged:0,blockedCount:0,truncated:false,reasons:[error],formalEligible:false};}
+    try{await ports.transaction('prd-paper',async repo=>{
+      const old=await repo.lane('prd-paper');
+      if(old?.lastAttemptAt && time(old.lastAttemptAt)>attemptAt)return;
+      const at=clock();await repo.saveLane('prd-paper',{...(old||{}),...value,paperStatus:value.status,status:error?'error':'ok',lastAttemptAt:new Date(attemptAt).toISOString(),lastSuccessAt:error?old?.lastSuccessAt:new Date(at).toISOString(),errorCode:error});
+    });}catch{error=error||'PRD_PAPER_STATUS_UNAVAILABLE';}
+    return {ok:error===null,...value,...(error?{errorCode:error}:{})};
+  }
   async function stage(lane,action){
     const attemptAt=clock();
     try{return await ports.transaction(lane,async repo=>{
@@ -77,13 +129,16 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     }
   }
   async function publish(){return stage('publish',async repo=>{
+    if(ports.trainedOnly)return {strategy:'league-trained-baseline-v1',legacyRetired:true,decisionIds:[],attempted:0,issues:0,inputAsOf:null};
     const publication=await repo.publication(),now=clock();
-    const {decisions,issues,attempted,inputAsOf,handicapCalibration}=await assessInputs(repo,publication,now);
+    const {decisions,issues,attempted,inputAsOf,handicapCalibration,inputCapture,openingStatus}=await assessInputs(repo,publication,now,clock);
     const bound=await bindCurrentDecisions(repo,decisions,clock);
     const accepted=bound.accepted;issues.push(...bound.issues);
     for(const issue of issues)await repo.issue('publish',issue);
     requireBeforeCutoff(accepted,clock());
-    return {publication,decisionIds:accepted.map(d=>d.decisionId),inputAsOf,basePublicationAsOf:publication.committedAt,issues:issues.length,attempted,handicapCalibration:{profileHash:handicapCalibration.profileHash,sampleRows:handicapCalibration.sampleRows,activeGroups:Object.values(handicapCalibration.groups).filter(g=>g.active).length}};
+    return {publication,decisionIds:accepted.map(d=>d.decisionId),inputAsOf,openingStatus,...(inputCapture?{inputCapture}:{}),
+      quotePublicationLatency:require('./quotePublicationLatency.cjs').summarizeQuotePublicationLatency(accepted),
+      basePublicationAsOf:publication?.committedAt??null,issues:issues.length,attempted,handicapCalibration:{profileHash:handicapCalibration.profileHash,sampleRows:handicapCalibration.sampleRows,activeGroups:Object.values(handicapCalibration.groups).filter(g=>g.active).length}};
   });}
   // Research has its own transaction. A missing migration, late cutoff, or
   // invalid research row cannot roll back the published single lane.
@@ -111,12 +166,14 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
   // particular, a missing HAD quote must not prevent two HHAD outcomes from
   // being studied. It never writes a recommendation decision or combo.
   async function researchV2(){
+    if(ports.trainedOnly)return {ok:true,enabled:false,created:0,reason:'legacy-strategy-retired'};
     if(!dualResearchV2Enabled||!ports.supportsResearchV2)return {ok:true,enabled:false,created:0,eligible:0,issues:0};
     try{return await ports.transaction('dual-research-v2',async repo=>{
       if(typeof repo.insertDualResearchV2!=='function'||typeof repo.currentInputs!=='function')
         return {ok:true,enabled:false,created:0,eligible:0,issues:0};
       const now=clock(),publication=await repo.publication();
       const inputs=await repo.currentInputs(now);
+      completedInputClock(inputs,now,clock);
       let created=0,eligible=0,issues=0;
       // The warehouse can contain more than one row for a source match. Do not
       // freeze whichever row an unordered query happened to return first.
@@ -145,10 +202,11 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     });}catch(error){return {ok:false,enabled:true,errorCode:String(error.code||'DUAL_RESEARCH_V2_FAILED').slice(0,64)};}
   }
   async function combos(){return stage('combos',async repo=>{
-    const publication=await repo.publication(),now=clock();
+    if(ports.trainedOnly)return {strategy:'league-trained-baseline-v1',legacyRetired:true,previews:[],candidateCount:0,referenceCount:0,watchCount:0,inputAsOf:null};
+    const publication=await repo.publication();let now=clock();
     // Recheck actual sale state and exact current input before freezing. A
     // retained preview alone is never authority to publish after suspension.
-    const assessed=await assessInputs(repo,publication,now);
+    const assessed=await assessInputs(repo,publication,now,clock);now=assessed.assessmentAt;
     const bound=await bindCurrentDecisions(repo,assessed.decisions,clock);
     const candidates=bound.accepted;
     const issues=[...assessed.issues,...bound.issues];
@@ -166,7 +224,7 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
       else previews.push(selection);
     }
     requireBeforeCutoff(created,clock());
-    return {publication,previews,inputAsOf:assessed.inputAsOf,basePublicationAsOf:publication.committedAt,candidateCount:eligibleSources.size,referenceCount:candidates.length,watchCount:candidates.filter(d=>!eligibleSources.has(d.sourceMatchId)).length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length,handicapCalibration:{profileHash:assessed.handicapCalibration.profileHash,sampleRows:assessed.handicapCalibration.sampleRows,activeGroups:Object.values(assessed.handicapCalibration.groups).filter(g=>g.active).length}};
+    return {publication,previews,inputAsOf:assessed.inputAsOf,openingStatus:assessed.openingStatus,...(assessed.inputCapture?{inputCapture:assessed.inputCapture}:{}),basePublicationAsOf:publication?.committedAt??null,candidateCount:eligibleSources.size,referenceCount:candidates.length,watchCount:candidates.filter(d=>!eligibleSources.has(d.sourceMatchId)).length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length,handicapCalibration:{profileHash:assessed.handicapCalibration.profileHash,sampleRows:assessed.handicapCalibration.sampleRows,activeGroups:Object.values(assessed.handicapCalibration.groups).filter(g=>g.active).length}};
   });}
   async function settle(){return stage('settlement',async repo=>{
     const verify=validators || officialResultValidators(clock());
@@ -224,15 +282,26 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     const previews=lanes.combos?.status==='ok' ? (lanes.combos.previews||[]).filter(c=>c.businessDate===day(now)&&validCombo(c,{now})
       && c.legs.every(d=>!conflictForDecision(targetMatches,d,now))) : [];
     const selected=singles.filter(r=>r.decision.businessDate===day(now)).map(row=>{
+      // Current primary-market quality is separate from the immutable HAD
+      // review cohort above. Never silently change its qualified denominator.
+      const open=now<Math.min(time(row.decision.cutoffTime),time(row.decision.kickoffTime))
+        && row.settlement.state==='PENDING';
+      const quality=publishedSelectionQuality(row.decision,open?{now}:{});
       const conflict=conflictForDecision(targetMatches,row.decision,now);
-      const risk=prospectiveRiskReasons(row.selectionQuality);
-      const current=(!conflict&&!risk.length)?row:{...row,selectionQuality:{...row.selectionQuality,status:'watch',qualified:false,
-        reasons:[...new Set([...(row.selectionQuality.reasons||[]),...risk,...(conflict?[conflict.reason]:[])])],
+      const referenceMatch=targetMatches.find(match=>String(match?.sourceMatchId||match?.id||'').replace(/^sporttery_/,'')===row.decision.sourceMatchId
+        && time(match.eventVersion||match.kickoffTime)===time(row.decision.eventVersion)
+        && match.homeTeamId===row.decision.homeTeamId && match.awayTeamId===row.decision.awayTeamId)||null;
+      // A current, read-only strategy assessment never replaces the frozen
+      // publication, its primary/conditional branch, or historical denominators.
+      // No calibration authorization adapter is installed: formal picks remain
+      // withheld, while unconditional model tendencies can be compared later.
+      const strategyAssessment=evaluateEvidencePriceRecommendation(row.decision,{asOf:now,referenceMatch});
+      const risk=quality.assessmentBasis==='coherent-primary-anchor-v1'?[]:prospectiveRiskReasons(quality);
+      const current=(!conflict&&!risk.length)?{...row,strategyAssessment,selectionQuality:quality}:{...row,strategyAssessment,selectionQuality:{...quality,status:'watch',qualified:false,
+        reasons:[...new Set([...(quality.reasons||[]),...risk,...(conflict?[conflict.reason]:[])])],
         ...(conflict?{crossTrack:conflict}:{})}};
       // The research projection is read-only and exists only for an open
       // pre-match row. It never changes the published decision or settlement.
-      const open=now<Math.min(time(row.decision.cutoffTime),time(row.decision.kickoffTime))
-        && row.settlement.state==='PENDING';
       if(!open)return current;
       const research=classifyOutcomeResearch(row);
       const staleQuote=!Number.isFinite(time(row.decision.quoteObservedAt))
@@ -253,18 +322,58 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     }));
     const overlap=previews.length===2?previews[0].decisionIds.filter(id=>previews[1].decisionIds.includes(id)):[];
     const coverage=buildDataCoverage({targetRows,singles:selected,now,lanes});
+    let prdPaperView;
+    if(ports.prdPaperPool){
+      let projection=null,readFailed=false;
+      try{projection=await repo.prdPaperProjection(day(now),{asOf:new Date(now).toISOString()});}catch{readFailed=true;await repo.issue('view',{reason:'prd-paper-projection-unavailable'});}
+      prdPaperView=require('./prdPaperRuntime.cjs').pipelineView({businessDate:day(now),updatedAt:new Date(now).toISOString(),lane:lanes['prd-paper'],projection,readFailed});
+    }
+    let leagueBaselineView;
+    if(ports.prdPaperPool){try{leagueBaselineView=await repo.leagueBaselineProjection(day(now),new Date(now).toISOString());}
+      catch{leagueBaselineView={version:'league-baseline-directions-v1',businessDate:day(now),updatedAt:new Date(now).toISOString(),records:[],blocked:1,formalEligible:false};}}
+    let reviewedAnalysis;
+    if(repo.client){
+      const attempted=await repo.savepoint(()=>require('./reviewedAnalysisRuntime.cjs').projection(repo.client,day(now),new Date(now).toISOString()));
+      if(attempted.error)await repo.issue('reviewed-analysis',{reason:'reviewed-analysis-projection-unavailable'});
+      else reviewedAnalysis=attempted.value;
+    }
+    let dailyBulletin;
+    if(repo.client){
+      const attempted=await repo.savepoint(()=>require('./dailyBulletinRuntime.cjs').projection(repo,{now,decisions:ports.trainedOnly?[]:decisions,heads:rawHeads,readOnlyArchive:ports.trainedOnly===true}));
+      if(attempted.error){await repo.issue('daily-bulletin',{reason:'daily-bulletin-unavailable'});
+        dailyBulletin={version:'jincai-daily-bulletin-v1',businessDate:day(now),updatedAt:new Date(now).toISOString(),status:'unavailable',records:[],tiers:[],review:null};}
+      else dailyBulletin=attempted.value;
+    }
     const center={version:'recommendation-center-v1',policyVersion:VERSION,updatedAt:new Date(now).toISOString(),businessDate:day(now),
       inputAsOf:[lanes.publish?.inputAsOf,lanes.combos?.inputAsOf].filter(v=>Number.isFinite(time(v))).sort((a,b)=>time(b)-time(a))[0]||null,resultAsOf:lanes.settlement?.lastSuccessAt||null,lanes,
-      current:selected,previews,todayCombos:today,todayDualResearch,overlapDecisionIds:overlap,coverage,
+      current:selected,previews,todayCombos:today,todayDualResearch,overlapDecisionIds:overlap,coverage,...(dailyBulletin?{dailyBulletin}:{}),
+      ...(prdPaperView?{prdPaper:prdPaperView}:{}),...(leagueBaselineView?{leagueBaseline:leagueBaselineView}:{}),...(reviewedAnalysis?{reviewedAnalysis}:{}),
       review:{singles:singles.slice(0,100),combos:combos.slice(0,100),limit:100,qualityReport:buildQualityReport(singles,{asOf:now}),
         statistics:{single:summary(singles,true),supplementary:supplementarySummary(singles),qualifiedSingle:summary(singles.filter(r=>r.selectionQuality.qualified),true),handicap:handicapSummary(singles),handicapBreakdown:handicapBreakdown(singles),marketBaseline:marketBaseline(singles),daily:dailySummary(singles,combos),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},handicapCalibration,
         definition:'latest-published-decision-before-cutoff-per-event; combos-use-exact-bound-versions'},
       excludedCorruptRecords:quarantined.length,modelValidation:'unvalidated',legacyRecordsReclassified:0};
+    if(ports.trainedOnly){
+      // Retire the legacy producer and its live projection together. Its
+      // immutable decisions, combo bindings and review denominators survive.
+      center.current=[];center.previews=[];center.todayCombos=[];center.todayDualResearch=[];center.overlapDecisionIds=[];
+      center.strategySwitch={version:'trained-strategy-switch-v1',activeReferenceStrategy:'league-trained-baseline-v1',
+        legacyPublicationEnabled:false,legacyFallbackEnabled:false,formalEligible:false,
+        modelAdoptionCount:leagueBaselineView?.records?.length||0};
+      const trained=leagueBaselineView?.records||[];
+      const missing=targetMatches.filter(m=>!trained.some(r=>r.event.sourceMatchId===String(m.sourceMatchId||'').replace(/^sporttery_/,'')
+        &&time(r.event.eventVersion)===time(m.eventVersion||m.kickoffTime)&&r.event.homeTeamId===m.homeTeamId&&r.event.awayTeamId===m.awayTeamId));
+      center.coverage={version:'recommendation-day-coverage-v1',businessDate:day(now),updatedAt:center.updatedAt,
+        targetCount:targetMatches.length,publishableCount:targetMatches.length-missing.length,qualifiedCount:0,unqualifiedCount:targetMatches.length,
+        coverageRatio:targetMatches.length?0:null,missingTotal:targetMatches.length,hasMore:targetMatches.length>32,
+        missing:targetMatches.slice(0,32).map(m=>({matchId:m.id||null,sourceMatchId:m.sourceMatchId||null,
+          homeTeamName:m.homeTeamName||'',awayTeamName:m.awayTeamName||'',reasonCode:'trained-model-adoption-required',
+          reasonText:missing.includes(m)?'等待本联赛训练参数、球队映射与新模型采用记录；不回退旧模型':'已有球队模型参考；正式分市场校准与前瞻验证尚未完成'}))};
+    }
     await repo.saveView(center);
     return {centerUpdatedAt:center.updatedAt,quarantined:quarantined.length};
   });}
-  return {publish,research,researchV2,combos,settle,view,
-    async publishingCycle(){const publication=await publish();const dualResearch=publication.ok?await research(publication.value.decisionIds):{ok:false,skipped:'publication-failed'};const dualResearchV2=await researchV2();const combinations=await combos();const projection=await view();return {publication,dualResearch,dualResearchV2,combinations,projection};},
+  return {publish,research,researchV2,prdPaper,leagueBaseline,combos,settle,view,
+    async publishingCycle(){const publication=await publish();const dualResearch=publication.ok?await research(publication.value.decisionIds):{ok:false,skipped:'publication-failed'};const dualResearchV2=await researchV2();const paper=await prdPaper();const league=await leagueBaseline();const combinations=await combos();const projection=await view();return {publication,dualResearch,dualResearchV2,...(ports.prdPaperPool?{prdPaper:paper,leagueBaseline:league}:{}),combinations,projection};},
     async settlementCycle(){const settlement=await settle();const projection=await view();return {settlement,projection};}
   };
 }

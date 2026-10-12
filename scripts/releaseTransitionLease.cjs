@@ -15,6 +15,9 @@ const {
 const LEASE_VERSION = "candidate-transition-lease-v2";
 const DIGEST_VERSION = "candidate-transition-semantic-digest-v2";
 const SOURCE_CLOCK_DIGEST_VERSION = "candidate-transition-source-clock-digest-v1";
+const EMERGENCY_AUTHORIZATION_FILE = "code-release-activation-authorization.json";
+const EMERGENCY_LEASE_VERSION = "emergency-code-transition-lease-v1";
+const EMERGENCY_LEASE_SECONDS = 900;
 const TRANSITION_TYPES = Object.freeze({
   decision: "candidate-decision-deadline",
   finalization: "candidate-capture-finalization",
@@ -29,6 +32,52 @@ class ReleaseTransitionLeaseError extends Error {
     this.details = details;
   }
 }
+
+const validateEmergencyCodeAuthorization = (value, { at, dataPlane = "code-only" } = {}) => {
+  const reject = message => { throw new ReleaseTransitionLeaseError(message); };
+  if (dataPlane !== "code-only") reject("emergency activation cannot authorize a database release");
+  if (!value || Object.getPrototypeOf(value) !== Object.prototype
+    || JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(["authorizedAt", "expiresAt", "mode", "reason", "version"]))
+    reject("invalid emergency activation authorization fields");
+  if (value.version !== "emergency-code-activation-v1" || value.mode !== "code-only-ignore-schedule"
+    || value.reason !== "user-requested-immediate-ui-repair") reject("invalid emergency activation authorization scope");
+  const start = Date.parse(value.authorizedAt), end = Date.parse(value.expiresAt), now = Date.parse(at);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(now)
+    || new Date(start).toISOString() !== value.authorizedAt || new Date(end).toISOString() !== value.expiresAt
+    || end <= start || end - start > 7_200_000 || now < start || now >= end)
+    reject("emergency activation authorization is outside its bounded validity");
+  const authorization = { version: value.version, mode: value.mode, reason: value.reason,
+    authorizedAt: value.authorizedAt, expiresAt: value.expiresAt };
+  return { authorization, authorizationHash: crypto.createHash("sha256").update(JSON.stringify(authorization)).digest("hex") };
+};
+
+// The caller must bind this exact file to the authenticated source inventory.
+const readEmergencyCodeAuthorization = (file, options = {}) => {
+  const resolved = path.resolve(file);
+  if (path.basename(resolved) !== EMERGENCY_AUTHORIZATION_FILE) throw new ReleaseTransitionLeaseError("unexpected emergency authorization path");
+  for (let parent = path.dirname(resolved); ; parent = path.dirname(parent)) {
+    const stat = fs.lstatSync(parent);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new ReleaseTransitionLeaseError("emergency authorization directory is not real");
+    if (parent === path.dirname(parent)) break;
+  }
+  const before = fs.lstatSync(resolved);
+  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1 || before.size <= 0 || before.size > 4096)
+    throw new ReleaseTransitionLeaseError("emergency authorization must be a bounded single-link regular file");
+  const bytes = fs.readFileSync(resolved), after = fs.lstatSync(resolved);
+  if (before.ino !== after.ino || before.size !== bytes.length || before.size !== after.size
+    || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs)
+    throw new ReleaseTransitionLeaseError("emergency authorization changed while reading");
+  return validateEmergencyCodeAuthorization(JSON.parse(bytes.toString("utf8")), options);
+};
+
+const emergencyClock = () => {
+  if (process.platform !== "linux") throw new ReleaseTransitionLeaseError("emergency lease clock requires Linux");
+  const bootId = fs.readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim();
+  const uptimeSeconds = require("node:os").uptime();
+  if (!/^[a-f0-9-]{36}$/.test(bootId) || !Number.isFinite(uptimeSeconds) || uptimeSeconds < 0)
+    throw new ReleaseTransitionLeaseError("emergency lease clock is invalid");
+  return { bootId, uptimeSeconds };
+};
 
 const canonicalize = (value) => {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -267,6 +316,9 @@ const createTransitionLease = (payload, {
   verifierRuntimeMaxSeconds,
   preverifyRefreshBudgetSeconds,
   atomicSwapMarginSeconds,
+  emergencyAuthorization = null,
+  dataPlane = null,
+  clockProof = null,
 } = {}) => {
   const runtimeSeconds = positiveInteger(verifierRuntimeMaxSeconds, "verifierRuntimeMaxSeconds");
   const refreshBudgetSeconds = positiveInteger(
@@ -277,10 +329,22 @@ const createTransitionLease = (payload, {
   const swapMarginSeconds = positiveInteger(atomicSwapMarginSeconds, "atomicSwapMarginSeconds");
   const projection = transitionProjection(payload, refreshAt);
   const minimumHorizonSeconds = runtimeSeconds + refreshBudgetSeconds + swapMarginSeconds;
+  let emergency = null;
+  if (emergencyAuthorization !== null) {
+    const approved = validateEmergencyCodeAuthorization(emergencyAuthorization, { at: projection.refreshAt, dataPlane });
+    if (minimumHorizonSeconds !== EMERGENCY_LEASE_SECONDS
+      || projection.refreshAtMs + EMERGENCY_LEASE_SECONDS * 1000 > Date.parse(approved.authorization.expiresAt))
+      throw new ReleaseTransitionLeaseError("emergency activation must retain its complete 900 second lease");
+    const clock = clockProof || emergencyClock();
+    if (!/^[a-f0-9-]{36}$/.test(clock.bootId) || !Number.isFinite(clock.uptimeSeconds) || clock.uptimeSeconds < 0)
+      throw new ReleaseTransitionLeaseError("emergency lease clock is invalid");
+    emergency = { version: EMERGENCY_LEASE_VERSION, ...approved, lifetimeSeconds: EMERGENCY_LEASE_SECONDS,
+      bootId: clock.bootId, issuedUptimeSeconds: clock.uptimeSeconds };
+  }
   const availableHorizonSeconds = projection.nextTransitionEpochMs === null
     ? null
     : (projection.nextTransitionEpochMs - projection.refreshAtMs) / 1000;
-  if (availableHorizonSeconds !== null && availableHorizonSeconds < minimumHorizonSeconds) {
+  if (!emergency && availableHorizonSeconds !== null && availableHorizonSeconds < minimumHorizonSeconds) {
     throw new ReleaseTransitionLeaseError("candidate transition horizon is too short", {
       refreshAt: projection.refreshAt,
       nextTransition: projection.nextTransition,
@@ -307,10 +371,12 @@ const createTransitionLease = (payload, {
     atomicSwapMarginSeconds: swapMarginSeconds,
     minimumHorizonSeconds,
     availableHorizonSeconds,
+    ...(emergency ? { emergency } : {}),
   };
 };
 
-const verifyTransitionLease = (payload, lease, { verifiedAt, requiredMarginSeconds = null } = {}) => {
+const verifyTransitionLease = (payload, lease, { verifiedAt, requiredMarginSeconds = null,
+  emergencyAuthorization = null, dataPlane = null, clockProof = null } = {}) => {
   if (lease?.version !== LEASE_VERSION || lease?.digestVersion !== DIGEST_VERSION) {
     throw new ReleaseTransitionLeaseError("transition lease version is invalid");
   }
@@ -323,6 +389,26 @@ const verifyTransitionLease = (payload, lease, { verifiedAt, requiredMarginSecon
     });
   }
   const projection = transitionProjection(payload, lease.refreshAt);
+  let emergencyRemainingSeconds = null;
+  if (lease.emergency || emergencyAuthorization !== null) {
+    const record = lease.emergency;
+    if (!record || record.version !== EMERGENCY_LEASE_VERSION || record.lifetimeSeconds !== EMERGENCY_LEASE_SECONDS
+      || lease.minimumHorizonSeconds !== EMERGENCY_LEASE_SECONDS || emergencyAuthorization === null)
+      throw new ReleaseTransitionLeaseError("emergency lease requires the same signed authorization");
+    const approved = validateEmergencyCodeAuthorization(emergencyAuthorization, { at: verifiedAt, dataPlane });
+    const original = validateEmergencyCodeAuthorization(record.authorization, { at: lease.refreshAt, dataPlane });
+    if (approved.authorizationHash !== record.authorizationHash || original.authorizationHash !== record.authorizationHash)
+      throw new ReleaseTransitionLeaseError("emergency authorization changed after lease creation");
+    const clock = clockProof || emergencyClock();
+    const elapsed = clock.uptimeSeconds - record.issuedUptimeSeconds;
+    if (clock.bootId !== record.bootId || !Number.isFinite(elapsed) || elapsed < 0
+      || !Number.isFinite(record.issuedUptimeSeconds) || record.issuedUptimeSeconds < 0)
+      throw new ReleaseTransitionLeaseError("emergency lease monotonic clock changed");
+    emergencyRemainingSeconds = Math.min(EMERGENCY_LEASE_SECONDS - elapsed,
+      EMERGENCY_LEASE_SECONDS - (verifiedAtMs - refreshAtMs) / 1000);
+    if (projection.inventoryDigest !== lease.inventoryDigest || projection.sourceClockDigest !== lease.sourceClockDigest)
+      throw new ReleaseTransitionLeaseError("emergency lease inventory or source clock changed");
+  }
   if (projection.dataDigest !== lease.dataDigest
     || projection.transitionDigest !== lease.transitionDigest
     || projection.nextTransition !== lease.nextTransition
@@ -355,13 +441,15 @@ const verifyTransitionLease = (payload, lease, { verifiedAt, requiredMarginSecon
   const remainingSeconds = nextTransitionMs === null
     ? null
     : (nextTransitionMs - verifiedAtMs) / 1000;
-  if (nextTransitionMs !== null && verifiedAtMs >= nextTransitionMs) {
+  if (emergencyRemainingSeconds !== null && emergencyRemainingSeconds < requiredTransitionMarginSeconds)
+    throw new ReleaseTransitionLeaseError("emergency code lease lifetime or rollback margin expired");
+  if (emergencyRemainingSeconds === null && nextTransitionMs !== null && verifiedAtMs >= nextTransitionMs) {
     throw new ReleaseTransitionLeaseError("candidate transition was crossed during verification", {
       verifiedAt: new Date(verifiedAtMs).toISOString(),
       nextTransition: projection.nextTransition,
     });
   }
-  if (remainingSeconds !== null && remainingSeconds < requiredTransitionMarginSeconds) {
+  if (emergencyRemainingSeconds === null && remainingSeconds !== null && remainingSeconds < requiredTransitionMarginSeconds) {
     throw new ReleaseTransitionLeaseError("candidate transition lease lacks required transition margin", {
       remainingSeconds,
       atomicSwapMarginSeconds: swapMarginSeconds,
@@ -391,6 +479,7 @@ const verifyTransitionLease = (payload, lease, { verifiedAt, requiredMarginSecon
     matchesChanged: projection.matches !== lease.matches,
     activeMatches: projection.activeMatches,
     futureTransitionEpochs: projection.transitions.length,
+    ...(emergencyRemainingSeconds !== null ? { emergencyRemainingSeconds, scheduleWindowIgnored: true } : {}),
   };
 };
 
@@ -452,12 +541,18 @@ const main = (argv = process.argv.slice(2)) => {
     throw new ReleaseTransitionLeaseError("--current, --lease and --at are required");
   }
   const payload = readRegularJson(currentPath, "candidate current JSON");
+  const emergencyAuthorization = options["emergency-authorization"]
+    ? readEmergencyCodeAuthorization(path.resolve(options["emergency-authorization"]), {
+      at: options.at, dataPlane: options["data-plane"],
+    }).authorization : null;
   if (mode === "probe" || mode === "create") {
     const lease = createTransitionLease(payload, {
       refreshAt: options.at,
       verifierRuntimeMaxSeconds: options["verifier-runtime-max-seconds"],
       preverifyRefreshBudgetSeconds: options["preverify-refresh-budget-seconds"],
       atomicSwapMarginSeconds: options["atomic-swap-margin-seconds"],
+      emergencyAuthorization,
+      dataPlane: options["data-plane"] || null,
     });
     // A successful probe is advisory only: it neither creates a lease nor
     // reserves a window. The candidate and final CAS must still be checked.
@@ -469,6 +564,8 @@ const main = (argv = process.argv.slice(2)) => {
   const result = verifyTransitionLease(payload, lease, {
     verifiedAt: options.at,
     requiredMarginSeconds: options["required-margin-seconds"] ?? null,
+    emergencyAuthorization,
+    dataPlane: options["data-plane"] || null,
   });
   process.stdout.write(`${JSON.stringify({ mode, ...result })}\n`);
   return result;
@@ -488,6 +585,9 @@ if (require.main === module) {
 }
 
 module.exports = {
+  EMERGENCY_AUTHORIZATION_FILE,
+  readEmergencyCodeAuthorization,
+  validateEmergencyCodeAuthorization,
   DIGEST_VERSION,
   LEASE_VERSION,
   SOURCE_CLOCK_DIGEST_VERSION,

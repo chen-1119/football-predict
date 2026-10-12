@@ -239,6 +239,7 @@ export interface MatchContextSignals {
     note?: string;
     preMatchQuality?: {
       version?: string;
+      evidenceCoverage?: PrematchEvidenceCoverage;
       score?: number;
       sourceQuality?: 'high' | 'medium' | 'low' | string;
       severeMissingCount?: number;
@@ -316,6 +317,20 @@ export interface FiveHundredRecentFormRow {
   totalGoalsResult?: string;
 }
 
+export interface PrematchEvidenceCoverage {
+  version: string;
+  confirmedBoth: boolean;
+  projectedAny: boolean;
+  degraded: boolean;
+  sides: Record<'home' | 'away', {
+    lineupStatus: 'confirmed' | 'projected' | 'unknown';
+    confirmedPlayers: number;
+    projectedPlayers: number;
+    injuryStatus: 'reported' | 'unknown';
+    injuryPlayers: number | null;
+  }>;
+}
+
 export interface ExternalMatchSignals {
   updatedAt?: string;
   source?: string;
@@ -327,6 +342,7 @@ export interface ExternalMatchSignals {
     updatedAt?: string;
     quality?: {
       version?: string;
+      evidenceCoverage?: PrematchEvidenceCoverage;
       score?: number;
       sourceQuality?: 'high' | 'medium' | 'low' | string;
       severeMissingCount?: number;
@@ -1514,6 +1530,20 @@ export interface Match {
   handicapOddsSourceUrl?: string;
   predictions: PredictionDetail[];
   predictionMeta?: PredictionMeta;
+  recommendationAuthority?: {
+    version: 'recommendation-publication-authority-v1';
+    mode: 'reviewed-and-trained';
+    legacyCurrentEnabled: false;
+    businessDate?: string;
+    updatedAt?: string;
+    observedAt?: string;
+    legacyArchiveState?: 'valid' | 'missing' | 'none';
+    activeValidation?: {
+      ok: boolean;
+      reviewed: { status: 'verified' | 'unavailable'; records: number; openRecords?: number; closedRecords?: number };
+      trained: { status: 'verified' | 'unavailable'; records: number; openRecords?: number; closedRecords?: number };
+    };
+  } | null;
   gptPrediction?: GptPredictionRecord;
   probabilityModel?: MatchProbabilityModel;
   stats?: MatchStats;

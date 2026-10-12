@@ -14,20 +14,25 @@ const LEAGUES = Object.freeze({
 const MAX_BYTES = 2 * 1024 * 1024;
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 
-function sourceUrl(season, league) {
+function sourceUrl(season, league, sourceCommit = null) {
   const parts = /^(20\d{2})-(\d{2})$/.exec(season);
   if (!parts || (Number(parts[1]) + 1) % 100 !== Number(parts[2])) throw new Error("Invalid season");
   if (!Object.hasOwn(LEAGUES, league)) throw new Error("Unsupported league");
-  return `https://raw.githubusercontent.com/openfootball/football.json/master/${season}/${league}.json`;
+  if (sourceCommit !== null && !/^[a-f0-9]{40}$/.test(sourceCommit)) throw new Error("Invalid pinned source commit");
+  return `https://raw.githubusercontent.com/openfootball/football.json/${sourceCommit || "master"}/${season}/${league}.json`;
 }
 
-function inspectSource(raw, { season, league, receivedAt }) {
-  const url = sourceUrl(season, league);
+function inspectSource(raw, { season, league, receivedAt, sourceCommit = null }) {
+  const url = sourceUrl(season, league, sourceCommit);
   if (!strictInstant(receivedAt)) throw new Error("Invalid receipt clock");
   if (!Buffer.isBuffer(raw) || raw.length > MAX_BYTES) throw new Error("Invalid source bytes");
   const data = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw));
   const expectedName = `${LEAGUES[league]} ${season.replace("-", "/")}`;
-  if (data?.name !== expectedName || !Array.isArray(data.matches) || data.matches.length > 2000) {
+  // Historical pinned JSON uses this documented Spanish title. The existing
+  // master observer contract and its original receipt bytes stay unchanged.
+  const pinnedSpanishName = sourceCommit && league === "es.1"
+    ? `Primera División de España ${season.replace("-", "/")}` : null;
+  if ((data?.name !== expectedName && (!pinnedSpanishName || data?.name !== pinnedSpanishName)) || !Array.isArray(data.matches) || data.matches.length > 2000) {
     throw new Error("Unexpected league, season or match schema");
   }
   const excluded = {};

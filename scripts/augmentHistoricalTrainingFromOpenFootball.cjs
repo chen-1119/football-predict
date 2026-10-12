@@ -5,7 +5,6 @@ const fs = require("node:fs");
 const https = require("node:https");
 const path = require("node:path");
 const { TextDecoder } = require("node:util");
-const { applyEvent, normalizeKey } = require("./augmentHistoricalTrainingFromFootballData.cjs");
 const { iterateHistoricalEvents, stableStringify } = require("./historicalEventStore.cjs");
 const {
   historicalWarehouseStatus,
@@ -235,6 +234,8 @@ function ratingIsReady(team) {
 }
 
 function fillMissingTrainingTeams(index, events) {
+  // Legacy index augmentation needs this module; the shadow CLI does not.
+  const { applyEvent, normalizeKey } = require("./augmentHistoricalTrainingFromFootballData.cjs");
   const isolated = { teams: {} };
   for (const event of [...events].sort((a, b) => a.date.localeCompare(b.date) || a.sourceEventId.localeCompare(b.sourceEventId))) {
     applyEvent(isolated, event);
@@ -390,7 +391,11 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch((error) => {
+  // An explicit shadow route never reads or mutates the existing training index.
+  const operation = process.argv.includes("--shadow-foundation")
+    ? require("./openFootballShadowFoundation.cjs").runShadowFoundationCli(process.argv.slice(2))
+    : main();
+  operation.catch((error) => {
     process.stderr.write(`${JSON.stringify({
       ok: false,
       code: error.code || "OPENFOOTBALL_TRAINING_AUGMENT_FAILED",

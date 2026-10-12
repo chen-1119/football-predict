@@ -48,6 +48,11 @@ function verifyFrontendRuntimeBoundary() {
       assert.equal(observed.workers.length, 1);
       assert.ok(observed.files.some(row => row.path === "server/publicationResolverWorker.cjs"));
       assert.ok(observed.files.some(row => row.path === "scripts/publishOfficialResultsFast.cjs"));
+      assert.ok(observed.files.some(row => row.path === "scripts/syncTeamEvidence.cjs"));
+      assert.ok(observed.files.some(row => row.path === "scripts/teamEvidenceStore.cjs"));
+      assert.ok(observed.files.some(row => row.path === "scripts/teamEvidenceSources.cjs"));
+      assert.ok(observed.files.some(row => row.path === "scripts/expandedLeagueHistoryParser.cjs"));
+      assert.equal(observed.files.some(row => row.path === "scripts/collectExpandedLeagueHistory.cjs"), false);
       for (const file of ["scripts/syncDailyPrematchApi.cjs", "scripts/syncApiFootballData.cjs", "scripts/dailyFeaturedComboLedger.cjs", "scripts/runMarketCollector.cjs", "scripts/runRecommendationSettlement.cjs"])
         assert.ok(observed.files.some(row => row.path === file), `missing runtime closure: ${file}`);
       assert.ok(observed.commands.some(row => row.file === "scripts/syncDailyPrematchApi.cjs" && row.api === "spawnSync"));
@@ -127,6 +132,30 @@ function verifyFrontendRuntimeBoundary() {
         rejected(candidate);
       });
     });
+    for (const relative of [
+      "src/components/recommendations/PublishedMatchPick.tsx",
+      "src/components/recommendations/SelectionQualityNote.tsx",
+      "src/components/recommendations/RecommendationCenter.tsx",
+      "src/components/recommendations/published-match-pick.css",
+      "src/styles/recommendation-center.css",
+    ]) {
+      check(`newly reviewed browser card stays outside the runtime closure: ${relative}`, () => {
+        assert.equal(observed.files.some(row => row.path === relative), false);
+        changed(relative, text => `${text}\n/* browser-only fixture change */\n`, candidate => {
+          const result = compareFrontendRuntimeBoundary({ baseline, candidate });
+          assert.equal(result.ok, true, JSON.stringify(result.blockers));
+          assert.equal(result.fastPathActivated, false);
+          assert.equal(result.externalRuntimeAttestationRequired, true);
+        });
+      });
+      check(`a server import of the reviewed browser card still rejects: ${relative}`, () => {
+        changed("server/index.cjs", text => `${text}\nrequire('../${relative}');\n`, candidate => {
+          const result = inspectFrontendRuntimeBoundary(candidate);
+          assert.ok(result.blockers.some(reason => reason.includes("runtime-ui-boundary-overlap")), JSON.stringify(result.blockers));
+          unreviewed(candidate);
+        });
+      });
+    }
     check("literal dynamic import and static export edges cannot hide UI overlap", () => {
       changed("server/index.cjs", text => `${text}\nimport('../src/components/Navbar.tsx');\n`, rejected);
       changed("server/index.cjs", text => `${text}\nexport * from '../src/components/Navbar.tsx';\n`, rejected);
@@ -171,6 +200,7 @@ function verifyFrontendRuntimeBoundary() {
       changed("scripts/runSyncWorker.cjs", text => text.replace("const child = spawn(command, args, {", "const child = spawn(process.env.OVERRIDE || command, args, {"), rejected);
     });
     check("unchanged generic process adapter cannot authorize a new dynamic wrapper caller", () => {
+      changed("scripts/runSyncWorker.cjs", text => text.replace('"sync:team-evidence"));', 'process.env.UNREVIEWED_EVIDENCE_COMMAND));'), unreviewed);
       changed("server/index.cjs", text => `${text}\nrunCommand(process.env.UNKNOWN_EXECUTABLE, process.env.UNKNOWN_ARGUMENTS);\n`, unreviewed);
       changed("server/index.cjs", text => `${text}\nrunCommand('node', ['src/pages/PredictionsList.tsx']);\n`, unreviewed);
     });

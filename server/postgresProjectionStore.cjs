@@ -215,7 +215,16 @@ const getPostgresProjectionStatus = async (pool, options = {}) => {
   }
 };
 
-const readPostgresCurrentMatches = async (pool, options = {}) => {
+const applyCurrentRecommendationAuthority = async (client, rows, options = {}) => {
+  const authority = require('./recommendationAuthority.cjs');
+  if (!authority.isTrustedPolicy(options.recommendationAuthorityPolicy)) return { rows, recommendationAuthority: null };
+  const verified = await authority.readPublicationAuthority(client, {
+    policy: options.recommendationAuthorityPolicy, asOf: new Date().toISOString(),
+  });
+  return authority.projectCurrentAuthoritySnapshot(rows, verified);
+};
+
+const readPostgresCurrentAuthoritySnapshot = async (pool, options = {}) => {
   const result = await withReadSnapshot(pool, options.publicationIdentity, async (client) => {
     const rows = await client.query(`
       SELECT payload
@@ -223,9 +232,34 @@ const readPostgresCurrentMatches = async (pool, options = {}) => {
       WHERE dataset = 'current'
       ORDER BY kickoff_time ASC, match_id ASC
     `);
-    return parsePayloadRows(rows.rows);
+    return applyCurrentRecommendationAuthority(client, parsePayloadRows(rows.rows), options);
   });
-  return result.available ? result.value : [];
+  return result.available ? result.value : { rows: [], recommendationAuthority: null };
+};
+
+const readPostgresCurrentMatches = async (pool, options = {}) => {
+  return (await readPostgresCurrentAuthoritySnapshot(pool, options)).rows;
+};
+
+const readPostgresRecommendationCenter = async (pool, options = {}) => {
+  const result = await withReadSnapshot(pool, options.publicationIdentity, async client => {
+    const authority = require('./recommendationAuthority.cjs');
+    if (authority.isTrustedPolicy(options.recommendationAuthorityPolicy)) {
+      const verified = await authority.readPublicationAuthority(client, {
+        policy: options.recommendationAuthorityPolicy, asOf: new Date().toISOString(),
+      });
+      const payload = authority.getAuthorityCenterPayload(verified);
+      if (options.includeReviewedHistory === true && !payload.recommendationCenter.reviewedAnalysis?.records?.length) {
+        const history = await require('../scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs')
+          .readLatestHistory(client, payload.recommendationCenter.businessDate, new Date().toISOString());
+        if (history) return { ...payload, recommendationCenter: { ...payload.recommendationCenter, reviewedAnalysisHistory: history } };
+      }
+      return payload;
+    }
+    const rows = await client.query('SELECT payload FROM football.daily_featured_combo_state WHERE id=1');
+    return rows.rows[0]?.payload || null;
+  });
+  return result.available ? result.value : null;
 };
 
 const readPostgresHistoryMatchesForList = async (pool, limit = 600, options = {}) => {
@@ -305,9 +339,11 @@ const readPostgresCurrentTransitionSnapshot = async (pool, options = {}) => {
         "data_publication_mode", "data_generation_source_cycle_id",
       ]),
     ]);
+    const projected = await applyCurrentRecommendationAuthority(client, parsePayloadRows(current.rows), options);
     return {
       available: true,
-      currentRows: parsePayloadRows(current.rows),
+      currentRows: projected.rows,
+      recommendationAuthority: projected.recommendationAuthority,
       transitionRows,
       meta,
       publication,
@@ -354,6 +390,55 @@ const readPostgresMatchById = async (pool, id, options = {}) => {
     return parsePayloadRows(rows.rows).reduce((current, candidate) => (
       current ? reconcileMatchLifecycle(current, candidate) : resolveMatchLifecycle(candidate)
     ), null);
+  });
+  return result.available ? result.value : null;
+};
+
+// Only detail routes use alias admission. Accounts, publishers and settlement
+// continue to use the original reader and immutable identities.
+const readPostgresMatchDetailById = async (pool, id, options = {}) => {
+  const matchId = String(id || '').trim();
+  const {detailAliasSource} = require('../src/services/matchDetailIdentity.js');
+  const sourceId = detailAliasSource(matchId);
+  if (!sourceId) {
+    // Trusted current publication reads require the strict source identity path.
+    // Never fall back to a raw legacy match reader after requesting retirement.
+    if (require('./recommendationAuthority.cjs').isTrustedPolicy(options.recommendationAuthorityPolicy)) return null;
+    return readPostgresMatchById(pool,matchId,options);
+  }
+  const result = await withReadSnapshot(pool,options.publicationIdentity,async (client,publication) => {
+    await client.query("SET LOCAL statement_timeout = '2500ms'");
+    const rows = await client.query(`SELECT payload,dataset,match_id,source_match_id,kickoff_time::text AS kickoff_time FROM football.match_snapshots
+      WHERE dataset IN ('current','history') AND (match_id=$1 OR source_match_id=$2)
+      ORDER BY CASE dataset WHEN 'current' THEN 0 ELSE 1 END,kickoff_time DESC LIMIT 17`,[matchId,sourceId]);
+    if (!rows.rows.length || rows.rows.length > 16) return null;
+    const candidates = parsePayloadRows(rows.rows);
+    if (candidates.length !== rows.rows.length) return null;
+    // Exact canonical IDs retain the existing strict path. Never attach an
+    // alias receipt to an already exact response or rewrite a stored row.
+    const match = candidates.reduce((current,candidate) =>
+      current ? reconcileMatchLifecycle(current,candidate) : resolveMatchLifecycle(candidate),null);
+    const project = async value => {
+      if (!value) return value;
+      const currentEvent = rows.rows.some((row, index) => row.dataset === 'current'
+        && sourceMatchIdFor(candidates[index].sourceMatchId || candidates[index].id) === sourceMatchIdFor(value.sourceMatchId || value.id)
+        && Date.parse(candidates[index].kickoffTime) === Date.parse(value.kickoffTime));
+      return currentEvent ? (await applyCurrentRecommendationAuthority(client, [value], options)).rows[0] : value;
+    };
+    if (match.id === matchId) return project(match);
+    const {DETAIL_ALIAS_DECISION_HEADS_SQL,decisionRowMatchesPayload,postgresClock,bindMatchDetailAlias} = require('./matchDetailIdentity.cjs');
+    const {exactDetailClock} = require('../src/services/matchDetailIdentity.js');
+    if (rows.rows.some((row,i) => row.match_id !== candidates[i].id || row.source_match_id !== candidates[i].sourceMatchId
+      || exactDetailClock(postgresClock(row.kickoff_time)) === null
+      || exactDetailClock(postgresClock(row.kickoff_time)) !== exactDetailClock(candidates[i].kickoffTime))) return null;
+    const frozen = await client.query(DETAIL_ALIAS_DECISION_HEADS_SQL,[sourceId,matchId]);
+    if (frozen.rows.length > 16 || frozen.rows.some(row => !decisionRowMatchesPayload(row))) return null;
+    const clock = await client.query('SELECT clock_timestamp()::text AS observed_at');
+    const observedAt = postgresClock(clock.rows[0]?.observed_at);
+    const decisions = parsePayloadRows(frozen.rows);
+    if (decisions.length !== frozen.rows.length) return null;
+    return project(bindMatchDetailAlias({requestedId:matchId,
+      candidates:[match,...candidates],decisions,publication,observedAt}));
   });
   return result.available ? result.value : null;
 };
@@ -456,11 +541,14 @@ module.exports = {
   getPostgresProjectionStatus,
   publicationIdentityFromMeta,
   readPostgresCurrentMatches,
+  readPostgresCurrentAuthoritySnapshot,
+  readPostgresRecommendationCenter,
   readPostgresCurrentTransitionSnapshot,
   readPostgresFastResultReceiptState,
   readPostgresHistoryMatchesForList,
   readPostgresHistoryMatchesPage,
   readPostgresMatchById,
+  readPostgresMatchDetailById,
   readPostgresOddsHistoryRows,
   readPostgresPredictionSnapshotRows,
   readPostgresPublicationIdentity,

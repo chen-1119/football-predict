@@ -20,7 +20,7 @@ const SQLITE_PATH = `${STORE_PATH}/football.db`;
 const EXPECTED_SITE_PATH = "/etc/football-release/expected-site";
 const EXPECTED_CHANNEL_PATH = "/etc/football-release/expected-channel";
 
-const MANAGED_CONFIG_PATHS = [
+const PRE_RETENTION_MANAGED_CONFIG_PATHS = [
   "/etc/systemd/system/football-predict.service",
   "/etc/systemd/system/football-sync-worker.service",
   "/etc/systemd/system/football-cleanup.service",
@@ -34,10 +34,17 @@ const MANAGED_CONFIG_PATHS = [
   "/etc/nginx/sites-enabled/default",
   "/etc/nginx/sites-enabled/football-predict"
 ];
-const LEGACY_MANAGED_CONFIG_PATHS = MANAGED_CONFIG_PATHS.filter(
+const RETENTION_CONFIG_PATHS = [
+  "/etc/systemd/system/football-postgres-backup.service",
+  "/etc/systemd/system/football-postgres-backup.timer",
+  "/usr/local/sbin/football-postgres-backup-v2",
+  "/etc/systemd/journald.conf.d/football-retention.conf"
+];
+const MANAGED_CONFIG_PATHS = [...PRE_RETENTION_MANAGED_CONFIG_PATHS, ...RETENTION_CONFIG_PATHS];
+const LEGACY_MANAGED_CONFIG_PATHS = PRE_RETENTION_MANAGED_CONFIG_PATHS.filter(
   (target) => target !== "/etc/nginx/sites-enabled/default"
 );
-const SUPPORTED_MANAGED_CONFIG_PATH_SETS = [MANAGED_CONFIG_PATHS, LEGACY_MANAGED_CONFIG_PATHS];
+const SUPPORTED_MANAGED_CONFIG_PATH_SETS = [MANAGED_CONFIG_PATHS, PRE_RETENTION_MANAGED_CONFIG_PATHS, LEGACY_MANAGED_CONFIG_PATHS];
 
 const TIMER_UNITS = ["football-cleanup.timer", "football-monitor.timer"];
 // Older recovery journals contain only TIMER_UNITS and UNIT_STATE_NAMES.
@@ -45,6 +52,7 @@ const TIMER_UNITS = ["football-cleanup.timer", "football-monitor.timer"];
 // so they cannot respawn between the final quiesce and the process fence.
 const SIDECAR_TIMER_UNITS = ["football-daily-prematch.timer", "football-featured-combo.timer"];
 const ALL_TIMER_UNITS = [...TIMER_UNITS, ...SIDECAR_TIMER_UNITS];
+const RETENTION_TIMER_UNITS = [...ALL_TIMER_UNITS, "football-postgres-backup.timer"];
 const SIDECAR_UNIT_STATE_NAMES = [
   "football-market-collector.service",
   "football-featured-combo.service",
@@ -59,6 +67,7 @@ const MAINTENANCE_UNITS = [
   "football-cleanup.service",
   "football-monitor.service"
 ];
+const RETENTION_MAINTENANCE_UNITS = ["football-postgres-backup.timer", "football-postgres-backup.service"];
 const RUNTIME_UNITS = ["football-sync-worker.service", "football-predict.service"];
 const UNIT_STATE_NAMES = ["football-predict.service", "football-sync-worker.service", "nginx.service"];
 const ALL_UNIT_STATE_NAMES = [...UNIT_STATE_NAMES, ...SIDECAR_UNIT_STATE_NAMES];
@@ -364,6 +373,12 @@ class SystemAdapter {
 
   daemonReload() {
     if (!TEST_MODE) this.run("systemctl", ["daemon-reload"]);
+  }
+
+  reloadRetention(config) {
+    if (!TEST_MODE && config.entries.some(entry => RETENTION_CONFIG_PATHS.includes(entry.target))) {
+      this.run("systemctl", ["try-restart", "systemd-journald.service"]);
+    }
   }
 
   validateAndReloadNginx(wasActive) {
@@ -726,8 +741,13 @@ const loadConfigSnapshot = (currentDir) => {
   });
   const timerRows = parseTsv(path.join(dir, "timers.tsv"), "timer state manifest", 3);
   const timerNames = timerRows.length === TIMER_UNITS.length ? TIMER_UNITS
-    : timerRows.length === ALL_TIMER_UNITS.length ? ALL_TIMER_UNITS : null;
+    : timerRows.length === ALL_TIMER_UNITS.length ? ALL_TIMER_UNITS
+      : timerRows.length === RETENTION_TIMER_UNITS.length ? RETENTION_TIMER_UNITS : null;
   if (!timerNames) fail("timer state manifest length mismatch");
+  const retentionConfig = rows.length === MANAGED_CONFIG_PATHS.length;
+  if (retentionConfig !== (timerNames.length === RETENTION_TIMER_UNITS.length)) {
+    fail("retention config and timer snapshot generations differ");
+  }
   const timers = timerRows.map(([name, enabled, active], index) => {
     if (name !== timerNames[index] || !["0", "1"].includes(enabled) || !["0", "1"].includes(active)) {
       fail("timer state manifest is invalid");
@@ -737,8 +757,11 @@ const loadConfigSnapshot = (currentDir) => {
   const unitRows = parseTsv(path.join(dir, "units.tsv"), "runtime unit state manifest", 3);
   const unitNames = unitRows.length === UNIT_STATE_NAMES.length ? UNIT_STATE_NAMES
     : unitRows.length === ALL_UNIT_STATE_NAMES.length ? ALL_UNIT_STATE_NAMES : null;
-  if (!unitNames || timerNames.length !== (unitNames.length === UNIT_STATE_NAMES.length
-    ? TIMER_UNITS.length : ALL_TIMER_UNITS.length)) fail("runtime unit state manifest length mismatch");
+  if (!unitNames || (unitNames.length === UNIT_STATE_NAMES.length
+    ? timerNames.length !== TIMER_UNITS.length
+    : ![ALL_TIMER_UNITS.length, RETENTION_TIMER_UNITS.length].includes(timerNames.length))) {
+    fail("runtime unit state manifest length mismatch");
+  }
   const units = unitRows.map(([name, enabled, active], index) => {
     if (name !== unitNames[index] || !["0", "1"].includes(enabled) || !["0", "1"].includes(active)) {
       fail("runtime unit state manifest is invalid");
@@ -1211,6 +1234,7 @@ const restoreConfig = (snapshot, system) => {
     }
   }
   system.daemonReload();
+  system.reloadRetention(snapshot);
   const nginxState = snapshot.units.find((entry) => entry.name === "nginx.service");
   system.validateAndReloadNginx(Boolean(nginxState?.active));
 };
@@ -1256,8 +1280,10 @@ const restoreModelArtifacts = (snapshot) => {
 
 const quiesceAll = (transaction, system) => {
   system.stopTransientUnits(transaction.bundleSha);
+  const retentionUnits = transaction.config.timers.some(state => state.name === "football-postgres-backup.timer")
+    ? RETENTION_MAINTENANCE_UNITS : [];
   for (const unit of [...SIDECAR_TIMER_UNITS, ...SIDECAR_UNIT_STATE_NAMES, ...SIDECAR_ONESHOT_UNITS,
-    ...MAINTENANCE_UNITS, ...RUNTIME_UNITS]) system.stop(unit);
+    ...MAINTENANCE_UNITS, ...retentionUnits, ...RUNTIME_UNITS]) system.stop(unit);
   system.killDedicatedUserProcesses();
 };
 
@@ -1387,11 +1413,71 @@ const resolveTransaction = (transaction) => {
   fsyncPath(transaction.recoveryRoot);
 };
 
+// A native release may die after installing its /run pause, before its shell
+// EXIT trap can run. Keep ownership in the root-only recovery transaction.
+const WATCHER_PAUSE_FILES = [
+  { target: "/run/football-release-fast-watcher-pause.env", mode: 0o640,
+    body: "RELAY_FAST_WATCHER_ENABLED=0\n" },
+  { target: "/run/systemd/system/football-predict.service.d/90-release-fast-watcher-pause.conf", mode: 0o644,
+    body: "[Service]\nEnvironmentFile=\nEnvironmentFile=/etc/football-predict/env\nEnvironmentFile=/run/football-release-fast-watcher-pause.env\n" }
+];
+
+const recordWatcherPauseIntent = (transaction, expectedSha) => {
+  if (!transaction?.native || transaction.bundleSha !== expectedSha || !validateDigest(expectedSha))
+    fail("watcher pause intent requires the current native transaction");
+  assertSecureDirectory(transaction.currentDir, "watcher pause transaction");
+  for (const item of WATCHER_PAUSE_FILES) {
+    if (pathExistsNoFollow(hostPath(item.target))) fail("watcher pause refuses existing override");
+  }
+  const file = path.join(transaction.currentDir, "watcher-pause-intent.json");
+  fs.writeFileSync(file, JSON.stringify({ version: 1, bundleSha256: expectedSha, priorOverridesAbsent: true }) + "\n",
+    { flag: "wx", mode: 0o600 });
+  fsyncPath(file); fsyncPath(transaction.currentDir);
+  return { recorded: true, bundleSha256: expectedSha };
+};
+
+const restoreOwnedWatcherPause = (transaction, system) => {
+  const file = path.join(transaction.currentDir, "watcher-pause-intent.json");
+  if (!pathExistsNoFollow(file)) return false; // Legacy transaction: never infer ownership.
+  const intent = readJsonFile(file, "watcher pause intent");
+  if (!transaction.native || Object.keys(intent).sort().join(",") !== "bundleSha256,priorOverridesAbsent,version"
+      || intent.version !== 1 || intent.bundleSha256 !== transaction.bundleSha || intent.priorOverridesAbsent !== true)
+    fail("watcher pause intent identity mismatch");
+  const present = [];
+  for (const item of WATCHER_PAUSE_FILES) {
+    const target = hostPath(item.target), stat = lstatOrNull(target);
+    if (!stat) continue;
+    let parent = path.dirname(target);
+    while (parent !== hostPath("/run") && parent !== path.dirname(parent)) {
+      const ps = fs.lstatSync(parent);
+      if (!ps.isDirectory() || ps.isSymbolicLink() || (!TEST_MODE && (ps.uid !== 0 || (ps.mode & 0o022))))
+        fail("watcher pause parent is unsafe");
+      parent = path.dirname(parent);
+    }
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size !== Buffer.byteLength(item.body)
+        || (!TEST_MODE && (stat.uid !== 0 || (stat.mode & 0o777) !== item.mode))
+        || fs.readFileSync(target, "utf8") !== item.body)
+      fail("watcher pause override changed; preserve for inspection");
+    present.push({ target, stat });
+  }
+  // Validate both before deleting either. Recovery already holds the normal
+  // release lock and has stopped application/writer units.
+  for (const { target, stat } of present) {
+    const now = fs.lstatSync(target);
+    if (now.ino !== stat.ino || now.dev !== stat.dev || now.mtimeMs !== stat.mtimeMs || now.size !== stat.size)
+      fail("watcher pause override changed during cleanup");
+    fs.unlinkSync(target); fsyncPath(path.dirname(target));
+  }
+  if (present.length) system.daemonReload();
+  return present.length > 0;
+};
+
 const recoverRollback = (transaction, system) => {
   const nativeWasActive = transaction.native ? nativeDataActive(transaction.native, system) : false;
   prevalidateRestoreTargets(transaction);
   updatePhase(transaction, "recovering-rollback");
   quiesceAll(transaction, system);
+  restoreOwnedWatcherPause(transaction, system);
   if (transaction.native && nativeDataActive(transaction.native, system) !== nativeWasActive) fail("native database changed during recovery quiesce");
   if (transaction.native) system.reopenBoundNativeDatabase(transaction.native.contract, nativeWasActive);
   if (transaction.native?.legacyBaseline) {
@@ -1447,7 +1533,7 @@ const recoverForward = (transaction, system) => {
     }
   }
   updatePhase(transaction, "recovering-commit");
-  if (transaction.native) quiesceAll(transaction, system);
+  if (transaction.native) { quiesceAll(transaction, system); restoreOwnedWatcherPause(transaction, system); }
   else system.stopTransientUnits(transaction.bundleSha);
   if (transaction.native) {
     prevalidateRestoreTargets(transaction);
@@ -1455,6 +1541,7 @@ const recoverForward = (transaction, system) => {
     restoreRuntimeEnv(transaction.native.runtimeEnv);
   }
   system.daemonReload();
+  system.reloadRetention(transaction.config);
   const nginxState = transaction.config.units.find((entry) => entry.name === "nginx.service");
   system.validateAndReloadNginx(Boolean(nginxState?.active));
   system.setEnabled("football-predict.service", true);
@@ -1494,7 +1581,10 @@ const recover = () => {
 
 const main = () => {
   try {
-    const result = recover();
+    const args = process.argv.slice(2);
+    if (args.length && (args.length !== 2 || args[0] !== "--record-fast-watcher-pause"))
+      fail("unsupported recovery arguments");
+    const result = args.length ? recordWatcherPauseIntent(loadTransaction(), args[1]) : recover();
     process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
   } catch (error) {
     const exitCode = error instanceof RecoveryError ? error.exitCode : 1;
@@ -1506,6 +1596,8 @@ const main = () => {
 if (require.main === module) main();
 
 module.exports = {
+  recordWatcherPauseIntent,
+  restoreOwnedWatcherPause,
   buildDualResearchRollbackSql,
   FORWARD_PHASES,
   PRE_SWAP_PHASES,

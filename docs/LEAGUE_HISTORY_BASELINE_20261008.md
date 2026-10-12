@@ -1,0 +1,73 @@
+# 芬超、巴甲历史接入与基线训练
+
+## 本次交付
+
+在下午球队证据及容量修复代码之上增加独立研究入口；保留既有注册、加载、正式发布和结算合同。
+
+- `collectLeagueTextHistory.cjs`：固定 OpenFootball 仓库提交，重新下载 11 个原始文件，保存 URL、请求/接收时间、字节哈希与 CC0 原文。支持文本日期继承、普通比分与半场比分核对；隔离未赛、非普通赛果、附加赛、当日/未来赛果。重复事件、未知有比分格式直接拒绝。
+- `runLeagueBaselineExperiment.cjs`：核对源文件并重新解析，防止修改派生行再重算外层哈希；逐联赛拟合攻防泊松，另计算 Elo。2023 训练、2024 选择正则与混合比例、2025 固定留出测试。第二段用截至 2025 的数据拟合，固定参数配置检验已取得的 2026 赛果。
+- 最终研究候选使用已取得的全部该联赛数据重新拟合，保留参数、训练输入哈希、日期范围、收敛状态。未知球队明确冷启动。
+
+此候选是新的研究产物格式，**还不能直接写入现有 `prematch-v3-baseline` 注册项**。它没有伪装成原动态模型格式，也没有修改现有校验器放行。当前没有生产数据库写入、正式模型激活或线上概率变更。
+
+## 真实上游观察
+
+2026-10-08 重新查询远端 HEAD 并下载固定提交原件：
+
+- `openfootball/south-america`：`119fa1724b2079a1072a0cb0ca0ccac26d92fd34`。
+- `openfootball/europe`：`0bf83f88e8feb22904c5f9d93c6407574c1347e0`。
+- 原件共 11 个；解析可用赛果 1743 条，隔离 243 行。
+- 巴甲 1417 条：2023–2025 各 380，2026 为 277，最新赛果日期 2026-09-20。
+- 芬超 326 条：2023 为 147、2024 为 147、2025 只有 32，最新赛果日期 2025-05-03；该源没有 2026 文件。测试期不足，明确阻断芬超训练评估。
+
+芬超官方 2025 赛程页另行探测：Web 抓取失败；本机 Node 与平台默认 TLS 均证书验证失败。未禁用 TLS 校验，未将搜索摘要拼接为训练数据。官方补充源没有正式接入。
+
+## 巴甲实际实验结果
+
+全部为后来取得的社区历史数据；按比赛日期隔离训练/验证/测试，**没有历史可用时钟证明，因此不是当时可执行的历史决策回测，也不是线上前瞻效果**。
+
+| 期间 | 模型命中 | 简单主胜基线 | 模型 Brier | 基线 Brier | 模型 Log Loss | 基线 Log Loss |
+|---|---:|---:|---:|---:|---:|---:|
+| 2025 留出 | 195/380（51.32%） | 191/380（50.26%） | 0.612686 | 0.625359 | 1.021701 | 1.040209 |
+| 2026 已取得部分 | 131/277（47.29%） | 130/277（46.93%） | 0.632863 | 0.639041 | 1.048363 | 1.059195 |
+
+基线概率使用对应训练集胜平负频率，并非均匀概率；两个期间的最大频率方向均为主胜。2024 验证选择正则 0.2、泊松混合权重 1，故最终选中纯泊松，未人为维持 Elo 权重。Elo 的 K=18/主场优势=55 为固定研究配置，不称为学习所得。
+
+2025 测试有 108 场涉及训练期未见球队，2026 为 54 场；球队名严格按源字面绑定，不模糊合并。比赛名义主客顺序被当成主客场研究输入，未核实中立场。来源覆盖、球队映射、中立场及历史修订都会影响解释。
+
+`statisticalGatePassed` 仅表示收敛且相对训练频率基线两项损失改善，**不表示市场优势、显著提升、正式校准或发布准入**。同期官方 SP 缺失，市场比较为 null。没有证明胜过旧线上模型。
+
+## 操作
+
+固定 Node 22，输出必须新建，原件和训练报告保留于私有 `.codex-tmp`，不提交业务导出。
+
+```text
+node scripts/collectLeagueTextHistory.cjs ABSOLUTE_NEW_DIRECTORY
+node scripts/runLeagueBaselineExperiment.cjs ABSOLUTE_HISTORY_JSON ABSOLUTE_NEW_REPORT_JSON
+node --test tests/league-history-training.test.cjs
+```
+
+最终验证：新 14 项 + 下午证据/反馈/训练 CLI/注册读取联合 61 项通过，0 跳过。首次联合执行因新工作树缺 `pg` 依赖失败，复用既有依赖 Junction 后原测试通过；不是修改测试放行。未声称全仓 lint 通过。
+
+## 继续接通所需内容
+
+### 22:21 生产注册与实际兼容性检查
+
+新增 `readPrematchModelRegistryStatus.cjs`，固定 SSH 指纹，以只读事务仅查询两个模型注册键；不读取或绕过赛事身份校验。2026-10-08 22:21:15（北京）实际查询确认 `prematch-v3-baseline`、`prematch-v3-parameters` 均不存在，生产写入为 0。同轮完整赛事读取器报 `V3_READER_MATCH_IDENTITY`，该调用未取得可用赛事输入。
+
+新增 `prepareLeagueModelRegistration.cjs`，核对研究报告与历史输入承诺、实现哈希，并重新拟合比较报告；它不重新下载来源，也不代替原采集/源文件验收。22:23 的真实报告回放通过；现有训练注册验证器返回 `V3_LEARNING_RESEARCH_REQUEST_REQUIRED`，加载器返回 `baseline-schema-or-hash-invalid` 和 `payload-clock-invalid`。因此 `readyToRegister=false`，没有可执行的注册写入命令。本地兼容性检查不等于线上采用。
+
+可执行检查（固定 Node 22，静默加载既有发布环境，输出为绝对新路径）：
+
+```text
+node scripts/readPrematchModelRegistryStatus.cjs ABSOLUTE_NEW_STATUS_JSON
+node scripts/prepareLeagueModelRegistration.cjs ABSOLUTE_HISTORY_JSON ABSOLUTE_REPORT_JSON ABSOLUTE_NEW_PREPARATION_JSON
+node --test tests/model-registry-status-read.test.cjs tests/model-registration-preparation.test.cjs
+```
+
+下一适配必须明确新研究模型版本与参数结构、验证参数数学与训练报告绑定、可信线上球队映射、推理输入时钟及逐条采用回执；不能只改 schema 名称或跳过旧验证器。现有 `registerPrematchV3Parameters.cjs --prepare` 只接受原 V3 请求、报告和绑定基线。其 `--apply` 还需新鲜双注册项 CAS 与真实读回，不能拿本报告冒充该输入。当前检查没有执行 `--apply`，没有修改正式准入要求。
+
+1. 补芬超 2025/2026 和巴甲 9 月 20 日后的许可来源；审批源球队与线上球队身份映射，核实中立场。
+2. 对研究产物实现独立、可复验的注册/加载适配及真实未来采用回执；旧动态模型和新拟合格式不能互冒。
+3. 补同决策时刻官方报价、分市场/让球线校准与原有正式准入证据；8 周 CLV 从真实前瞻样本开始。
+4. 正式适配器及准入完成后才切换后续比赛；旧冻结方向、比分首项和结算不改写。

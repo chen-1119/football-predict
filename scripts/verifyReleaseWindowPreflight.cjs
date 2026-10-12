@@ -139,12 +139,36 @@ function runCreatePrefix(source, options = {}) {
       } };
       if (name === "node:child_process") return { spawnSync: (command, args) => {
         if (args[0] === "/fixture/scripts/createFrontendReleaseBundle.cjs") { assert.equal(command, "/fixed/node"); calls.push("ui-source"); }
+        else if (args[0] === "scripts/verifyRequestJsonUtf8.cjs") {
+          assert.equal(command, "/fixed/node");
+          assert.deepEqual(Array.from(args), ["scripts/verifyRequestJsonUtf8.cjs"]);
+          calls.push("request-utf8");
+          return { status: options.requestUtf8Status ?? (options.requestUtf8Unavailable ? null : 0),
+            error: options.requestUtf8Unavailable ? { message: "fixture request UTF8 child unavailable" } : undefined,
+            stdout: options.requestUtf8Status ? "fixture request UTF8 rejection" : "" };
+        }
+        else if (args[0] === "scripts/verifySignedLiveHadPublication.cjs") {
+          assert.equal(command, "/fixed/node");
+          assert.deepEqual(Array.from(args), ["scripts/verifySignedLiveHadPublication.cjs"]);
+          calls.push("signed-had");
+          return {status:options.signedHadStatus ?? (options.signedHadUnavailable ? null : 0),
+            error:options.signedHadUnavailable ? {message:"fixture signed HAD child unavailable"} : undefined,
+            stdout:options.signedHadStatus ? "fixture signed HAD rejection" : ""};
+        }
         else if (args[0] === "scripts/verifyFrontendEvidenceSemantics.cjs") {
           assert.equal(command, "/fixed/node"); calls.push("frontend-evidence");
           return { status: options.frontendEvidenceFails ? 1 : 0,
             stdout: options.frontendEvidenceFails ? JSON.stringify({ checks: [{ name: "fixture frontend evidence failure", ok: false }] }) : "" };
         }
         else if (args[0] === "scripts/verifyReleaseVerifierContracts.cjs") { assert.equal(command, "/fixed/node"); calls.push("preSign"); }
+        else if (args[0] === "scripts/verifySportteryOpeningPolicy.cjs") {
+          assert.equal(command, "/fixed/node");
+          assert.deepEqual(Array.from(args), ["scripts/verifySportteryOpeningPolicy.cjs"]);
+          calls.push("sporttery-opening");
+          return { status: options.openingStatus ?? (options.openingUnavailable ? null : 0),
+            error: options.openingUnavailable ? { message: "fixture opening child unavailable" } : undefined,
+            stdout: options.openingStatus ? "fixture opening rejection" : "" };
+        }
         else { assert.equal(command, "npm"); assert.deepEqual(Array.from(args), ["run", "build"]); calls.push("build"); }
         return { status: 0 };
       } };
@@ -159,6 +183,7 @@ function runCreatePrefix(source, options = {}) {
         calls.push("worker"); if (options.workerThrows) throw new Error("fixture worker observation unavailable");
         return { ok: options.workerOpen !== false, blockers: options.workerOpen === false ? ["worker-latest-official-cycle-failed"] : [], readyToCutover: false };
       } };
+      if (name === "./runReleaseCapacityPreflight.cjs") return { runLiveCapacityPreflight: () => ({ ok: true, readyToCutover: false }) };
       if (name === "./runReleaseWindowPreflight.cjs") return { runLiveReleaseWindowPreflight: ({ stage }) => {
         assert.equal(stage, "before-build");
         calls.push("window"); if (options.windowThrows) throw new Error("fixture window unavailable"); return { ok: options.windowOpen !== false, readyToCutover: false };
@@ -174,6 +199,19 @@ function verifyReleaseWindowPreflight() {
   const helper = require("./runReleaseWindowPreflight.cjs");
   const checks = [], check = (name, action) => { try { action(); checks.push({ name, ok: true }); } catch (error) { checks.push({ name, ok: false, error: error.stack }); } };
   const evaluate = (value = observation(), now = START, stage = "before-build") => helper.evaluateReleaseWindowObservation(value, now, { stage });
+  check('activation advisory keeps 900 seconds plus clock reserve without authorizing cutover',()=>{
+    const options={stage:'before-upload',nativeFullRelease:true,activationMinimum:true};
+    for(const seconds of [899,904,905,1200]){
+      const r=helper.evaluateReleaseWindowObservation(observation({horizonSeconds:seconds}),START,options);
+      assert.equal(r.ok,seconds>=905);assert.equal(r.minimumHorizonSeconds,905);
+      assert.equal(r.leaseCreated,false);assert.equal(r.windowPreauthorized,false);assert.equal(r.productionWrites,0);
+    }
+    assert.equal(helper.evaluateReleaseWindowObservation(observation({horizonSeconds:905}),START+1000,options).ok,false);
+    assert.throws(()=>helper.evaluateReleaseWindowObservation(observation(),START,{...options,nativeFullRelease:false}));
+    const changed=observation();changed.pointerAfter.generationId='g-'+ '0'.repeat(64);
+    assert.throws(()=>helper.evaluateReleaseWindowObservation(changed,START,options));
+    assert.throws(()=>helper.evaluateReleaseWindowObservation(observation(),START+60001,options));
+  });
   const reject = mutate => { const value = observation(); mutate(value); assert.throws(() => evaluate(value)); };
   const noAuthority = result => {
     for (const field of ["readyToCutover", "windowReserved", "windowPreauthorized", "leaseCreated"]) assert.equal(result[field], false, field);
@@ -217,7 +255,7 @@ function verifyReleaseWindowPreflight() {
     const nativeShell = readSource("deploy/light-server/release-native.sh");
     const verify = source => {
       const earlyStart = source.indexOf('releaseTransitionLease.cjs" probe');
-      const candidateStart = source.indexOf('releaseTransitionLease.cjs" create');
+      const candidateStart = source.indexOf('"$NEXT_DIR/scripts/releaseTransitionLease.cjs" create');
       assert.ok(earlyStart >= 0 && candidateStart > earlyStart);
       const early = source.slice(earlyStart, source.indexOf('verifyCandidateArtifactSeed.cjs', earlyStart));
       const candidate = source.slice(candidateStart, source.indexOf('release_stage_observe end candidate-build ok', candidateStart));
@@ -390,16 +428,58 @@ function verifyReleaseWindowPreflight() {
     assert.throws(() => evaluate(fixture.run(helper)));
   });
   const create = readSource("scripts/createReleaseBundle.cjs");
+  const wrapper = readSource("deploy/light-server/football-release");
+  const { BURN, validateSequenceBranches } = require("./releaseSequencePreflight.cjs");
+  const mutateWrapper = (before, after) => {
+    assert.equal(wrapper.split(before).length - 1, 1, "mutation must target one real wrapper fragment");
+    const changed = wrapper.replace(before, after); assert.notEqual(changed, wrapper); return changed;
+  };
+  const mutateFrontend = (before, after) => {
+    const { frontend } = validateSequenceBranches(wrapper);
+    assert.equal(frontend.split(before).length - 1, 1, "mutation must target one real frontend fragment");
+    const changed = wrapper.replace(frontend, frontend.replace(before, after)); assert.notEqual(changed, wrapper); return changed;
+  };
+  check("real frontend closing fi excludes the full logging continuation without losing nested failure handling", () => {
+    const { frontend, full } = validateSequenceBranches(wrapper);
+    assert.match(frontend, /\n  exit 0\nfi$/);
+    assert.match(frontend, /\n    exit "\$frontend_status"\n  fi/);
+    assert.doesNotMatch(frontend, /readonly LOG_PATH="\$LATEST_LOG_PATH"/);
+    assert.match(full, /readonly LOG_PATH="\$LATEST_LOG_PATH"/);
+    assert.ok(full.indexOf('readonly LOG_PATH="$LATEST_LOG_PATH"') < full.indexOf('readonly TRUSTED_SOURCE_DIR='));
+    assert.equal(frontend.split(BURN).length - 1, 1); assert.equal(full.split(BURN).length - 1, 1);
+    validateSequenceBranches(mutateWrapper('readonly LOG_PATH="$LATEST_LOG_PATH"', '# full-only fixture continuation\nreadonly LOG_PATH="$LATEST_LOG_PATH"'));
+  });
+  check("frontend success and failure must both exit before the real full continuation", () => {
+    for (const [before, after] of [['  exit 0\nfi', '  :\nfi'], ['    exit "$frontend_status"', '    :'],
+      ['  exit 0\nfi', '  exit 0\nelse\n  :\nfi'], ['  exit 0\nfi', '  exit 0\nelif true; then\n  :\nfi']]) {
+      const changed = mutateFrontend(before, after);
+      assert.throws(() => validateSequenceBranches(changed));
+    }
+  });
+  check("sequence consumption cannot move before dispatch or repeat in either real branch", () => {
+    const { frontend, full } = validateSequenceBranches(wrapper);
+    assert.throws(() => validateSequenceBranches(wrapper.replace(frontend, BURN + '\n' + frontend)));
+    assert.throws(() => validateSequenceBranches(wrapper.replace(frontend, frontend.replace(BURN, BURN + '\n' + BURN))));
+    assert.throws(() => validateSequenceBranches(wrapper.replace(full, full.replace(BURN, BURN + '\n' + BURN))));
+    const noSignedSequence = mutateWrapper('readonly MANIFEST_SEQUENCE="$manifest_sequence"', 'readonly OTHER_SEQUENCE="$manifest_sequence"');
+    assert.throws(() => validateSequenceBranches(noSignedSequence));
+  });
+  check("missing top-level dispatch closure or full continuation fails the source gate", () => {
+    const noClosure = mutateFrontend('  exit 0\nfi', '  exit 0\n  fi');
+    const noFull = mutateWrapper('readonly TRUSTED_SOURCE_DIR=', 'readonly OTHER_SOURCE_DIR=');
+    assert.throws(() => validateSequenceBranches(noClosure));
+    assert.throws(() => validateSequenceBranches(noFull));
+  });
   check("actual deploy prefix requests upload stage and blocks clone or upload after a rejected observation", () => {
     const deploy = readSource("scripts/deployReleaseBundle.cjs");
     const start = deploy.indexOf("  // Reject a closed window before the archive scan, local clone, or uploads.");
     const end = deploy.indexOf("  if (!nativeFullRelease) {", start); assert.ok(start >= 0 && end > start);
     for (const outcome of ["open", "closed", "throws"]) {
       const calls = [];
-      const context = { dryRun: false, releaseWindowPreflight: null, nativeFullRelease: true,
+      const context = { dryRun: false, releaseWindowPreflight: null, nativeFullRelease: false, emergencyCodeAuthorization: null,
         fail: message => { throw new Error(message); }, require: name => {
           if (name === "./runReleaseWindowPreflight.cjs") return { runLiveReleaseWindowPreflight: ({ stage, nativeFullRelease }) => {
-            assert.equal(stage, "before-upload"); assert.equal(nativeFullRelease, true); calls.push("window");
+            assert.equal(stage, "before-upload"); assert.equal(nativeFullRelease, false); calls.push("window");
             if (outcome === "throws") throw new Error("observation unavailable"); return { ok: outcome === "open" };
           } };
           assert.equal(name, "./runReleaseArchivePreflight.cjs"); return { runLiveArchivePreflight: () => { calls.push("archive"); return { report: { ok: true } }; } };
@@ -411,7 +491,7 @@ function verifyReleaseWindowPreflight() {
   });
   check("actual online create prefix runs worker, window, archive and frontend evidence before preSign, sequence reservation and build", () => {
     const result = runCreatePrefix(create); assert.equal(result.ok, true, result.error);
-    assert.deepEqual(result.calls, ["sequence-preflight", "worker", "window", "archive", "frontend-evidence", "preSign", "reserve", "build"]);
+    assert.deepEqual(result.calls, ["sequence-preflight", "worker", "window", "archive", "frontend-evidence", "request-utf8", "signed-had", "preSign", "sporttery-opening", "reserve", "build"]);
     for (const options of [{ windowOpen: false }, { windowThrows: true }]) {
       const rejected = runCreatePrefix(create, options); assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "worker", "window"]);
     }
@@ -429,15 +509,41 @@ function verifyReleaseWindowPreflight() {
       assert.match(rejected.error, options.workerThrows ? /worker observation unavailable/ : /worker-latest-official-cycle-failed/);
     }
   });
+  check("the required UTF8 verifier rejects failure or missing child before preSign, reservation and build", () => {
+    for (const options of [{ requestUtf8Status: 1 }, { requestUtf8Unavailable: true }]) {
+      const rejected = runCreatePrefix(create, options);
+      assert.equal(rejected.ok, false);
+      assert.deepEqual(rejected.calls, ["sequence-preflight", "worker", "window", "archive", "frontend-evidence", "request-utf8"]);
+      assert.match(rejected.error, /Request JSON UTF-8 preflight failed/);
+    }
+  });
+  check("the signed HAD contract rejects failure or missing child before preSign, reservation and build",()=>{
+    for(const options of [{signedHadStatus:1},{signedHadUnavailable:true}]){
+      const rejected=runCreatePrefix(create,options);assert.equal(rejected.ok,false);
+      assert.deepEqual(rejected.calls,["sequence-preflight","worker","window","archive","frontend-evidence","request-utf8","signed-had"]);
+      assert.match(rejected.error,/Signed HAD publication preflight failed/);
+    }
+  });
+  check("opening contract failure or missing child stops before reservation and build", () => {
+    for (const options of [{ openingStatus: 1 }, { openingUnavailable: true }]) {
+      const rejected = runCreatePrefix(create, options); assert.equal(rejected.ok, false);
+      assert.deepEqual(rejected.calls, ["sequence-preflight", "worker", "window", "archive", "frontend-evidence", "request-utf8", "signed-had", "preSign", "sporttery-opening"]);
+      assert.match(rejected.error, /Sporttery opening preflight failed/);
+    }
+  });
   check("native policy rejects unaccepted bootstrap before network, reservation or build", () => {
     const rejected = runCreatePrefix(create, { nativePolicy: true, nativeRejected: true });
     assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "native-policy"]);
     const accepted = runCreatePrefix(create, { nativePolicy: true }); assert.equal(accepted.ok, true, accepted.error);
-    assert.deepEqual(accepted.calls, ["sequence-preflight", "native-policy", "worker", "window", "archive", "frontend-evidence", "preSign", "reserve", "build"]);
+    assert.deepEqual(accepted.calls, ["sequence-preflight", "native-policy", "worker", "archive", "frontend-evidence", "request-utf8", "signed-had", "preSign", "sporttery-opening", "reserve", "build"]);
+    const closed = runCreatePrefix(create, { nativePolicy: true, windowThrows: true });
+    assert.equal(closed.ok, true, closed.error); assert.deepEqual(closed.calls, accepted.calls);
+    const prepared = closed.logs.find(row => row.reason === 'native-prepare-only');
+    assert.equal(prepared.readyToCutover, false); assert.equal(prepared.windowPreauthorized, false);
   });
   check("actual offline create prefix makes no live calls and explicitly reports no window authority", () => {
     const result = runCreatePrefix(create, { offline: true, windowThrows: true }); assert.equal(result.ok, true, result.error);
-    assert.deepEqual(result.calls, ["sequence-preflight", "frontend-evidence", "preSign", "reserve", "build"]);
+    assert.deepEqual(result.calls, ["sequence-preflight", "frontend-evidence", "request-utf8", "signed-had", "preSign", "sporttery-opening", "reserve", "build"]);
     assert.equal(result.logs[0].windowChecked, false); assert.equal(result.logs[0].readyToCutover, false);
   });
   check("actual UI create dispatch exits before live gates, full verification and local build", () => {

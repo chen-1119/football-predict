@@ -324,7 +324,7 @@ function eloTriplet(homeElo, awayElo, drawRate, homeAdvantage) {
   };
 }
 
-function modelProjection(state, match, forecastBoundary) {
+function modelProjection(state, match, forecastBoundary, options = {}) {
   const config = state.config;
   const home = decayedTeamView(state.teams.get(match.homeTeam.entityId), forecastBoundary, config);
   const away = decayedTeamView(state.teams.get(match.awayTeam.entityId), forecastBoundary, config);
@@ -401,8 +401,8 @@ function modelProjection(state, match, forecastBoundary) {
         homeAdvantage: neutral ? 0 : config.eloHomeAdvantage,
       },
       poisson: {
-        awayLambda: round(awayLambda),
-        homeLambda: round(homeLambda),
+        awayLambda: options.unroundedRates === true ? awayLambda : round(awayLambda),
+        homeLambda: options.unroundedRates === true ? homeLambda : round(homeLambda),
       },
     },
     probabilities: {
@@ -566,7 +566,157 @@ function createModelAdapter(config) {
     captureFeature: (state, match, context) => modelProjection(state, match, context.forecastBoundary),
     applyResultBatch,
     serializeState,
+    restoreState: serialized => restoreDynamicGoalStrengthState(serialized, config),
   };
+}
+
+function restoreDynamicGoalStrengthState(serialized, config) {
+  const fail = () => { throw new DynamicGoalStrengthError('Stored model state is incomplete or inconsistent', { code: 'INVALID_STORED_MODEL_STATE' }); };
+  const object = value => value && typeof value === 'object' && !Array.isArray(value);
+  const numeric = value => typeof value === 'number' && Number.isFinite(value);
+  const count = value => Number.isSafeInteger(value) && value >= 0;
+  const { clockNanoseconds } = require('../src/services/prematchTeamEvidenceV3.cjs');
+  if (!object(serialized) || serialized.version !== DYNAMIC_GOAL_STRENGTH_STATE_VERSION
+    || !count(serialized.appliedRows) || !serialized.appliedRows || !count(serialized.appliedBatches)
+    || !serialized.appliedBatches || !object(serialized.teams) || !object(serialized.competitions)
+    || clockNanoseconds(serialized.lastAvailableAt) === null) fail();
+  const state = createState(config);
+  state.appliedRows = serialized.appliedRows; state.appliedBatches = serialized.appliedBatches; state.lastAvailableAt = serialized.lastAvailableAt;
+  for (const [key, row] of Object.entries(serialized.teams)) {
+    if (!key || !object(row) || !['attack', 'defense', 'elo'].every(field => numeric(row[field]))
+      || !['matches', 'homeMatches', 'awayMatches'].every(field => count(row[field])) || !row.matches
+      || row.homeMatches + row.awayMatches !== row.matches
+      || Math.abs(row.attack) > config.latentLimit || Math.abs(row.defense) > config.latentLimit
+      || Math.abs(row.elo - config.baseElo) > 600 || clockNanoseconds(row.updatedAt) === null
+      || clockNanoseconds(row.updatedAt) > clockNanoseconds(serialized.lastAvailableAt)) fail();
+    state.teams.set(key, { ...row });
+  }
+  for (const [key, row] of Object.entries(serialized.competitions)) {
+    if (!key || !object(row) || !count(row.matches) || !row.matches
+      || !['awayGoals', 'awayWins', 'draws', 'homeGoals', 'homeWins', 'weightedMatches'].every(field => numeric(row[field]) && row[field] >= 0)
+      || row.weightedMatches > row.matches || clockNanoseconds(row.updatedAt) === null
+      || clockNanoseconds(row.updatedAt) > clockNanoseconds(serialized.lastAvailableAt)) fail();
+    state.competitions.set(key, { ...row });
+  }
+  if ([...state.teams.values()].reduce((sum, row) => sum + row.matches, 0) !== state.appliedRows * 2
+    || state.competitions.get('__global__')?.matches !== state.appliedRows
+    || [...state.competitions.entries()].filter(([key]) => key !== '__global__').reduce((sum, [, row]) => sum + row.matches, 0) !== state.appliedRows
+    || stableHash(serializeState(state)) !== stableHash(serialized)) fail();
+  return state;
+}
+
+// A source-content commitment is not admission of that source. This adapter
+// replays only the artifact's embedded rows and then evaluates the saved model;
+// it performs no file reads, market lookup or collection/training job.
+function forecastDynamicGoalStrengthV3(input = {}) {
+  const { clockNanoseconds } = require('../src/services/prematchTeamEvidenceV3.cjs');
+  const { strictInstant } = require('../src/services/strictInstant.cjs');
+  const object = value => value && typeof value === 'object' && !Array.isArray(value);
+  const identity = value => typeof value === 'string' && value.trim() ? value.trim()
+    : Number.isSafeInteger(value) && value >= 0 ? String(value) : null;
+  const isBefore = (a, b) => clockNanoseconds(a) !== null && clockNanoseconds(b) !== null && clockNanoseconds(a) < clockNanoseconds(b);
+  const notAfter = (a, b) => clockNanoseconds(a) !== null && clockNanoseconds(b) !== null && clockNanoseconds(a) <= clockNanoseconds(b);
+  const equalClock = (a, b) => clockNanoseconds(a) !== null && clockNanoseconds(a) === clockNanoseconds(b);
+  const blockers = [];
+  const blocked = () => ({ version: 'dynamic-goal-strength-prematch-v3', status: 'blocked', formalEligible: false,
+    sourceVerification: 'unverified', baseRates: null, baseRatesEvidence: null, blockers: [...new Set(blockers)].sort() });
+  try {
+    input = object(input) ? input : {};
+    const { artifact, asOf, createdAt, availableAt } = input, event = object(input.event) ? input.event : {};
+    if (!verifyDynamicGoalStrengthArtifact(artifact)) blockers.push('baseline-artifact-invalid');
+    if (!identity(event.sourceMatchId) || !identity(event.homeTeamId) || !identity(event.awayTeamId)
+      || identity(event.homeTeamId) === identity(event.awayTeamId) || !strictInstant(event.eventVersion)
+      || !strictInstant(event.cutoffAt) || (event.kickoffTime !== undefined && !equalClock(event.kickoffTime, event.eventVersion))) blockers.push('baseline-event-binding-invalid');
+    if (!isBefore(asOf, event.cutoffAt) || !notAfter(event.cutoffAt, event.eventVersion)) blockers.push('baseline-at-or-after-cutoff');
+    if (!['SCHEDULED', 'TIMED', 'PENDING', 'NOT_STARTED'].includes(String(event.status || '').toUpperCase())) blockers.push('baseline-event-not-prematch');
+    if (event.isOnSale === false || ['CLOSED', 'SUSPENDED', 'STOPPED'].includes(String(event.saleStatus || '').toUpperCase())) blockers.push('baseline-sale-not-open');
+    if (typeof event.neutral !== 'boolean') blockers.push('baseline-venue-status-unknown');
+    if (!isBefore(createdAt, asOf) || !isBefore(availableAt, asOf) || !notAfter(createdAt, availableAt)) blockers.push('baseline-artifact-not-available-before-as-of');
+    if (blockers.length) return blocked();
+    const features = artifact.featureArtifact, watermark = features.watermark, serialized = features.finalState;
+    const trainedThrough = watermark?.maxConsumedAvailableAt;
+    if (!watermark || stableHash(artifact.model.trainingWatermark) !== stableHash(watermark)
+      || watermark.consumedRows !== features.input.rows || watermark.consumedBatches !== features.input.dateBatches
+      || serialized.appliedRows !== watermark.consumedRows || serialized.appliedBatches !== watermark.consumedBatches
+      || !equalClock(serialized.lastAvailableAt, trainedThrough) || !isBefore(trainedThrough, asOf)
+      || !notAfter(trainedThrough, createdAt) || !HASH_PATTERN.test(watermark.consumedRootHash || '')) blockers.push('baseline-training-watermark-incomplete-or-future');
+    const canonicalSource = value => String(value || '').replace(/^sporttery_/, '');
+    if (features.snapshots.some(row => canonicalSource(row.sourceEventId) === canonicalSource(event.sourceMatchId)
+      || canonicalSource(row.sourceEventId).split('|')[0] === canonicalSource(event.sourceMatchId))) blockers.push('baseline-current-event-in-training');
+    if (features.labels.some(row => !isBefore(row.availableAt, asOf))) blockers.push('baseline-training-result-not-known');
+    // The legacy builder canonicalizes receipt clocks to milliseconds. The
+    // original submillisecond bytes cannot be recovered from its artifact, so
+    // the full quantization interval must precede the prediction clock.
+    const trainingClocks = [trainedThrough, ...features.labels.map(row => row.availableAt)].map(clockNanoseconds);
+    const storedTrainingMax = trainingClocks.every(value => value !== null)
+      ? trainingClocks.reduce((max, value) => value > max ? value : max) : null;
+    const trainingClockUpperBound = storedTrainingMax === null ? null : storedTrainingMax + 999999n;
+    if (trainingClockUpperBound === null || trainingClockUpperBound >= clockNanoseconds(asOf)) {
+      blockers.push('training-clock-precision-overlaps-as-of');
+    }
+    if (trainingClockUpperBound !== null && trainingClockUpperBound > clockNanoseconds(createdAt)) {
+      blockers.push('baseline-training-precision-after-artifact-creation');
+    }
+    const config = normalizeConfig(artifact.model.config);
+    if (stableHash(config) !== artifact.model.configHash) blockers.push('baseline-config-invalid-or-ablation');
+    if (blockers.length) return blocked();
+    const labels = new Map(features.labels.map(row => [row.sourceEventId, row]));
+    const embeddedRows = features.snapshots.map(row => ({ ...row.match, availableAt: labels.get(row.sourceEventId)?.availableAt,
+      score: labels.get(row.sourceEventId)?.score }));
+    const replay = buildDynamicGoalStrengthArtifact(embeddedRows, { config });
+    if (replay.model.finalStateHash !== artifact.model.finalStateHash || replay.featureArtifact.artifactHash !== artifact.featureArtifact.artifactHash) {
+      blockers.push('baseline-embedded-training-replay-mismatch'); return blocked();
+    }
+    const state = createModelAdapter(config).restoreState(serialized);
+    const mapping = object(event.entityMapping) ? event.entityMapping : null;
+    const mappingClockValid = mapping && identity(mapping.sourceMatchId) === identity(event.sourceMatchId)
+      && equalClock(mapping.eventVersion, event.eventVersion) && notAfter(mapping.providerObservedAt, mapping.receivedAt)
+      && notAfter(mapping.receivedAt, asOf) && identity(mapping.source?.provider) && HASH_PATTERN.test(mapping.source?.receiptHash || '');
+    const entities = {}; let usedExternalMapping = false;
+    for (const side of ['home', 'away']) {
+      const sourceTeamId = identity(event[`${side}TeamId`]);
+      if (state.teams.has(sourceTeamId)) entities[side] = sourceTeamId;
+      else if (mappingClockValid && identity(mapping[side]?.sourceTeamId) === sourceTeamId && state.teams.has(identity(mapping[side]?.entityId))) {
+        entities[side] = identity(mapping[side].entityId); usedExternalMapping = true;
+      }
+      else blockers.push(`baseline-explicit-team-mapping-missing:${side}`);
+    }
+    const sourceCompetitionId = identity(event.competition) || identity(event.competitionId) || identity(event.leagueId);
+    let competition = sourceCompetitionId;
+    if (!competition || competition === '__global__' || !state.competitions.has(competition)) {
+      if (mappingClockValid && identity(mapping.competition?.sourceCompetitionId) === sourceCompetitionId
+        && identity(mapping.competition?.entityId) !== '__global__' && state.competitions.has(identity(mapping.competition?.entityId))) {
+        competition = identity(mapping.competition.entityId); usedExternalMapping = true;
+      }
+      else blockers.push('baseline-explicit-competition-mapping-missing');
+    }
+    if (entities.home && entities.home === entities.away) blockers.push('baseline-mapped-teams-not-distinct');
+    if (blockers.length) return blocked();
+    const match = { sourceEventId: identity(event.sourceMatchId), date: event.eventVersion.slice(0, 10), competition,
+      neutral: event.neutral, homeTeam: { entityId: entities.home }, awayTeam: { entityId: entities.away } };
+    const projection = modelProjection(state, match, asOf, { unroundedRates: true });
+    const baseRates = { home: projection.features.poisson.homeLambda, away: projection.features.poisson.awayLambda };
+    if (!Object.values(baseRates).every(value => typeof value === 'number' && Number.isFinite(value) && value > 0)) { blockers.push('baseline-rate-invalid'); return blocked(); }
+    const evidence = {
+      kind: 'zero-market-team-strength', marketIncluded: false, artifactHash: artifact.artifactHash,
+      trainedThrough, createdAt, availableAt, featureArtifactHash: features.artifactHash,
+      precisionGuard: { kind: 'legacy-millisecond-clock-upper-bound', originalClockBytesPreserved: false,
+        quantizationUpperOffsetNanoseconds: 999999, trainingClockUpperBoundNanoseconds: String(trainingClockUpperBound),
+        requiredUpperBoundBeforeAsOf: true, requiredUpperBoundNotAfterCreation: true },
+      finalStateHash: artifact.model.finalStateHash, trainingWatermarkHash: stableHash(watermark),
+      event: { sourceMatchId: identity(event.sourceMatchId), eventVersion: event.eventVersion, cutoffAt: event.cutoffAt,
+        homeTeamId: identity(event.homeTeamId), awayTeamId: identity(event.awayTeamId) }, asOf,
+      mapping: { homeEntityId: entities.home, awayEntityId: entities.away, competition,
+        evidenceHash: usedExternalMapping ? stableHash(mapping) : null, mode: usedExternalMapping ? 'explicit-source-bound-mapping' : 'exact-artifact-entity-id' },
+      baseRates, trainingReplayVerified: true, sourceVerification: 'unverified', formalEligible: false,
+      computationScope: 'zero-market-model-formula-after-embedded-training-replay;not-source-admission-or-performance-validation',
+    };
+    return { version: 'dynamic-goal-strength-prematch-v3', status: 'shadow-ready', formalEligible: false,
+      sourceVerification: 'unverified', blockers: [], baseRates,
+      baseRatesEvidence: { ...evidence, contentHash: stableHash(evidence) } };
+  } catch (error) {
+    blockers.push(error.code || 'baseline-artifact-or-state-malformed'); return blocked();
+  }
 }
 
 function withoutHash(value, key) {
@@ -819,6 +969,7 @@ module.exports = {
   buildDynamicGoalStrengthAblationArtifact,
   dixonColesScoreMatrix,
   evaluateDynamicGoalStrengthWalkForward,
+  forecastDynamicGoalStrengthV3,
   normalizeConfig,
   outcomeProbabilitiesFromMatrix,
   probabilityAudit,

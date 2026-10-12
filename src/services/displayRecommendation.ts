@@ -15,6 +15,7 @@ import {
 } from './liveRecommendationEligibility';
 import { isBeforeMatchSaleCutoff } from './matchLifecycle';
 import { formatCalibratedModelProbability, formatEvidenceScore } from './predictionPresentation';
+import { isLegacyCurrentRecommendationRetired } from './recommendationAuthorityPresentation';
 
 type Language = 'zh' | 'en';
 
@@ -953,6 +954,7 @@ export const getListHandicapSupplement = (
   language: Language,
   primaryPrediction?: PredictionDetail
 ): DisplayRecommendationCompanion | null => {
+  if (isLegacyCurrentRecommendationRetired(match)) return null;
   const lineAudit = getHandicapLineResolution(match);
   const lineValue = lineAudit.line;
   if (lineValue === null) return null;

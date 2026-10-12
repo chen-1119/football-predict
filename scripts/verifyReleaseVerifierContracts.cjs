@@ -7,6 +7,132 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('trusted current authority replays published lanes and preserves retired evidence',()=>{
+ const files=['tests/recommendation-authority.test.cjs','tests/recommendation-authority-integration.test.cjs',
+   'tests/recommendation-authority-presentation.test.cjs','tests/remote-recommendation-authority.test.cjs'];
+ const child=require('node:child_process').spawnSync(process.execPath,['--test',...files],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# skipped 0$/m);
+ for(const file of ['server/recommendationAuthority.cjs','src/services/recommendationAuthorityPresentation.ts',...files])
+  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+file+'"'));
+});
+check('signed emergency activation bypasses only code-only schedule gates',()=>{
+ const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/emergency-code-activation.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"tests/emergency-code-activation.test.cjs"'));
+});
+check('code cutover covers result archives through its unchanged lease and checks final expiry',()=>{
+ const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/code-cutover-archive-horizon.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"tests/code-cutover-archive-horizon.test.cjs"'));
+});
+check('maintenance transitions drain and fixed evidence pack rejects conflicting sources',()=>{
+ const r=require('node:child_process').spawnSync(process.execPath,['--test','tests/maintenance-quiescence.test.cjs','tests/fixed-prematch-evidence-pack.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1048576});assert.equal(r.status,0,r.stderr||r.stdout);assert.match(r.stdout,/# skipped 0/);
+});
+check('owned worker timeout needs durable same-invocation empty-writer proof',()=>{
+ const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/owned-worker-stop.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1048576});assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 20$/m);assert.match(child.stdout,/^# skipped 0$/m);
+});
+check('native oversized snapshot requires exact protected generation bytes',()=>{
+ const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/native-snapshot-copy-proof.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:45000,maxBuffer:1048576});assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 8$/m);assert.match(child.stdout,/^# skipped 0$/m);
+});
+check('reviewed editorial source and exact public direction binding fail closed',()=>{
+ const r=require('node:child_process').spawnSync(process.execPath,['--test','tests/reviewed-analysis.test.cjs','tests/reviewed-three-combo-view.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1048576});
+ assert.equal(r.status,0,r.stderr||r.stdout);assert.match(r.stdout,/# skipped 0/);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"tests/reviewed-three-combo-view.test.cjs"'));
+});
+check('staged code preparation, bounded handover and independent natural-cycle evidence pass before signing',()=>{
+  const report=require('./verifyStagedCodeRelease.cjs').run();
+  assert.equal(report.ok,true);assert.ok(report.tests>=20);assert.equal(report.skipped,0);
+  for(const file of ['scripts/codeReleaseAcceptance.cjs','scripts/verifyStagedCodeRelease.cjs','tests/staged-code-release.test.cjs'])
+    for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+file+'"'));
+});
+check('daily bulletin scheduling, source proof and immutable cohort pass before signing',()=>{
+  const report=require('./verifyDailyBulletinPolicy.cjs').run();assert.equal(report.ok,true);assert.ok(report.tests>=20);assert.equal(report.skipped,0);
+  for(const file of ['scripts/verifyDailyBulletinPolicy.cjs','scripts/captureDailySourceEvidence.cjs','scripts/recommendationPlatform/dailyBulletinPolicy.cjs',
+    'scripts/recommendationPlatform/dailyBulletinRuntime.cjs','scripts/recommendationPlatform/dailySourceEvidence.cjs','tests/daily-bulletin-policy.test.cjs',
+    'src/components/recommendations/DailyBulletinPanel.tsx','src/components/recommendations/daily-bulletin.css'])
+    for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+file+'"'));
+});
+check('code releases separate PG migration and model work before signing',()=>{
+  const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/code-data-release.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 64$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  const shell=require('node:child_process').spawnSync(process.execPath,['scripts/verifyCodeReleaseShell.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+  assert.equal(shell.status,0,shell.stderr);const proof=JSON.parse(shell.stdout);assert.equal(proof.ok,true);assert.equal(proof.checks.length,11);assert(proof.checks.some(row=>row.name==='closed-code-lease'&&row.ok));assert.equal(proof.actualBashBranchExecution,true);
+  for(const file of ['scripts/releaseDataPlanePolicy.cjs','scripts/nativeCodeReleaseDataPlane.cjs','tests/code-data-release.test.cjs','scripts/verifyCodeReleaseShell.cjs','scripts/verifyCodeReleasePostgresIsolation.cjs'])
+    for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+file+'"'));
+});
+check('online capacity observation precedes allocation and signing',()=>{
+  const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/release-capacity-preflight.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:10000,maxBuffer:1048576});
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 10$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  const factory=read('scripts/createReleaseBundle.cjs');assert(factory.indexOf('const capacityPreflight =')<factory.indexOf('const sequenceReservation ='));
+  for(const f of ['scripts/runReleaseCapacityPreflight.cjs','tests/release-capacity-preflight.test.cjs'])for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+f+'"'));
+});
+check('native capacity and protected retention planning fail closed before signing', () => {
+  const child = require('node:child_process').spawnSync(process.execPath,
+    ['--test', '--test-reporter=tap', 'tests/native-release-capacity.test.cjs', 'tests/release-retention-plan.test.cjs'],
+    { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 10000, maxBuffer: 1024 * 1024 });
+  assert.equal(child.status, 0, child.stderr || child.stdout);
+  assert.match(child.stdout, /^# tests 26$/m); assert.match(child.stdout, /^# pass 26$/m);
+  assert.match(child.stdout, /^# skipped 0$/m);
+  for (const relative of ['scripts/nativeReleaseCapacity.cjs', 'scripts/releaseRetentionPlan.cjs',
+    'tests/native-release-capacity.test.cjs', 'tests/release-retention-plan.test.cjs']) {
+    assert(read('scripts/createReleaseBundle.cjs').includes('"' + relative + '"'));
+    assert(read('scripts/verifyReleaseBundleSafety.cjs').includes('"' + relative + '"'));
+  }
+});
+check('daily opening cannot adopt pre-opening prices or stop schedule and result collection',()=>{
+  const proof=require('./verifySportteryOpeningPolicy.cjs').run();
+  assert.equal(proof.ok,true);assert.ok(proof.tests>=20);assert.equal(proof.skipped,0);assert.equal(proof.productionWrites,0);
+  const factory=read('scripts/createReleaseBundle.cjs'),safety=read('scripts/verifyReleaseBundleSafety.cjs');
+  assert.ok(factory.indexOf('const sportteryOpening = spawnSync')<factory.indexOf('const outDir ='));
+  for(const file of ['src/services/sportteryOpeningPolicy.cjs','scripts/verifySportteryOpeningPolicy.cjs',...proof.files]){
+    assert.ok(factory.includes('"'+file+'"'));assert.ok(safety.includes('"'+file+'"'));
+  }
+});
+check('signed live HAD source, publication, deadline and frozen replay pass before signing',()=>{
+  const report=require('./verifySignedLiveHadPublication.cjs').run();
+  assert.equal(report.ok,true);assert.ok(report.tests>=100);assert.equal(report.skipped,0);assert.equal(report.productionWrites,0);
+  const factory=read('scripts/createReleaseBundle.cjs');
+  assert.ok(factory.indexOf('const signedHadPublication = spawnSync')<factory.indexOf('const outDir ='));
+  for(const file of ['scripts/verifySignedLiveHadPublication.cjs','scripts/recommendationPlatform/liveOfficialHad.cjs',
+    'scripts/recommendationPlatform/quotePublicationLatency.cjs','tests/fixtures/signed-live-had.cjs',
+    'tests/recommendation-live-official-had.test.cjs','tests/recommendation-signed-had-publication.test.cjs',
+    'tests/recommendation-quote-publication-latency.test.cjs'])assert.ok(factory.includes('"'+file+'"'));
+});
+check('prospective PRD paper model, signed prices, immutable commit and public projection pass before signing',()=>{
+  const report=require('./verifyPrdPaperPipeline.cjs').run();
+  assert.equal(report.ok,true);assert.ok(report.tests>=129);assert.equal(report.skipped,0);
+  assert.equal(report.productionWrites,0);assert.equal(report.modelPromotionAllowed,false);
+  const factory=read('scripts/createReleaseBundle.cjs'),safety=read('scripts/verifyReleaseBundleSafety.cjs');
+  for(const file of ['scripts/zeroMarketResearchBaseline.cjs','src/services/marketSeparatedDirectionResearch.cjs',
+    'tests/zero-market-research-baseline.test.cjs','tests/market-separated-direction-research.test.cjs',
+    'scripts/verifyPrdPaperPipeline.cjs','scripts/recommendationPlatform/prdPaperRuntime.cjs',
+    'scripts/recommendationPlatform/prdPaperRepository.cjs','src/services/prdPaperRecommendation.cjs',
+    'src/components/recommendations/PrdPaperDirections.tsx','tests/prd-paper-recommendation.test.cjs',
+    'tests/prd-paper-repository.test.cjs','tests/prd-paper-runtime.test.cjs','tests/prd-paper-directions-view.test.cjs']){
+    assert.ok(factory.includes('"'+file+'"'));assert.ok(safety.includes('"'+file+'"'));
+  }
+});
+check('official club facts remain bounded literal research without training or feature admission before signing',()=>{
+  const child=require('node:child_process').spawnSync(process.execPath,['--test','--test-reporter=tap','tests/official-club-research-evidence.test.cjs'],
+    {cwd:root,encoding:'utf8',windowsHide:true,timeout:10000,maxBuffer:1024*1024});
+  assert.equal(child.status,0,child.stderr||child.stdout);
+  assert.match(child.stdout,/^# tests 27$/m);assert.match(child.stdout,/^# pass 27$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  const factory=read('scripts/createReleaseBundle.cjs');
+  for(const file of ['scripts/officialClubResearchEvidence.cjs','tests/official-club-research-evidence.test.cjs'])assert.ok(factory.includes('"'+file+'"'));
+});
+check('time bounded backups, logs and managed recovery pass before signing', () => {
+  for (const entry of ['verifyPostgresBackupRetention.cjs', 'verifyScheduledStorageRetention.cjs']) {
+    const child = require('node:child_process').spawnSync(process.execPath, [path.join(__dirname, entry)],
+      { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 60000, maxBuffer: 1024 * 1024 });
+    assert.equal(child.status, 0, child.stderr || child.stdout);
+    const proof = JSON.parse(child.stdout); assert.equal(proof.ok, true);
+    if (entry === 'verifyPostgresBackupRetention.cjs') {
+      assert.equal(proof.scope.productionBackupInvoked, false); assert.equal(proof.scope.pg, 0);
+    } else {
+      assert.equal(proof.scope.productionPathsTouched, false); assert.equal(proof.scope.postgresAccess, false);
+    }
+  }
+});
 check('actual root deployment configuration gate passes before signing', () => {
   const child = require('node:child_process').spawnSync(process.execPath, ['scripts/verifyDeploymentConfig.cjs'],
     { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 60000, maxBuffer: 2 * 1024 * 1024 });
@@ -15,7 +141,7 @@ check('actual root deployment configuration gate passes before signing', () => {
   assert.ok(proof.checks.length > 50 && proof.checks.every(row => row.ok === true));
 });
 check('native policy, signed dispatch and exact generation copy pass before signing', () => {
-  for (const entry of ['verifyNativeReleasePipeline.cjs', 'verifyNativeReleaseGenerationCopy.cjs', 'verifyRecoveryColdStart.cjs']) {
+  for (const entry of ['verifyNativeReleasePipeline.cjs', 'verifyNativeReleaseGenerationCopy.cjs', 'verifyRecoveryColdStart.cjs', 'verifyNativeReleaseFailureCleanup.cjs']) {
     const child = require('node:child_process').spawnSync(process.execPath, [path.join(__dirname, entry)],
       { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30000, maxBuffer: 1024 * 1024 });
     assert.equal(child.status, 0, child.stderr || child.stdout);
@@ -529,7 +655,8 @@ check('deployment rechecks archives before local clone and upload',()=>{
   const client=read('scripts/deployReleaseBundle.cjs');
   const probe=client.indexOf('require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight()');
   assert.ok(probe>=0&&probe<client.indexOf('const localCloneVerifier = runCommand('));
-  assert.ok(probe<client.indexOf('for (const artifact of uploads)'));
+  const upload=client.indexOf('for (const artifact of (activateOnly ? [] : uploads))');
+  assert.ok(upload>0 && probe<upload);
 });
 check('read-only release window preparation and actual entrypoint routing pass before signing',()=>{
   const result=require('./verifyReleaseWindowPreflight.cjs').verifyReleaseWindowPreflight();
@@ -614,7 +741,7 @@ for (const [entry, script, minimum] of [
     assert.equal(report.productionWrites, 0);
     if (systemdOnly) {
       assert.equal(report.verifier, 'frontend-installed-systemd-contracts-v1');
-      assert.equal(report.checks, 5);
+      assert.equal(report.checks, 7);
       assert.equal(report.verificationScope, 'systemd-vm-contracts-only');
       assert.equal(report.platform, 'win32');
       assert.equal(report.linuxFilesystemProof, false);

@@ -16,7 +16,10 @@ const PROFILES = Object.freeze({
     trees: [],
   }),
   "scripts/verifyFrontendEvidenceSemantics.cjs": Object.freeze({
-    auditedSha256: "43168071e0fa5f7d1969b977c359521b41f093d813f8eade25e88fd8890a45b7",
+    // Re-audited 2026-10-06: direct shared-status imports and component-only
+    // exports are bound explicitly; executed dependencies and complete source
+    // membership scope remain identical.
+    auditedSha256: "a73664ccbdc7629db6d11967cbcb5ca57580493b438cab0c586aa61343ff52c0",
     files: ["server/index.cjs", "src/services/publishedRecommendationStatus.cjs"],
     // Entire src tree, including membership, nested paths, CSS and TS/TSX.
     // TS/TSX is only scanned. The no-import status helper is the sole executed

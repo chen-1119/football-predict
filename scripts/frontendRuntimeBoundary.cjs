@@ -30,7 +30,8 @@ const ENTRYPOINTS = deepFreeze({
   "football-recommendation-settlement.service": { script: "scripts/runRecommendationSettlement.cjs", args: " --watch" },
 });
 const EXTERNAL_UNITS = deepFreeze({
-  "football-postgres-backup.service": { executable: "/usr/local/sbin/football-postgres-backup", source: "deploy/light-server/football-postgres-backup.sh" },
+  "football-postgres-backup.service": { executable: "/usr/bin/bash", scriptPath: "/usr/local/sbin/football-postgres-backup-v2",
+    argv: ["/usr/bin/bash", "/usr/local/sbin/football-postgres-backup-v2"], source: "deploy/light-server/football-postgres-backup.sh" },
   "football-postgres-cos-upload.service": { executable: "/usr/local/sbin/football-postgres-cos-upload", source: "deploy/light-server/football-postgres-cos-upload.sh" },
 });
 // These are existing operational command adapters, not permission to add a new
@@ -74,17 +75,20 @@ const COMMAND_CALLER_FUNCTIONS = deepFreeze({
     "dc5ba7f3cc3b8e8e65d6dc9450fce24c99b9575fdca632d9c8f3c114d749dfd2", "e35c0a392d9a0ab5ca3abdd8375d0578c8b06bd508da82871c3f23e7d81751e3",
     // Reviewed native coverage await and postgres:sync routing. Commands stay
     // literal; the full reachable code and package graph are still compared.
-    "994b5f575e5f8141fc06500fee5a2e036db26d6f3b4248673f462cdd97f701eb", "50b4a036b586195589da6e7b56c11c6a1daa40cc8d183f8af039bc8415e42ff5"],
+    "994b5f575e5f8141fc06500fee5a2e036db26d6f3b4248673f462cdd97f701eb", "50b4a036b586195589da6e7b56c11c6a1daa40cc8d183f8af039bc8415e42ff5",
+    // Same runCycle plus the literal PostgreSQL supplementary evidence job.
+    // No command adapter, argument grammar or source-closure exemption changes.
+    "bc5de663a3c33c468d9062d6b8eec3be88c4c4202a173e1aaae7af2d74147678"],
 });
 const UNIT_SOURCE_HASHES = Object.freeze({
   "football-daily-prematch.service": "9e6af93d56635ed0940590b4a027e02ab5310080e53b2873775b520f46796d8a",
   "football-featured-combo.service": "7412039439c38effc1679bf80b9966480ff414120084c690c51ee3d434fbee42",
   "football-market-collector.service": "ea62d7e0b66c56a44cb1a61322222ddbe3a2a4cc18429baec9cede8cf3c46043",
   "football-recommendation-settlement.service": "96206e75ff7276c3d2c428324d78f4222963af775ac89d6193ec9b2bdeb8a910",
-  "football-cleanup.service": "88b0b805ee484ff1b3915e8debad2e9bea512f024f77aa9ce691c8218fee0e85",
-  "football-monitor.service": "7112bc1c27cfbd2edb7ff22a1fc1c5f454eb59a784a2f2dd12d5ecff76c6b31e",
-  "football-postgres-backup.service": "c3ca1d47cc65ad4e7dbf9a512ca669d059484f386ba3793a84ca64f551c998fa",
-  "football-postgres-backup.sh": "e8f5b6789e85b8abeca3f051daaf75a119fad7c674e835f74ebaccf9f0d21d7d",
+  "football-cleanup.service": "ef6c15376412d306411f4db6be745a434f4f1b288573fd28945d4dd21430ca9e",
+  "football-monitor.service": "5a133418f0b262540bbfe652facfdd4c598867e826dd7d08d555a54c629f5ef7",
+  "football-postgres-backup.service": "aa0c89c11106991a5810cf320518f7f9a7a163082ba819c572b5895b160a2bdb",
+  "football-postgres-backup.sh": "2d30d55dfd8ee9fc8e800d5072020ec8aac5cc8154a4aedd3da09ca32ddb338f",
   "football-postgres-cos-upload.service": "e6267a03da9facc1b9d421df368d70d3e333d5fb24c7a8ff83aec23a2baa7e52",
   "football-postgres-cos-upload.sh": "e9da629d53fae2ae0edfc0c230828d03c570cfdf7792ca9d8da8fbd92a6724f9",
   "football-predict.service": "392e5ab781fa24961ec05d847f354a57fb4bddc16ef34bdae5c61a687a049af3",
@@ -194,7 +198,8 @@ function inspectFrontendRuntimeBoundary(input) {
       const text = read(`deploy/light-server/${name}`);
       if (sha(normalizeSource(text)) !== UNIT_SOURCE_HASHES[name]) throw new Error(`runtime-entrypoint-policy-drift:${name}`);
       const starts = [...text.matchAll(/^ExecStart=(.*)$/gm)].map(match => match[1].trim());
-      const expected = policy.script ? `/opt/node-v22.22.1/bin/node /opt/football-predict/${policy.script}${policy.args}` : policy.executable;
+      const expected = policy.script ? `/opt/node-v22.22.1/bin/node /opt/football-predict/${policy.script}${policy.args}`
+        : policy.argv ? policy.argv.join(" ") : policy.executable;
       if (starts.length !== 1 || starts[0] !== expected) throw new Error(`runtime-entrypoint-policy-drift:${name}`);
       if (policy.script) queue.push(policy.script);
       else if (sha(normalizeSource(read(policy.source))) !== UNIT_SOURCE_HASHES[path.posix.basename(policy.source)]) throw new Error(`runtime-external-unit-policy-drift:${name}`);

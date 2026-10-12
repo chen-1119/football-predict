@@ -18,19 +18,28 @@ const put = (name, value) => { const file = path.join(temp,name); fs.mkdirSync(p
     const fullBegin = branches.full.indexOf(BURN), fullEnd = branches.full.indexOf('release_status="$?"', fullBegin) + 'release_status="$?"'.length;
     const full = branches.full.slice(fullBegin,fullEnd);
     for (const kind of ["full","frontend-only"]) for (const status of [0,7]) {
+      const attemptRoot = path.join(temp, `${kind}-${status}-attempts`), trace = path.join(temp, `${kind}-${status}.trace`);
+      fs.mkdirSync(path.join(attemptRoot, "fixture.99"), { recursive: true });
+      const shellPath = value => "'" + value.replace(/\\/g, "/").replace(/'/g, "'\\''") + "'";
       const script = `set -eu
 readonly MANIFEST_KIND=${kind}
 MANIFEST_SEQUENCE=99; RECOVERY_CURRENT=/nonexistent-football-fixture-recovery
 TRUSTED_KEY_ID=fixture; NODE_BIN=node; FRONTEND_HELPER_DIR=/fixture
+FRONTEND_ATTEMPT_ROOT=${shellPath(attemptRoot)}; TRACE_FILE=${shellPath(trace)}
 BUNDLE_SHA=fixture; work_dir=/fixture; STARTED_AT=fixture; UPLOAD_GROUP=fixture
 SOURCE_BUNDLE=/fixture; SOURCE_SHA=/fixture; SOURCE_MANIFEST=/fixture; SOURCE_SIGNATURE=/fixture
 TRUSTED_SOURCE_DIR=/fixture; PUBLIC_BASE_URL=https://fixture.invalid
 EXPECTED_SITE=fixture; EXPECTED_CHANNEL=fixture; RELEASE_EXPORT_MODE=fixture; RELEASE_SCRIPT_PATH=/fixture
-consume_release_sequence_before_execution(){ printf 'consume\\n'; }
+consume_release_sequence_before_execution(){ printf 'consume\\n' >>"$TRACE_FILE"; }
 preserve_signed_source_baseline(){ return 0; }
 write_status(){ :; }
 rm(){ :; }
-env(){ printf 'execute\\n'; return ${status}; }
+env(){
+  case "$*" in
+    *frontendReleaseAttempt.cjs*) printf 'prepare\\n' >>"$TRACE_FILE"; return 0 ;;
+    *) printf 'execute\\n' >>"$TRACE_FILE"; return ${status} ;;
+  esac
+}
 ${branches.frontend}
 ${full}
 exit "$release_status"
@@ -38,15 +47,21 @@ exit "$release_status"
       const result = spawnSync(bash,["--noprofile","--norc","-s"],{input:script,encoding:"utf8",windowsHide:true,timeout:5000,
         env:{ PATH:process.env.PATH, SystemRoot:process.env.SystemRoot, LANG:"C.UTF-8" }});
       assert.equal(result.status,status,result.stderr);
-      assert.equal(result.stdout.split("\n").filter(s=>s==="consume").length,1);
-      assert.equal(result.stdout.split("\n").filter(s=>s==="execute").length,1);
-      assert.ok(result.stdout.indexOf("consume") < result.stdout.indexOf("execute"));
+      const events = fs.readFileSync(trace, "utf8").trim().split("\n");
+      assert.deepEqual(events, kind === "frontend-only" ? ["prepare", "consume", "execute"] : ["consume", "execute"]);
+      if (kind === "frontend-only") {
+        const log = fs.readFileSync(path.join(attemptRoot, "fixture.99/output.log"), "utf8");
+        assert.match(log, status === 0 ? /frontend-only release complete/ : /no full fallback/);
+      }
     }
   });
   await check("added consumption and removed early exit cannot pass preflight", () => {
     assert.throws(()=>validateSequenceBranches(source.replace(BURN,BURN+"\n"+BURN)));
-    assert.throws(()=>validateSequenceBranches(source.replace('  exit 0\nfi\n\nreadonly TRUSTED_SOURCE_DIR','  :\nfi\n\nreadonly TRUSTED_SOURCE_DIR')));
-    assert.throws(()=>validateSequenceBranches(source.replace('    exit "$frontend_status"','    :')));
+    for (const [before, after] of [['  exit 0\nfi', '  :\nfi'], ['    exit "$frontend_status"', '    :']]) {
+      assert.equal(branches.frontend.split(before).length - 1, 1, "negative must mutate one real frontend exit");
+      const changed = source.replace(branches.frontend, branches.frontend.replace(before, after)); assert.notEqual(changed, source);
+      assert.throws(()=>validateSequenceBranches(changed));
+    }
   });
   await check("failure terminates release checking, diagnostic mode still records a failure", () => {
     const rows=[]; let later=false;
