@@ -13,7 +13,8 @@ function validate(body) {
     || ['archiveSha256', 'manifestSha256', 'inventorySha256', 'schemaSha256', 'keyId'].some(key => !/^[a-f0-9]{64}$/.test(body[key] || ''))
     || !Number.isSafeInteger(body.archiveBytes) || body.archiveBytes < 1 || body.archiveBytes > 512 * 1024 * 1024
     || body.apiContract !== 'separated-read-api-v1' || body.entry !== policy.entry
-    || (body.component === 'web' ? !['linux', 'win32'].includes(body.artifactPlatform) : body.artifactPlatform !== 'source')
+    || (body.component === 'web' ? !['linux', 'win32'].includes(body.artifactPlatform)
+      : body.component === 'read-api' ? !['source', 'linux'].includes(body.artifactPlatform) : body.artifactPlatform !== 'source')
     || body.databaseCopies !== 0 || body.migrations !== false || body.activationEligible !== false || body.algorithm !== algorithm) throw new Error('INVALID_COMPONENT_ENVELOPE');
   return Object.fromEntries(KEYS.map(key => [key, body[key]]));
 }

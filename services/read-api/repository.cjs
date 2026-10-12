@@ -103,7 +103,12 @@ function createRepository({ pool, now = Date.now, readAuthority = authority.read
         return { ok: true, recommendationCenter: center };
       });
     },
-    async health() { return snapshot(async () => ({ ok: true, ready: true, role: 'read-api', writesEnabled: false })); },
+    async health() { return snapshot(async client => {
+      const result = await client.query("SELECT oid::text AS oid,current_setting('transaction_read_only') AS read_only FROM pg_database WHERE datname=current_database()");
+      if (result.rows.length !== 1 || !/^[1-9][0-9]*$/.test(result.rows[0].oid || '') || result.rows[0].read_only !== 'on') fail('READ_ONLY_DATABASE_UNPROVEN');
+      return { ok: true, ready: true, role: 'read-api', writesEnabled: false,
+        database: { oid: result.rows[0].oid, transactionReadOnly: true } };
+    }); },
   };
 }
 const etag = value => '"' + crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex') + '"';

@@ -2,10 +2,11 @@
 const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto'), cp = require('node:child_process');
 const { plan } = require('../services/release/componentPolicy.cjs');
 const sha = raw => crypto.createHash('sha256').update(raw).digest('hex');
-function build({ component, root = path.resolve(__dirname, '..'), output }) {
+function build({ component, root = path.resolve(__dirname, '..'), output, includeRuntimeDependencies = false }) {
   const policy = plan(component);
   if (!output || !path.isAbsolute(output)) throw new Error('Absolute output path required');
   if (fs.existsSync(output)) throw new Error('Output already exists');
+  if (includeRuntimeDependencies && (component !== 'read-api' || process.platform !== 'linux')) throw new Error('Runtime image requires Linux read-api');
   const head = cp.execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
   if (cp.execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], { cwd: root, encoding: 'utf8' }).trim()) throw new Error('Tracked source must be committed before packaging');
   const tracked = cp.execFileSync('git', ['ls-files', '-z'], { cwd: root }).toString().split('\0').filter(Boolean);
@@ -21,6 +22,8 @@ function build({ component, root = path.resolve(__dirname, '..'), output }) {
   }
   function tree(directory, prefix) {
     for (const name of fs.readdirSync(directory).sort()) {
+      // npm CLI shims are symlinks and are not used by the immutable runtime.
+      if (includeRuntimeDependencies && name === '.bin' && /(?:^|\/)node_modules(?:\/|$)/.test(prefix)) continue;
       const from = path.join(directory, name), to = prefix ? prefix + '/' + name : name;
       const stat = fs.lstatSync(from);
       if (stat.isSymbolicLink()) throw new Error('Artifact tree contains a symlink');
@@ -40,6 +43,7 @@ function build({ component, root = path.resolve(__dirname, '..'), output }) {
   } else {
     for (const name of tracked.filter(name => policy.roots.some(prefix => name === prefix || name.startsWith(prefix + '/')))) copy(path.join(root, name), name);
     for (const name of ['package.json', 'package-lock.json']) copy(path.join(root, name), name);
+    if (includeRuntimeDependencies) tree(path.join(root, 'node_modules'), 'node_modules');
   }
   for (const unit of new Set(policy.units.map(name => name.replace(/@[^.]+\./, '@.')))) {
     const name = 'deploy/services-v1/' + unit; copy(path.join(root, name), name);
@@ -50,7 +54,7 @@ function build({ component, root = path.resolve(__dirname, '..'), output }) {
   const manifest = { version: 'independent-component-artifact-v1', component, head, createdAt: new Date().toISOString(),
     apiContract: 'separated-read-api-v1', entry: policy.entry, schemaSha256: sha(JSON.stringify(schema)),
     databaseCopies: 0, migrations: false, signed: false, activationEligible: false,
-    artifactPlatform: component === 'web' ? process.platform : 'source', runtimeDependenciesInstalled: component === 'web',
+    artifactPlatform: component === 'web' || includeRuntimeDependencies ? process.platform : 'source', runtimeDependenciesInstalled: component === 'web' || includeRuntimeDependencies,
     linuxRuntimeVerified: false,
     requiresSignedActivation: true, sourceFiles: inventory.length, sourceBytes: inventory.reduce((n, row) => n + row.bytes, 0), inventory };
   fs.writeFileSync(path.join(staging, 'component-manifest.json'), JSON.stringify(manifest, null, 2), { flag: 'wx' });
@@ -60,7 +64,8 @@ function build({ component, root = path.resolve(__dirname, '..'), output }) {
   return receipt;
 }
 if (require.main === module) {
-  const value = build({ component: process.argv[2], output: process.argv[3] });
+  if (process.argv[4] !== undefined && process.argv[4] !== '--runtime') throw new Error('Unknown artifact build option');
+  const value = build({ component: process.argv[2], output: process.argv[3], includeRuntimeDependencies: process.argv[4] === '--runtime' });
   const { inventory, ...summary } = value; void inventory; console.log(JSON.stringify(summary, null, 2));
 }
 module.exports = { build };

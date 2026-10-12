@@ -7,7 +7,7 @@ function plan(envelope, actual, now = Date.now()) {
   // has a tested fence and a durable handover/rollback transaction.
   if (!['read-api', 'web'].includes(component.component)) reject('WRITER_HANDOVER_UNIMPLEMENTED');
   if (actual.signatureVerified !== true || actual.archiveSha256 !== component.archiveSha256 || actual.sourceHead !== component.head) reject('SIGNED_ARTIFACT_IDENTITY_REQUIRED');
-  if (actual.platform !== 'linux' || (component.component === 'web' && component.artifactPlatform !== 'linux')) reject('LINUX_RUNTIME_REQUIRED');
+  if (actual.platform !== 'linux' || component.artifactPlatform !== 'linux') reject('LINUX_RUNTIME_REQUIRED');
   if (actual.runtimeVerified !== true || actual.runtimeArchiveSha256 !== component.archiveSha256) reject('EXACT_ARTIFACT_RUNTIME_REQUIRED');
   if (actual.apiContract !== component.apiContract || actual.schemaSha256 !== component.schemaSha256) reject('COMPONENT_CONTRACT_MISMATCH');
   if (actual.releaseLockHeld !== true || actual.releaseProcesses?.length !== 0 || actual.recoveryPending !== false
@@ -22,9 +22,9 @@ function plan(envelope, actual, now = Date.now()) {
   return { version: 'read-only-component-activation-plan-v1', component: component.component, archiveSha256: component.archiveSha256,
     databaseCopies: 0, migrations: false, productionWriterStarted: false, originalServicesRestarted: false,
     operations: ['Verify exact archive and dependency inventory', 'Create-only isolated component directory',
-      'Start this component on its dedicated loopback port', 'Verify authenticated API and browser contracts',
-      'Atomically select this component code pointer; preserve the previous pointer and database commits'],
+      'Start this component on its dedicated loopback port', 'Verify database read-only, API and access-rejection contracts',
+      'Atomically select this immutable component image; preserve the previous selector and database commits'],
     rollback: 'Stop only the new component; restore its previous code pointer. Preserve PostgreSQL, frozen recommendations, ACKs and settlement.',
-    executableControllerImplemented: false, installed: false };
+    executableControllerImplemented: component.component === 'read-api', installed: false };
 }
 module.exports = { plan };

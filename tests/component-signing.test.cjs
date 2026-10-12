@@ -7,7 +7,7 @@ const key = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
 const keyId = 'a'.repeat(64), now = Date.parse('2026-10-12T00:00:00Z');
 const manifest = { version: 'independent-component-artifact-v1', component: 'read-api', head: 'b'.repeat(40),
   archiveSha256: 'c'.repeat(64), archiveBytes: 100, apiContract: 'separated-read-api-v1', schemaSha256: 'd'.repeat(64),
-  entry: 'services/read-api/server.cjs', artifactPlatform: 'source', inventory: [], signed: false, activationEligible: false, databaseCopies: 0, migrations: false };
+  entry: 'services/read-api/server.cjs', artifactPlatform: 'linux', inventory: [], signed: false, activationEligible: false, databaseCopies: 0, migrations: false };
 const envelope = signing.envelope(manifest, Buffer.from(JSON.stringify(manifest)), keyId);
 const signature = signing.sign(envelope, key.privateKey);
 test('component signatures bind exact source, archive, contract, platform and inventory in their own domain', () => {
@@ -33,8 +33,8 @@ const actual = { signatureVerified: true, archiveSha256: envelope.archiveSha256,
 test('read-only installation design isolates the component and keeps database and writer ownership', () => {
   const result = plan(envelope, actual, now);
   assert.equal(result.databaseCopies, 0); assert.equal(result.migrations, false); assert.equal(result.installed, false);
-  assert.equal(result.executableControllerImplemented, false); assert.equal(result.productionWriterStarted, false);
-  assert.throws(() => plan({ ...envelope, component: 'recommendation', entry: 'services/tasks/run.cjs' }, actual, now), { code: 'WRITER_HANDOVER_UNIMPLEMENTED' });
+  assert.equal(result.executableControllerImplemented, true); assert.equal(result.productionWriterStarted, false);
+  assert.throws(() => plan({ ...envelope, component: 'recommendation', entry: 'services/tasks/run.cjs', artifactPlatform: 'source' }, actual, now), { code: 'WRITER_HANDOVER_UNIMPLEMENTED' });
 });
 test('signing alone never admits Windows web, unknown runtime or stale/inconsistent production state', () => {
   for (const change of [{ signatureVerified: false }, { runtimeVerified: false }, { runtimeArchiveSha256: 'e'.repeat(64) },
@@ -43,4 +43,5 @@ test('signing alone never admits Windows web, unknown runtime or stale/inconsist
     { leaseStartedAtMs: now - 900000 }, { elapsedMonotonicMs: 900000 }, { availableBytes: 1 },
     { loopbackPortAvailable: false }, { existingProductionServicesUnchanged: false }]) assert.throws(() => plan(envelope, { ...actual, ...change }, now));
   assert.throws(() => plan({ ...envelope, component: 'web', entry: 'apps/web/server.js', artifactPlatform: 'win32' }, actual, now), { code: 'LINUX_RUNTIME_REQUIRED' });
+  assert.throws(() => plan({ ...envelope, artifactPlatform: 'source' }, actual, now), { code: 'LINUX_RUNTIME_REQUIRED' });
 });

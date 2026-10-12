@@ -47,6 +47,20 @@ test('dedicated pool enforces read-only defaults before account or repository SQ
   const broken = readOnlyPool({ connect: async () => ({ query: async () => { throw failed; }, release: error => released.push(error) }), end: async () => {} });
   await assert.rejects(broken.connect(), failed); assert.equal(released.at(-1), failed);
 });
+test('health proves database identity and the actual read-only transaction', async () => {
+  for (const readOnly of ['on', 'off']) {
+    const db = pool(), originalConnect = db.connect;
+    db.connect = async () => {
+      const client = await originalConnect(), query = client.query.bind(client);
+      return { ...client, query: async (sql, args) => /FROM pg_database/.test(sql)
+        ? { rows: [{ oid: '28598409', read_only: readOnly }] } : query(sql, args) };
+    };
+    const repo = createRepository({ pool: db, now: () => NOW });
+    if (readOnly === 'on') assert.deepEqual((await repo.health()).database, { oid: '28598409', transactionReadOnly: true });
+    else await assert.rejects(repo.health(), { code: 'READ_ONLY_DATABASE_UNPROVEN' });
+    assert(db.state.released);
+  }
+});
 test('pagination is bounded and pinned to the database generation and exact date', async () => {
   const db = pool([{ id: 'one', fixture: match }, { id: 'two', fixture: match }]);
   const repo = createRepository({ pool: db, now: () => NOW });
