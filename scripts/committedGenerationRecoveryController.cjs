@@ -14,7 +14,7 @@ function dependencyImageDigest(dir,requireRoot=true){
   const base=path.join(dir,'node_modules'),rows=[];let bytes=0;
   assert.equal(fs.realpathSync(base),base);
   function walk(at){const parent=fs.lstatSync(at);assert(parent.isDirectory()&&!parent.isSymbolicLink());if(requireRoot)assert(parent.uid===0&&!(parent.mode&0o022));
-    for(const name of fs.readdirSync(at).sort()){const file=path.join(at,name),rel=path.relative(base,file),s=fs.lstatSync(file);assert(rows.length<30000);if(requireRoot)assert(s.uid===0&&!(s.mode&0o022));assert(!(s.mode&0o6000));
+    for(const name of fs.readdirSync(at).sort()){const file=path.join(at,name),rel=path.relative(base,file),s=fs.lstatSync(file);assert(rows.length<30000);if(requireRoot)assert(s.uid===0&&(s.isSymbolicLink()||!(s.mode&0o022)),'unsafe dependency ownership/mode '+rel);assert(!(s.mode&0o6000));
       if(s.isSymbolicLink()){const target=fs.readlinkSync(file),lexical=path.resolve(path.dirname(file),target),real=fs.realpathSync(file);assert(!path.isAbsolute(target));assert(lexical.startsWith(base+path.sep)&&real.startsWith(base+path.sep),'dependency link escapes image');rows.push({path:rel,kind:'link',target});}
       else if(s.isDirectory()){rows.push({path:rel,kind:'directory'});walk(file);}
       else{assert(s.isFile()&&s.nlink===1);bytes+=s.size;assert(bytes<=512*1048576);rows.push({path:rel,kind:'file',bytes:s.size,sha256:hashFile(file)});}
