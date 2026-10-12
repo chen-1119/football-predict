@@ -1,331 +1,13 @@
 {
   "version": 1,
   "source": "pre-match-signal-layer",
-  "updatedAt": "2026-10-12T16:44:33.186Z",
-  "count": 54,
+  "updatedAt": "2026-10-12T16:49:09.324Z",
+  "count": 53,
   "matches": {
-    "2041885": {
-      "version": "sync-pre-match-signals-v53-temporal-evidence",
-      "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
-      "sourceMatchId": "2041885",
-      "matchId": "fivehundred_2041885",
-      "matchNo": "周六023",
-      "kickoffTime": "2026-10-11T00:45:00+08:00",
-      "homeTeamName": "费耶诺德",
-      "awayTeamName": "阿尔克马尔",
-      "quality": {
-        "version": "pre-match-quality-v53-temporal-evidence",
-        "score": 28,
-        "sourceQuality": "low",
-        "recommendationUsable": true,
-        "analysisComplete": false,
-        "severeMissingCount": 0,
-        "trustPenalty": 8,
-        "components": {
-          "referee": {
-            "key": "referee",
-            "label": {
-              "zh": "裁判牌数",
-              "en": "Referee cards"
-            },
-            "status": "missing",
-            "score": 0,
-            "source": "missing",
-            "note": {
-              "zh": "未接入真实裁判牌数",
-              "en": "No verified referee card profile"
-            },
-            "evidenceType": "official-referee-assignment",
-            "availabilityState": "missing_overdue",
-            "eligibleAtCutoff": false,
-            "cutoffTime": "2026-10-10T15:00:00.000Z",
-            "kickoffTime": "2026-10-10T16:45:00.000Z",
-            "sourceObservedAt": "2026-10-10T19:41:21.244Z",
-            "expectedPublishedAt": "2026-10-09T16:45:00.000Z"
-          },
-          "teamCards": {
-            "key": "teamCards",
-            "label": {
-              "zh": "球队牌数历史",
-              "en": "Team card history"
-            },
-            "status": "estimated",
-            "score": 52,
-            "source": "football-data.co.uk-match-statistics",
-            "note": {
-              "zh": "牌数样本 24/24 场，黄牌均值 1.5/1.3",
-              "en": "Card sample 24/24, yellow avg 1.5/1.3"
-            }
-          },
-          "lineup": {
-            "key": "lineup",
-            "label": {
-              "zh": "确认首发/预计阵容",
-              "en": "Confirmed/projected lineup"
-            },
-            "status": "not_yet_publishable",
-            "score": 0,
-            "source": "missing",
-            "note": {
-              "zh": "正式首发尚未到常规发布时间，不计为数据缺口",
-              "en": "Confirmed XI is not normally published yet and is not counted as a gap"
-            },
-            "evidenceType": "confirmed-lineup",
-            "confirmed": false,
-            "availabilityState": "not_yet_publishable",
-            "eligibleAtCutoff": false,
-            "cutoffTime": "2026-10-10T15:00:00.000Z",
-            "kickoffTime": "2026-10-10T16:45:00.000Z",
-            "sourceObservedAt": "2026-10-10T19:41:21.244Z",
-            "expectedPublishedAt": "2026-10-10T15:30:00.000Z"
-          },
-          "injuries": {
-            "key": "injuries",
-            "label": {
-              "zh": "伤停",
-              "en": "Injuries"
-            },
-            "status": "missing",
-            "score": 0,
-            "source": "missing",
-            "note": {
-              "zh": "未接入可核验伤停",
-              "en": "No verifiable injury signal"
-            },
-            "evidenceType": "squad-availability",
-            "availabilityState": "missing_overdue",
-            "eligibleAtCutoff": false,
-            "cutoffTime": "2026-10-10T15:00:00.000Z",
-            "kickoffTime": "2026-10-10T16:45:00.000Z",
-            "sourceObservedAt": "2026-10-10T19:41:21.244Z",
-            "expectedPublishedAt": "2026-10-10T10:45:00.000Z"
-          },
-          "xg": {
-            "key": "xg",
-            "label": {
-              "zh": "xG/xGA",
-              "en": "xG/xGA"
-            },
-            "status": "not_yet_publishable",
-            "score": 0,
-            "source": "missing",
-            "note": {
-              "zh": "缺少历史xG或明确标注的赛前估算",
-              "en": "No historical xG or explicitly labelled pre-match estimate"
-            },
-            "evidenceType": "pre-match-xg-estimate",
-            "availabilityState": "not_yet_publishable",
-            "eligibleAtCutoff": false,
-            "cutoffTime": "2026-10-10T15:00:00.000Z",
-            "kickoffTime": "2026-10-10T16:45:00.000Z",
-            "sourceObservedAt": "2026-10-10T15:00:00.000Z",
-            "expectedPublishedAt": "2026-10-10T16:45:00.000Z"
-          },
-          "weather": {
-            "key": "weather",
-            "label": {
-              "zh": "天气/场地",
-              "en": "Weather/pitch"
-            },
-            "status": "estimated",
-            "score": 48,
-            "source": "open-meteo",
-            "note": {
-              "zh": "Rotterdam 场地估算天气：雨，12.1C，风速 19.4km/h，降水 1.8mm，环境中等风险。",
-              "en": "Rotterdam venue estimated weather: Rain, 12.1C, wind 19.4km/h, precipitation 1.8mm, medium risk."
-            }
-          },
-          "market": {
-            "key": "market",
-            "label": {
-              "zh": "盘口校验",
-              "en": "Market validation"
-            },
-            "status": "verified",
-            "score": 100,
-            "source": "sporttery",
-            "note": {
-              "zh": "已有胜平负/让球盘口校验源",
-              "en": "Market validation source available"
-            }
-          },
-          "motivation": {
-            "key": "motivation",
-            "label": {
-              "zh": "排名/战意",
-              "en": "Table/motivation"
-            },
-            "status": "estimated",
-            "score": 62,
-            "source": "rank-stage-context",
-            "note": {
-              "zh": "已接入排名或赛程阶段信息",
-              "en": "Rank or stage context loaded"
-            }
-          },
-          "strength": {
-            "key": "strength",
-            "label": {
-              "zh": "Elo球队强度",
-              "en": "Elo team strength"
-            },
-            "status": "missing",
-            "score": 0,
-            "source": "missing",
-            "note": {
-              "zh": "未形成可审计Elo强度",
-              "en": "No auditable Elo strength"
-            }
-          },
-          "form": {
-            "key": "form",
-            "label": {
-              "zh": "近期状态",
-              "en": "Recent form"
-            },
-            "status": "missing",
-            "score": 0,
-            "source": "missing",
-            "note": {
-              "zh": "未形成近期状态样本",
-              "en": "No recent-form sample"
-            }
-          }
-        },
-        "missing": [
-          {
-            "key": "referee",
-            "zh": "缺少裁判牌数",
-            "en": "Missing Referee cards",
-            "severity": "low",
-            "weight": 4
-          },
-          {
-            "key": "injuries",
-            "zh": "缺少伤停",
-            "en": "Missing Injuries",
-            "severity": "medium",
-            "weight": 10
-          },
-          {
-            "key": "strength",
-            "zh": "缺少Elo球队强度",
-            "en": "Missing Elo team strength",
-            "severity": "medium",
-            "weight": 18
-          },
-          {
-            "key": "form",
-            "zh": "缺少近期状态",
-            "en": "Missing Recent form",
-            "severity": "medium",
-            "weight": 16
-          }
-        ],
-        "lowQuality": [
-          "teamCards",
-          "weather",
-          "motivation"
-        ],
-        "notYetPublishable": [
-          {
-            "key": "lineup",
-            "zh": "确认首发/预计阵容尚未到正常发布时间",
-            "en": "Confirmed/projected lineup is not normally published yet",
-            "expectedPublishedAt": "2026-10-10T15:30:00.000Z",
-            "weight": 0
-          },
-          {
-            "key": "xg",
-            "zh": "xG/xGA尚未到正常发布时间",
-            "en": "xG/xGA is not normally published yet",
-            "expectedPublishedAt": "2026-10-10T16:45:00.000Z",
-            "weight": 0
-          }
-        ],
-        "postCutoffOnly": [],
-        "weights": {
-          "referee": 4,
-          "teamCards": 4,
-          "lineup": 0,
-          "injuries": 10,
-          "xg": 12,
-          "weather": 2,
-          "market": 18,
-          "motivation": 8,
-          "strength": 18,
-          "form": 16
-        },
-        "connected": {
-          "referee": false,
-          "teamCards": true,
-          "lineup": false,
-          "injuries": false,
-          "xg": false,
-          "weather": true,
-          "market": true,
-          "motivation": true,
-          "strength": false,
-          "form": false
-        },
-        "advisory": {
-          "webConsensus": {
-            "version": "web-consensus-advisory-v1",
-            "available": false,
-            "eligibleForRiskDisplay": false,
-            "eligibleForNumericModel": false,
-            "eligibleForFormalQuality": false,
-            "weight": 0,
-            "source": "missing",
-            "confidence": 0,
-            "conflictFreeze": false,
-            "blockers": [],
-            "summary": {
-              "zh": "未接入网络观点；不影响正式质量分",
-              "en": "No web consensus; formal quality is unchanged"
-            }
-          }
-        },
-        "summary": {
-          "zh": "赛前数据质量 28/100，缺口偏多；2项尚未到发布时间且不扣分。",
-          "en": "Pre-match data quality 28/100, low coverage; 2 not-yet-publishable items carry no penalty."
-        }
-      },
-      "discipline": {
-        "source": "football-data.co.uk-match-statistics",
-        "dataQuality": "estimated-history",
-        "homeCardsPerMatch": 1.54,
-        "awayCardsPerMatch": 1.33,
-        "expectedYellowCards": {
-          "home": 1.54,
-          "away": 1.33,
-          "total": 2.87
-        },
-        "redCardRisk": {
-          "home": 0.083,
-          "away": 0,
-          "total": 0.083
-        },
-        "sample": {
-          "home": 24,
-          "away": 24
-        },
-        "trustPenalty": 1,
-        "summary": {
-          "zh": "历史牌数样本 24/24 场，黄牌均值 1.54/1.33。",
-          "en": "Card-history sample 24/24, yellow avg 1.54/1.33."
-        }
-      },
-      "qualitySummary": {
-        "zh": "赛前数据质量 28/100，缺口偏多；2项尚未到发布时间且不扣分。",
-        "en": "Pre-match data quality 28/100, low coverage; 2 not-yet-publishable items carry no penalty."
-      }
-    },
     "2041886": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041886",
       "matchId": "fivehundred_2041886",
       "matchNo": "周六024",
@@ -624,7 +306,7 @@
     "2041887": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041887",
       "matchId": "fivehundred_2041887",
       "matchNo": "周六025",
@@ -929,7 +611,7 @@
     "2041888": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041888",
       "matchId": "fivehundred_2041888",
       "matchNo": "周六026",
@@ -1228,7 +910,7 @@
     "2041889": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041889",
       "matchId": "fivehundred_2041889",
       "matchNo": "周六027",
@@ -1546,7 +1228,7 @@
     "2041890": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041890",
       "matchId": "fivehundred_2041890",
       "matchNo": "周六028",
@@ -1864,7 +1546,7 @@
     "2041891": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041891",
       "matchId": "fivehundred_2041891",
       "matchNo": "周六029",
@@ -2182,7 +1864,7 @@
     "2041892": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041892",
       "matchId": "fivehundred_2041892",
       "matchNo": "周六030",
@@ -2487,7 +2169,7 @@
     "2041893": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041893",
       "matchId": "fivehundred_2041893",
       "matchNo": "周日001",
@@ -2791,7 +2473,7 @@
     "2041894": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041894",
       "matchId": "fivehundred_2041894",
       "matchNo": "周日002",
@@ -3095,7 +2777,7 @@
     "2041895": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041895",
       "matchId": "fivehundred_2041895",
       "matchNo": "周日003",
@@ -3399,7 +3081,7 @@
     "2041896": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041896",
       "matchId": "fivehundred_2041896",
       "matchNo": "周日004",
@@ -3703,7 +3385,7 @@
     "2041897": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041897",
       "matchId": "fivehundred_2041897",
       "matchNo": "周日005",
@@ -4020,7 +3702,7 @@
     "2041898": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041898",
       "matchId": "fivehundred_2041898",
       "matchNo": "周日006",
@@ -4324,7 +4006,7 @@
     "2041899": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041899",
       "matchId": "fivehundred_2041899",
       "matchNo": "周日007",
@@ -4641,7 +4323,7 @@
     "2041900": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041900",
       "matchId": "fivehundred_2041900",
       "matchNo": "周日008",
@@ -4945,7 +4627,7 @@
     "2041901": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041901",
       "matchId": "fivehundred_2041901",
       "matchNo": "周日009",
@@ -5249,7 +4931,7 @@
     "2041902": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041902",
       "matchId": "fivehundred_2041902",
       "matchNo": "周日010",
@@ -5553,7 +5235,7 @@
     "2041903": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041903",
       "matchId": "fivehundred_2041903",
       "matchNo": "周日011",
@@ -5870,7 +5552,7 @@
     "2041904": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041904",
       "matchId": "fivehundred_2041904",
       "matchNo": "周日012",
@@ -6187,7 +5869,7 @@
     "2041905": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041905",
       "matchId": "fivehundred_2041905",
       "matchNo": "周日013",
@@ -6504,7 +6186,7 @@
     "2041906": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041906",
       "matchId": "fivehundred_2041906",
       "matchNo": "周日014",
@@ -6821,7 +6503,7 @@
     "2041907": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041907",
       "matchId": "fivehundred_2041907",
       "matchNo": "周日015",
@@ -7144,7 +6826,7 @@
     "2041908": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041908",
       "matchId": "fivehundred_2041908",
       "matchNo": "周日016",
@@ -7448,7 +7130,7 @@
     "2041909": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041909",
       "matchId": "fivehundred_2041909",
       "matchNo": "周日017",
@@ -7765,7 +7447,7 @@
     "2041910": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041910",
       "matchId": "fivehundred_2041910",
       "matchNo": "周日018",
@@ -8083,7 +7765,7 @@
     "2041911": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041911",
       "matchId": "fivehundred_2041911",
       "matchNo": "周日019",
@@ -8388,7 +8070,7 @@
     "2041912": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041912",
       "matchId": "fivehundred_2041912",
       "matchNo": "周日020",
@@ -8706,7 +8388,7 @@
     "2041913": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041913",
       "matchId": "fivehundred_2041913",
       "matchNo": "周日021",
@@ -9024,7 +8706,7 @@
     "2041914": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041914",
       "matchId": "fivehundred_2041914",
       "matchNo": "周日022",
@@ -9342,7 +9024,7 @@
     "2041915": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041915",
       "matchId": "fivehundred_2041915",
       "matchNo": "周日023",
@@ -9647,7 +9329,7 @@
     "2041916": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041916",
       "matchId": "fivehundred_2041916",
       "matchNo": "周日024",
@@ -9965,7 +9647,7 @@
     "2041917": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041917",
       "matchId": "fivehundred_2041917",
       "matchNo": "周日025",
@@ -10270,7 +9952,7 @@
     "2041918": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041918",
       "matchId": "fivehundred_2041918",
       "matchNo": "周日026",
@@ -10588,7 +10270,7 @@
     "2041919": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041919",
       "matchId": "fivehundred_2041919",
       "matchNo": "周日027",
@@ -10893,7 +10575,7 @@
     "2041920": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041920",
       "matchId": "fivehundred_2041920",
       "matchNo": "周日028",
@@ -11198,7 +10880,7 @@
     "2041921": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041921",
       "matchId": "fivehundred_2041921",
       "matchNo": "周一001",
@@ -11503,7 +11185,7 @@
     "2041922": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041922",
       "matchId": "fivehundred_2041922",
       "matchNo": "周一002",
@@ -11821,7 +11503,7 @@
     "2041923": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041923",
       "matchId": "fivehundred_2041923",
       "matchNo": "周一003",
@@ -12120,7 +11802,7 @@
     "2041924": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041924",
       "matchId": "fivehundred_2041924",
       "matchNo": "周一004",
@@ -12425,7 +12107,7 @@
     "2041925": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041925",
       "matchId": "fivehundred_2041925",
       "matchNo": "周一005",
@@ -12743,7 +12425,7 @@
     "2041926": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041926",
       "matchId": "fivehundred_2041926",
       "matchNo": "周一006",
@@ -13048,7 +12730,7 @@
     "2041927": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041927",
       "matchId": "fivehundred_2041927",
       "matchNo": "周一007",
@@ -13372,7 +13054,7 @@
     "2041928": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041928",
       "matchId": "fivehundred_2041928",
       "matchNo": "周一008",
@@ -13696,7 +13378,7 @@
     "2041929": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041929",
       "matchId": "fivehundred_2041929",
       "matchNo": "周一009",
@@ -14001,7 +13683,7 @@
     "2041930": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041930",
       "matchId": "fivehundred_2041930",
       "matchNo": "周一010",
@@ -14306,7 +13988,7 @@
     "2041953": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041953",
       "matchId": "fivehundred_2041953",
       "matchNo": "周二004",
@@ -14611,7 +14293,7 @@
     "2041954": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041954",
       "matchId": "fivehundred_2041954",
       "matchNo": "周二005",
@@ -14916,7 +14598,7 @@
     "2041955": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041955",
       "matchId": "fivehundred_2041955",
       "matchNo": "周二006",
@@ -15240,7 +14922,7 @@
     "2041956": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041956",
       "matchId": "fivehundred_2041956",
       "matchNo": "周二007",
@@ -15564,7 +15246,7 @@
     "2041957": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041957",
       "matchId": "fivehundred_2041957",
       "matchNo": "周二008",
@@ -15869,7 +15551,7 @@
     "2041958": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041958",
       "matchId": "fivehundred_2041958",
       "matchNo": "周二009",
@@ -16174,7 +15856,7 @@
     "2041959": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041959",
       "matchId": "fivehundred_2041959",
       "matchNo": "周二010",
@@ -16479,7 +16161,7 @@
     "2041960": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-12T16:44:33.186Z",
+      "updatedAt": "2026-10-12T16:49:09.324Z",
       "sourceMatchId": "2041960",
       "matchId": "fivehundred_2041960",
       "matchNo": "周二011",
@@ -16802,19 +16484,19 @@
     }
   },
   "summary": {
-    "rows": 54,
+    "rows": 53,
     "high": 0,
     "medium": 0,
-    "low": 54,
-    "recommendationUsable": 54,
+    "low": 53,
+    "recommendationUsable": 53,
     "analysisComplete": 0,
     "coverageByComponent": {
       "referee": {
-        "rows": 54,
+        "rows": 53,
         "verified": 0,
         "partial": 0,
         "estimated": 0,
-        "missing": 54,
+        "missing": 53,
         "not_yet_publishable": 0,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
@@ -16823,25 +16505,25 @@
         "nextSource": "official-league-or-association-match-report"
       },
       "teamCards": {
-        "rows": 54,
+        "rows": 53,
         "verified": 0,
         "partial": 0,
-        "estimated": 25,
+        "estimated": 24,
         "missing": 29,
         "not_yet_publishable": 0,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
-        "connected": 25,
-        "coverage": 0.463,
+        "connected": 24,
+        "coverage": 0.4528,
         "nextSource": "signed-football-data-discipline-history"
       },
       "lineup": {
-        "rows": 54,
+        "rows": 53,
         "verified": 0,
         "partial": 0,
         "estimated": 0,
         "missing": 20,
-        "not_yet_publishable": 34,
+        "not_yet_publishable": 33,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
         "connected": 0,
@@ -16849,11 +16531,11 @@
         "nextSource": "official-club-or-league-match-centre"
       },
       "injuries": {
-        "rows": 54,
+        "rows": 53,
         "verified": 0,
         "partial": 0,
         "estimated": 0,
-        "missing": 52,
+        "missing": 51,
         "not_yet_publishable": 2,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
@@ -16862,12 +16544,12 @@
         "nextSource": "official-club-squad-report"
       },
       "xg": {
-        "rows": 54,
+        "rows": 53,
         "verified": 0,
         "partial": 0,
         "estimated": 0,
         "missing": 17,
-        "not_yet_publishable": 37,
+        "not_yet_publishable": 36,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
         "connected": 0,
@@ -16875,50 +16557,50 @@
         "nextSource": "licensed-or-auditable-public-match-statistics"
       },
       "weather": {
-        "rows": 54,
+        "rows": 53,
         "verified": 0,
         "partial": 0,
-        "estimated": 22,
+        "estimated": 21,
         "missing": 32,
         "not_yet_publishable": 0,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
-        "connected": 22,
-        "coverage": 0.4074,
+        "connected": 21,
+        "coverage": 0.3962,
         "nextSource": "open-meteo-venue-forecast"
       },
       "market": {
-        "rows": 54,
-        "verified": 54,
+        "rows": 53,
+        "verified": 53,
         "partial": 0,
         "estimated": 0,
         "missing": 0,
         "not_yet_publishable": 0,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
-        "connected": 54,
+        "connected": 53,
         "coverage": 1,
         "nextSource": "sporttery-had-hhad"
       },
       "motivation": {
-        "rows": 54,
+        "rows": 53,
         "verified": 0,
         "partial": 0,
-        "estimated": 54,
+        "estimated": 53,
         "missing": 0,
         "not_yet_publishable": 0,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
-        "connected": 54,
+        "connected": 53,
         "coverage": 1,
         "nextSource": "official-league-standings-and-schedule"
       },
       "strength": {
-        "rows": 54,
+        "rows": 53,
         "verified": 0,
         "partial": 0,
         "estimated": 0,
-        "missing": 54,
+        "missing": 53,
         "not_yet_publishable": 0,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
@@ -16927,11 +16609,11 @@
         "nextSource": "signed-local-elo-history"
       },
       "form": {
-        "rows": 54,
+        "rows": 53,
         "verified": 0,
         "partial": 0,
         "estimated": 0,
-        "missing": 54,
+        "missing": 53,
         "not_yet_publishable": 0,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
@@ -16943,57 +16625,57 @@
     "gapPriorities": [
       {
         "key": "form",
-        "missing": 54,
+        "missing": 53,
         "estimated": 0,
-        "rows": 54,
+        "rows": 53,
         "coverage": 0,
         "nextSource": "signed-local-rolling-form"
       },
       {
         "key": "referee",
-        "missing": 54,
+        "missing": 53,
         "estimated": 0,
-        "rows": 54,
+        "rows": 53,
         "coverage": 0,
         "nextSource": "official-league-or-association-match-report"
       },
       {
         "key": "strength",
-        "missing": 54,
+        "missing": 53,
         "estimated": 0,
-        "rows": 54,
+        "rows": 53,
         "coverage": 0,
         "nextSource": "signed-local-elo-history"
       },
       {
         "key": "injuries",
-        "missing": 52,
+        "missing": 51,
         "estimated": 0,
-        "rows": 54,
+        "rows": 53,
         "coverage": 0,
         "nextSource": "official-club-squad-report"
       },
       {
         "key": "weather",
         "missing": 32,
-        "estimated": 22,
-        "rows": 54,
-        "coverage": 0.4074,
+        "estimated": 21,
+        "rows": 53,
+        "coverage": 0.3962,
         "nextSource": "open-meteo-venue-forecast"
       },
       {
         "key": "teamCards",
         "missing": 29,
-        "estimated": 25,
-        "rows": 54,
-        "coverage": 0.463,
+        "estimated": 24,
+        "rows": 53,
+        "coverage": 0.4528,
         "nextSource": "signed-football-data-discipline-history"
       },
       {
         "key": "lineup",
         "missing": 20,
         "estimated": 0,
-        "rows": 54,
+        "rows": 53,
         "coverage": 0,
         "nextSource": "official-club-or-league-match-centre"
       },
@@ -17001,33 +16683,20 @@
         "key": "xg",
         "missing": 17,
         "estimated": 0,
-        "rows": 54,
+        "rows": 53,
         "coverage": 0,
         "nextSource": "licensed-or-auditable-public-match-statistics"
       },
       {
         "key": "motivation",
         "missing": 0,
-        "estimated": 54,
-        "rows": 54,
+        "estimated": 53,
+        "rows": 53,
         "coverage": 1,
         "nextSource": "official-league-standings-and-schedule"
       }
     ],
     "warnings": [
-      {
-        "matchId": "fivehundred_2041885",
-        "sourceMatchId": "2041885",
-        "homeTeamName": "费耶诺德",
-        "awayTeamName": "阿尔克马尔",
-        "score": 28,
-        "missing": [
-          "referee",
-          "injuries",
-          "strength",
-          "form"
-        ]
-      },
       {
         "matchId": "fivehundred_2041886",
         "sourceMatchId": "2041886",
@@ -17267,6 +16936,19 @@
         "sourceMatchId": "2041904",
         "homeTeamName": "水晶宫",
         "awayTeamName": "诺丁汉森林",
+        "score": 26,
+        "missing": [
+          "referee",
+          "lineup",
+          "injuries",
+          "xg"
+        ]
+      },
+      {
+        "matchId": "fivehundred_2041905",
+        "sourceMatchId": "2041905",
+        "homeTeamName": "拉齐奥",
+        "awayTeamName": "蒙扎",
         "score": 26,
         "missing": [
           "referee",
