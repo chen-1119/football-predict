@@ -44,6 +44,31 @@ async function verifyFrontendReleaseConsumers() {
     assert.equal(queue(null, { releaseKind: "full", sha256: runtimeSha, releaseSequence: 711 }).complete, true);
   });
   const deploySource = read("scripts/deployReleaseBundle.cjs");
+  await check("authenticated UI preflight isolates collection faults; full deployment retains the full worker probe", () => {
+    const start = deploySource.indexOf("const buildRemotePreflightCommand ="), end = deploySource.indexOf("\nif (recoverMode)", start);
+    assert.ok(start > 0 && end > start);
+    let probes = 0;
+    const build = vm.runInNewContext(deploySource.slice(start,end)+"\nbuildRemotePreflightCommand", {
+      remoteEntrypoint: "/fixed/release", remoteDir: "/fixed/incoming", remoteRecoveryHelperPath: "/fixed/recovery",
+      shellQuote: value => "'"+value+"'", buildReadOnlyWorkerProbe: () => { probes++; return "full-worker-probe"; }
+    });
+    const ui = build(runtimeSha, false, "frontend-only"); assert.equal(probes,0);
+    assert.match(ui,/systemctl is-active football-sync-worker/); assert.match(ui,/release-recovery-pending/);
+    for(const kind of ["full",undefined,"unknown"]){assert.match(build(runtimeSha,false,kind),/full-worker-probe/);}
+    assert.equal(probes,3);
+    assert.match(deploySource,/!frontendOnly && recoveryHelperRotationContract.ok === true,\s*releaseCandidate.releaseKind/);
+  });
+  await check("UI freshness checks every candidate UI path while full freshness retains runtime and tool edits", () => {
+    const start = deploySource.indexOf("const freshnessPaths ="), end = deploySource.indexOf("if (newerWorkspaceFiles.length", start);
+    assert.ok(start > 0 && end > start);
+    const rows = [{ path: "scripts/deployReleaseBundle.cjs" }, { path: "src/App.tsx" }, { path: "server/index.cjs" }];
+    const run = frontendOnly => vm.runInNewContext(deploySource.slice(start, end)+"\nnewerWorkspaceFiles.map(row=>row.path)", {
+      frontendOnly, rootDir: "/fixture", bundlePath: "/bundle", fs: { statSync: () => ({ mtimeMs: 1 }) }, Set,
+      collectFilesNewerThan: () => rows, require: name => { assert.equal(name, "./releaseChangeClassification.cjs"); return require(name); }
+    });
+    assert.deepEqual(Array.from(run(true)), ["src/App.tsx"]);
+    assert.deepEqual(Array.from(run(false)), ["scripts/deployReleaseBundle.cjs", "server/index.cjs", "src/App.tsx"]);
+  });
   const windowRouting = { cases: 0, assertions: 0 };
   await check("actual deploy pre-upload route authenticates before window, archive and clone while UI and dry-run bypass live gates", async () => {
     const fixture = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "football-ui-consumer-route-"));
@@ -147,6 +172,17 @@ async function verifyFrontendReleaseConsumers() {
       });
       assert.equal(mismatch.ok, false); assert.deepEqual(mismatch.calls, ["signature", "actual-inventory"]);
       assert.match(mismatch.error, /actual-archive-source-evidence-mismatch/);
+      const historicalGrant = path.join(source, "deploy/light-server/code-release-activation-authorization.json");
+      fs.writeFileSync(historicalGrant, JSON.stringify({ expiresAt: "2000-01-01T00:00:00.000Z", historical: true }));
+      const inertTar = spawnSync("tar", ["-czf", bundlePath, "-C", source, "./src", "./deploy"], { encoding: "utf8", windowsHide: true });
+      assert.equal(inertTar.status, 0, inertTar.stderr);
+      const inertEvidence = await archive.captureReleaseArchiveSourceEvidence(bundlePath);
+      Object.assign(base, { sha256: inertEvidence.archiveSha256, bytes: inertEvidence.archiveBytes,
+        entries: inertEvidence.archiveEntryCount, archiveSourceEvidence: inertEvidence });
+      base.frontendAuthorization.candidateInventorySha256 = inertEvidence.inventorySha256;
+      fs.writeFileSync(bundlePath + ".sha256", inertEvidence.archiveSha256 + "\n");
+      assertWindowRoute("UI retains historical full grant inertly and verifies all bytes", await route(), true, ["signature", "actual-inventory"]);
+      assertWindowRoute("non-native full cannot execute the historical grant", await route(asFull), false, ["signature"], /emergency activation requires signed native code release/);
     } finally {
       const current = fs.lstatSync(fixture); assert.equal(current.dev, original.dev); assert.equal(current.ino, original.ino);
       assert.equal(current.isSymbolicLink(), false); assert.equal(fs.realpathSync(fixture), fixture); fs.rmSync(fixture, { recursive: true });

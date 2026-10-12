@@ -146,6 +146,16 @@ function sequence(context, expected) {
   const value = read(context, context.paths.sequence, 128).bytes.toString("utf8");
   if (value !== expected + "\n") fail("consumed-release-sequence-mismatch");
 }
+function completedRuntimeSequence(context, expected) {
+  // Failed later attempts consume a sequence without replacing the completed
+  // runtime. Register that exact runtime without resetting the replay counter.
+  const value = read(context, context.paths.sequence, 128).bytes.toString("utf8");
+  if (!/^[1-9][0-9]*\n$/.test(value) || !Number.isSafeInteger(Number(value.trim()))
+    || Number(value.trim()) < expected) fail("consumed-release-sequence-mismatch");
+  const existing = read(context, context.paths.state, RECEIPT_MAX, { optional: true });
+  if (existing && state(JSON.parse(existing.bytes.toString("utf8"))).frontendSequence > expected)
+    fail("completed-runtime-initialization-would-reset-newer-frontend");
+}
 function artifact(input, limit) {
   if (!exact(input, ["bytes", "sha256"]) || !Buffer.isBuffer(input.bytes) || !HASH.test(input.sha256 || "") || input.bytes.length > limit) fail("invalid-bound-artifact");
   const bytes = Buffer.from(input.bytes); if (hash(bytes) !== input.sha256) fail("artifact-digest-mismatch"); return { bytes, sha256: input.sha256 };
@@ -450,7 +460,7 @@ function initialize(context, input) {
   guard(context); requireIdle(context);
   if (!exact(input, ["runtimeSha256", "runtimeSequence", "acceptanceReceiptBytes", "acceptanceSha256"]) || !HASH.test(input.runtimeSha256 || "")
     || !Number.isSafeInteger(input.runtimeSequence) || input.runtimeSequence < 1) fail("invalid-full-initialization-input");
-  markers(context, input.runtimeSha256); sequence(context, input.runtimeSequence);
+  markers(context, input.runtimeSha256); completedRuntimeSequence(context, input.runtimeSequence);
   const status = Object.fromEntries(read(context, path.join(context.paths.status, input.runtimeSha256 + ".status"), 16384).bytes.toString("utf8").trim().split("\n").map(line => {
     const at = line.indexOf("="); if (at < 1) fail("invalid-full-release-status"); return [line.slice(0, at), line.slice(at + 1)];
   }));
