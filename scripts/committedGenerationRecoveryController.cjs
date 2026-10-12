@@ -29,8 +29,12 @@ async function inspect(p){
   assert.equal(hashFile(baseline+'/original.tgz'),p.targetSha256);policy.verifySignedBytes(read(baseline+'/manifest.json',1048576),read(baseline+'/manifest.sig',16384),read('/etc/football-release/signing-public.pem',16384));
   assert.equal(fs.realpathSync(p.buildDir),p.buildDir);const bs=fs.lstatSync(p.buildDir);assert(bs.isDirectory()&&!bs.isSymbolicLink());
   const buildProcesses=cp.spawnSync('/usr/bin/pgrep',['-u','football-build'],{encoding:'utf8',timeout:5000});assert.equal(buildProcesses.status,1,'build user not quiescent');
-  const sourceRows=m.archiveSourceEvidence.inventory.entries.filter(r=>r.kind==='file'&&!r.path.startsWith('.release-model-assets/')&&!r.path.startsWith('.release-prebuilt/')&&!r.path.startsWith('public/')&&!r.path.startsWith('dist/'));
-  for(const row of sourceRows){const file=p.buildDir+'/'+row.path,s=fs.lstatSync(file);assert(s.isFile()&&!s.isSymbolicLink()&&s.nlink===1&&s.size===row.bytes);assert.equal(hashFile(file),row.sha256,'prepared signed source drift '+row.path);}
+  // npm prune rewrites only the disposable build lock metadata. Normal
+  // assemble_final_tree copies package-lock from authenticated source, never
+  // from this build directory. All executable source remains byte-exact.
+  const sourceRows=m.archiveSourceEvidence.inventory.entries.filter(r=>r.kind==='file'&&r.path!=='package-lock.json'&&!r.path.startsWith('.release-model-assets/')&&!r.path.startsWith('.release-prebuilt/')&&!r.path.startsWith('public/')&&!r.path.startsWith('dist/'));
+  assert(read(p.buildDir+'/deploy/light-server/release-from-bundle.sh',1048576).toString().includes('cp -a --no-dereference -- "$TRUSTED_SOURCE_DIR/." "$NEXT_DIR/"'));
+  for(const row of sourceRows){const file=p.buildDir+'/'+row.path,s=fs.lstatSync(file);assert(s.isFile()&&!s.isSymbolicLink()&&s.nlink===1&&s.size===row.bytes,'prepared file shape differs '+row.path);assert.equal(hashFile(file),row.sha256,'prepared signed source drift '+row.path);}
   const distRows=m.archiveSourceEvidence.inventory.entries.filter(r=>r.kind==='file'&&r.path.startsWith('dist/'));for(const r of distRows)assert.equal(hashFile(p.buildDir+'/'+r.path),r.sha256);
   assert.equal(hashFile(p.buildDir+'/deploy/light-server/release-from-bundle.sh'),p.shellSha256);assert.equal(hashFile(p.buildDir+'/deploy/light-server/release-native.sh'),p.nativeSha256);
   const journal=run('/usr/bin/journalctl',['--unit=football-predict.service','--since=-20min','--grep=PUBLICATION_SQLITE_IDENTITY_MISMATCH|SQLite publication identity matches','--lines=12','--output=json','--no-pager']);
