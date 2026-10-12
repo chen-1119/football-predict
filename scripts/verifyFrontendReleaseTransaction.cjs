@@ -103,6 +103,29 @@ function verify() {
       assert.equal(fs.existsSync(f.p.state), false);
     } finally { f.dispose(); }
   });
+  check("completed runtime registration preserves later consumed sequences; UI releases still require the exact reserved sequence", () => {
+    const f = createFixture(); try {
+      put(f.p.sequence, "13\n", 0o600); f.initialize(); f.accepted(runtimeSha256);
+      assert.equal(fs.readFileSync(f.p.sequence, "utf8"), "13\n");
+      assert.throws(() => f.adapter.begin(f.plan()), /sequence-mismatch/);
+      assert.equal(fs.existsSync(f.p.current), false);
+    } finally { f.dispose(); }
+  });
+  check("completed registration refuses malformed highwater, changed live identity and newer accepted UI", () => {
+    for (const value of ["010\n", "10", "10\n11\n", "9007199254740992\n"]) {
+      const f = createFixture(); try { put(f.p.sequence, value, 0o600); assert.throws(f.initialize, /sequence-mismatch/); }
+      finally { f.dispose(); }
+    }
+    const changed = createFixture(); try {
+      put(changed.p.sequence, "13\n", 0o600); put(path.join(changed.p.app, ".release-live-complete"), "d".repeat(64)+"\n");
+      assert.throws(changed.initialize, /marker-mismatch/);
+      put(path.join(changed.p.app, ".release-live-complete"), runtimeSha256+"\n");
+    } finally { changed.dispose(); }
+    const newer = createFixture(); try {
+      newer.prepared(); const started = newer.adapter.begin(newer.plan()); newer.accept(started.transactionId);
+      assert.throws(newer.initialize, /reset-newer-frontend/); newer.accepted(frontendSha256);
+    } finally { newer.dispose(); }
+  });
   check("full status accepts wrapper canonical seconds and Node milliseconds but rejects loose dates", () => {
     for (const completed of ["2026-09-08T10:00:00Z", "2026-09-08T10:00:00.000Z", "2026-09-08 10:00:00Z", "2026-02-31T10:00:00Z", "2026-09-08T10:00:00+00:00"]) {
       const f = createFixture(); try {
