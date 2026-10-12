@@ -9,7 +9,9 @@ function read(file, maximum) {
 }
 function artifact(archive) {
   if (!archive || !path.isAbsolute(archive)) throw new Error('Absolute archive path required');
-  const raw = read(archive, 512 * 1024 * 1024), manifestBytes = read(archive + '.manifest.json', 2 * 1024 * 1024);
+  // A Linux image also inventories lock-installed dependencies. Its actual
+  // 12,083-file manifest exceeds 2 MiB; retain a fixed 4 MiB metadata bound.
+  const raw = read(archive, 512 * 1024 * 1024), manifestBytes = read(archive + '.manifest.json', 4 * 1024 * 1024);
   const manifest = JSON.parse(manifestBytes);
   if (raw.length !== manifest.archiveBytes || signing.sha(raw) !== manifest.archiveSha256) throw new Error('COMPONENT_ARCHIVE_MISMATCH');
   return { manifest, manifestBytes };
@@ -37,4 +39,4 @@ if (require.main === module) {
   console.log(JSON.stringify({ component: result.envelope.component, head: result.envelope.head, archiveSha256: result.envelope.archiveSha256,
     signed: result.signed, verified: result.verified, activationEligible: false }));
 }
-module.exports = { sign, verify };
+module.exports = { sign, verify, artifact };
