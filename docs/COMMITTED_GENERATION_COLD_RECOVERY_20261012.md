@@ -43,3 +43,20 @@ the original recovery material and invokes the fixed normal recovery helper.
 Successful code recovery is followed by independent installed-source, public
 TLS, frozen/ACK and natural synchronization verification. It is not proof that
 a new database source batch has already been committed.
+# Retained final image after a verified recovery OOM
+
+The recovery coordinator can prepare a new isolated build from the exact final
+tree recorded by the original recovery transaction, only after its independently
+signed previous continuation unit reports `oom-kill`, has no PID or remaining
+cgroup members, and the original helper classifies APP as old, BACKUP as absent
+and FAILED as the recorded new tree. Every signed executable and dist byte and
+the complete bounded dependency inventory are checked before cloning. The
+FAILED tree is retained in the new root capsule before the normal directory
+exchange; it is never overlaid onto the live application.
+
+The next authorization binds a 3 GiB controller memory cap and 512 MiB swap cap.
+Preparation requires at least 5 GiB actually available host memory. This changes
+the recovery verifier's resource allocation; all 900 second, signature, same
+database, stopped writer, archive continuity and full runtime gates remain.
+Candidate data is materialized anew from the already verified immutable seed.
+The serving PostgreSQL database is never cloned or edited by this preparation.
