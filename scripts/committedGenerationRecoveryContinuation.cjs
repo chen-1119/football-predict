@@ -25,6 +25,7 @@ function validateAuthorization(p,now=Date.now()){
   if(p.externalAuthorizationVersion){assert.equal(p.externalAuthorizationVersion,'cold-full-recovery-authorizations-v1');for(const k of ['engineSha256','externalEmergencySha256','externalEmergencyAuthorizationHash','externalWorkerSha256','originalNativeStateSha256'])requireHash(p[k]);assert.equal(p.externalEmergency.expiresAt,p.expiresAt);assert.equal(p.externalWorker.expiresAt,p.expiresAt);assert.equal(p.externalWorker.baseRuntimeSha256,p.baseRuntimeSha256);assert.equal(p.externalWorker.publication.databaseOid,p.databaseOid);assert.equal(digest(JSON.stringify(p.externalEmergency)+'\n'),p.externalEmergencySha256);assert.equal(digest(JSON.stringify(p.externalWorker)+'\n'),p.externalWorkerSha256);assert.equal(digest(JSON.stringify({version:p.externalEmergency.version,mode:p.externalEmergency.mode,reason:p.externalEmergency.reason,authorizedAt:p.externalEmergency.authorizedAt,expiresAt:p.externalEmergency.expiresAt})),p.externalEmergencyAuthorizationHash);}
   assert.equal(p.forcedSynchronization,false);assert.equal(p.transitionSeconds,900);
   if(p.controllerMemoryMaxBytes!==undefined){assert.equal(p.controllerMemoryMaxBytes,3*1024**3);assert.equal(p.controllerMemorySwapMaxBytes,512*1048576);}
+  if(p.candidateStoreLink){const link=p.candidateStoreLink;assert.equal(link.path,p.buildDir+'/server-data');assert.equal(link.target,'/var/lib/football-predict');for(const key of ['device','inode'])assert.match(link[key],/^[0-9]+$/);assert.equal(link.sha256,digest(link.target));assert.equal(p.materializeCandidate,true);}
   if(p.recordedFailedImage){const image=p.recordedFailedImage;assert.equal(image.path,'/opt/football-predict.failed');assert.equal(image.priorUnitResult,'oom-kill');requireHash(image.priorId);requireHash(image.priorAuthorizationSha256);requireHash(image.newTreeIdentitySha256);requireHash(image.dependencies?.sha256);for(const k of ['device','inode'])assert.match(image[k],/^[0-9]+$/);assert(Number.isSafeInteger(image.signedFiles)&&image.signedFiles>1700);assert.equal(image.controllerMemoryMaxBytes,p.controllerMemoryMaxBytes);assert.equal(image.controllerMemorySwapMaxBytes,p.controllerMemorySwapMaxBytes);assert.deepEqual(image.finalReceipts.map(r=>r.name),['final-started.json','data-finalized.json']);for(const r of image.finalReceipts)requireHash(r.sha256);}
   if(p.retiredCandidateFiles?.length){assert.deepEqual(p.retiredCandidateFiles.map(r=>r.name),['candidate-access-intent.json','candidate-access.json','candidate-access-dropped.json','candidate.env']);for(const row of p.retiredCandidateFiles)requireHash(row.sha256);}
   assert.match(p.buildDir,new RegExp('^/opt/football-predict\\.build-'+p.targetSha256.slice(0,12)+'-[1-9][0-9]{0,9}$'));
@@ -141,7 +142,7 @@ quiesce_continuation_writers
 assert_native_cutover_processes_drained
 if [ "${p.resumeSeed===true?1:0}" = 1 ]; then
   [ "$(sha256sum "$NATIVE_STATE_DIR/seed-accepted.json" | cut -d' ' -f1)" = "${p.seedReceiptSha256||''}" ]
-  if [ "${p.recordedFailedImage?1:0}" = 1 ]; then
+  if [ "${p.materializeCandidate?1:0}" = 1 ]; then
     native_materialize_candidate
     seed_candidate_model_artifacts
     candidate_ai_state_status=0
