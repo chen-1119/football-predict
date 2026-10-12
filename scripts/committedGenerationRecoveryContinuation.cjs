@@ -90,7 +90,15 @@ RELEASE_SITE=football-predict
 RELEASE_CHANNEL=production
 RELEASE_SEQUENCE=${p.targetSequence}
 `;
-  if(p.servingCoreVersion){const dir=p.sourceDir.slice(0,-7),liveCore=tail.match(/^  run_as_service_user_with_runtime_env env VERIFY_BASE_URL=[\s\S]*?^    "\$NODE_HOME\/bin\/node" "\$APP_DIR\/scripts\/verifyNativeDeploymentCore\.cjs"$/m);assert(liveCore,'exact original live core command required');tail=replaceOnce(tail,liveCore[0],`  "$NODE_HOME/bin/node" '${dir}/serving-core.cjs' '${dir}'`);tail=replaceOnce(tail,'  NODE_PATH="$APP_DIR/node_modules" "$NODE_HOME/bin/node" "$APP_DIR/scripts/verifyReleaseArchiveSuccessor.cjs" live "$BUNDLE_SHA256"',`  "$NODE_HOME/bin/node" '${dir}/serving-core.cjs' '${dir}' archives`);}
+  if(p.servingCoreVersion){
+    const dir=p.sourceDir.slice(0,-7),liveCore=tail.match(/^  run_as_service_user_with_runtime_env env VERIFY_BASE_URL=[\s\S]*?^    "\$NODE_HOME\/bin\/node" "\$APP_DIR\/scripts\/verifyNativeDeploymentCore\.cjs"$/m);
+    assert(liveCore,'exact original live core command required');
+    const archiveCommand='  NODE_PATH="$APP_DIR/node_modules" "$NODE_HOME/bin/node" "$APP_DIR/scripts/verifyReleaseArchiveSuccessor.cjs" live "$BUNDLE_SHA256"';
+    // Both serving and all 601 archive identities are checked in one protected
+    // RR session. Candidate verification and the later natural-cycle gate stay
+    // unchanged. Never select the uncommitted raw head for serving archives.
+    tail=replaceOnce(tail,liveCore[0]+'\n'+archiveCommand,`  "$NODE_HOME/bin/node" '${dir}/serving-core.cjs' '${dir}' archives`);
+  }
   const initialize=`
 PRIMARY_READ_SOURCE=postgres
 TRANSACTION_VERSION=4
