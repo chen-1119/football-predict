@@ -63,6 +63,8 @@ function renderScript(shell,native,p){
   const pause='  if [ "${RELEASE_FAST_WATCHER_PAUSE_OVERRIDE_ACTIVE:-0}" = 1 ]; then\n    # The code lane already owns this pause from its immutable seed capture.\n    # Preserve it until the stopped window; do not try to install it twice.\n    assert_release_fast_watcher_pause_guard\n  else\n    pause_current_fast_watcher_for_live_prebuild\n  fi';
   tail=replaceOnce(tail,pause,'  assert_continuation_old_stopped');
   tail=replaceOnce(tail,'  start_release_sync_write_barrier\n','  assert_continuation_old_stopped\n  quiesce_native_auxiliary_writers\n  assert_native_cutover_processes_drained\n');
+  assert.equal(tail.split('\n  quiesce_native_auxiliary_writers\n').length,3);
+  tail=tail.split('\n  quiesce_native_auxiliary_writers\n').join('\n  quiesce_continuation_writers\n');
   assert(tail.includes('run_trusted_candidate_verifier'));assert(tail.includes('native_data final'));
   assert(tail.includes('native_code_verify_cutover_lease "$CODE_CUTOVER_POST_SWAP_MARGIN_SECONDS"'));
   assert(tail.includes('mv "$APP_DIR" "$BACKUP_DIR"'));assert(tail.includes('mv "$NEXT_DIR" "$APP_DIR"'));
@@ -100,6 +102,15 @@ assert_continuation_old_stopped() {
   wait_for_current_service_cgroup_reclaimed "/system.slice/${'${SERVICE_NAME}'}.service" || return 1
   assert_sync_worker_inactive_for_live_prebuild || return 1
 }
+quiesce_continuation_writers() {
+  local unit state
+  for unit in "${'${NATIVE_AUXILIARY_UNITS[@]}'}" football-daily-prematch.service football-read-api-component-6073aafaaf5dae590bfb2b50.service; do
+    systemctl stop "$unit" || return 1
+    state="$(systemctl is-active "$unit" 2>/dev/null || true)"
+    case "$state" in inactive|failed) ;; *) return 1 ;; esac
+  done
+  assert_native_cutover_processes_drained || return 1
+}
 release_stage_observe init "$TRUSTED_SOURCE_DIR"
 quiesce_managed_maintenance_for_sqlite_snapshot
 stop_worker_for_release_window
@@ -114,7 +125,7 @@ CODE_CUTOVER_STARTED_SECONDS=$SECONDS
   --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" --verifier-runtime-max-seconds 300 \\
   --preverify-refresh-budget-seconds 570 --atomic-swap-margin-seconds 30 \\
   --emergency-authorization "$CODE_EMERGENCY_AUTHORIZATION" --data-plane code-only
-quiesce_native_auxiliary_writers
+quiesce_continuation_writers
 assert_native_cutover_processes_drained
 native_data seed >"$NATIVE_STATE_DIR/recovery-seed.log" 2>&1
 native_materialize_candidate
