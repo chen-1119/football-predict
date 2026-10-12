@@ -188,6 +188,26 @@ const requireCompleteUpsert = (result, expectedRows, table, required) => {
   throw error;
 };
 
+const withSourceFileAssemblySession = async (client, assemble) => {
+  if (typeof assemble !== 'function') throw new Error('Source assembly callback required');
+  const settings = (await client.query(`SELECT current_setting('statement_timeout') AS statement_timeout,
+    (SELECT setting::bigint FROM pg_settings WHERE name='statement_timeout') AS statement_timeout_ms,
+    current_setting('default_toast_compression') AS toast_compression,
+    (SELECT enumvals FROM pg_settings WHERE name='default_toast_compression') AS toast_options`)).rows[0];
+  const priorTimeoutMs = Number(settings?.statement_timeout_ms);
+  if (!settings || !Number.isSafeInteger(priorTimeoutMs) || priorTimeoutMs < 0) throw new Error('Invalid source assembly session budget');
+  const statementBudgetMs = priorTimeoutMs > 0 ? Math.min(priorTimeoutMs, 90000) : 90000;
+  await client.query("SELECT set_config('statement_timeout',$1,true)", [String(statementBudgetMs)]);
+  const useLz4 = settings.toast_compression === 'pglz' && Array.isArray(settings.toast_options) && settings.toast_options.includes('lz4');
+  if (useLz4) await client.query("SELECT set_config('default_toast_compression',$1,true)", ['lz4']);
+  // SQL failures propagate to the caller's transaction rollback. Do not issue
+  // recovery SQL or commit an assembly whose outcome is unconfirmed.
+  const result = await assemble();
+  if (useLz4) await client.query("SELECT set_config('default_toast_compression',$1,true)", [settings.toast_compression]);
+  await client.query("SELECT set_config('statement_timeout',$1,true)", [settings.statement_timeout]);
+  return result;
+};
+
 const insertFileSourceRow = async ({ client, row, payload, conflict, onFileBytes, batchBytes }) => {
   // The caller owns the transaction. Failure leaves its rollback responsible
   // for the parts and all earlier projection writes; never catch/commit here.
@@ -208,11 +228,14 @@ const insertFileSourceRow = async ({ client, row, payload, conflict, onFileBytes
   }
   // Exhausting the iterator verifies the source hash/stat before assembly.
   await flush();
-  const result = await client.query(`
+  // A large, admitted JSON source is assembled without a ledger-sized JS
+  // string. Bound this one SQL operation on the server before the writer's
+  // client deadline. Preserve a stricter operator statement limit.
+  const result = await withSourceFileAssemblySession(client, () => client.query(`
     INSERT INTO football.source_snapshots (id,source,captured_at,payload)
     SELECT $1, $2, $3, string_agg(piece, '' ORDER BY seq)::json FROM ${temp}
     ${conflict}
-  `, [row.id ?? null, row.source ?? null, row.captured_at ?? null]);
+  `, [row.id ?? null, row.source ?? null, row.captured_at ?? null]));
   await client.query(`DROP TABLE ${temp}`);
   return result;
 };
@@ -1520,7 +1543,7 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
     if (stableStringify(publicationFromMeta(meta)) !== stableStringify(publication))
       throw new Error("projection source metadata and publication identity disagree");
     source.assertUnchanged();
-    pool = options.pool || createPostgresPool({ applicationName: `football-projection-${mode}` });
+    pool = options.pool || createProjectionWritePool(mode);
     const arena = loadAiArena(aiArenaPath);
     await ensureProjectionSchema(source, pool);
 
@@ -1741,8 +1764,17 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
   }
 };
 const syncPostgresProjectionFromSqlite = options => syncPostgresProjectionFromSource(createSqliteProjectionSource(options), options);
+function createProjectionWritePool(mode) {
+  if (!['backfill', 'incremental', 'fast-result'].includes(mode)) throw new Error('Invalid projection pool mode');
+  // HTTP/read-only pools retain their existing deadlines. Only this single
+  // projection writer gets a bounded 120s response budget; the complete worker
+  // step, source hash/CAS checks and transaction rollback remain unchanged.
+  return createPostgresPool({ applicationName: `football-projection-${mode}`, queryTimeoutMillis: 120000 });
+}
 
 module.exports = {
+  createProjectionWritePool,
+  withSourceFileAssemblySession,
   insertBatches,
   streamIteratorInsert,
   ensureProjectionSchema,

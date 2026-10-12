@@ -71,6 +71,8 @@ const RETENTION_MAINTENANCE_UNITS = ["football-postgres-backup.timer", "football
 const RUNTIME_UNITS = ["football-sync-worker.service", "football-predict.service"];
 const UNIT_STATE_NAMES = ["football-predict.service", "football-sync-worker.service", "nginx.service"];
 const ALL_UNIT_STATE_NAMES = [...UNIT_STATE_NAMES, ...SIDECAR_UNIT_STATE_NAMES];
+const READ_API_UNIT = "football-read-api-component-6073aafaaf5dae590bfb2b50.service";
+const COMPONENT_UNIT_STATE_NAMES = [...ALL_UNIT_STATE_NAMES, READ_API_UNIT];
 const COMMON_COHORT_G2_V1_PATH = `${STORE_PATH}/model-artifacts/candidate-common-cohort-shadow-g2.json`;
 const COMMON_COHORT_G2_V2_PATH = `${STORE_PATH}/model-artifacts/candidate-common-cohort-shadow-g2-v2.json`;
 const MODEL_ARTIFACTS = new Map([
@@ -756,7 +758,8 @@ const loadConfigSnapshot = (currentDir) => {
   });
   const unitRows = parseTsv(path.join(dir, "units.tsv"), "runtime unit state manifest", 3);
   const unitNames = unitRows.length === UNIT_STATE_NAMES.length ? UNIT_STATE_NAMES
-    : unitRows.length === ALL_UNIT_STATE_NAMES.length ? ALL_UNIT_STATE_NAMES : null;
+    : unitRows.length === ALL_UNIT_STATE_NAMES.length ? ALL_UNIT_STATE_NAMES
+      : unitRows.length === COMPONENT_UNIT_STATE_NAMES.length ? COMPONENT_UNIT_STATE_NAMES : null;
   if (!unitNames || (unitNames.length === UNIT_STATE_NAMES.length
     ? timerNames.length !== TIMER_UNITS.length
     : ![ALL_TIMER_UNITS.length, RETENTION_TIMER_UNITS.length].includes(timerNames.length))) {
@@ -1282,14 +1285,15 @@ const quiesceAll = (transaction, system) => {
   system.stopTransientUnits(transaction.bundleSha);
   const retentionUnits = transaction.config.timers.some(state => state.name === "football-postgres-backup.timer")
     ? RETENTION_MAINTENANCE_UNITS : [];
+  const componentUnits = transaction.config.units.some(state => state.name === READ_API_UNIT) ? [READ_API_UNIT] : [];
   for (const unit of [...SIDECAR_TIMER_UNITS, ...SIDECAR_UNIT_STATE_NAMES, ...SIDECAR_ONESHOT_UNITS,
-    ...MAINTENANCE_UNITS, ...retentionUnits, ...RUNTIME_UNITS]) system.stop(unit);
+    ...MAINTENANCE_UNITS, ...retentionUnits, ...componentUnits, ...RUNTIME_UNITS]) system.stop(unit);
   system.killDedicatedUserProcesses();
 };
 
 const restoreUnitStates = (snapshot, system) => {
   for (const state of snapshot.units) {
-    if (state.name === "nginx.service" || SIDECAR_UNIT_STATE_NAMES.includes(state.name)) continue;
+    if (state.name === "nginx.service" || SIDECAR_UNIT_STATE_NAMES.includes(state.name) || state.name === READ_API_UNIT) continue;
     system.setEnabled(state.name, state.enabled);
     if (state.active) system.start(state.name);
     else system.stop(state.name);
@@ -1298,7 +1302,7 @@ const restoreUnitStates = (snapshot, system) => {
 
 const restoreSidecarUnitStates = (snapshot, system) => {
   for (const state of snapshot.units) {
-    if (!SIDECAR_UNIT_STATE_NAMES.includes(state.name)) continue;
+    if (!SIDECAR_UNIT_STATE_NAMES.includes(state.name) && state.name !== READ_API_UNIT) continue;
     system.setEnabled(state.name, state.enabled);
     if (state.active) system.start(state.name);
     else system.stop(state.name);

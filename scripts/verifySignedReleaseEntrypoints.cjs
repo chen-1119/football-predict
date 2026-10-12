@@ -438,6 +438,7 @@ const nodeFiles = [
   "scripts/verifyReleaseRecovery.cjs",
   "scripts/verifyReleaseSidecarRecovery.cjs",
   "scripts/verifyNativeSidecarLifecycle.cjs",
+  "scripts/releaseInstalledReadApiIdentity.cjs",
   "scripts/verifySignedReleaseEntrypoints.cjs"
 ];
 for (const relativePath of nodeFiles) {

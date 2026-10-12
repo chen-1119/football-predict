@@ -40,7 +40,7 @@ const validateEmergencyCodeAuthorization = (value, { at, dataPlane = "code-only"
     || JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(["authorizedAt", "expiresAt", "mode", "reason", "version"]))
     reject("invalid emergency activation authorization fields");
   if (value.version !== "emergency-code-activation-v1" || value.mode !== "code-only-ignore-schedule"
-    || value.reason !== "user-requested-immediate-ui-repair") reject("invalid emergency activation authorization scope");
+    || !["user-requested-immediate-ui-repair","user-requested-immediate-data-sync-repair"].includes(value.reason)) reject("invalid emergency activation authorization scope");
   const start = Date.parse(value.authorizedAt), end = Date.parse(value.expiresAt), now = Date.parse(at);
   if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(now)
     || new Date(start).toISOString() !== value.authorizedAt || new Date(end).toISOString() !== value.expiresAt

@@ -43,6 +43,9 @@ ${[
 ].map(extractFunction).join("\n\n")}
 
 declare -A mock_active=() mock_enabled=()
+assert_installed_read_api_lifecycle_identity() {
+  [[ "$scenario" != component-identity-rejected ]]
+}
 systemctl() {
   local action="$1"; shift
   local quiet=0
@@ -89,6 +92,9 @@ pgrep() {
       poststop-error) return 2 ;;
       *) return 1 ;;
     esac
+  fi
+  if [[ "\${mock_active[football-read-api-component-6073aafaaf5dae590bfb2b50.service]:-0}" == 1 ]]; then
+    printf '4242\\n9998\\n'; return 0
   fi
   case "$scenario" in
     normal|timer-*|poststop-*|unhealthy|health-after-fail|pid-drift|wrong-unit-cgroup|wrong-proc-cgroup)
@@ -148,12 +154,14 @@ nginx.service\t1\t1
 football-market-collector.service\t1\t1
 football-featured-combo.service\t0\t0
 football-recommendation-settlement.service\t0\t1
+football-read-api-component-6073aafaaf5dae590bfb2b50.service\t1\t1
 UNITS
 cat >"$RECOVERY_DIR/managed-config/timers.tsv" <<'TIMERS'
 football-cleanup.timer\t1\t1
 football-monitor.timer\t0\t0
 football-daily-prematch.timer\t1\t1
 football-featured-combo.timer\t0\t0
+football-postgres-backup.timer\t0\t0
 TIMERS
 
 for unit in "\${MANAGED_TIMERS[@]}" "\${MANAGED_STATE_UNITS[@]}" \
@@ -162,6 +170,7 @@ for unit in "\${MANAGED_TIMERS[@]}" "\${MANAGED_STATE_UNITS[@]}" \
 done
 for unit in football-predict.service football-sync-worker.service nginx.service \
   football-market-collector.service football-recommendation-settlement.service \
+  football-read-api-component-6073aafaaf5dae590bfb2b50.service \
   football-cleanup.timer football-daily-prematch.timer football-daily-prematch.service; do
   mock_active[$unit]=1
 done
@@ -169,6 +178,7 @@ for unit in football-predict.service football-sync-worker.service nginx.service 
   football-market-collector.service football-cleanup.timer football-daily-prematch.timer; do
   mock_enabled[$unit]=1
 done
+mock_enabled[football-read-api-component-6073aafaaf5dae590bfb2b50.service]=1
 
 if [[ "$scenario" == status-error ]]; then
   if quiesce_managed_maintenance_for_sqlite_snapshot; then
@@ -177,6 +187,13 @@ if [[ "$scenario" == status-error ]]; then
   fi
   assert_state football-cleanup.timer 1 1
   assert_state football-market-collector.service 1 1
+  printf 'ok %s\\n' "$scenario"
+  exit 0
+fi
+if [[ "$scenario" == component-identity-rejected ]]; then
+  if quiesce_native_auxiliary_writers; then exit 1; fi
+  assert_state football-market-collector.service 1 1
+  assert_state football-read-api-component-6073aafaaf5dae590bfb2b50.service 1 1
   printf 'ok %s\\n' "$scenario"
   exit 0
 fi
@@ -190,6 +207,7 @@ if [[ "$scenario" == normal || "$scenario" == timer-* || "$scenario" == poststop
   quiesce_native_auxiliary_writers
   assert_state football-market-collector.service 0 1
   assert_state football-recommendation-settlement.service 0 0
+  assert_state football-read-api-component-6073aafaaf5dae590bfb2b50.service 0 1
   mock_barrier_running=0
   if [[ "$scenario" == poststop-* ]]; then
     if assert_native_cutover_processes_drained; then
@@ -224,10 +242,12 @@ if [[ "$scenario" == normal || "$scenario" == timer-* || "$scenario" == poststop
   assert_state football-market-collector.service 1 1
   assert_state football-featured-combo.service 0 0
   assert_state football-recommendation-settlement.service 1 0
+  assert_state football-read-api-component-6073aafaaf5dae590bfb2b50.service 1 1
   assert_state football-cleanup.timer 1 1
   assert_state football-monitor.timer 0 0
   assert_state football-daily-prematch.timer 1 1
   assert_state football-featured-combo.timer 0 0
+  assert_state football-postgres-backup.timer 0 0
 else
   if quiesce_native_auxiliary_writers; then
     printf 'unknown or uncheckable football process allowed cutover: %s\\n' "$scenario" >&2
@@ -247,7 +267,7 @@ try {
   for (const scenario of ["normal", "persistent", "duplicate", "missing", "error",
     "unhealthy", "health-after-fail", "pid-drift", "wrong-unit-cgroup", "wrong-proc-cgroup",
     "poststop-stray", "poststop-error", "status-error",
-    "timer-missing", "timer-reordered", "timer-malformed"]) {
+    "timer-missing", "timer-reordered", "timer-malformed", "component-identity-rejected"]) {
     const result = spawnSync(bash, [harnessPath.replace(/\\/g, "/"), scenario], {
       cwd: workspace, encoding: "utf8", timeout: 30_000, windowsHide: true
     });
@@ -257,5 +277,5 @@ try {
 } finally {
   fs.rmSync(harnessDir, { recursive: true, force: true });
 }
-console.log(JSON.stringify({ ok: true, cases: 16, productionWrites: 0,
+console.log(JSON.stringify({ ok: true, cases: 17, productionWrites: 0,
   scope: "actual release Bash functions, authenticated barrier-only cutover, strict post-stop drain, exact sidecar/timer restore and fail-closed processes" }));
