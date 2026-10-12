@@ -62,6 +62,7 @@ function renderScript(shell,native,p){
     '  assert_continuation_old_stopped');
   const pause='  if [ "${RELEASE_FAST_WATCHER_PAUSE_OVERRIDE_ACTIVE:-0}" = 1 ]; then\n    # The code lane already owns this pause from its immutable seed capture.\n    # Preserve it until the stopped window; do not try to install it twice.\n    assert_release_fast_watcher_pause_guard\n  else\n    pause_current_fast_watcher_for_live_prebuild\n  fi';
   tail=replaceOnce(tail,pause,'  assert_continuation_old_stopped');
+  tail=replaceOnce(tail,'  start_release_sync_write_barrier\n','  assert_continuation_old_stopped\n  quiesce_native_auxiliary_writers\n  assert_native_cutover_processes_drained\n');
   assert(tail.includes('run_trusted_candidate_verifier'));assert(tail.includes('native_data final'));
   assert(tail.includes('native_code_verify_cutover_lease "$CODE_CUTOVER_POST_SWAP_MARGIN_SECONDS"'));
   assert(tail.includes('mv "$APP_DIR" "$BACKUP_DIR"'));assert(tail.includes('mv "$NEXT_DIR" "$APP_DIR"'));
@@ -113,7 +114,8 @@ CODE_CUTOVER_STARTED_SECONDS=$SECONDS
   --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" --verifier-runtime-max-seconds 300 \\
   --preverify-refresh-budget-seconds 570 --atomic-swap-margin-seconds 30 \\
   --emergency-authorization "$CODE_EMERGENCY_AUTHORIZATION" --data-plane code-only
-start_release_sync_write_barrier "$APP_DIR"
+quiesce_native_auxiliary_writers
+assert_native_cutover_processes_drained
 native_data seed >"$NATIVE_STATE_DIR/recovery-seed.log" 2>&1
 native_materialize_candidate
 seed_candidate_model_artifacts

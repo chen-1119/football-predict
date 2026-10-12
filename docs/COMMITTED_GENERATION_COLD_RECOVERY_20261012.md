@@ -20,8 +20,10 @@ atomic complete application directory exchange, public and completion gates.
 It changes no individual application source files, database rows, raw pointers,
 model registrations, frozen recommendations or settlements.
 
-The only unavailable old-health checks are replaced by positive stopped-worker
-and reclaimed old-service-cgroup proofs. Candidate health is still mandatory.
+Unavailable old-health and old-HTTP-mediated barriers are replaced by positive
+stopped-worker, reclaimed old-service-cgroup and drained native auxiliary-writer
+proofs before seed and final. The native seed/final protected PostgreSQL receipt
+and immutable pointer locks remain. Candidate health is still mandatory.
 The failed first attempt's lease/input/current files are retained. A separately
 signed recovery attempt captures new actual readonly input and creates its own
 900 second transition lease. It cannot extend the original authorization.
