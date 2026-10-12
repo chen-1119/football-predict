@@ -21,6 +21,7 @@ function validateAuthorization(p,now=Date.now()){
   assert.equal(p.failureCode,'PUBLICATION_SQLITE_IDENTITY_MISMATCH');
   assert.equal(p.failureMessage,'SQLite publication identity matches neither the serving generation nor its immutable previous generation');
   assert.equal(p.productionDataWrites,false);assert.equal(p.applicationFileOverlay,false);
+  if(p.resumeSeed===true){requireHash(p.seedReceiptSha256);requireHash(p.seedIdentity?.manifestHash);assert.equal(p.seedIdentity.generationId,'g-'+p.seedIdentity.manifestHash);assert.equal(p.seedIdentity.mode,'active-generation');}
   assert.equal(p.forcedSynchronization,false);assert.equal(p.transitionSeconds,900);
   assert.match(p.buildDir,new RegExp('^/opt/football-predict\\.build-'+p.targetSha256.slice(0,12)+'-[1-9][0-9]{0,9}$'));
   assert.equal(p.sourceDir,'/var/lib/football-release/recovery-continuations/'+p.id+'/source');requireHash(p.id);
@@ -118,6 +119,7 @@ systemctl stop "$SERVICE_NAME"
 wait_for_current_service_cgroup_reclaimed "/system.slice/${'${SERVICE_NAME}'}.service"
 assert_continuation_old_stopped
 assert_build_user_quiescent
+write_recovery_phase prepared
 NODE_PATH="$APP_DIR/node_modules" "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/nativeCodeReleaseDataPlane.cjs" lease-input "$BUNDLE_SHA256"
 CODE_CUTOVER_STARTED_SECONDS=$SECONDS
 "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" create \\
@@ -127,12 +129,16 @@ CODE_CUTOVER_STARTED_SECONDS=$SECONDS
   --emergency-authorization "$CODE_EMERGENCY_AUTHORIZATION" --data-plane code-only
 quiesce_continuation_writers
 assert_native_cutover_processes_drained
+if [ "${p.resumeSeed===true?1:0}" = 1 ]; then
+  [ "$(sha256sum "$NATIVE_STATE_DIR/seed-accepted.json" | cut -d' ' -f1)" = "${p.seedReceiptSha256||''}" ]
+else
 native_data seed >"$NATIVE_STATE_DIR/recovery-seed.log" 2>&1
 native_materialize_candidate
 seed_candidate_model_artifacts
 candidate_ai_state_status=0
 copy_regular_file_nofollow "$LIVE_STORE_DIR/ai-arena-state.json" "$CANDIDATE_STORE_DIR/ai-arena-state.json" || candidate_ai_state_status="$?"
 [ "$candidate_ai_state_status" = 0 ] || [ "$candidate_ai_state_status" = 2 ]
+fi
 chown -hR "$BUILD_USER:$BUILD_USER" "$BUILD_DIR"
 NATIVE_CANDIDATE_ENV_FILE="$NATIVE_STATE_DIR/candidate.env"
 NATIVE_NEXT_CREATED=1
