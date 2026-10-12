@@ -44,6 +44,17 @@ async function verifyFrontendReleaseConsumers() {
     assert.equal(queue(null, { releaseKind: "full", sha256: runtimeSha, releaseSequence: 711 }).complete, true);
   });
   const deploySource = read("scripts/deployReleaseBundle.cjs");
+  await check("UI freshness checks every candidate UI path while full freshness retains runtime and tool edits", () => {
+    const start = deploySource.indexOf("const freshnessPaths ="), end = deploySource.indexOf("if (newerWorkspaceFiles.length", start);
+    assert.ok(start > 0 && end > start);
+    const rows = [{ path: "scripts/deployReleaseBundle.cjs" }, { path: "src/App.tsx" }, { path: "server/index.cjs" }];
+    const run = frontendOnly => vm.runInNewContext(deploySource.slice(start, end)+"\nnewerWorkspaceFiles.map(row=>row.path)", {
+      frontendOnly, rootDir: "/fixture", bundlePath: "/bundle", fs: { statSync: () => ({ mtimeMs: 1 }) }, Set,
+      collectFilesNewerThan: () => rows, require: name => { assert.equal(name, "./releaseChangeClassification.cjs"); return require(name); }
+    });
+    assert.deepEqual(Array.from(run(true)), ["src/App.tsx"]);
+    assert.deepEqual(Array.from(run(false)), ["scripts/deployReleaseBundle.cjs", "server/index.cjs", "src/App.tsx"]);
+  });
   const windowRouting = { cases: 0, assertions: 0 };
   await check("actual deploy pre-upload route authenticates before window, archive and clone while UI and dry-run bypass live gates", async () => {
     const fixture = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "football-ui-consumer-route-"));

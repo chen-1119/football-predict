@@ -511,7 +511,11 @@ const recoveryHelperRotationContract = parseFixedRecoveryHelperRotationContract(
   releaseShellInspection.content
 );
 
+// UI archives intentionally retain every non-UI byte from the signed baseline;
+// later local deployment-tool edits are not candidate source changes.
+const freshnessPaths = frontendOnly ? new Set(require("./releaseChangeClassification.cjs").FRONTEND_PATHS) : null;
 const newerWorkspaceFiles = collectFilesNewerThan(rootDir, fs.statSync(bundlePath).mtimeMs)
+  .filter(row => !freshnessPaths || freshnessPaths.has(row.path))
   .sort((a, b) => a.path.localeCompare(b.path));
 if (newerWorkspaceFiles.length && !allowStaleBundle) {
   fail("release bundle is older than current workspace changes; rerun npm run release:bundle", {
