@@ -44,6 +44,20 @@ async function verifyFrontendReleaseConsumers() {
     assert.equal(queue(null, { releaseKind: "full", sha256: runtimeSha, releaseSequence: 711 }).complete, true);
   });
   const deploySource = read("scripts/deployReleaseBundle.cjs");
+  await check("authenticated UI preflight isolates collection faults; full deployment retains the full worker probe", () => {
+    const start = deploySource.indexOf("const buildRemotePreflightCommand ="), end = deploySource.indexOf("\nif (recoverMode)", start);
+    assert.ok(start > 0 && end > start);
+    let probes = 0;
+    const build = vm.runInNewContext(deploySource.slice(start,end)+"\nbuildRemotePreflightCommand", {
+      remoteEntrypoint: "/fixed/release", remoteDir: "/fixed/incoming", remoteRecoveryHelperPath: "/fixed/recovery",
+      shellQuote: value => "'"+value+"'", buildReadOnlyWorkerProbe: () => { probes++; return "full-worker-probe"; }
+    });
+    const ui = build(runtimeSha, false, "frontend-only"); assert.equal(probes,0);
+    assert.match(ui,/systemctl is-active football-sync-worker/); assert.match(ui,/release-recovery-pending/);
+    for(const kind of ["full",undefined,"unknown"]){assert.match(build(runtimeSha,false,kind),/full-worker-probe/);}
+    assert.equal(probes,3);
+    assert.match(deploySource,/!frontendOnly && recoveryHelperRotationContract.ok === true,\s*releaseCandidate.releaseKind/);
+  });
   await check("UI freshness checks every candidate UI path while full freshness retains runtime and tool edits", () => {
     const start = deploySource.indexOf("const freshnessPaths ="), end = deploySource.indexOf("if (newerWorkspaceFiles.length", start);
     assert.ok(start > 0 && end > start);
