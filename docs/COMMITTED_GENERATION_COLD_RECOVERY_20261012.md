@@ -28,6 +28,16 @@ The failed first attempt's lease/input/current files are retained. A separately
 signed recovery attempt captures new actual readonly input and creates its own
 900 second transition lease. It cannot extend the original authorization.
 
+After the original source authorizations cease to cover a complete 900 second
+attempt, a new independently signed coordinator may supply new authorization
+documents. They are bound to the current pending intent, original full archive,
+actual database/source pairing and new controller/engine Git source. The old
+authorization files inside the original full package are never edited. The
+coordinator explicitly delegates only those two authorization inputs; all
+release modules are byte-verified original full source. The original native
+coordination state is retained before recording new authorization hashes.
+This does not change PostgreSQL metadata, business rows or application files.
+
 The continuation runs under the same kernel release lock. On failure it retains
 the original recovery material and invokes the fixed normal recovery helper.
 Successful code recovery is followed by independent installed-source, public

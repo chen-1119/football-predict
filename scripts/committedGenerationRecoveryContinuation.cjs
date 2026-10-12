@@ -22,6 +22,7 @@ function validateAuthorization(p,now=Date.now()){
   assert.equal(p.failureMessage,'SQLite publication identity matches neither the serving generation nor its immutable previous generation');
   assert.equal(p.productionDataWrites,false);assert.equal(p.applicationFileOverlay,false);
   if(p.resumeSeed===true){requireHash(p.seedReceiptSha256);requireHash(p.seedIdentity?.manifestHash);assert.equal(p.seedIdentity.generationId,'g-'+p.seedIdentity.manifestHash);assert.equal(p.seedIdentity.mode,'active-generation');}
+  if(p.externalAuthorizationVersion){assert.equal(p.externalAuthorizationVersion,'cold-full-recovery-authorizations-v1');for(const k of ['engineSha256','externalEmergencySha256','externalWorkerSha256','originalNativeStateSha256'])requireHash(p[k]);assert.equal(p.externalEmergency.expiresAt,p.expiresAt);assert.equal(p.externalWorker.expiresAt,p.expiresAt);assert.equal(p.externalWorker.baseRuntimeSha256,p.baseRuntimeSha256);assert.equal(p.externalWorker.publication.databaseOid,p.databaseOid);assert.equal(digest(JSON.stringify(p.externalEmergency)+'\n'),p.externalEmergencySha256);assert.equal(digest(JSON.stringify(p.externalWorker)+'\n'),p.externalWorkerSha256);}
   assert.equal(p.forcedSynchronization,false);assert.equal(p.transitionSeconds,900);
   assert.match(p.buildDir,new RegExp('^/opt/football-predict\\.build-'+p.targetSha256.slice(0,12)+'-[1-9][0-9]{0,9}$'));
   assert.equal(p.sourceDir,'/var/lib/football-release/recovery-continuations/'+p.id+'/source');requireHash(p.id);
@@ -147,6 +148,13 @@ run_recovery_tail() {
   // The full target source supplies every normal function. The explicit new
   // recovery attempt has its own retained old-clock receipt and fresh lease;
   // it never edits the expired first-attempt lease in place.
-  return setup+prefix+'\n'+functions+'\n'+initialize+tail+'\nrun_recovery_tail\n';
+  let result=setup+prefix+'\n'+functions+'\n'+initialize+tail+'\nrun_recovery_tail\n';
+  if(p.externalAuthorizationVersion){
+    const dir=p.sourceDir.slice(0,-7),replacement=`native_data() {\n  NODE_PATH="$APP_DIR/node_modules" "$NODE_HOME/bin/node" '${dir}/engine.cjs' '${dir}' "$TRUSTED_SOURCE_DIR" native "$1" "$BUNDLE_SHA256"\n}`;
+    const original=functions.match(/^native_data\(\) \{[\s\S]*?^\}/m);assert(original);result=replaceOnce(result,original[0],replacement);
+    result=replaceOnce(result,'CODE_EMERGENCY_AUTHORIZATION="$TRUSTED_SOURCE_DIR/deploy/light-server/code-release-activation-authorization.json"',`CODE_EMERGENCY_AUTHORIZATION='${dir}/code-release-activation-authorization.json'`);
+    result=result.split('"$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/nativeCodeReleaseDataPlane.cjs"').join(`"$NODE_HOME/bin/node" '${dir}/engine.cjs' '${dir}' "$TRUSTED_SOURCE_DIR" code`);
+  }
+  return result;
 }
 module.exports={VERSION,digest,verifySignedBytes,validateAuthorization,validateObservation,renderScript};
