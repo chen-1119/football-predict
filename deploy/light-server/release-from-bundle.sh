@@ -200,10 +200,12 @@ MANAGED_STATE_UNITS=(
   football-predict.service football-sync-worker.service nginx.service
   football-market-collector.service football-featured-combo.service
   football-recommendation-settlement.service
+  football-read-api-component-6073aafaaf5dae590bfb2b50.service
 )
 NATIVE_AUXILIARY_UNITS=(
   football-market-collector.service football-featured-combo.service
   football-recommendation-settlement.service
+  football-read-api-component-6073aafaaf5dae590bfb2b50.service
 )
 MODEL_ARTIFACT_TOKENS=(strategy evaluation candidate-registry candidate-challenger-suite candidate-temperature-suite candidate-common-cohort-g2-v1 candidate-common-cohort-g2-v2 candidate-capture-status benchmark-prospective-ledger)
 MODEL_ARTIFACT_PATHS=(
@@ -1210,6 +1212,7 @@ snapshot_runtime_env_for_rollback() {
 }
 
 snapshot_managed_config_for_rollback() {
+  assert_installed_read_api_lifecycle_identity || return 1
   local transaction_dir="$1"
   local snapshot_dir="${transaction_dir}/managed-config"
   local entries_dir="${snapshot_dir}/entries"
@@ -1618,6 +1621,7 @@ restore_managed_config_after_rollback() {
 }
 
 restore_managed_unit_states_after_rollback() {
+  assert_installed_read_api_lifecycle_identity || return 1
   [ "$RECOVERY_ACTIVE" = "1" ] || return 0
   local unit_state="${RECOVERY_DIR}/managed-config/units.tsv"
   local unit enabled active extra expected_index=0 line_count=0 actual_enabled actual_active
@@ -4600,7 +4604,12 @@ stop_service_for_release_window() {
   return 0
 }
 
+assert_installed_read_api_lifecycle_identity() {
+  "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseInstalledReadApiIdentity.cjs" || return 1
+}
+
 quiesce_native_auxiliary_writers() {
+  assert_installed_read_api_lifecycle_identity || return 1
   local unit state attempt pgrep_status observed_pids barrier_pid barrier_cgroup
   for unit in "${NATIVE_AUXILIARY_UNITS[@]}" football-daily-prematch.service; do
     systemctl stop "$unit" >/dev/null 2>&1 || return 1
@@ -4650,6 +4659,7 @@ assert_native_cutover_processes_drained() {
 }
 
 restore_native_auxiliary_states_after_readiness() {
+  assert_installed_read_api_lifecycle_identity || return 1
   local unit_state="${RECOVERY_DIR}/managed-config/units.tsv"
   local unit enabled active extra index=0 actual_enabled actual_active
   local -A enabled_by_unit=() active_by_unit=()
