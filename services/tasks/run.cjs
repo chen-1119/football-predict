@@ -6,6 +6,7 @@ const { rolePlan } = require('./roles.cjs');
 function runTask(role, { spawnImpl = spawn, env = process.env, executable = process.execPath } = {}) {
   const plan = rolePlan(role);
   if (env.FOOTBALL_SERVICE_LAYOUT !== 'separated-v1') throw new Error('Separated task requires an explicit service-layout cutover');
+  if (spawnImpl === spawn) throw Object.assign(new Error('WRITER_HANDOVER_UNIMPLEMENTED'), { code: 'WRITER_HANDOVER_UNIMPLEMENTED' });
   let child, timer, stopped = false;
   function launch() {
     if (stopped) return;
@@ -30,6 +31,12 @@ function runTask(role, { spawnImpl = spawn, env = process.env, executable = proc
 if (require.main === module) {
   const role = process.argv[2];
   if (process.argv.includes('--plan')) console.log(JSON.stringify(rolePlan(role), null, 2));
-  else { const task = runTask(role); process.once('SIGTERM', task.stop); process.once('SIGINT', task.stop); }
+  else {
+    // A layout flag cannot transfer production writer ownership. The root
+    // handover controller and per-transaction fencing are not installed yet.
+    rolePlan(role);
+    console.error('WRITER_HANDOVER_UNIMPLEMENTED');
+    process.exitCode = 75;
+  }
 }
 module.exports = { runTask };

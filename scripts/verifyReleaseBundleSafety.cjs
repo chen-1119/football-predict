@@ -171,6 +171,8 @@ const requiredReleaseEntries = [
   "services/read-api/repository.cjs",
   "services/read-api/authorization.cjs",
   "services/tasks/run.cjs",
+  "services/release/writerHandoverTransaction.cjs",
+  "tests/writer-handover-transaction.test.cjs",
   "services/tasks/roles.cjs",
   "services/tasks/team.cjs",
   "services/tasks/settlement.cjs",
