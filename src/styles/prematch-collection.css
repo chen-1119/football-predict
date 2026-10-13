@@ -128,3 +128,10 @@
   .match-detail-v4 .match-detail-v4__cockpit .recommendation-overview-main { font-size: 28px; }
   .match-detail-v4__pick-facts { gap: 20px; }
 }
+/* Empty sections are concise disclosures; actual player records stay expanded. */
+.prematch-report--compact { padding: 14px 18px; }
+.prematch-report--compact > summary,
+.prematch-report__missing > summary { cursor: pointer; font-size: 0.85rem; font-weight: 600; color: hsl(var(--text-secondary)); }
+.prematch-report--compact > p,
+.prematch-report__missing > p { font-size: 0.82rem; line-height: 1.7; color: hsl(var(--text-muted)); margin: 10px 0; }
+.prematch-report--compact .prematch-report__refresh { margin: 8px 8px 0 0; }
