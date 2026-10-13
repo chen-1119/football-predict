@@ -27,7 +27,7 @@ async function boundedRow(client, key) {
   if (rows.length !== 1) fail('ARCHIVE_IDENTITY_CONFLICT');
   return verifyRow(rows[0], key, MAX);
 }
-function createResearchArchiveRead({ pool, replay } = {}) {
+function createResearchArchiveRead({ pool, replay, readOfficial, trustRegistry } = {}) {
   if (!pool?.connect || typeof replay !== 'function') throw new Error('Archive reader dependencies required');
   async function snapshot(action) {
     const client = await pool.connect(); let broken;
@@ -48,6 +48,29 @@ function createResearchArchiveRead({ pool, replay } = {}) {
     } finally { client.release(broken); }
   }
   return {
+    official(value) {
+      const date = day(value);
+      return snapshot(async (_client, observedAt) => {
+        const live = require('../scripts/recommendationPlatform/liveOfficialHandicap.cjs');
+        const input = (readOfficial || live.readLiveOfficialSnapshot)();
+        if (!input || Buffer.byteLength(JSON.stringify(input)) > 4 * 1024 * 1024) fail('OFFICIAL_SOURCE_UNAVAILABLE');
+        const registry = trustRegistry || require('../src/services/collectorAttestation.cjs').loadCollectorTrustRegistry(
+          process.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH || require('node:path').resolve(__dirname, '../deploy/light-server/collector-trust-registry.json'));
+        const audit = {};
+        live.joinOfficialHandicap([], input, { now: Date.parse(observedAt), trustRegistry: registry, audit });
+        if (audit.status !== 'source-verified') fail('OFFICIAL_SOURCE_UNAVAILABLE');
+        // Keep both complete signed payloads. Do not filter their rows or claim
+        // every event is selling merely because the source signature verifies.
+        const endpoints = input.endpoints.filter(e => ['current', 'calculator'].includes(e.method));
+        const json = JSON.stringify({ endpoints });
+        return { requestedBusinessDate: date, state: 'signed-source-verified', collectorSignatureVerified: true,
+          eventEligibilityVerified: false, sourceCycleId: endpoints[0].sourceCycleId,
+          encoding: 'reserialized-json-preserving-complete-signed-payloads',
+          source: { json, bytes: Buffer.byteLength(json), sha256: require('node:crypto').createHash('sha256').update(json).digest('hex') },
+          acquisition: audit.endpoints, maximumAgeMs: 15 * 60 * 1000,
+          requiresCurrentEventCutoffAndPublicationRevalidation: true };
+      });
+    },
     day(value) {
       const date = day(value);
       return snapshot(async client => {
@@ -102,7 +125,7 @@ function createResearchArchiveHandler({ reader, authenticate }) {
       if (!auth) return send(401, { ok: false, error: 'AUTHENTICATION_REQUIRED' });
       if (!['operator', 'admin'].includes(auth.user?.role)) return send(403, { ok: false, error: 'OPERATOR_REQUIRED' });
       if (req.method !== 'GET') return send(405, { ok: false, error: 'READ_ONLY_ENDPOINT' });
-      const param = url.pathname === '/api/operator/research/day' ? 'date'
+      const param = ['/api/operator/research/day', '/api/operator/research/official'].includes(url.pathname) ? 'date'
         : url.pathname === '/api/operator/research/artifact' ? 'key' : null;
       if (!param) return send(404, { ok: false, error: 'NOT_FOUND' });
       if ([...url.searchParams.keys()].length !== 1 || url.searchParams.getAll(param).length !== 1)
@@ -110,7 +133,8 @@ function createResearchArchiveHandler({ reader, authenticate }) {
       if (!reader || active >= 2) return send(503, { ok: false, error: 'ARCHIVE_READ_UNAVAILABLE' });
       active++;
       try {
-        const value = await reader[param === 'date' ? 'day' : 'artifact'](url.searchParams.get(param));
+        const method = url.pathname.endsWith('/official') ? 'official' : param === 'date' ? 'day' : 'artifact';
+        const value = await reader[method](url.searchParams.get(param));
         if (Buffer.byteLength(JSON.stringify(value)) > 24 * 1024 * 1024) fail('ARCHIVE_RESPONSE_BOUND');
         return send(200, { ok: true, ...value });
       } finally { active--; }
