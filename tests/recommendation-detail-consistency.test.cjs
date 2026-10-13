@@ -18,10 +18,7 @@ const Facts=compile('../src/components/predictions/RecommendationEvidenceFacts.t
  if(id==='./sourceNeutralText')return{formatSourceNeutralText:unavailable};
  if(id.endsWith('.css'))return{};throw Error(id);
 }).RecommendationEvidenceFacts;
-const qualityNote=compile('../src/components/recommendations/SelectionQualityNote.tsx',id=>{
- if(id==='react/jsx-runtime')return jsx;
- if(id.endsWith('/publishedDetailPresentation'))return presentation;throw Error(id);
-});
+const qualityNote=require('./fixtures/selection-quality-note-module.cjs');
 const Pick=compile('../src/components/recommendations/PublishedMatchPick.tsx',id=>{
  if(id==='react/jsx-runtime')return jsx;
  if(id.endsWith('/recommendationCenterView'))return view;
