@@ -268,10 +268,15 @@ async function verify(pool){
     const newPublish=await switched.publish(),newCombos=await switched.combos(),switchedView=await switched.view();
     check(()=>assert.equal(newPublish.ok,true));check(()=>assert.equal(newCombos.ok,true));check(()=>assert.equal(switchedView.ok,true));
     check(()=>assert.deepEqual(newPublish.value.decisionIds,[]));
-    // Missing registry schema is a real blocked model cycle, recorded in the
-    // installed publish lane, never an unsupported league-baseline lane.
+    // Temporarily hide this disposable schema's artifact table to exercise a
+    // real missing-registry failure. Coverage history above needs the table.
+    // The error must still be recorded in the installed publish lane.
     switchedPorts.prdPaperPool=mappedPool;
-    const blockedModel=await switched.leagueBaseline();check(()=>assert.equal(blockedModel.ok,false));
+    await q('ALTER TABLE football.private_model_artifacts RENAME TO unavailable_private_model_artifacts');
+    let blockedModel;
+    try{blockedModel=await switched.leagueBaseline();}
+    finally{await q('ALTER TABLE football.unavailable_private_model_artifacts RENAME TO private_model_artifacts');}
+    check(()=>assert.equal(blockedModel.ok,false));
     const modelLane=(await q("SELECT payload FROM football.recommendation_lanes WHERE lane='publish'")).rows[0].payload;
     check(()=>assert.equal(modelLane.status,'error'));check(()=>assert.equal(modelLane.legacyRetired,true));
     check(()=>assert.equal(modelLane.errorCode,'LEAGUE_MODEL_CYCLE_FAILED'));
