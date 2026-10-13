@@ -150,7 +150,15 @@ function createWebsiteReader({ exportPath, apiFootballReferencePath, readFixture
   if (apiFootballReferencePath && !path.isAbsolute(apiFootballReferencePath)) throw new TypeError('apiFootballReferencePath must be an absolute configured path');
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || maxBytes > 50 * 1024 * 1024) throw new TypeError('Invalid export size limit');
   return async siteMatchId => {
-    if (typeof siteMatchId !== 'string' || !/^sporttery_[1-9]\d*$/.test(siteMatchId) || /\s/.test(siteMatchId)) return { status: 'invalid-id', predictionEligible: false };
+    if (typeof siteMatchId !== 'string' || !/^(?:sporttery|fivehundred)_[1-9]\d*$/.test(siteMatchId) || /\s/.test(siteMatchId)) return { status: 'invalid-id', predictionEligible: false };
+    // A website ID is not permission to alias an official collector ID by its
+    // numeric suffix. Report the actual scope gap without reading another event
+    // or offering a refresh that the existing official-only queue cannot accept.
+    if (siteMatchId.startsWith('fivehundred_')) {
+      const fixture = await readFixture(siteMatchId);
+      if (!fixture || fixture.id !== siteMatchId) return { matchId: siteMatchId, status: 'missing', predictionEligible: false };
+      return { matchId: siteMatchId, status: 'unsupported-identity', refreshEligible: false, predictionEligible: false };
+    }
     if (!exportPath && !apiFootballReferencePath) return { matchId: siteMatchId, status: 'disabled', predictionEligible: false };
     const fixture = await readFixture(siteMatchId);
     if (!fixture || fixture.id !== siteMatchId) return { matchId: siteMatchId, status: 'missing', predictionEligible: false };

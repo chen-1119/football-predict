@@ -510,6 +510,8 @@ const requiredEntries = [
   "src/components/recommendations/ReviewedAnalysis.tsx",
   "tests/reviewed-analysis.test.cjs",
   "server/matchDetailPublication.cjs",
+  "collectors/leisu-prematch/website-reader.cjs",
+  "collectors/leisu-prematch/website-reader.test.cjs",
   "server/postgresProjectionStore.cjs",
   "src/services/matchDetailPublication.ts",
   "src/pages/MatchDetail.tsx",

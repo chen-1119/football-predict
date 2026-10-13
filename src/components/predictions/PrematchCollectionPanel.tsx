@@ -7,12 +7,13 @@ type Player = { name: string; side?: 'home' | 'away'; reason?: string; position?
 type Section = { status: string; observedAt: string | null; lastAttemptAt: string | null; previousValue: boolean;
   missingReason?: string | null;
   data: { players?: Player[]; teams?: Array<{ side: 'home' | 'away'; formation: string; coach?: string; starters: Player[]; substitutes: Player[] }> } | null };
-type Evidence = { matchId: string; status: string; predictionEligible: false; sections?: { injuries: Section; lineup: Section } };
+type Evidence = { matchId: string; status: string; predictionEligible: false; refreshEligible?: boolean; sections?: { injuries: Section; lineup: Section } };
 type RefreshRequest = { matchId: string; state: 'queued' | 'cooldown' | 'error'; nextAllowedAt?: string; error?: string };
 const labels: Record<string, [string, string]> = {
   ok: ['资料校验通过', 'Evidence verified'],
   available: ['已有资料', 'Available'], source_empty: ['暂无可展示资料', 'No data available'], missing: ['资料待补充', 'Awaiting data'],
   unavailable: ['资料暂不可用', 'Unavailable'], stale: ['资料已过期', 'Expired'], disabled: ['采集尚未启用', 'Collection disabled'],
+  'unsupported-identity': ['本场编号尚未接入补充资料采集，伤停与首发未核实', 'Supplementary collection is not connected for this match ID; injuries and lineup are unverified'],
   ineligible: ['不在赛前采集范围', 'Outside collection window'], partial: ['部分资料待补充', 'Partial coverage'],
   blocked: ['资料暂未更新', 'Awaiting an update'], login_required: ['资料暂未更新', 'Awaiting an update'],
   conflict: ['资料待核对', 'Data unverified'], parse_error: ['资料暂未更新', 'Awaiting an update'],
@@ -73,7 +74,7 @@ export function PrematchCollectionPanel({ matchId, language, homeName, awayName,
   const collectingStopped = kickoffTime && currentTime >= Date.parse(kickoffTime);
   const activeRequest = request?.matchId === matchId ? request : null;
   const requestCooling = Boolean(activeRequest?.nextAllowedAt && Date.parse(activeRequest.nextAllowedAt) > currentTime);
-  const canRequest = Boolean(kickoffTime && Date.parse(kickoffTime) > currentTime && evidence?.status !== 'ineligible');
+  const canRequest = Boolean(kickoffTime && Date.parse(kickoffTime) > currentTime && evidence?.status !== 'ineligible' && evidence?.status !== 'unsupported-identity' && evidence?.refreshEligible !== false);
   const requestRefresh = async () => {
     if (requesting || requestCooling || !canRequest) return;
     setRequesting(true);
@@ -104,7 +105,7 @@ export function PrematchCollectionPanel({ matchId, language, homeName, awayName,
       <div><span className="prematch-report__eyebrow">{zh ? '最新补充资料' : 'LATEST MATCH DATA'}</span><h3 id={`prematch-heading-${matchId}`}>{zh ? '伤停与比赛阵容' : 'Injuries & lineups'}</h3>
         <p>{zh ? '查看本场实际采集的球员明细。新增资料仅供参考，推荐是否采用以决策记录为准。' : 'Collected player details for this match. Reference data; adoption is determined by the recorded decision.'}</p></div>
       <div className="prematch-report__actions"><button type="button" className="prematch-report__refresh" disabled={fetching} onClick={() => setRefreshTick(value => value + 1)}>{fetching ? (zh ? '读取中…' : 'Loading…') : (zh ? '刷新资料' : 'Refresh data')}</button>
-        <button type="button" className="prematch-report__refresh" disabled={requesting || requestCooling || !canRequest} onClick={requestRefresh}>{requesting ? (zh ? '提交中…' : 'Queuing…') : requestCooling ? (zh ? '更新请求已提交' : 'Update requested') : (zh ? '更新本场资料' : 'Update match data')}</button></div>
+        {evidence?.status !== 'unsupported-identity' && <button type="button" className="prematch-report__refresh" disabled={requesting || requestCooling || !canRequest} onClick={requestRefresh}>{requesting ? (zh ? '提交中…' : 'Queuing…') : requestCooling ? (zh ? '更新请求已提交' : 'Update requested') : (zh ? '更新本场资料' : 'Update match data')}</button>}</div>
     </header>
     {activeRequest && <p className="prematch-report__notice" role="status">{activeRequest.state === 'error'
       ? activeRequest.error === 'request-denied' ? (zh ? '补采请求未通过验证，请重新打开本站后重试。' : 'Request verification failed. Reopen this site and retry.') : label(activeRequest.error || 'unavailable')

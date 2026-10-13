@@ -11833,7 +11833,7 @@ const handleApi = async (req, res, url) => {
       origin: process.env.ACCOUNT_PUBLIC_ORIGIN || 'https://134.175.132.183',
     })(req, res, prematchRefreshRoute[1]);
   }
-  const prematchEvidenceRoute = url.pathname.match(/^\/api\/v1\/matches\/(sporttery_[1-9]\d*)\/prematch-evidence$/);
+  const prematchEvidenceRoute = url.pathname.match(/^\/api\/v1\/matches\/((?:sporttery|fivehundred)_[1-9]\d*)\/prematch-evidence$/);
   if (prematchEvidenceRoute) {
     const { createWebsiteHandler } = require("../collectors/leisu-prematch/website-reader.cjs");
     const handler = createWebsiteHandler({

@@ -8,7 +8,7 @@ const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
 check('detail keeps original acknowledged event publications and truthful missing-data states',()=>{
- const files=['tests/match-detail-publication.test.cjs','tests/prematch-collection-panel.test.cjs','tests/match-detail-identity.test.cjs'];
+ const files=['tests/match-detail-publication.test.cjs','tests/prematch-collection-panel.test.cjs','tests/match-detail-identity.test.cjs','collectors/leisu-prematch/website-reader.test.cjs'];
  const child=require('node:child_process').spawnSync(process.execPath,['--test','--test-reporter=tap',...files],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:2*1024*1024});
  assert.equal(child.status,0,child.stderr||child.stdout);
  const count=name=>Number(child.stdout.match(new RegExp('^# '+name+' (\\d+)$','m'))?.[1]);

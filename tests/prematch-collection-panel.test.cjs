@@ -75,6 +75,16 @@ test('previousValue keeps the actual injury and lineup records with original rec
   assert.match(words(tree), /09\/21 10:20/); assert.match(words(tree), /09\/21 10:30/); assert.doesNotMatch(words(tree), /13:59/); assertDataOnly(tree);
 });
 
+test('unsupported current match identity shows the collection gap and offers no impossible queue request', async () => {
+  const u = await harness({ data: { matchId: 'fivehundred_123', status: 'unsupported-identity', refreshEligible: false, predictionEligible: false } });
+  const tree = u.render();
+  assert.match(words(tree), /本场编号尚未接入补充资料采集，伤停与首发未核实/);
+  assert.equal(nodes(tree, n => n.type === 'button' && words(n).includes('更新本场资料')).length, 0);
+  assert.equal(nodes(tree, n => n.props?.['data-testid'] === 'prematch-injury-row').length, 0);
+  assert.equal(u.fetches.length, 1);
+  assert.match(u.fetches[0].url, /fivehundred_123\/prematch-evidence$/);
+});
+
 test('empty and failed data states never invent players, successful receipt times or collector diagnostics', async () => {
   for (const status of ['ok', 'missing', 'source_empty', 'unavailable', 'partial', 'stale', 'blocked', 'login_required', 'unmapped', 'conflict', 'parse_error']) {
     const data = evidence(); data.status = status;
