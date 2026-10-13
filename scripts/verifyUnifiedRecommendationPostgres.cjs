@@ -6,6 +6,43 @@ const {Repository,postgresPorts}=require('./recommendationPlatform/repository.cj
 const {readDualResearchReport}=require('./recommendationPlatform/dualResearchReport.cjs');
 const {createDualResearchV2Record}=require('./recommendationPlatform/dualChoiceResearchV2.cjs');
 const {withVerifiedInputEvidence}=require('../tests/fixtures/recommendation-input-helper.cjs');
+// Synthetic signatures exercise the real source admission contract. They are
+// scoped to this verifier's private temporary directory, never live evidence.
+function signedFixtureContext(){
+  const context=require('./collectorAttestationTestFixture.cjs').createCollectorAttestationTestContext({keyId:'disposable-postgres-fixture',independenceDomain:'synthetic-postgres'});
+  const file=path.join(path.dirname(context.registryPath),'official-current.json');
+  const previous=process.env.SPORTTERY_RELAY_FAST_LANE_SNAPSHOT;
+  process.env.SPORTTERY_RELAY_FAST_LANE_SNAPSHOT=file;
+  fs.writeFileSync(file,'null\n');
+  const normalize=match=>({...match,
+    homeTeamId:require('./storedResultTeamIdentity.cjs').derivedTeamId(match.homeTeamName),
+    awayTeamId:require('./storedResultTeamIdentity.cjs').derivedTeamId(match.awayTeamName),
+    eventVersion:new Date(match.eventVersion||match.kickoffTime).toISOString(),
+    matchNo:match.matchNo||`周${'日一二三四五六'[new Date(match.businessDate+'T12:00:00Z').getUTCDay()]}${String(match.sourceMatchId).padStart(3,'0')}`});
+  const writeSnapshot=(rows,receivedAt)=>{
+    const inputs=rows.map(row=>row.prospectiveForecastInput||row),groups=new Map();
+    for(const m of inputs){
+      const kickoff=new Date(Date.parse(m.kickoffTime)+8*3600000).toISOString();
+      const row={matchId:Number(m.sourceMatchId),businessDate:m.businessDate,matchDate:kickoff.slice(0,10),matchTime:kickoff.slice(11,19),matchNumStr:m.matchNo,
+        homeTeamAllName:m.homeTeamName,awayTeamAllName:m.awayTeamName,matchStatus:'Selling',sellStatus:1,
+        oddsList:[...(m.odds?[{poolCode:'HAD',h:m.odds.odds1,d:m.odds.oddsX,a:m.odds.odds2,goalLine:''}]:[]),
+          ...(m.handicapOdds?[{poolCode:'HHAD',h:m.handicapOdds.odds1,d:m.handicapOdds.oddsX,a:m.handicapOdds.odds2,goalLine:m.handicapLine}]:[])],
+        poolList:['HAD','HHAD'].map(poolCode=>({poolCode,poolStatus:'Selling',cbtValue:1,cbtAllUp:1,cbtSingle:0,intValue:2,intAllUp:0,intSingle:0,bettingAllup:1}))};
+      const group=groups.get(m.businessDate)||[];group.push(row);groups.set(m.businessDate,group);
+    }
+    const payload={success:true,value:{matchInfoList:[...groups].map(([businessDate,subMatchList])=>({businessDate,subMatchList}))}};
+    const endpoints=['current','calculator'].map(method=>require('../tests/fixtures/signed-live-had.cjs').snapshot([],{receivedAt,requestedAt:receivedAt-500,pair:context.keyPair,
+      mutate(entry){entry.method=method;entry.payload=payload;entry.sourceCycleId='synthetic-postgres-'+receivedAt;
+        entry.url=require('./sportteryEndpointContract.cjs')[method==='current'?'SPORTTERY_CURRENT_URL':'SPORTTERY_CALCULATOR_URL'];
+        entry.sourceRequest={method:'GET',url:entry.url,page:null,role:method};}}).snapshot.endpoints[0]);
+    fs.writeFileSync(file,JSON.stringify({endpoints}));
+    return {endpoints};
+  };
+  return {normalize,writeSnapshot,registry:context.registry,cleanup(){
+    if(previous===undefined)delete process.env.SPORTTERY_RELAY_FAST_LANE_SNAPSHOT;else process.env.SPORTTERY_RELAY_FAST_LANE_SNAPSHOT=previous;
+    context.cleanup();
+  }};
+}
 async function verify(pool){
   const schema=`recommendation_verify_${process.pid}_${Date.now()}`;
   const q=(sql,args)=>pool.query(sql.replaceAll('football.',`${schema}.`),args);
@@ -13,13 +50,23 @@ async function verify(pool){
   const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10);
   const dow=new Date(`${tomorrow}T12:00:00Z`).getUTCDay();
   let now=Date.parse(`${tomorrow}T${[0,6].includes(dow)?'14':'13'}:00:00Z`);
-  const rawFixture=id=>({id:`sporttery_${id}`,sourceMatchId:String(id),businessDate:tomorrow,status:'SCHEDULED',homeTeamId:`h${id}`,awayTeamId:`a${id}`,homeTeamName:`Home ${id}`,awayTeamName:`Away ${id}`,kickoffTime:`${tomorrow}T16:00:00Z`,eventVersion:`${tomorrow}T16:00:00Z`,probabilityModel:{generatedAt:new Date(now).toISOString(),oneXTwo:{final:{home:55,draw:25,away:20}}},odds:{odds1:1.8,oddsX:3.5,odds2:4.5},oddsSource:'sporttery:had',oddsUpdatedAt:new Date(now).toISOString(),predictions:[]});
+  const signed=signedFixtureContext();
+  const rawFixture=id=>signed.normalize({id:`sporttery_${id}`,sourceMatchId:String(id),businessDate:tomorrow,status:'SCHEDULED',homeTeamName:`Home ${id}`,awayTeamName:`Away ${id}`,kickoffTime:`${tomorrow}T16:00:00Z`,eventVersion:`${tomorrow}T16:00:00Z`,probabilityModel:{generatedAt:new Date(now).toISOString(),oneXTwo:{final:{home:55,draw:25,away:20}}},odds:{odds1:1.8,oddsX:3.5,odds2:4.5},oddsSource:'sporttery:had',oddsUpdatedAt:new Date(now).toISOString(),predictions:[]});
   const fixture=id=>withVerifiedInputEvidence(rawFixture(id));
   let checks=0;const check=(fn)=>{fn();checks++;};
-  const write=async(m,dataset='current')=>q(`INSERT INTO football.match_snapshots(id,dataset,source_match_id,kickoff_time,payload)
+  const write=async(m,dataset='current')=>{
+    await q(`INSERT INTO football.match_snapshots(id,dataset,source_match_id,kickoff_time,payload)
     VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT(id,dataset) DO UPDATE
     SET source_match_id=EXCLUDED.source_match_id,kickoff_time=EXCLUDED.kickoff_time,payload=EXCLUDED.payload`,
     [m.id,dataset,m.sourceMatchId,m.kickoffTime,JSON.stringify(m)]);
+    if(dataset==='current'){
+      const rows=(await q("SELECT payload FROM football.match_snapshots WHERE dataset='current' ORDER BY id")).rows.map(r=>r.payload);
+      const newest=Math.max(...rows.map(r=>Date.parse(r.oddsUpdatedAt)));
+      // Adding one later fixture must not manufacture a refreshed observation
+      // for the previously frozen events exercised by the immutability test.
+      signed.writeSnapshot(rows.filter(r=>Date.parse(r.oddsUpdatedAt)===newest),newest);
+    }
+  };
   try{
     await pool.query(`CREATE SCHEMA ${schema}`);
     await q(`CREATE TABLE football.projection_meta(key text PRIMARY KEY,value text,updated_at timestamptz DEFAULT clock_timestamp());
@@ -28,7 +75,9 @@ async function verify(pool){
     for(const migration of ['007_market_collector_runtime.sql','011_unified_recommendation_runtime.sql','013_dual_choice_research.sql','014_dual_choice_market_neutral.sql'])
       await q(fs.readFileSync(path.join(__dirname,'../server/postgres/migrations/',migration),'utf8'));
     for(const [key,value] of Object.entries({data_publication_mode:'generation',data_generation_id:'test-generation',manifest_hash:'a'.repeat(64),data_generation_source_cycle_id:'test-source',committed_at:new Date(now).toISOString()}))await q('INSERT INTO football.projection_meta(key,value) VALUES($1,$2)',[key,value]);
-    await Promise.all([1,2,3].map(id=>write(fixture(id))));
+    // Snapshot publication follows each committed insert. Seed sequentially so
+    // an earlier SELECT cannot overwrite the final three-event test snapshot.
+    for(const id of [1,2,3])await write(fixture(id));
     // Explicit historical compatibility exercise; the production default is trained-only.
     const runtime=createRuntime({...postgresPorts(mappedPool,()=>now),trainedOnly:false,prdPaperPool:null},{dualResearchEnabled:true,validators:{isFinal:r=>r.testOfficial===true&&r.status==='FINISHED',isVoid:r=>r.testOfficial===true&&r.resultDisposition==='VOID'}});
     const first=await runtime.publishingCycle();check(()=>assert.equal(first.publication.ok,true));check(()=>assert.equal(first.dualResearch.ok,true));check(()=>assert.equal(first.combinations.ok,true));check(()=>assert.equal(first.projection.ok,true));
@@ -62,7 +111,7 @@ async function verify(pool){
     // independently committed PostgreSQL transactions rather than mock rows.
     const nextDate=new Date(Date.parse(`${tomorrow}T00:00:00Z`)+86400000).toISOString().slice(0,10);
     now=Date.parse(`${nextDate}T10:00:00Z`);
-    const nextFixture=id=>withVerifiedInputEvidence({...rawFixture(id),businessDate:nextDate,kickoffTime:`${nextDate}T16:00:00Z`,eventVersion:`${nextDate}T16:00:00Z`});
+    const nextFixture=id=>withVerifiedInputEvidence(signed.normalize({...rawFixture(id),businessDate:nextDate,matchNo:undefined,kickoffTime:`${nextDate}T16:00:00Z`,eventVersion:`${nextDate}T16:00:00Z`}));
     const sourceVersion=async label=>{
       await q("UPDATE football.projection_meta SET value=$1 WHERE key='committed_at'",[new Date(now).toISOString()]);
       await q("UPDATE football.projection_meta SET value=$1 WHERE key='data_generation_id'",[label]);
@@ -111,9 +160,9 @@ async function verify(pool){
     const mixedDate=new Date(Date.parse(`${nextDate}T00:00:00Z`)+86400000).toISOString().slice(0,10);
     const mixedDow=new Date(`${mixedDate}T12:00:00Z`).getUTCDay();
     now=Date.parse(`${mixedDate}T${[0,6].includes(mixedDow)?'14':'13'}:00:00Z`);
-    const mixedFixture=id=>withVerifiedInputEvidence({ ...rawFixture(id),businessDate:mixedDate,kickoffTime:`${mixedDate}T16:00:00Z`,eventVersion:`${mixedDate}T16:00:00Z`,
+    const mixedFixture=id=>withVerifiedInputEvidence(signed.normalize({ ...rawFixture(id),businessDate:mixedDate,matchNo:undefined,kickoffTime:`${mixedDate}T16:00:00Z`,eventVersion:`${mixedDate}T16:00:00Z`,
       probabilityModel:{version:'mixed-integration',generatedAt:new Date(now).toISOString(),oneXTwo:{final:id===303?{home:80,draw:12,away:8}:{home:45,draw:30,away:25}},calculationTrace:{poisson:{lambdas:{home:1.4,away:1.1}}}},
-      ...(id===303?{}:{handicapLine:1,handicapOdds:{odds1:1.8,oddsX:3.8,odds2:4.5},handicapOddsSource:'sporttery:HHAD',handicapOddsUpdatedAt:new Date(now).toISOString()}) });
+      ...(id===303?{}:{handicapLine:1,handicapOdds:{odds1:1.8,oddsX:3.8,odds2:4.5},handicapOddsSource:'sporttery:HHAD',handicapOddsUpdatedAt:new Date(now).toISOString()}) }));
     await q("DELETE FROM football.match_snapshots WHERE dataset='current'");
     for(const id of [301,302,303])await write(mixedFixture(id));
     await sourceVersion('mixed-markets');
@@ -212,7 +261,7 @@ async function verify(pool){
     check(()=>assert.equal(cutoverView.strategySwitch.legacyFallbackEnabled,false));
     check(()=>assert.deepEqual(cutoverView.current,[]));check(()=>assert.deepEqual(cutoverView.previews,[]));
     return {ok:true,checks,schema,scope:'disposable-test-schema',productionRowsWritten:0};
-  }finally{await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);}
+  }finally{try{await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);}finally{signed.cleanup();}}
 }
 if(require.main===module){const url=process.env.UNIFIED_TEST_DATABASE_URL;if(!url)throw new Error('Explicit UNIFIED_TEST_DATABASE_URL is required; production defaults are never used');const parsed=new URL(url);if(!['localhost','127.0.0.1','[::1]'].includes(parsed.hostname)||parsed.pathname!=='/recommendation_test')throw new Error('Use local disposable database recommendation_test only');const {Pool}=require('pg');const pool=new Pool({connectionString:url,ssl:false,max:6});verify(pool).then(x=>console.log(JSON.stringify(x))).catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>pool.end());}
-module.exports={verify};
+module.exports={verify,signedFixtureContext};
