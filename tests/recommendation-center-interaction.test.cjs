@@ -52,6 +52,17 @@ function words(node){if(node==null||typeof node==='boolean')return '';if(Array.i
 const byClass=(tree,name)=>nodes(tree,n=>(n.props?.className||'').split(' ').includes(name));
 const button=(tree,label)=>nodes(tree,n=>n.type==='button'&&words(n)===label)[0];
 
+test('recommendation and review share the coverage entry and collapse legacy metrics without changing counts',async()=>{
+ for(const mode of ['recommendations','review']){
+  const ui=await harness({mode}),before=JSON.stringify(ui.data.review.statistics),tree=ui.render();
+  assert.equal(nodes(tree,n=>n.props?.['aria-label']==='已发布推荐统计').length,1);
+  const archive=nodes(tree,n=>n.props?.['data-legacy-statistics']==='archive');assert.equal(archive.length,1);
+  assert.equal(archive[0].type,'details');assert.notEqual(archive[0].props.open,true);
+  assert.match(words(archive[0]),/近期人工审核和训练模型参考/);
+  assert.equal(JSON.stringify(ui.data.review.statistics),before);
+ }
+});
+
 function franceResultRow(){
   const source=match(2041806,NOW,{homeTeamName:'法国',awayTeamName:'比利时',odds:{odds1:1.32,oddsX:4.6,odds2:6.3},
     handicapLine:-1,handicapOdds:{odds1:2.4,oddsX:3.3,odds2:2.74},handicapOddsSource:'sporttery:HHAD',handicapOddsUpdatedAt:new Date(NOW).toISOString(),

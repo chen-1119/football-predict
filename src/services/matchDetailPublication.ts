@@ -4,7 +4,8 @@ import type { ReviewedAnalysisRecord, LeagueBaselineDirection } from './recommen
 import { exactDetailClock } from './matchDetailIdentity.js';
 
 type Receipt = {track:'manual'|'trained';artifactKey:string;payloadSha256:string;recordHash:string;createdAt:string;storedAt:string;ackAt:string;ackPayloadSha256:string};
-export type DetailPublication = {reviewed:ReviewedAnalysisRecord|null;trained:LeagueBaselineDirection|null;receipts:Receipt[];observedAt:string;businessDate:string};
+type PostMatch = {track:'manual'|'trained';state:'WON'|'LOST'|'PENDING'|'UNKNOWN'|'VOID'|'DISPUTED';score:string|null;resultEventId:string|null;revision:number|null;resultObservedAt:string|null;source:string|null};
+export type DetailPublication = {reviewed:ReviewedAnalysisRecord|null;trained:LeagueBaselineDirection|null;receipts:Receipt[];observedAt:string;businessDate:string;postMatch?:PostMatch[]};
 type Obj=Record<string,unknown>;
 const obj=(v:unknown):Obj=>{if(!v||typeof v!=='object'||Array.isArray(v))throw Error('Detail publication object');return v as Obj;};
 const clock=(v:unknown)=>{const n=exactDetailClock(v);if(n===null)throw Error('Detail publication clock');return n;};
@@ -39,7 +40,22 @@ export function detailPublishedRecommendation(value:unknown,match:Match,now=Date
    if(clock(raw.createdAt)!==clock(p.createdAt)||clock(raw.commitObservedAt)!==clock(p.ackAt)
     ||(track==='manual'?raw.publicationHash:raw.recordHash)!==p.recordHash)throw Error('Detail publication original binding');
   }
-  return {reviewed:manual,trained:model,receipts,observedAt:v.observedAt,businessDate};
+  const postMatch:PostMatch[]=[],seen=new Set<string>();
+  if(v.postMatch!==undefined){
+   if(!Array.isArray(v.postMatch)||v.postMatch.length>receipts.length)throw Error('Detail result count');
+   for(const value of v.postMatch){
+    const e=obj(value),track=String(e.track);
+    if(!tracks.has(track)||seen.has(track)||!['WON','LOST','PENDING','UNKNOWN','VOID','DISPUTED'].includes(String(e.state)))throw Error('Detail result track');
+    seen.add(track);
+    if(e.state==='WON'||e.state==='LOST'){
+     if(typeof e.score!=='string'||!/^\d+-\d+$/.test(e.score)||typeof e.resultEventId!=='string'||!/^result_[a-f0-9]{64}$/.test(e.resultEventId)
+      ||!Number.isSafeInteger(e.revision)||Number(e.revision)<0||typeof e.source!=='string'||!e.source||e.source.length>300
+      ||clock(e.resultObservedAt)<clock(match.kickoffTime)||clock(e.resultObservedAt)>clock(v.observedAt))throw Error('Detail result evidence');
+    }else if(['score','resultEventId','revision','resultObservedAt','source'].some(k=>e[k]!==null))throw Error('Detail unsettled result');
+    postMatch.push(e as unknown as PostMatch);
+   }
+  }
+  return {reviewed:manual,trained:model,receipts,observedAt:v.observedAt,businessDate,postMatch};
  }catch{return null;}
 }
 

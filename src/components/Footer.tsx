@@ -76,6 +76,10 @@ export const Footer: React.FC = () => {
         </div>
 
         <div className="app-footer-actions">
+          <nav className="app-footer-policies" aria-label={language === 'zh' ? '公开数据说明' : 'Public data documentation'}>
+            <a href="/about-data.html">{language === 'zh' ? '数据来源' : 'Data sources'}</a>
+            <a href="/methodology.html">{language === 'zh' ? '统计与复盘方法' : 'Review methodology'}</a>
+          </nav>
           <div className="footer-policy-list app-footer-policies" aria-label={t('policyNavigation') as string} ref={policyRootRef}>
             {policyItems.map((item) => (
               <details className="footer-policy-details app-footer-policy" key={item.key} onToggle={(event) => {

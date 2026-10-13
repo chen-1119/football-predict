@@ -2573,7 +2573,16 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         ? '暂无可验证进球质量数据，比分和进球判断只按近期攻防处理。'
         : 'No verified goal-quality data yet; score and goals rely on recent attacking and defensive form.'));
   const publicPreMatchFactCards = [
+    ...(reviewedRecord ? [{
+      available: true,
+      title: language === 'zh' ? '原发布官方报价' : 'Official price at publication',
+      value: `${reviewedRecord.market}${reviewedRecord.market === 'HHAD' ? ` (${Number(reviewedRecord.handicap) > 0 ? '+' : ''}${reviewedRecord.handicap})` : ''} · SP ${reviewedRecord.sp}`,
+      tone: 'neutral',
+      body: language === 'zh' ? `冻结报价观察于 ${new Date(reviewedRecord.quoteObservedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}；对应上方原发布方向，不作为当前报价或赔率走势。` : `Frozen quote observed ${reviewedRecord.quoteObservedAt}; bound to the original pick above, not a current quote or a price trend.`,
+      tags: [language === 'zh' ? '原发布记录' : 'Original publication']
+    }] : []),
     {
+      available: Boolean(match.oddsTrend),
       title: language === 'zh' ? '盘口变化' : 'Market movement',
       value: match.oddsTrend ? `${match.oddsTrend.sampleSize}次快照` : (language === 'zh' ? '待观察' : 'Pending'),
       tone: match.oddsTrend?.direction === 'mixed' ? 'warning' : match.oddsTrend ? 'success' : 'neutral',
@@ -2585,6 +2594,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       tags: match.oddsTrend ? [language === 'zh' ? '赔率快照' : 'odds snapshots', match.oddsTrend.direction] : [language === 'zh' ? '待补' : 'missing']
     },
     {
+      available: lineupRefereeReadyCount > 0,
       title: language === 'zh' ? '阵容/裁判/牌数' : 'Lineups/referee/cards',
       value: language === 'zh' ? `${lineupRefereeReadyCount}/4项` : `${lineupRefereeReadyCount}/4`,
       tone: lineupRefereeReadyCount >= 3 ? 'success' : lineupRefereeReadyCount >= 1 ? 'warning' : 'neutral',
@@ -2600,6 +2610,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       ].filter(Boolean)
     },
     {
+      available: xgHasValue,
       title: language === 'zh' ? '进球质量' : 'Goal quality',
       value: xgHasValue ? `${formatDecimal(xgHome)} : ${formatDecimal(xgAway)}` : '--',
       tone: verifiedXgReady ? 'success' : xgHasValue ? 'warning' : 'neutral',
@@ -2612,6 +2623,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       ].filter(Boolean)
     },
     {
+      available: false,
       title: language === 'zh' ? '数据缺口' : 'Data gaps',
       value: dataGapLabels.length
         ? (language === 'zh' ? `${dataGapLabels.length} 项主要缺口` : `${dataGapLabels.length} primary gaps`)
@@ -2631,6 +2643,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   ];
   const factorCards = [
     {
+      available: poolRows.some((row) => row.odds),
       title: language === 'zh' ? '官方赔率 / 让球' : 'Official odds / handicap',
       value: poolRows.filter((row) => row.odds).length ? `${poolRows.filter((row) => row.odds).length}/${poolRows.length}` : '--',
       tone: poolRows.some((row) => row.odds) ? 'success' : 'warning',
@@ -2639,6 +2652,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         : '1X2 and handicap odds validate the direction; no single price can create a formal pick by itself.'
     },
     {
+      available: Boolean(probabilityModel?.elo),
       title: language === 'zh' ? '长期强弱' : 'Long-run strength',
       value: probabilityModel?.elo ? `${probabilityModel.elo.homeRating}/${probabilityModel.elo.awayRating}` : '--',
       tone: probabilityModel?.elo ? 'success' : 'neutral',
@@ -2647,6 +2661,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         : `Uses ${probabilityModel?.elo?.historicalSource?.rows || probabilityModel?.form?.historicalSource?.rows || '--'} long-run match samples for stable team strength and form.`
     },
     ...(worldCupPrior ? [{
+      available: true,
       title: language === 'zh' ? '世界杯背景' : 'World Cup context',
       value: Number.isFinite(worldCupPriorWeight) ? formatModelWeight(worldCupPriorWeight) : (language === 'zh' ? '已接入' : 'Loaded'),
       tone: 'success',
@@ -2655,6 +2670,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         : `World Cup context is matched for ${worldCupPriorHomeName || 'home'} vs ${worldCupPriorAwayName || 'away'} and used only as a pre-match supplement.`
     }] : []),
     {
+      available: Boolean(probabilityModelForm),
       title: language === 'zh' ? '近况攻防' : 'Recent form',
       value: probabilityModelForm ? `${formatDecimal(probabilityModelForm.home?.goalsForAvg)} / ${formatDecimal(probabilityModelForm.away?.goalsForAvg)}` : '--',
       tone: probabilityModelForm ? 'success' : 'neutral',
@@ -2663,6 +2679,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         : 'Last-year attacking and defensive form adjusts the goal range and checks whether the score profile supports the analysis direction.'
     },
     {
+      available: lineupSignalReady || projectedRosterReady,
       title: language === 'zh' ? '阵容信息' : 'Lineups',
       value: lineupSignalReady
         ? (language === 'zh' ? '官方确认' : 'Confirmed')
@@ -2677,6 +2694,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         : (language === 'zh' ? '未取得本场有效首发记录。比赛开赛后不补造赛前名单，不改写原推荐。' : 'No valid lineup record is available. Pre-match records and recommendations are not reconstructed after kickoff.')
     },
     ...(hasUsableFiveHundredDetails ? [{
+      available: true,
       title: language === 'zh' ? '赛前资料' : 'Pre-match data',
       value: fiveHundredDisplay.summaryLabel,
       tone: fiveHundredDisplay.tone,
@@ -2684,6 +2702,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         || (language === 'zh' ? '参考赔率、亚洲盘、近况和阵容用于赛前校验，不单独生成正式推荐。' : 'Reference odds, Asian lines, form, and projected XI validate the pre-match read; they do not create formal picks alone.')
     }] : []),
     {
+      available: Boolean(fiveHundredSignal?.europeOdds?.companies),
       title: language === 'zh' ? '外部均赔' : 'External odds',
       value: fiveHundredSignal?.europeOdds?.companies ? `${fiveHundredSignal.europeOdds.companies}` : '--',
       tone: fiveHundredSignal?.europeOdds?.companies ? 'success' : 'neutral',
@@ -2692,6 +2711,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         || (language === 'zh' ? '外部均赔用于交叉验证官方赔率是否异常，不单独生成正式推荐。' : 'External average odds cross-check official odds; they do not create formal picks alone.')
     },
     {
+      available: weatherVerified,
       title: language === 'zh' ? '天气 / 场地' : 'Weather / pitch',
       value: weatherVerified ? `${weatherStatusLabel} · ${weatherConditionLabel}` : weatherStatusLabel,
       tone: weatherRiskTone,
@@ -3541,7 +3561,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               </div>
 
               <div className="pre-match-risk-grid">
-                {publicPreMatchFactCards.map((item) => (
+                {publicPreMatchFactCards.filter(item => item.available).map((item) => (
                   <section key={item.title} className={`pre-match-risk-panel is-${item.tone}`}>
                     <span>{displayText(item.title)}</span>
                     <strong>{displayText(item.value)}</strong>
@@ -4135,7 +4155,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         {activeTab === 'evidence' && (
           <div className="match-detail-v4__section-stack" data-section="evidence-analysis">
 
-            <div className="card factor-analysis-card">
+            <details className="card factor-analysis-card" data-supplemental-model="collapsed">
+              <summary>{language === 'zh' ? `补充模型资料（${factorCards.filter(item => item.available).length}项有记录）` : `Supplemental model inputs (${factorCards.filter(item => item.available).length} recorded)`}</summary>
               <div className="factor-analysis-head">
                 <div>
                   <span className="review-kicker">
@@ -4152,7 +4173,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 </div>
               </div>
               <div className="factor-card-grid">
-                {factorCards.map((item) => (
+                {factorCards.filter(item => item.available).map((item) => (
                   <div key={item.title} className={`factor-card is-${item.tone}`}>
                     <span>{displayText(item.title)}</span>
                     <strong>{displayText(item.value)}</strong>
@@ -4160,7 +4181,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   </div>
                 ))}
               </div>
-            </div>
+              {factorCards.every(item => !item.available) && <p>{language === 'zh' ? '当前模型快照未记录这些输入。原发布报价与人工分析见上方；球队历史赛果见“历史与复盘”。' : 'These inputs are absent from this model snapshot. See the original price and editorial analysis above, and match history in History & review.'}</p>}
+            </details>
 
             {!useUnified && <div className={`card insight-card is-${matchInsight.tone}`}>
               <div className="insight-head">
@@ -4570,6 +4592,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         )}
         <details className="card detail-missing-notes" data-testid="detail-missing-notes">
           <summary>{language === 'zh' ? '资料缺项说明' : 'Missing-data notes'}</summary>
+          {publicPreMatchFactCards.filter(item => !item.available).map(item => <p key={item.title}><strong>{item.title}：</strong>{item.body}</p>)}
+          {factorCards.some(item => !item.available) && <p>{language === 'zh' ? '模型快照未记录：' : 'Missing from the model snapshot: '}{factorCards.filter(item => !item.available).map(item => item.title).join('、')}{language === 'zh' ? '。不代表其他来源没有资料；补采内容需另行核验。' : '. Other sources may hold data; later evidence requires separate verification.'}</p>}
           <p>{language === 'zh' ? '页面优先展示已有记录；以下项目尚无可核验内容，不以 0 或模拟值填充。' : 'Available records appear above. The following gaps are not filled with zero or simulated values.'}</p>
           {!hasScoreDistribution && <p>{reviewedRecord
             ? (language === 'zh' ? '人工参考比分已列在上方原推荐中，不附加未经验证的模型概率。' : 'Editorial scores are in the original pick above, without an unverified model probability.')
