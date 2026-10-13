@@ -8,7 +8,7 @@ const row = (k, payload) => {
   return { artifact_key: k, artifact_version: 'test-v1', generated_at: at, updated_at: at,
     payload_json: json, payload_sha256: crypto.createHash('sha256').update(json).digest('hex'), payload_bytes: Buffer.byteLength(json) };
 };
-function fixture({ ack = true, readonly = 'on', corrupt = false, bytes, replayError = false } = {}) {
+function fixture({ ack = true, readonly = 'on', corrupt = false, bytes, actualBytes, replayError = false } = {}) {
   const records = new Map([[key, row(key, { version: 'reviewed-analysis-freeze-v1', draft, record: { businessDate: draft.businessDate } })]]);
   if (ack) records.set(key + '-ack', row(key + '-ack', { recordKey: key }));
   if (corrupt) records.get(key).payload_json += ' ';
@@ -18,7 +18,7 @@ function fixture({ ack = true, readonly = 'on', corrupt = false, bytes, replayEr
       queries.push(sql);
       if (sql.startsWith('SELECT clock_timestamp')) return { rows: [{ now: at, readonly }] };
       if (sql.startsWith('SELECT artifact_key,payload_sha256')) return { rows: [records.get(key)] };
-      if (sql.startsWith('SELECT payload_bytes')) return { rows: records.has(args[0]) ? [{ payload_bytes: bytes ?? records.get(args[0]).payload_bytes }] : [] };
+      if (sql.startsWith('SELECT payload_bytes')) return { rows: records.has(args[0]) ? [{ payload_bytes: bytes ?? records.get(args[0]).payload_bytes, actual_bytes: actualBytes ?? Buffer.byteLength(records.get(args[0]).payload_json) }] : [] };
       if (sql.includes('payload::text')) return { rows: records.has(args[0]) ? [records.get(args[0])] : [] };
       assert.match(sql, /^(BEGIN|SET LOCAL|COMMIT|ROLLBACK)/); return { rows: [] };
     }, release() { released++; },
@@ -44,12 +44,12 @@ test('missing ACK is explicit and never reported as unpublished or verified', as
   assert.equal(r.state, 'record-present-ack-missing'); assert.equal(r.verified, false); assert.equal(f.replayed(), 0);
   assert.equal(r.retryPublicationAutomatically, false);
 });
-for (const options of [{ readonly: 'off' }, { corrupt: true }, { bytes: 8 * 1024 * 1024 + 1 }, { replayError: true }]) {
+for (const options of [{ readonly: 'off' }, { corrupt: true }, { bytes: 8 * 1024 * 1024 + 1 }, {actualBytes: 8 * 1024 * 1024 + 1}, { replayError: true }]) {
   test('archive rejects unsafe evidence ' + JSON.stringify(options), async () => {
     const f = fixture(options); await assert.rejects(f.reader.artifact(key),
-      options.readonly ? /READ_ONLY_REQUIRED/ : options.corrupt ? /payload byte count mismatch/ : options.bytes ? /ARCHIVE_BYTE_BOUND/ : /signature mismatch/);
+      options.readonly ? /READ_ONLY_REQUIRED/ : (options.corrupt || options.bytes || options.actualBytes) ? /ARCHIVE_BYTE_BOUND/ : /signature mismatch/);
     assert.equal(f.queries.at(-1), 'ROLLBACK'); assert.equal(f.released(), 1);
-    if (options.bytes) assert.ok(!f.queries.some(q => q.includes('payload::text')));
+    if (options.bytes || options.actualBytes) assert.ok(!f.queries.some(q => q.includes('AS payload_json')));
   });
 }
 test('day index explicitly requires further verification', async () => {

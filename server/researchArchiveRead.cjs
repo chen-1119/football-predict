@@ -18,11 +18,11 @@ function publicationKey(value) {
   day(match[1]); return value;
 }
 async function boundedRow(client, key) {
-  const meta = (await client.query('SELECT payload_bytes FROM football.private_model_artifacts WHERE artifact_key=$1', [key])).rows;
+  const meta = (await client.query('SELECT payload_bytes,octet_length(payload::text) AS actual_bytes FROM football.private_model_artifacts WHERE artifact_key=$1', [key])).rows;
   if (meta.length > 1) fail('ARCHIVE_IDENTITY_CONFLICT');
   if (!meta.length) return null;
   const bytes = Number(meta[0].payload_bytes);
-  if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > MAX) fail('ARCHIVE_BYTE_BOUND');
+  if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > MAX || Number(meta[0].actual_bytes) !== bytes) fail('ARCHIVE_BYTE_BOUND');
   const rows = (await client.query(SELECT, [key])).rows;
   if (rows.length !== 1) fail('ARCHIVE_IDENTITY_CONFLICT');
   return verifyRow(rows[0], key, MAX);
