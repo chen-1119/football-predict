@@ -591,6 +591,7 @@ const requiredReleaseEntries = [
   "tests/normal-code-serving.test.cjs",
   "server/researchArchiveRead.cjs",
   "tests/research-archive-read.test.cjs",
+  "scripts/verifyResearchArchivePostgres.cjs",
   "tests/code-data-release.test.cjs",
   "tests/postgres-committed-publication.test.cjs",
   "scripts/verifyCodeReleaseShell.cjs",
