@@ -337,7 +337,7 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
     {tab==='single'&&<PublishedReviewCoveragePanel data={authorizationRequired||review&&reviewPage.authorizationRequired?undefined:publishedCoverage} failed={failed||review&&reviewPage.failed||authorizationRequired||review&&reviewPage.authorizationRequired} language={language}/>}
     <details className="rc-review-insights" data-legacy-statistics="archive">
     <summary>{zh?'旧策略统计与模型评估 · 展开历史档案':'Legacy statistics and model evaluation · expand archive'}</summary>
-    <p>{zh?'以下仅统计旧策略冻结记录。近期人工审核和训练模型参考已列入上方“已发布推荐统计”，分别结算；不加入旧模型概率指标。':'The following statistics cover frozen legacy records only. Recent editorial and trained-model references appear above, with separate settlements and probability metrics.'}</p>
+    <p>{zh?'以下仅统计旧策略冻结记录。近期人工审核和训练模型参考列入单场页“已发布推荐统计”，分别结算；不加入旧模型概率指标。':'The following statistics cover frozen legacy records only. Recent editorial and trained-model references appear in the single-match published statistics, with separate settlements and probability metrics.'}</p>
     {review&&<h2 className="rc-legacy-heading">{zh?(tab==='single'?'旧策略台账 · 下方统计仅属原HAD及让球诊断':'旧策略组合 · 按原冻结版本统计'):(tab==='single'?'Legacy ledger · original HAD and handicap diagnostics only':'Legacy combos · original frozen versions')}</h2>}
     <Stats value={summary} zh={zh} scoped={review} diagnostic={review&&tab==='single'&&filters.market==='HHAD'} hadOnly={tab==='single'&&(!review||filters.market!=='HHAD')}/>
     {review&&<ReviewWindows seven={reviewPage.data?.summary.windows.last7} thirty={reviewPage.data?.summary.windows.last30} language={language}/>}
