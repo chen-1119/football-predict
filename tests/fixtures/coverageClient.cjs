@@ -15,7 +15,7 @@ function client({pairs=[],legacy=[],heads=[],isolation='repeatable read'}={}){
    a.equal(sql.slice(sql.indexOf('WITH latest_page'),sql.indexOf('identity_groups AS MATERIALIZED')).includes('payload'),false);
    a.match(sql,/count\(DISTINCT ROW\(prior.business_date,identity\."businessDate",identity\."homeTeamId",identity\."awayTeamId"\)\)/);
    a.match(sql,/CROSS JOIN LATERAL jsonb_to_record\(prior.payload\)/);a.match(sql,/GROUP BY prior.source_match_id,prior.event_version/);
-   a.ok(args[1]<=16,'legacy JSON work must be bounded to the smaller materialized page');
+   a.ok(args[1]<=8,'legacy JSON work must be bounded to the smaller materialized page');
    const groups=new Map();for(const r of legacy){const k=JSON.stringify([r.payload.sourceMatchId,Date.parse(r.payload.eventVersion)]),group=groups.get(k)||[];group.push(r);groups.set(k,group);}
    const latest=[...groups.values()].map(group=>{const r=group.reduce((a,b)=>BigInt(a.sequence)>BigInt(b.sequence)?a:b),p=r.payload;return {sequence:String(r.sequence),id:p.decisionId,source_match_id:p.sourceMatchId,event_version:p.eventVersion,business_date:p.businessDate,
     actual_payload_bytes:Buffer.byteLength(JSON.stringify(p)),identity_variants:String(new Set(group.map(x=>JSON.stringify([x.payload.businessDate,x.payload.businessDate,x.payload.homeTeamId,x.payload.awayTeamId]))).size)};});

@@ -7,7 +7,7 @@ const {hash}=require('../../src/services/leagueBaselineModel.cjs');
 const {loadCollectorTrustRegistry}=require('../../src/services/collectorAttestation.cjs');
 const ns=require('../../src/services/prematchV3Clock.cjs').epochNanoseconds;
 const fail=code=>{throw Object.assign(Error(code),{code});};
-const bounds=Object.freeze({pageSize:64,legacyPageSize:16,maxArtifacts:1024,maxLegacy:100000,maxBytes:64*1024*1024,maxResultHeads:100000});
+const bounds=Object.freeze({pageSize:64,legacyPageSize:8,maxArtifacts:1024,maxLegacy:100000,maxBytes:64*1024*1024,maxResultHeads:100000});
 function createVerificationCache({maxEntries=256,maxBytes=32*1024*1024}={}){
  if(!Number.isSafeInteger(maxEntries)||maxEntries<0||maxEntries>256||!Number.isSafeInteger(maxBytes)||maxBytes<0||maxBytes>32*1024*1024)fail('COVERAGE_CACHE_BOUND');
  const entries=new Map();let bytes=0;
