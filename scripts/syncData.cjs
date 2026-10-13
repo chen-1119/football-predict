@@ -85,6 +85,7 @@ const { summarizeRelayLanes } = require("./relayLaneFreshness.cjs");
 const { boundedRuntimeEnv } = require("./boundedRuntimeNumber.cjs");
 const {
   applyFastResultObservation,
+  findFastResultObservation,
   mergeFastResultObservations,
   overlayFastObservedFinals,
 } = require("./fastResultObservations.cjs");
@@ -14685,6 +14686,88 @@ function buildLiveRecommendationAuditSummary(matches, capturedAt) {
   };
 }
 
+// Called only with the receipt/history from the verified PostgreSQL same-RR
+// reader. Display odds do not replace an already committed official event ID.
+function preserveCanonicalResultOnlyIdentities(matches, receipt, runtimeFinals) {
+  if (receipt?.version !== "sqlite-fast-result-receipt-v2" || !Array.isArray(receipt.observations)) return matches;
+  const iso = (value) => Number.isFinite(Date.parse(value || "")) ? new Date(value).toISOString() : null;
+  const resultOnly = (match, canonicalReviewId = match?.id) => {
+    const meta = match?.predictionMeta;
+    const gate = meta?.publicationGate;
+    const review = match?.postMatchReview;
+    const summary = review?.predictionReview;
+    if (!isOfficialResultMatch(match) || match.status !== "FINISHED"
+      || !Array.isArray(match.predictions) || match.predictions.length
+      || match.archivedPreMatchPrediction != null
+      || gate?.version !== "prediction-publication-cutoff-gate-v1"
+      || gate.status !== "blocked" || gate.trustedExistingPreCutoffDecision !== false
+      || !["cutoff", "model-after-cutoff"].includes(gate.reasonCode)
+      || !summary || !Array.isArray(summary.rows) || summary.rows.length
+      || ![match.id, canonicalReviewId].includes(review.matchId)
+      || review.sourceMatchId !== match.sourceMatchId
+      || iso(review.eventVersion) !== iso(match.eventVersion)
+      || review.teams?.home !== match.homeTeamName || review.teams?.away !== match.awayTeamName
+      || review.finalScore !== `${match.scoreHome}-${match.scoreAway}`
+      || iso(review.settlement?.resultObservedAt) !== iso(match.resultObservedAt)
+      || iso(review.settlement?.settledAt) !== iso(match.settledAt)
+      || review?.settlement?.publicationId != null || review?.settlement?.publicationVerified !== false) return false;
+    for (const object of [match, meta]) {
+      for (const key of ["publicationId", "publicationBinding", "livePublicationEvidence", "publicReferenceDecision",
+        "immutableAnalysisReferenceDecision", "dualMarketDecision", "archiveParityRecovery"]) {
+        if (object?.[key] != null) return false;
+      }
+    }
+    for (const key of ["settled", "won", "mainSettled", "mainWon", "allSettled", "allWon",
+      "referenceSettled", "referenceWon", "liveSettled", "liveWon"]) {
+      if (summary[key] !== 0) return false;
+    }
+    for (const key of ["bestStatus", "formalBestStatus", "liveBestStatus", "referenceBestStatus", "archivedBestStatus", "oneXTwoStatus"]) {
+      if (summary[key] != null) return false;
+    }
+    const provenance = match.resultProvenance;
+    return provenance?.sourceMatchId === match.sourceMatchId
+      && iso(provenance.eventVersion) === iso(match.eventVersion)
+      && iso(provenance.kickoffTime) === iso(match.kickoffTime)
+      && provenance.scoreHome === match.scoreHome && provenance.scoreAway === match.scoreAway
+      && provenance.resultObservationFallback === false && provenance.promotionEligible === true
+      && iso(provenance.observedAt) === iso(match.resultObservedAt);
+  };
+  const byEvent = new Map();
+  for (const row of runtimeFinals || []) {
+    const event = iso(row?.eventVersion);
+    if (!row?.sourceMatchId || !event) continue;
+    const key = JSON.stringify([row.sourceMatchId, event]);
+    const rows = byEvent.get(key) || [];
+    rows.push(row);
+    byEvent.set(key, rows);
+  }
+  return matches.map((match) => {
+    const sourceId = match?.sourceMatchId;
+    const event = iso(match?.eventVersion);
+    if (!sourceId || !event || match.id !== `fivehundred_${sourceId}`) return match;
+    const witnesses = byEvent.get(JSON.stringify([sourceId, event])) || [];
+    if (witnesses.length !== 1) return match;
+    const witness = witnesses[0];
+    if (witness.id !== `sporttery_${sourceId}` || !resultOnly(witness) || !resultOnly(match, witness.id)
+      || !sameEvent(match, witness) || match.resultSource !== witness.resultSource
+      || match.scoreHome !== witness.scoreHome || match.scoreAway !== witness.scoreAway) return match;
+    for (const key of ["homeTeamId", "awayTeamId", "homeTeamName", "awayTeamName"]) {
+      if (!match[key] || match[key] !== witness[key]) return match;
+    }
+    for (const key of ["kickoffTime", "resultObservedAt", "settledAt"]) {
+      if (!iso(match[key]) || iso(match[key]) !== iso(witness[key])) return match;
+    }
+    const observation = findFastResultObservation(witness, receipt.observations);
+    if (!observation || observation.promotionEligible !== true || observation.resultObservationFallback !== false
+      || iso(observation.kickoffTime) !== iso(match.kickoffTime)
+      || iso(observation.resultObservedAt) !== iso(match.resultObservedAt)
+      || iso(observation.settledAt) !== iso(match.settledAt)) return match;
+    // Keep post-cutoff decision metadata, display SP and settlement fields.
+    // No decision is regenerated; any actual frozen prediction rejects above.
+    return { ...match, id: witness.id, postMatchReview: { ...match.postMatchReview, matchId: witness.id } };
+  });
+}
+
 function stripOfficialResultOnlyPredictionContent(match) {
   const isPublishedResultOnly = match?.status === "FINISHED" && match?.oddsSource !== "sporttery:HAD";
   const isAttributedFiveHundredResult = isFallbackResultMatch(match);
@@ -17781,7 +17864,7 @@ async function sync() {
   }).history.length);
   const existingSyncMeta = loadExistingSyncMeta(publicDir);
   const sqliteDataPath = process.env.DATASTORE_SQLITE_PATH || path.join(DEFAULT_STORE_DIR, "football.db");
-  const { receipt: sqliteFastReceipt, finals: sqliteFastFinals } = await readRuntimeFastResultInput({
+  const { receipt: sqliteFastReceipt, finals: sqliteFastFinals, storage: fastInputStorage } = await readRuntimeFastResultInput({
     sqlitePath: sqliteDataPath, storeDir: DEFAULT_STORE_DIR, publicDataDir: dataDir,
     existingObservations: existingSyncMeta?.fastResultObservations,
   });
@@ -18127,6 +18210,9 @@ async function sync() {
   // untrusted/provisional results have been demoted, and before review/output
   // validation, so FINISHED rows cannot retain stale PENDING statuses.
   output = output.map(settleTrustedPublishedPredictions);
+  if (fastInputStorage === "postgres") {
+    output = preserveCanonicalResultOnlyIdentities(output, sqliteFastReceipt, sqliteFastFinals);
+  }
   const postMatchReviews = attachPostMatchReviews(
     output,
     capturedAt,
@@ -18893,6 +18979,7 @@ if (require.main === module) {
     reconcileOfficialResultClock,
     mergeReviewPredictionsWithSnapshot,
     stripOfficialResultOnlyPredictionContent,
+    preserveCanonicalResultOnlyIdentities,
     oddsTrendForMatch,
     officialVoidDisposition,
     parseHandicapLine,

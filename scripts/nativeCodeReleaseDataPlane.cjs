@@ -73,7 +73,7 @@ async function tryAllocate(sha, directory) {
     const selection=policy.selectWorkerCodeRepairPreparation(repair,
       require('./releaseWorkerPreflight.cjs').collectWorkerPreflight(),policy.collectWorkerCodeRepair);
     assert.equal(selection.report.ok,true,'worker preparation changed before allocation');
-    if(selection.useRepair && ['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4'].includes(repair.version)) {
+    if(selection.useRepair && ['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5'].includes(repair.version)) {
       assert.equal(repair.baseRuntimeSha256,state.oldSha);
       assert.equal(repair.publication.databaseOid,state.oldDatabaseOid);
       state.committedGenerationRepairAuthorizationHash=crypto.createHash('sha256').update(fs.readFileSync(repairFile)).digest('hex');
@@ -132,7 +132,7 @@ function assertCodeCurrentPublication(session, storeDir = STORE) {
 function assertRepairPair(state, session, current, previous, authorization, authorizationHash) {
   const repair=require('./releaseWorkerCodeRepair.cjs');
   repair.validateWorkerCodeRepairAuthorization(authorization,Date.now());
-  assert(['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4'].includes(authorization.version));
+  assert(['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5'].includes(authorization.version));
   assert.equal(authorizationHash,state.committedGenerationRepairAuthorizationHash);
   assert.equal(authorization.baseRuntimeSha256,state.oldSha);
   assert.equal(authorization.publication.databaseOid,state.oldDatabaseOid);

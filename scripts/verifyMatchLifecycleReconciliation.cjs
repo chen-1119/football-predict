@@ -15,8 +15,9 @@ const {
   matchStoreKey,
   mergeFreshWithExistingStore,
   stripOfficialResultOnlyPredictionContent,
+  preserveCanonicalResultOnlyIdentities,
 } = require("./syncData.cjs");
-const { normalizeObservation } = require("./fastResultObservations.cjs");
+const { normalizeObservation, overlayFastObservedFinals, applyFastResultObservation } = require("./fastResultObservations.cjs");
 const { validateBundlePayloads } = require("../server/dataGenerationBundle.cjs");
 
 const NOW = "2026-07-13T12:00:00.000Z";
@@ -683,6 +684,125 @@ check("new official void is promoted but a later official final supersedes it", 
   assert.equal(Object.prototype.hasOwnProperty.call(final, "resultDisposition"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(final, "voidReason"), false);
 });
+
+// Minimal projection of the 2026-10-13 same-RR receipt/history incident. The
+// blocked metadata is intentional: a post-cutoff model attempt is not a frozen
+// recommendation and must be retained, never silently erased by reconciliation.
+const canonicalResultOnlyFixture = () => {
+  const observed = "2026-10-13T01:18:18.385Z";
+  const event = "2026-10-12T18:45:00.000Z";
+  const raw = {
+    id: "fivehundred_2041926", sourceMatchId: "2041926", source: "five-hundred",
+    status: "FINISHED", effectiveStatus: "FINISHED", eventVersion: event, kickoffTime: event,
+    homeTeamId: "team_70x0db", awayTeamId: "team_1p04q0t", homeTeamName: "第戎", awayTeamName: "梅斯",
+    scoreHome: 4, scoreAway: 2, resultSource: "sporttery:official-api",
+    resultObservedAt: observed, settledAt: observed,
+    odds: { odds1: 2.7, oddsX: 3.3, odds2: 2.2 }, oddsSource: "500.com:HAD",
+    handicapLine: "+1", handicapOddsSource: "500.com:HHAD", predictions: [],
+    resultProvenance: { provider: "sporttery", official: true, trusted: true,
+      source: "sporttery:official-api", sourceMatchId: "2041926", eventVersion: event,
+      kickoffTime: event, scoreHome: 4, scoreAway: 2, observedAt: observed,
+      resultObservationFallback: false, promotionEligible: true },
+    predictionMeta: { decisionId: "decision_1tmft1v", lockedReason: "model-after-cutoff",
+      modelGeneratedAt: "2026-10-13T03:44:03.776Z", publicationGate: {
+        version: "prediction-publication-cutoff-gate-v1", status: "blocked",
+        reasonCode: "model-after-cutoff", trustedExistingPreCutoffDecision: false,
+      } },
+    postMatchReview: { matchId: "fivehundred_2041926", sourceMatchId: "2041926", eventVersion: event,
+      teams: { home: "第戎", away: "梅斯" }, finalScore: "4-2", generatedAt: observed,
+      settlement: { publicationId: null, publicationVerified: false, settledAt: observed, resultObservedAt: observed },
+      predictionReview: { rows: [], settled: 0, won: 0, mainSettled: 0, mainWon: 0,
+        allSettled: 0, allWon: 0, referenceSettled: 0, referenceWon: 0, liveSettled: 0, liveWon: 0,
+        bestStatus: null, formalBestStatus: null, liveBestStatus: null, referenceBestStatus: null,
+        archivedBestStatus: null, oneXTwoStatus: null } },
+  };
+  const witness = structuredClone(raw);
+  witness.id = "sporttery_2041926";
+  witness.postMatchReview.matchId = witness.id;
+  witness.predictionMeta.decisionId = "decision_1kwqs77";
+  witness.predictionMeta.lockedReason = "cutoff";
+  witness.predictionMeta.modelGeneratedAt = null;
+  witness.predictionMeta.publicationGate.reasonCode = "cutoff";
+  const receipt = { version: "sqlite-fast-result-receipt-v2", observations: [{
+    sourceMatchId: "2041926", eventVersion: event, kickoffTime: event, scoreHome: 4, scoreAway: 2,
+    resultObservedAt: observed, settledAt: observed, publishedAt: "2026-10-13T01:19:38.473Z",
+    observationSource: "sporttery-relay-endpoint-received-at", resultObservationFallback: false,
+    sourceCycleId: "sporttery-relay:20261013T011817455Z", datasetRevision: "sqlite-fast-result-r9487",
+  }] };
+  return { raw, witness, receipt };
+};
+
+check("verified canonical result-only identity survives 500 display odds without changing payloads", () => {
+  const { raw, witness, receipt } = canonicalResultOnlyFixture();
+  const before = structuredClone(raw);
+  const [result] = preserveCanonicalResultOnlyIdentities([raw], receipt, [witness]);
+  assert.equal(result.id, witness.id);
+  assert.equal(result.postMatchReview.matchId, witness.id);
+  assert.deepEqual(result, { ...before, id: witness.id,
+    postMatchReview: { ...before.postMatchReview, matchId: witness.id } });
+  assert.deepEqual(raw, before);
+  assert.equal(preserveCanonicalResultOnlyIdentities([result], receipt, [witness])[0], result);
+});
+
+check("full-sync overlay may supply canonical review before the review builder", () => {
+  const { raw, witness, receipt } = canonicalResultOnlyFixture();
+  delete raw.postMatchReview;
+  const overlaid = overlayFastObservedFinals([raw], [witness], receipt.observations)
+    .map((match) => applyFastResultObservation(match, receipt.observations));
+  assert.equal(overlaid[0].id, raw.id);
+  assert.equal(overlaid[0].postMatchReview.matchId, witness.id);
+  const [result] = preserveCanonicalResultOnlyIdentities(overlaid, receipt, [witness]);
+  assert.equal(result.id, witness.id);
+  assert.deepEqual(result, { ...overlaid[0], id: witness.id,
+    postMatchReview: { ...overlaid[0].postMatchReview, matchId: witness.id } });
+});
+
+for (const [name, change] of [
+  ["missing receipt", (f) => { f.receipt = null; }],
+  ["missing witness", (f) => { f.finals = []; }],
+  ["duplicate witness", (f) => { f.finals.push(structuredClone(f.witness)); }],
+  ["noncanonical witness", (f) => { f.witness.id = f.raw.id; f.witness.postMatchReview.matchId = f.raw.id; }],
+  ["changed source ID", (f) => { f.witness.sourceMatchId = "2041927"; }],
+  ["changed event", (f) => { f.witness.eventVersion = "2026-10-12T19:45:00Z"; }],
+  ["changed kickoff", (f) => { f.witness.kickoffTime = "2026-10-12T19:45:00Z"; }],
+  ["reversed ordered teams", (f) => { [f.witness.homeTeamId, f.witness.awayTeamId] = [f.witness.awayTeamId, f.witness.homeTeamId]; }],
+  ["missing team identity", (f) => { delete f.raw.homeTeamId; }],
+  ["changed team name", (f) => { f.witness.homeTeamName = "另一球队"; }],
+  ["changed score", (f) => { f.witness.scoreHome = 5; }],
+  ["untrusted provenance", (f) => { f.witness.resultProvenance.trusted = false; }],
+  ["provenance wrong source ID", (f) => { f.raw.resultProvenance.sourceMatchId = "2041927"; }],
+  ["provenance wrong event", (f) => { f.raw.resultProvenance.eventVersion = "2026-10-12T19:45:00Z"; }],
+  ["provenance wrong score", (f) => { f.raw.resultProvenance.scoreHome = 5; }],
+  ["different result source", (f) => { f.raw.resultSource = "sporttery:other"; }],
+  ["changed observation clock", (f) => { f.raw.resultObservedAt = "2026-10-13T01:19:18.385Z"; }],
+  ["changed settlement clock", (f) => { f.raw.settledAt = "2026-10-13T01:19:18.385Z"; }],
+  ["receipt wrong score", (f) => { f.receipt.observations[0].scoreHome = 5; }],
+  ["receipt fallback", (f) => { f.receipt.observations[0].resultObservationFallback = true; }],
+  ["third review identity", (f) => { f.raw.postMatchReview.matchId = "sporttery_2041927"; }],
+  ["canonical review of other event", (f) => { f.raw.postMatchReview.matchId = f.witness.id; f.raw.postMatchReview.eventVersion = "2026-10-12T19:45:00Z"; }],
+  ["canonical review of reversed teams", (f) => { f.raw.postMatchReview.matchId = f.witness.id; f.raw.postMatchReview.teams.home = f.raw.awayTeamName; }],
+  ["canonical review with another score", (f) => { f.raw.postMatchReview.matchId = f.witness.id; f.raw.postMatchReview.finalScore = "5-2"; }],
+  ["pre-cutoff trusted decision", (f) => { f.raw.predictionMeta.publicationGate.trustedExistingPreCutoffDecision = true; }],
+  ["unblocked decision", (f) => { f.raw.predictionMeta.publicationGate.status = "published"; }],
+  ["actual prediction", (f) => { f.raw.predictions = [{ tipCode: "1" }]; }],
+  ["actual archive", (f) => { f.raw.archivedPreMatchPrediction = { prediction: { tipCode: "1" } }; }],
+  ["public reference", (f) => { f.raw.predictionMeta.publicReferenceDecision = { hash: "frozen" }; }],
+  ["immutable reference", (f) => { f.raw.predictionMeta.immutableAnalysisReferenceDecision = { hash: "frozen" }; }],
+  ["dual market decision", (f) => { f.raw.predictionMeta.dualMarketDecision = { hash: "frozen" }; }],
+  ["publication binding", (f) => { f.raw.predictionMeta.publicationBinding = { publicationId: "frozen" }; }],
+  ["published settlement", (f) => { f.raw.postMatchReview.settlement.publicationId = "frozen"; }],
+  ["settled prediction count", (f) => { f.raw.postMatchReview.predictionReview.referenceSettled = 1; }],
+  ["formal review status", (f) => { f.raw.postMatchReview.predictionReview.formalBestStatus = "WON"; }],
+  ["review rows", (f) => { f.raw.postMatchReview.predictionReview.rows = [{}]; }],
+  ["witness actual archive", (f) => { f.witness.archivedPreMatchPrediction = {}; }],
+]) {
+  check(`canonical result-only preservation rejects ${name}`, () => {
+    const f = canonicalResultOnlyFixture();
+    f.finals = [f.witness];
+    change(f);
+    assert.equal(preserveCanonicalResultOnlyIdentities([f.raw], f.receipt, f.finals)[0], f.raw);
+  });
+}
 
 console.log(JSON.stringify({
   ok: true,
