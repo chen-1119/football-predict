@@ -92,8 +92,10 @@ test('empty and failed data states never invent players, successful receipt time
     const tree = (await harness({ data })).render();
     assert.equal(nodes(tree, n => n.props?.['data-testid'] === 'prematch-injury-row').length, 0);
     assert.equal(nodes(tree, n => n.props?.className === 'prematch-report__lineup').length, 0);
-    assert.match(words(tree), /不代表全员健康或无人停赛/); assert.match(words(tree), /取得有效资料后显示/);
-    assert.equal(words(nodes(tree, n => n.props?.className === 'prematch-report__time')[0]), '—');
+    assert.match(words(tree), /不代表全员健康或无人停赛/);
+    assert.equal(tree.type, 'details'); assert.equal(tree.props.open, undefined, 'missing-only content starts collapsed');
+    assert.equal(nodes(tree, n => n.props?.className === 'prematch-report__metrics').length, 0, 'no empty metric grid');
+    assert.equal(nodes(tree, n => n.props?.className === 'prematch-report__time').length, 0, 'no invented receipt time');
     assert.doesNotMatch(words(tree), /球员甲|主队教练|13:58/); assertDataOnly(tree);
   }
 });
@@ -144,7 +146,28 @@ test('priority errors remain visible and kicked-off matches cannot queue request
 test('finished unavailable sections show unknown counts, not zero healthy players or future lineup timing', async()=>{
  const data=evidence();data.status='unavailable';data.sections={injuries:section('unavailable'),lineup:section('stale')};
  const tree=(await harness({data,kickoffTime:'2026-09-22T05:00:00Z'})).render();
- const metrics=nodes(tree,n=>n.props?.className==='prematch-report__metrics')[0],value=words(metrics);
- assert.match(value,/伤停记录—/);assert.match(value,/确认首发—/);assert.match(value,/不代表没有伤停/);
+ const value=words(tree);
+ assert.equal(tree.type,'details');assert.equal(tree.props.open,undefined);
+ assert.equal(nodes(tree,n=>n.props?.className==='prematch-report__metrics').length,0);
+ assert.match(value,/不代表全员健康或无人停赛/);
  assert.match(value,/未取得本场有效首发记录/);assert.doesNotMatch(words(tree),/尚未到|首发名单待更新|已过期，等待更新/);
+});
+
+test('partial coverage keeps actual players expanded and collapses only the absent lineup', async()=>{
+ const tree=(await harness()).render();
+ assert.equal(tree.type,'section');
+ assert.equal(nodes(tree,n=>n.props?.['data-testid']==='prematch-injury-row').length,1);
+ const notes=nodes(tree,n=>n.type==='details'&&n.props?.className==='prematch-report__missing');
+ assert.equal(notes.length,1);assert.equal(notes[0].props.open,undefined);assert.match(words(notes[0]),/首发/);
+ assert.equal(nodes(tree,n=>String(n.props?.className||'').includes('prematch-report__lineup-empty')).length,0);
+ assert.doesNotMatch(words(notes[0]),/球员甲/);
+});
+
+test('empty disclosure preserves denied refresh explanation without implying verified player data',async()=>{
+ const data=evidence();data.sections={injuries:section(),lineup:section()};
+ const u=await harness({data,postStatus:403});
+ assert.doesNotMatch(words(u.render()),/资料校验通过/);
+ await nodes(u.render(),n=>n.type==='button'&&words(n)==='更新本场资料')[0].props.onClick();
+ assert.match(words(u.render()),/补采请求未通过验证/);
+ assert.equal(u.fetches.filter(r=>r.options.method==='POST').length,1);assertDataOnly(u.render());
 });

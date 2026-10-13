@@ -2168,6 +2168,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         : (language === 'zh' ? '全局比分分布参考' : 'Global score distribution reference'),
     }))
     : legacyScoreRecommendations;
+  // The published editorial scores already appear in the primary pick. An absent
+  // model distribution must not contradict those scores with an empty card.
+  const hasScoreDistribution = !reviewedRecord && (useUnified && isCoherentPublication
+    ? publishedGlobalScores.length > 0 : scoreRecommendations.length > 0);
   const displayedScoreText = useUnified
     ? isCoherentPublication
       ? publishedGlobalScores.map(score => score.label).join(' / ') || (language === 'zh' ? '同源比分分布暂不可用' : 'Bound score distribution unavailable')
@@ -3202,9 +3206,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
             </div>
 
             }
-            {detailPublication ? <div className="card"><DetailPublicationEvidence data={detailPublication} language={language}/></div> : <details className="published-match-pick__basis recommendation-detail-secondary-evidence">
+            {detailPublication ? <div className="card"><DetailPublicationEvidence data={detailPublication} language={language}/></div> : (hasScoreDistribution || unifiedRow) && <details className="published-match-pick__basis recommendation-detail-secondary-evidence">
               <summary>{language === 'zh' ? '查看分析依据' : 'View analysis evidence'}</summary>
-            <div className="card recommendation-score-card">
+            {hasScoreDistribution && <div className="card recommendation-score-card">
               <section className="recommendation-overview-panel is-score">
                 <div className="recommendation-overview-head">
                   <span>{useUnified && isCoherentPublication ? (language === 'zh' ? '全局比分前三参考' : 'Top three global score references') : (language === 'zh' ? '比分推演' : 'Score Projection')}</span>
@@ -3257,7 +3261,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   )}
                 </div>
               </section>
-            </div>
+            </div>}
 
             {useUnified && unifiedRow && <div className="card recommendation-score-card" data-four-market-decision-id={unifiedRow.decision.decisionId} data-four-market-record-hash={unifiedRow.decision.recordHash}>
               <section className="recommendation-overview-panel is-score" aria-label={language === 'zh' ? '四项玩法的同源分析状态' : 'Four-market evidence status'}>
@@ -3266,7 +3270,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   <b>{language === 'zh' ? '参考分析' : 'Reference analysis'}</b>
                 </div>
                 <div className="recommendation-score-list">
-                  {publishedMarketOrder.map(market => market === 'HAD' ? <div key={market} className="recommendation-score-option">
+                  {publishedMarketOrder.filter(market => market === 'HAD' || publishedHandicapDirection).map(market => market === 'HAD' ? <div key={market} className="recommendation-score-option">
                     <span>{primaryMarketLabel(unifiedRow.decision, 'HAD', language === 'zh')}</span>
                     <strong>{publishedHadNames[unifiedRow.decision.tipCode]}</strong>
                     <em>{isCoherentPublication
@@ -3295,7 +3299,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       ? `SP ${publishedHandicapSp.toFixed(2)}`
                       : (language === 'zh' ? '本条未绑定该方向的官方让球 SP' : 'No official handicap SP bound to this outcome')}</small>
                   </div>)}
-                  {isCoherentPublication ? <div className="recommendation-score-option">
+                  {hasScoreDistribution && (isCoherentPublication ? <div className="recommendation-score-option">
                     <span>{language === 'zh' ? '全局比分前三参考' : 'Top three global score references'}</span>
                     <div className="recommendation-score-list">{coherentScoreReference}</div>
                     {coherentAlignedArchive}
@@ -3308,15 +3312,15 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       : (language === 'zh' ? '同源比分矩阵不可用' : 'Bound score matrix unavailable')}</em>
                     <small>{publishedDetail?.scoreSource === 'published-matrix' && publishedDetail.primaryScore
                       ? `${publishedDetail.primaryScore.probability.toFixed(1)}% · ${language === 'zh' ? '无条件概率' : 'Unconditional probability'} · ` : ''}{language === 'zh' ? '本条未绑定竞彩比分 SP，仅作模型参考' : 'No official exact-score SP bound; model reference only'}</small>
-                  </div>}
-                  <div className="recommendation-score-option">
+                  </div>)}
+                  {leadingPublishedTotal && <div className="recommendation-score-option">
                     <span>{language === 'zh' ? '总进球分布最高项' : 'Leading total-goals bucket'}</span>
                     <strong>{leadingPublishedTotal ? `${leadingPublishedTotal.label}${language === 'zh' ? ' 球' : ' goals'}` : '—'}</strong>
                     <em>{leadingPublishedTotal
                       ? `${(leadingPublishedTotal.probability * 100).toFixed(1)}% · ${language === 'zh' ? '完整矩阵无条件概率' : 'Unconditional full-matrix probability'}`
                       : (language === 'zh' ? '同源总进球分布不可用' : 'Bound total-goals distribution unavailable')}</em>
                     <small>{language === 'zh' ? '本条未绑定竞彩总进球 SP，仅作模型参考' : 'No official total-goals SP bound; model reference only'}</small>
-                  </div>
+                  </div>}
                 </div>
                 {isCoherentPublication && <PublishedHadDistribution decision={unifiedRow.decision} language={language}/>}
                 {publishedTotals?.length === 8 && <div className="recommendation-mini-tags" aria-label={language === 'zh' ? '竞彩总进球概率分布' : 'Total-goals probability distribution'}>
@@ -3367,9 +3371,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         aria-labelledby={detailTabId(activeTab)}
         tabIndex={0}
       >
-        {(activeTab === 'overview' || activeTab === 'evidence') && (
-          <PrematchCollectionPanel matchId={match.id} language={language} homeName={homeTeam.name[language]} awayName={awayTeam.name[language]} kickoffTime={match.kickoffTime} />
-        )}
+
         {activeTab === 'overview' && (
           <div className="match-detail-v4__section-stack" data-section="overview">
 
@@ -4323,7 +4325,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         {activeTab === 'probability' && (
           <div className="match-detail-v4__section-stack" data-section="score-projection">
 
-            {(useUnified || hasPredictionContent) && (useUnified || !isPreMatchRecordSettling) && (
+            {hasScoreDistribution && (useUnified || hasPredictionContent) && (useUnified || !isPreMatchRecordSettling) && (
               <div className="card score-projection-card match-detail-v4__score-projection">
                 <h4 className="match-detail-v4__score-heading">
                   <Trophy size={16} />
@@ -4359,7 +4361,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         )}
 
         {/* 历史与复盘：赛前模型估计 */}
-        {activeTab === 'history' && (
+        {activeTab === 'history' && modelEstimateRows.length > 0 && (
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
               <div>
@@ -4418,35 +4420,16 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               </div>
             )}
 
-            <section className="match-stat-availability" data-testid="match-stat-availability" data-state={isVoid ? 'void' : observedStatsNotStarted ? 'not-started' : 'not-collected'} aria-labelledby="match-stat-availability-heading">
-              <header><h4 id="match-stat-availability-heading">{language === 'zh' ? '本场实况统计' : 'Statistics from this match'}</h4><span>{isVoid ? (language === 'zh' ? '赛事已取消' : 'Match cancelled') : observedStatsNotStarted ? (language === 'zh' ? '未开赛 · 尚未产生' : 'Not started · not yet generated') : (language === 'zh' ? '数据通道尚未接入' : 'Statistics feed not connected')}</span></header>
-              <p>{isVoid ? (language === 'zh' ? '本场已取消，不等待产生实况统计。可继续查看两队过往比赛记录。' : 'This fixture is cancelled. Historical team records remain available below.') : observedStatsNotStarted
-                ? (language === 'zh' ? '这场比赛尚未开始，控球、射门、角球和牌数等本场统计尚未产生，不属于数据丢失。赛前请参考下方两队已完场比赛的统计。' : 'This match has not started, so possession, shots, corners and cards have not been generated. Use the historical team statistics below for pre-match analysis.')
-                : (language === 'zh' ? '当前采集通道提供赛程、赔率、赛果及部分赛前资料，尚未接入本场主客队实况统计。这里没有可核验数值，不能按 0 解读。' : 'The current feeds provide fixtures, odds, results and some pre-match data. No verified home/away statistics from this match have been connected; absence does not mean zero.')}</p>
-              <div className="match-stat-availability__fields" aria-label={language === 'zh' ? '本场统计字段范围' : 'Match statistics fields'}>{verifiedTeamStatLabels.map(stat => <span key={stat}>{stat}</span>)}</div>
-              <a href="#historical-score-statistics">{language === 'zh' ? '查看已有历史赛果统计 ↓' : 'View available historical statistics ↓'}</a>
-            </section>
-            {dataGapSignal && (
-              <div style={{ padding: '0.85rem', borderRadius: '8px', border: '1px solid hsl(var(--border))', background: 'hsl(var(--border) / 0.22)', color: 'hsl(var(--text-secondary))', fontSize: '0.82rem', lineHeight: 1.55 }}>
-                <strong style={{ color: 'hsl(var(--text-primary))' }}>
-                  {language === 'zh' ? '数据缺口校验' : 'Data Gap Check'}
-                </strong>
-                <div>
-                  {displayText(language === 'zh'
-                    ? `来源质量 ${dataGapSignal.sourceQuality || '--'}；主要缺口：${(dataGapSignal.missing || []).slice(0, 3).map((item) => item.zh || item.key).filter(Boolean).join('、') || '暂无关键缺口'}。`
-                    : `Source quality ${dataGapSignal.sourceQuality || '--'}; gaps: ${(dataGapSignal.missing || []).slice(0, 3).map((item) => item.en || item.key).filter(Boolean).join(', ') || 'no major gap'}.`)}
-                </div>
-              </div>
-            )}
+
           </div>
         )}
 
         {/* 历史与复盘：近期战绩 */}
-        {activeTab === 'history' && (
+        {activeTab === 'history' && (homeHistory.rows.length > 0 || awayHistory.rows.length > 0) && (
           <div className="form-history-stack" id="historical-score-statistics">
             <div className="form-summary-grid">
-              {renderFormSummaryCard(homeTeam.shortName[language], homeTeam.color, homeHistory)}
-              {renderFormSummaryCard(awayTeam.shortName[language], awayTeam.color, awayHistory)}
+              {homeHistory.sampleSize > 0 && renderFormSummaryCard(homeTeam.shortName[language], homeTeam.color, homeHistory)}
+              {awayHistory.sampleSize > 0 && renderFormSummaryCard(awayTeam.shortName[language], awayTeam.color, awayHistory)}
             </div>
 
             <div className="card team-history-card">
@@ -4461,15 +4444,15 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 </div>
               </div>
               <div className="team-history-grid">
-                {renderHistoryColumn(homeTeam.shortName[language], homeHistory)}
-                {renderHistoryColumn(awayTeam.shortName[language], awayHistory)}
+                {homeHistory.rows.length > 0 && renderHistoryColumn(homeTeam.shortName[language], homeHistory)}
+                {awayHistory.rows.length > 0 && renderHistoryColumn(awayTeam.shortName[language], awayHistory)}
               </div>
             </div>
           </div>
         )}
 
         {/* 历史与复盘：交锋历史 */}
-        {activeTab === 'history' && (
+        {activeTab === 'history' && headToHead.rows.length > 0 && (
           <div className="card h2h-card">
             <div className="history-card-head">
               <div>
@@ -4579,14 +4562,46 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 </tbody>
               </table>
             </div>
-          ) : (
-            <div className="card data-quality-note">
-              {language === 'zh'
-                ? '本场官网没有返回可用积分榜，页面改用 Elo 强度、长期样本和近一年赛果做强弱参考，不展示模拟排名。'
-                : 'No usable official table was returned for this fixture, so the page uses Elo strength, long-run samples, and last-year results instead of a simulated table.'}
-            </div>
-          )
+          ) : null
         )}
+
+        {(activeTab === 'overview' || activeTab === 'evidence') && (
+          <PrematchCollectionPanel matchId={match.id} language={language} homeName={homeTeam.name[language]} awayName={awayTeam.name[language]} kickoffTime={match.kickoffTime} />
+        )}
+        <details className="card detail-missing-notes" data-testid="detail-missing-notes">
+          <summary>{language === 'zh' ? '资料缺项说明' : 'Missing-data notes'}</summary>
+          <p>{language === 'zh' ? '页面优先展示已有记录；以下项目尚无可核验内容，不以 0 或模拟值填充。' : 'Available records appear above. The following gaps are not filled with zero or simulated values.'}</p>
+          {!hasScoreDistribution && <p>{reviewedRecord
+            ? (language === 'zh' ? '人工参考比分已列在上方原推荐中，不附加未经验证的模型概率。' : 'Editorial scores are in the original pick above, without an unverified model probability.')
+            : (language === 'zh' ? '模型比分分布：暂无可核验的分布。' : 'No verified model score distribution.')}</p>}
+          {activeTab === 'history' && <>
+            {!homeHistory.rows.length && <p>{homeTeam.name[language]} · {language === 'zh' ? '近一年赛果尚未匹配到有效记录。' : 'No verified results matched in the last-year window.'}</p>}
+            {!awayHistory.rows.length && <p>{awayTeam.name[language]} · {language === 'zh' ? '近一年赛果尚未匹配到有效记录。' : 'No verified results matched in the last-year window.'}</p>}
+            {!headToHead.rows.length && <p>{language === 'zh' ? '直接交锋：近一年窗口暂未匹配到记录，不代表双方从未交手。' : 'Head-to-head: no records matched in the last-year window; this does not mean the teams never met.'}</p>}
+            {!match.standings?.length && <p>{language === 'zh' ? '积分榜：当前未取得可用官方排名。' : 'Standings: no usable official table received.'}</p>}
+            {!modelEstimateRows.length && <p>{language === 'zh' ? '赛前模型估计：没有带明确来源的数值。' : 'No model estimate with explicit provenance.'}</p>}
+            <section className="match-stat-availability" data-testid="match-stat-availability" data-state={isVoid ? 'void' : observedStatsNotStarted ? 'not-started' : 'not-collected'} aria-labelledby="match-stat-availability-heading">
+              <header><h4 id="match-stat-availability-heading">{language === 'zh' ? '本场实况统计' : 'Statistics from this match'}</h4><span>{isVoid ? (language === 'zh' ? '赛事已取消' : 'Match cancelled') : observedStatsNotStarted ? (language === 'zh' ? '未开赛 · 尚未产生' : 'Not started · not yet generated') : (language === 'zh' ? '数据通道尚未接入' : 'Statistics feed not connected')}</span></header>
+              <p>{isVoid ? (language === 'zh' ? '本场已取消，不等待产生实况统计。可继续查看两队过往比赛记录。' : 'This fixture is cancelled. Historical team records remain available below.') : observedStatsNotStarted
+                ? (language === 'zh' ? '这场比赛尚未开始，控球、射门、角球和牌数等本场统计尚未产生，不属于数据丢失。赛前请参考下方两队已完场比赛的统计。' : 'This match has not started, so possession, shots, corners and cards have not been generated. Use the historical team statistics below for pre-match analysis.')
+                : (language === 'zh' ? '当前采集通道提供赛程、赔率、赛果及部分赛前资料，尚未接入本场主客队实况统计。这里没有可核验数值，不能按 0 解读。' : 'The current feeds provide fixtures, odds, results and some pre-match data. No verified home/away statistics from this match have been connected; absence does not mean zero.')}</p>
+              <div className="match-stat-availability__fields" aria-label={language === 'zh' ? '本场统计字段范围' : 'Match statistics fields'}>{verifiedTeamStatLabels.map(stat => <span key={stat}>{stat}</span>)}</div>
+              <a href="#historical-score-statistics">{language === 'zh' ? '查看已有历史赛果统计 ↓' : 'View available historical statistics ↓'}</a>
+            </section>
+            {dataGapSignal && (
+              <div style={{ padding: '0.85rem', borderRadius: '8px', border: '1px solid hsl(var(--border))', background: 'hsl(var(--border) / 0.22)', color: 'hsl(var(--text-secondary))', fontSize: '0.82rem', lineHeight: 1.55 }}>
+                <strong style={{ color: 'hsl(var(--text-primary))' }}>
+                  {language === 'zh' ? '数据缺口校验' : 'Data Gap Check'}
+                </strong>
+                <div>
+                  {displayText(language === 'zh'
+                    ? `来源质量 ${dataGapSignal.sourceQuality || '--'}；主要缺口：${(dataGapSignal.missing || []).slice(0, 3).map((item) => item.zh || item.key).filter(Boolean).join('、') || '暂无关键缺口'}。`
+                    : `Source quality ${dataGapSignal.sourceQuality || '--'}; gaps: ${(dataGapSignal.missing || []).slice(0, 3).map((item) => item.en || item.key).filter(Boolean).join(', ') || 'no major gap'}.`)}
+                </div>
+              </div>
+            )}
+          </>}
+        </details>
 
       </div>
 
