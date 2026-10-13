@@ -19,7 +19,16 @@ function signedFixtureContext(){
     awayTeamId:require('./storedResultTeamIdentity.cjs').derivedTeamId(match.awayTeamName),
     eventVersion:new Date(match.eventVersion||match.kickoffTime).toISOString(),
     matchNo:match.matchNo||`周${'日一二三四五六'[new Date(match.businessDate+'T12:00:00Z').getUTCDay()]}${String(match.sourceMatchId).padStart(3,'0')}`});
+  const observationAt=row=>{
+    const m=row.prospectiveForecastInput||row;
+    const clocks=[...(m.odds?[m.oddsReceivedAt,m.oddsObservedAt,m.oddsUpdatedAt]:[]),
+      ...(m.handicapOdds?[m.handicapOddsReceivedAt,m.handicapOddsObservedAt,m.handicapOddsUpdatedAt]:[])]
+      .filter(value=>typeof value==='string'&&value.length>0).map(Date.parse).filter(Number.isFinite);
+    if(!clocks.length)throw new Error('Signed test fixture requires a valid observation clock for an available market');
+    return Math.max(...clocks);
+  };
   const writeSnapshot=(rows,receivedAt)=>{
+    if(!Number.isSafeInteger(receivedAt))throw new Error('Signed test fixture acquisition clock must be finite');
     const inputs=rows.map(row=>row.prospectiveForecastInput||row),groups=new Map();
     for(const m of inputs){
       const kickoff=new Date(Date.parse(m.kickoffTime)+8*3600000).toISOString();
@@ -38,7 +47,7 @@ function signedFixtureContext(){
     fs.writeFileSync(file,JSON.stringify({endpoints}));
     return {endpoints};
   };
-  return {normalize,writeSnapshot,registry:context.registry,cleanup(){
+  return {normalize,observationAt,writeSnapshot,registry:context.registry,cleanup(){
     if(previous===undefined)delete process.env.SPORTTERY_RELAY_FAST_LANE_SNAPSHOT;else process.env.SPORTTERY_RELAY_FAST_LANE_SNAPSHOT=previous;
     context.cleanup();
   }};
@@ -61,10 +70,10 @@ async function verify(pool){
     [m.id,dataset,m.sourceMatchId,m.kickoffTime,JSON.stringify(m)]);
     if(dataset==='current'){
       const rows=(await q("SELECT payload FROM football.match_snapshots WHERE dataset='current' ORDER BY id")).rows.map(r=>r.payload);
-      const newest=Math.max(...rows.map(r=>Date.parse(r.oddsUpdatedAt)));
+      const clocks=rows.map(signed.observationAt),newest=Math.max(...clocks);
       // Adding one later fixture must not manufacture a refreshed observation
       // for the previously frozen events exercised by the immutability test.
-      signed.writeSnapshot(rows.filter(r=>Date.parse(r.oddsUpdatedAt)===newest),newest);
+      signed.writeSnapshot(rows.filter((_,index)=>clocks[index]===newest),newest);
     }
   };
   try{
@@ -202,13 +211,13 @@ async function verify(pool){
     // history for settlement under the exact event version.
     const researchDate=new Date(Date.now()+4*86400000).toISOString().slice(0,10);
     const researchNow=Date.parse(`${researchDate}T13:00:00Z`);
-    const researchFixture=withVerifiedInputEvidence({...rawFixture(901),businessDate:researchDate,
+    const researchFixture=withVerifiedInputEvidence(signed.normalize({...rawFixture(901),businessDate:researchDate,matchNo:undefined,
       kickoffTime:`${researchDate}T16:00:00Z`,eventVersion:`${researchDate}T16:00:00Z`,
       odds:null,oddsSource:null,oddsUpdatedAt:null,handicapLine:-1,
       handicapOdds:{odds1:2.2,oddsX:3.5,odds2:3.1},handicapOddsSource:'sporttery:HHAD',
       handicapOddsUpdatedAt:new Date(researchNow).toISOString(),
       probabilityModel:{generatedAt:new Date(researchNow).toISOString(),oneXTwo:{final:{home:55,draw:25,away:20}},
-        calculationTrace:{poisson:{lambdas:{home:1.4,away:1.1}}}}});
+        calculationTrace:{poisson:{lambdas:{home:1.4,away:1.1}}}}}));
     const researchRecord=createDualResearchV2Record(researchFixture,{now:researchNow,
       publication:{generationId:'test-generation',manifestHash:'a'.repeat(64),committedAt:new Date(researchNow).toISOString()}});
     check(()=>assert.ok(researchRecord));
