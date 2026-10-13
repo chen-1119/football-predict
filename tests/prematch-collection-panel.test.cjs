@@ -131,3 +131,10 @@ test('priority errors remain visible and kicked-off matches cannot queue request
   assert.equal(button.props.disabled, true); await button.props.onClick(); assert.equal(u.fetches.length, 1);
   assert.equal(nodes(u.render(), n => n.props?.className === 'prematch-report__lineup').length, 0); assert.match(words(u.render()), /不补造首发名单/); assertDataOnly(u.render());
 });
+test('finished unavailable sections show unknown counts, not zero healthy players or future lineup timing', async()=>{
+ const data=evidence();data.status='unavailable';data.sections={injuries:section('unavailable'),lineup:section('stale')};
+ const tree=(await harness({data,kickoffTime:'2026-09-22T05:00:00Z'})).render();
+ const metrics=nodes(tree,n=>n.props?.className==='prematch-report__metrics')[0],value=words(metrics);
+ assert.match(value,/伤停记录—/);assert.match(value,/确认首发—/);assert.match(value,/不代表没有伤停/);
+ assert.match(value,/未取得本场有效首发记录/);assert.doesNotMatch(words(tree),/尚未到|首发名单待更新|已过期，等待更新/);
+});

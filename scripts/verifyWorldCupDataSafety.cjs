@@ -62,7 +62,7 @@ const rawSafe = (
 
 const safetySource = readText('src/services/worldCupDatasetSafety.ts');
 const worldCupDataSource = readText('src/services/worldCupData.ts');
-const pageSource = readText('src/pages/WorldCup.tsx');
+const appSource = readText('src/App.tsx');
 const syncSource = readText('scripts/syncData.cjs');
 
 assert(safetySource.includes('team-group-outlook-mismatch'), 'team/groupOutlook mismatch gate is missing');
@@ -76,36 +76,12 @@ assert(worldCupDataSource.includes('getSafeKimiWorldCupFixtureSeeds'), 'World Cu
 assert(worldCupDataSource.includes('if (!WORLD_CUP_DATASET_SAFETY.fixtureSeedSafe) return []'), 'seed fixture API does not fail closed');
 assert(!worldCupDataSource.includes('WORLD_CUP_GROUP_PAIRINGS'), 'synthetic group fixture fallback is still enabled');
 assert(!worldCupDataSource.includes('seededKickoffTime'), 'synthetic kickoff fallback is still enabled');
-assert(pageSource.includes('const allWorldCupMatches = syncedWorldCupMatches;'), 'World Cup page can still display fallback fixtures');
-assert(pageSource.includes('getWorldCupCurrentOfficialStage'), 'World Cup page does not derive stage from the official schedule');
-assert(pageSource.includes('getWorldCupOfficialMatchNumber'), 'World Cup page does not isolate official group-stage matches');
-assert(!pageSource.includes('WORLD_CUP_ROUND_OF_16_START'), 'World Cup page still hard-codes the active Round-of-16 window');
-assert(pageSource.includes("import { WORLD_CUP_DATASET_SAFETY } from '../services/worldCupDatasetSafety'"),
-  'World Cup page does not consume the canonical dataset safety gate');
-assert(pageSource.includes('WORLD_CUP_DATASET_SAFETY.safe && !isOfficialKnockoutStage'),
-  'static World Cup forecasts are not gated by both dataset safety and official stage');
-assert(pageSource.includes('{showStaticForecastContent && <>'),
-  'legacy group/route marketing sections are not behind the static-content gate');
-assert(pageSource.includes('静态专题数据集未通过安全校验'),
-  'World Cup page does not explain why unsafe static content is hidden');
-assert(pageSource.includes('当前页面只读取官方竞彩世界杯赛程'),
-  'World Cup page does not state its official-only fallback mode');
-assert(!pageSource.includes('knockoutRoutes.slice(0, 3).map'),
-  'compact overview still falls back to static title probabilities');
-assert(pageSource.includes("onClick={() => onSelectMatch(match.id)}"),
-  'official World Cup fixture cards are no longer clickable');
-assert(pageSource.includes('const OfficialStageMatchCard'),
-  'current-stage cards still use the Round-of-16-specific component');
-assert(pageSource.includes("`#${String(officialMatchNumber).padStart(3, '0')}`"),
-  'current-stage cards do not display the official World Cup match number');
-assert(!pageSource.includes('<span>R16-'),
-  'current-stage cards still hard-code an R16 label');
-assert((pageSource.match(/displayRecommendation \|\| !WORLD_CUP_DATASET_SAFETY\.safe/g) || []).length >= 2,
-  'unsafe static fixture forecasts remain enabled on one or more match-card paths');
-assert(pageSource.includes("WORLD_CUP_DATASET_SAFETY.safe\n                ? getWorldCupFixtureForecast"),
-  'compact official overview still calls the static forecast while the dataset is unsafe');
-assert(pageSource.includes("'未归档'"),
-  'finished official cards do not disclose a missing pre-match direction archive');
+// The old page is removed; the dataset and sync guards above and below remain active.
+assert(appSource.includes('<Route path="/worldcup" element={<Navigate to="/leagues" replace />} />'),
+  'retired World Cup route no longer redirects to the live league page');
+assert(['src/pages/WorldCup.tsx', 'src/components/WorldCupSpotlight.tsx', 'src/components/WorldCupLastDance.tsx']
+  .every(relative => !fs.existsSync(path.join(rootDir, relative))),
+  'retired World Cup UI source has been reintroduced');
 
 const syncDataset = loadWorldCupKimiDataset();
 const syncSummary = worldCupDatasetSummary(syncDataset);

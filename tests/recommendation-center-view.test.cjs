@@ -8,6 +8,7 @@ const source=fs.readFileSync(path.join(__dirname,'../src/services/recommendation
 fs.writeFileSync(path.join(dir,'view.cjs'),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText);
 fs.copyFileSync(path.join(__dirname,'../src/services/publishedRecommendationStatus.cjs'),path.join(dir,'publishedRecommendationStatus.cjs'));
 fs.copyFileSync(path.join(__dirname,'../src/services/coherentPrimarySelection.cjs'),path.join(dir,'coherentPrimarySelection.cjs'));
+fs.copyFileSync(path.join(__dirname,'../src/services/publishedReviewCoverage.ts'),path.join(dir,'publishedReviewCoverage.ts'));
 const view=require(path.join(dir,'view.cjs'));
 const modelModule={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/services/publishedMatchRecommendation.ts'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{module:modelModule,exports:modelModule.exports,Date});
 const {parseRecommendationCenter,visiblePreview,primarySelectionSummary,comboLegSelection,handicapAnalysisBasis,calibrationSampleBasis,sameDirectionConcentration,boundOfficialHandicapSp}=view;

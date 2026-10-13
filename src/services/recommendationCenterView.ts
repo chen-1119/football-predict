@@ -1,3 +1,4 @@
+import { parsePublishedReviewCoverage, type PublishedReviewCoverage } from './publishedReviewCoverage.ts';
 import { validCoherentPrimary, type CoherentPrimary } from './coherentPrimarySelection.cjs';
 
 export { publicationLifecycle, publicationLifecycleLabel } from './publishedRecommendationStatus.cjs';
@@ -183,6 +184,7 @@ export interface RecommendationCenterData {
   reviewedAnalysis?:ReviewedAnalysis;
   reviewedAnalysisHistory?:ReviewedAnalysis;
   dailyBulletin?:DailyBulletin;
+  publishedCoverage?:PublishedReviewCoverage;
 }
 export interface LeagueBaselineDirection {
  sourceMatchId:string;eventVersion:string;homeTeamId:string;awayTeamId:string;
@@ -984,6 +986,7 @@ export function parseRecommendationCenter(response:unknown):RecommendationCenter
     result.strategySwitch={version:'trained-strategy-switch-v1',activeReferenceStrategy:'league-trained-baseline-v1',legacyPublicationEnabled:false,legacyFallbackEnabled:false,formalEligible:false,modelAdoptionCount};
   }
   if(Object.hasOwn(x,'dailyBulletin'))result.dailyBulletin=parseDailyBulletin(x.dailyBulletin,result.businessDate);
+  if(x.publishedCoverage!=null)result.publishedCoverage=parsePublishedReviewCoverage(x.publishedCoverage);
   if(result.coverage&&result.coverage.businessDate!==result.businessDate)throw new Error('Day coverage date mismatch');
   if(new Set(result.current.map(r=>r.decision.decisionId)).size!==result.current.length)throw new Error('Duplicate current decision');
   if(result.todayDualResearch?.some(r=>r.businessDate!==result.businessDate)

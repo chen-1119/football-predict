@@ -6199,6 +6199,7 @@ const readMatchDetailById = async (matchId, options = {}) => {
   const match = await readPostgresMatchDetailById(postgresPool,decodedId,{
     publicationIdentity:basePublication.identity || null,
     recommendationAuthorityPolicy:options.recommendationAuthorityPolicy,
+    includePublishedDetail:true,
   });
   return match ? enrichMatchHistoricalTraining(match) : null;
 };

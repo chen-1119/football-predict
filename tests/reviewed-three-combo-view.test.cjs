@@ -180,6 +180,7 @@ function center(data,now,tab){
   if(id==='react')return {useEffect:()=>{},useState:initial=>[typeof initial==='function'?initial():initial,()=>{}]};
   if(id==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
   if(id==='./ReviewedAnalysis')return ui;
+  if(id==='./PublishedReviewCoverage')return {PublishedReviewCoveragePanel:stub};
   if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
   if(id==='../../hooks/useRecommendationReviewPage')return {useRecommendationReviewPage:()=>({data:null,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
   if(id==='../../services/recommendationCenterView')return view;

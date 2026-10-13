@@ -1,3 +1,5 @@
+import { detailPublishedRecommendation, detailLineupAvailability } from '../services/matchDetailPublication';
+import { DetailPublicationEvidence } from '../components/recommendations/DetailPublicationEvidence';
 import { reviewedMatchRecommendation } from '../services/publishedMatchRecommendation';
 import { TrainedMatchPick } from '../components/recommendations/LeagueBaselineDirections';
 import { trainedMatchRecommendation } from '../services/publishedMatchRecommendation';
@@ -69,7 +71,7 @@ type MatchDetailCacheEntry = {
   etag: string;
   match: DetailMatch;
 };
-type DetailMatch = Match & { detailIdentity?: DetailIdentityBinding };
+type DetailMatch = Match & { detailIdentity?: DetailIdentityBinding; publishedDetail?: unknown };
 
 type DetailRequestStatus = 'loading' | 'ready' | 'failed';
 
@@ -1472,10 +1474,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     );
   }
 
+  const detailPublication = detailPublishedRecommendation(fullMatch?.publishedDetail,match,nowMs);
+  const reviewedRecord = detailPublication?.reviewed ?? (published.data?.businessDate===match.businessDate ? reviewedMatchRecommendation(published.data,match) : null);
+  const trainedRecord = detailPublication?.trained ?? (published.data?.businessDate===match.businessDate ? trainedMatchRecommendation(published.data,match) : null);
   const unifiedRow = publishedMatchRecommendation(published.data, match);
   const dualStudy = published.data?.todayDualResearch?.find(row => row.matchId === match.id
     && Date.parse(row.eventVersion) === Date.parse(match.kickoffTime)) || null;
-  const useUnified = published.loading || published.failed || usesPublishedRecommendation(match, unifiedRow, nowMs);
+  const useUnified = Boolean(reviewedRecord || trainedRecord) || published.loading || published.failed || usesPublishedRecommendation(match, unifiedRow, nowMs);
   // Saved-capture reference calculations remain separate from the published model.
   // Keep this branch after every hook and before the normal analytical presentation.
   if (matchesSavedCaptureIdentity(capturedData, match)
@@ -1497,7 +1502,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           <p>{language === 'zh' ? '开赛时间：' : 'Kickoff: '}{displayText(capturedKickoff)}{language === 'zh' ? '（北京时间）' : ' (Beijing time)'}</p>
           <strong>{language === 'zh' ? '赛前推荐与比赛参数' : 'Pre-match picks and match parameters'}</strong>
         </header>
-        {useUnified ? ((reviewedMatchRecommendation(published.data,match) || (published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)))) ? <TrainedMatchPick record={trainedMatchRecommendation(published.data,match)} reviewed={reviewedMatchRecommendation(published.data,match)} now={nowMs} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} />) : <CapturedReferenceAnalysisPanel match={match} capture={capturedData} language={language} now={nowMs} />}
+        {useUnified ? ((reviewedRecord || trainedRecord || (published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)))) ? <TrainedMatchPick record={trainedRecord} reviewed={reviewedRecord} now={nowMs} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} />) : <CapturedReferenceAnalysisPanel match={match} capture={capturedData} language={language} now={nowMs} />}
         <CapturedMatchData capture={capturedData} language={language} />
       </div>
     );
@@ -2445,11 +2450,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     : ['Possession', 'Shots', 'Shots on target', 'Corners', 'Offsides', 'Fouls', 'Yellow cards', 'Red cards'];
   const observedStatsNotStarted = !isVoid && match.status === 'SCHEDULED'
     && Number.isFinite(Date.parse(match.kickoffTime)) && nowMs < Date.parse(match.kickoffTime);
+  const lineupAvailability = detailLineupAvailability({status:match.status,kickoffTime:match.kickoffTime,now:nowMs,
+    ready:false,projected:false,notYetPublishable:preMatchQuality?.components?.lineup?.status==='not_yet_publishable'});
   const dataGapLabels = ((preMatchQuality?.missing?.length ? preMatchQuality.missing : dataGapSignal?.missing) || [])
     .slice(0, 3)
     .map((item) => localizedSignalText(item))
     .filter(Boolean);
-  const notYetPublishableLabels = (preMatchQuality?.notYetPublishable || [])
+  const notYetPublishableLabels = (lineupAvailability.beforeWindow ? preMatchQuality?.notYetPublishable || [] : [])
     .slice(0, 3)
     .map((item) => localizedSignalText(item))
     .filter(Boolean);
@@ -2521,9 +2528,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       ? confirmedLineupSummaryText || (language === 'zh' ? '官方首发已确认' : 'Official XI confirmed')
       : projectedRosterReady
         ? `${language === 'zh' ? '预计阵容（非首发）' : 'Projected roster (not confirmed)'}：${projectedRosterSummaryText}`
-        : lineupQuality?.status === 'not_yet_publishable'
-          ? (language === 'zh' ? '正式首发尚未到发布时间，不扣分' : 'Confirmed XI is not published yet; no penalty')
-          : '',
+        : lineupAvailability.notYetPublishable
+          ? (language === 'zh' ? '尚未到通常首发发布时间' : 'Before the usual lineup window')
+          : (language === 'zh' ? '未取得本场有效首发记录' : 'No valid lineup record for this match'),
     injurySignalReady
       ? (injuryCount > 0
         ? (language === 'zh' ? `伤停 ${injuryCount} 条` : `${injuryCount} injury notes`)
@@ -2604,7 +2611,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       title: language === 'zh' ? '数据缺口' : 'Data gaps',
       value: dataGapLabels.length
         ? (language === 'zh' ? `${dataGapLabels.length} 项主要缺口` : `${dataGapLabels.length} primary gaps`)
-        : (language === 'zh' ? '无明确高权重缺口' : 'No high-weight gap'),
+        : (language === 'zh' ? '资料完整性未核实' : 'Data completeness unverified'),
       tone: (preMatchQuality?.sourceQuality || dataGapSignal?.sourceQuality) === 'low' ? 'danger' : (preMatchQuality || dataGapSignal) ? 'warning' : 'neutral',
       body: dataGapLabels.length
         ? (language === 'zh'
@@ -2614,7 +2621,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           ? (language === 'zh'
             ? `暂无明确高权重缺口；${notYetPublishableLabels.join('、')}，这些项目尚未到正常发布时间，不降低当前置信度。`
             : `No high-weight gap; ${notYetPublishableLabels.join(', ')} are not normally published yet and do not reduce confidence.`)
-          : (preMatchQuality?.summary?.[language] || (language === 'zh' ? '暂无明确高权重缺口。' : 'No high-weight gap detected.')),
+          : (language === 'zh' ? '未取得完整的逐项核验记录，不能据此认定没有缺项。已开赛场次仅展示原始资料，不补造赛前记录。' : 'No complete field verification is available. Missing items cannot be ruled out; past matches retain original evidence only.'),
       tags: dataGapLabels.length ? dataGapLabels.slice(0, 3) : notYetPublishableLabels.slice(0, 3)
     }
   ];
@@ -2657,14 +2664,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         ? (language === 'zh' ? '官方确认' : 'Confirmed')
         : projectedRosterReady
           ? (language === 'zh' ? '预计阵容' : 'Projected')
-          : lineupQuality?.status === 'not_yet_publishable'
+          : lineupAvailability.notYetPublishable
             ? (language === 'zh' ? '尚未发布' : 'Not published yet')
-            : '--',
+            : (language === 'zh' ? '未取得有效记录' : 'No valid record'),
       tone: lineupSignalReady ? 'success' : projectedRosterReady ? 'warning' : 'neutral',
-      body: confirmedLineupSummaryText
-        || projectedRosterSummaryText
-        || localizedSignalText(lineupQuality?.note)
-        || (language === 'zh' ? '正式首发尚未到发布时间时不算数据缺口；截止后首发只展示，不修改正式推荐。' : 'A confirmed XI is not a data gap before its publication window; post-cutoff lineups are display-only and cannot change the formal pick.')
+      body: lineupSignalReady ? confirmedLineupSummaryText : projectedRosterReady ? projectedRosterSummaryText
+        : lineupAvailability.beforeWindow ? (language === 'zh' ? '尚未到通常首发发布时间；收到有效名单后单独展示。' : 'Before the usual lineup window; valid lineups will be shown separately.')
+        : (language === 'zh' ? '未取得本场有效首发记录。比赛开赛后不补造赛前名单，不改写原推荐。' : 'No valid lineup record is available. Pre-match records and recommendations are not reconstructed after kickoff.')
     },
     ...(hasUsableFiveHundredDetails ? [{
       title: language === 'zh' ? '赛前资料' : 'Pre-match data',
@@ -3072,7 +3078,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 </span>
               </div>
             )}
-            {useUnified ? <div className="card recommendation-overview-card recommendation-outcome-card"><section className="recommendation-overview-panel is-outcome">{((reviewedMatchRecommendation(published.data,match) || (published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)))) ? <TrainedMatchPick record={trainedMatchRecommendation(published.data,match)} reviewed={reviewedMatchRecommendation(published.data,match)} now={nowMs} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} />)}</section></div> : <div className="card recommendation-overview-card recommendation-outcome-card">
+            {useUnified ? <div className="card recommendation-overview-card recommendation-outcome-card"><section className="recommendation-overview-panel is-outcome">{((reviewedRecord || trainedRecord || (published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)))) ? <TrainedMatchPick record={trainedRecord} reviewed={reviewedRecord} now={nowMs} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} />)}</section></div> : <div className="card recommendation-overview-card recommendation-outcome-card">
               <section className="recommendation-overview-panel is-outcome">
                 <small>{language === 'zh' ? '旧版赛前归档' : 'Legacy pre-match archive'}</small>
                 <div className="recommendation-overview-head">
@@ -3196,7 +3202,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
             </div>
 
             }
-            <details className="published-match-pick__basis recommendation-detail-secondary-evidence">
+            {detailPublication ? <div className="card"><DetailPublicationEvidence data={detailPublication} language={language}/></div> : <details className="published-match-pick__basis recommendation-detail-secondary-evidence">
               <summary>{language === 'zh' ? '查看分析依据' : 'View analysis evidence'}</summary>
             <div className="card recommendation-score-card">
               <section className="recommendation-overview-panel is-score">
@@ -3322,7 +3328,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               </section>
             </div>}
 
-            </details>
+            </details>}
       </section>
 
       {dualStudy && <details className="published-match-pick__basis"><summary>{language === 'zh' ? '查看双选研究依据' : 'View dual-choice study evidence'}</summary><DualResearchV2 row={dualStudy} language={language} /></details>}
@@ -3452,16 +3458,16 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 </div>
                 <span>{useUnified ? (language === 'zh' ? '已发布方向与SP以上方统一记录为准' : 'Published direction and SP follow the record above') : (language === 'zh' ? '保留决策时点，最新补采资料见上方' : 'Decision-time record; latest collected data is shown above')}</span>
               </div>
-              <RecommendationEvidenceFacts
+              {detailPublication ? <DetailPublicationEvidence data={detailPublication} language={language}/> : <RecommendationEvidenceFacts
                 match={match}
                 prediction={primaryOutcomePrediction || primaryPostReviewPrediction}
                 publishedDecision={useUnified ? unifiedRow?.decision || null : undefined}
                 language={language}
                 className="is-detail"
-              />
+              />}
               <p className="match-detail-v4__data-analysis-note">
                 {language === 'zh'
-                  ? useUnified ? '已发布概率和时间来自同一记录；补充模型快照与最新采集资料分别标明来源，不作为该记录的采用证明。' : '下面的缺项与分析对应推荐生成时点；后续补到的伤停、阵容在上方单独展示，不会自动改写这里的历史依据。'
+                  ? detailPublication?.reviewed ? '以上为本场原人工审核记录。未提供模型概率；补充资料与原分析分别显示。' : useUnified ? '已发布概率和时间来自同一记录；补充模型快照与最新采集资料分别标明来源，不作为该记录的采用证明。' : '下面的缺项与分析对应推荐生成时点；后续补到的伤停、阵容在上方单独展示，不会自动改写这里的历史依据。'
                   : useUnified ? 'Published probabilities and times share one record. Supplemental model snapshots and newly collected data are separate, not proof of adoption by that record.' : 'Gaps and analysis below reflect the decision time. Subsequently collected injuries and lineups are shown above and do not automatically rewrite this record.'}
               </p>
               {posteriorDisagreement && <FrozenHadPosteriorNote
@@ -3555,7 +3561,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
         {activeTab === 'history' && (
           <div className="match-detail-v4__section-stack" data-section="history">
-            {useUnified && <div className="card review-card"><h3>{language === 'zh' ? '已发布推荐复盘' : 'Published recommendation review'}</h3>{((reviewedMatchRecommendation(published.data,match) || (published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)))) ? <TrainedMatchPick record={trainedMatchRecommendation(published.data,match)} reviewed={reviewedMatchRecommendation(published.data,match)} now={nowMs} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} />)}</div>}
+            {useUnified && <div className="card review-card"><h3>{language === 'zh' ? '已发布推荐复盘' : 'Published recommendation review'}</h3>{((reviewedRecord || trainedRecord || (published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)))) ? <TrainedMatchPick record={trainedRecord} reviewed={reviewedRecord} now={nowMs} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} />)}</div>}
             {!useUnified && isResultPhase && hasReviewPredictions && (
               <div className="card review-card">
                 <div className="review-head">
@@ -3687,7 +3693,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               </div>
             )}
 
-            {useUnified ? <div className="card"><RecommendationEvidenceFacts match={match} publishedDecision={unifiedRow?.decision || null} language={language} supplementaryModel={false} /></div> : <>
+            {useUnified ? <div className="card">{detailPublication ? <DetailPublicationEvidence data={detailPublication} language={language}/> : <RecommendationEvidenceFacts match={match} publishedDecision={unifiedRow?.decision || null} language={language} supplementaryModel={false} />}</div> : <>
             <div className={`card signal-summary-card is-${matchSignal.category} ${isFormalPrimaryRecommendation || isLivePrimaryRecommendation || isArchivedLiveRecommendation ? '' : 'is-reference'}`}>
               <div>
                 <span className={`signal-badge is-${matchSignal.category}`}>{displayText(matchSignal.label[language])}</span>
@@ -3699,7 +3705,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 {calibratedModelProbability && (
                   <span>{language === 'zh' ? '混合模型估计·未校准' : 'Mixed model estimate · uncalibrated'} <strong>{calibratedModelProbability}</strong></span>
                 )}
-                <span>{language === 'zh' ? '风险项' : 'Risks'} <strong>{matchSignal.riskCount}</strong></span>
+                <span>{language === 'zh' ? '风险项' : 'Risks'} <strong>{['finished','unavailable'].includes(matchSignal.category) || !Array.isArray(primaryOutcomePrediction?.riskTags) ? '—' : matchSignal.riskCount}</strong></span>
                 {match.oddsTrend && (
                   <span>{language === 'zh' ? '赔率快照' : 'Odds snapshots'} <strong>{match.oddsTrend.sampleSize}</strong></span>
                 )}
@@ -3747,7 +3753,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         {activeTab === 'probability' && (
           <div className="match-detail-v4__section-stack" data-section="probability">
 
-            {useUnified && <div className="card"><RecommendationEvidenceFacts match={match} publishedDecision={unifiedRow?.decision || null} language={language} supplementaryModel={false} /></div>}
+            {useUnified && <div className="card">{detailPublication ? <DetailPublicationEvidence data={detailPublication} language={language}/> : <RecommendationEvidenceFacts match={match} publishedDecision={unifiedRow?.decision || null} language={language} supplementaryModel={false} />}</div>}
 
             <section className="card match-detail-v4__odds-card" aria-labelledby="match-detail-odds-heading">
               <div className="match-detail-v4__section-head">

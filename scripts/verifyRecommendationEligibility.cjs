@@ -48,7 +48,6 @@ const officialEligibilitySource = fs.readFileSync(
   "utf8"
 );
 const matchDetailSource = fs.readFileSync(path.join(rootDir, "src/pages/MatchDetail.tsx"), "utf8");
-const worldCupSource = fs.readFileSync(path.join(rootDir, "src/pages/WorldCup.tsx"), "utf8");
 const recommendationCopySource = fs.readFileSync(path.join(rootDir, "src/services/recommendationCopy.ts"), "utf8");
 const backtestSource = fs.readFileSync(
   path.join(rootDir, "scripts/runModelBacktest.cjs"),
@@ -232,8 +231,6 @@ check("frontend keeps formal gates while reference directions remain separately 
   && recommendationCopySource.includes("isFormalRecommendationPrediction(match, prediction)")
   && matchDetailSource.includes("isFormalPrimaryRecommendation")
   && matchDetailSource.includes("分析参考")
-  && worldCupSource.includes("copy.analysisReference[language]")
-  && !worldCupSource.includes("actionablePrediction")
   && !bestTipsSource.includes("observation: { zh: '观察'")
   && !bestTipsSource.includes("language === 'zh' ? '观察' : 'Watch'")
   && !predictionsListSource.includes("return language === 'zh' ? '观察' : 'Watch'"));

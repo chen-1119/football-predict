@@ -109,7 +109,7 @@ class Repository {
     // Restrict history to published HAD decisions or prospectively captured V2
     // research events. A HHAD-only event has no HAD decision, and an unrelated
     // rescheduled match with the same source id must not settle its V2 record.
-    return (await this.client.query(`SELECT m.payload FROM football.match_snapshots m
+    const original=(await this.client.query(`SELECT m.payload FROM football.match_snapshots m
       WHERE m.dataset IN ('current','history') AND (EXISTS (
         SELECT 1 FROM football.recommendation_decisions d
         WHERE d.source_match_id=COALESCE(NULLIF(m.payload->>'sourceMatchId',''),regexp_replace(m.payload->>'id','^sporttery_',''))
@@ -118,6 +118,41 @@ class Repository {
         WHERE r.source_match_id=COALESCE(NULLIF(m.payload->>'sourceMatchId',''),regexp_replace(m.payload->>'id','^sporttery_',''))
           AND r.event_version=m.kickoff_time
       ))`)).rows.map(r=>r.payload);
+    const adapter=require('./publishedReviewCoverageRepository.cjs');
+    const observed=(await this.client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
+    const asOf=observed instanceof Date?observed.toISOString():observed;
+    const verified=await adapter.loadVerifiedCoverage(this.client,{asOf,trustRegistry:this.trustRegistry,includeResults:false,includeLegacy:false});
+    if(!verified.coverage.complete)throw Object.assign(new Error('Acknowledged publication ledger is incomplete'),{code:'COVERAGE_HISTORY_INCOMPLETE'});
+    // New manual/model events are admitted only after original raw JSON,
+    // signature, record and second-transaction ACK replay. This does not
+    // admit any result: the original official 90-minute validators still run.
+    const additional=[];let count=0,bytes=0;
+    for(let i=0;i<verified.events.length;i+=64){
+      const targets=verified.events.slice(i,i+64);let cursor='';
+      for(;;){
+        const page=(await this.client.query(`SELECT m.id,m.payload FROM football.match_snapshots m
+          JOIN jsonb_to_recordset($1::jsonb) AS e("sourceMatchId" text,"eventVersion" timestamptz,"businessDate" text,"homeTeamId" text,"awayTeamId" text)
+            ON m.source_match_id=e."sourceMatchId" AND m.kickoff_time=e."eventVersion"
+          WHERE m.dataset IN ('current','history') AND m.id COLLATE "C">$2
+            AND m.payload->>'businessDate'=e."businessDate"
+            AND m.payload->>'homeTeamId'=e."homeTeamId" AND m.payload->>'awayTeamId'=e."awayTeamId"
+          ORDER BY m.id COLLATE "C" LIMIT $3`,[JSON.stringify(targets),cursor,64])).rows;
+        if(page.length>64)throw Object.assign(new Error('History page exceeds bound'),{code:'COVERAGE_HISTORY_PAGE_BOUND'});
+        for(const row of page){
+          if(typeof row.id!=='string'||row.id<=cursor)throw Object.assign(new Error('History cursor did not advance'),{code:'COVERAGE_HISTORY_CURSOR'});
+          cursor=row.id;count++;bytes+=Buffer.byteLength(JSON.stringify(row.payload));
+          if(count>10000||bytes>64*1024*1024)throw Object.assign(new Error('History input exceeds bound'),{code:'COVERAGE_HISTORY_BOUND'});
+          // Recheck exact JSON identity after the typed SQL join. No fallback
+          // from fivehundred numeric suffixes or from a rescheduled event.
+          if(targets.some(t=>adapter.matchesIdentity(row.payload,t)))additional.push(row.payload);
+        }
+        if(page.length<64)break;
+      }
+    }
+    // Identical copies in the old and new candidate pools do not create
+    // duplicate observations. Distinct current/history result bytes survive
+    // so the existing result-conflict/revision policy can see both.
+    const seen=new Set();return [...original,...additional].filter(row=>{const key=hash(row);if(seen.has(key))return false;seen.add(key);return true;});
   }
   async appendResult(e) {
     await this.client.query(`INSERT INTO football.recommendation_result_events(id,source_match_id,event_version,observed_at,payload)
