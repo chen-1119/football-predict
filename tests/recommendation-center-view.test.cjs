@@ -322,11 +322,12 @@ function renderedText(data,props,now){
   const code=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/components/recommendations/RecommendationCenter.tsx'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
   vm.runInNewContext(code,{module,exports:module.exports,Date:now==null?Date:class extends Date{static now(){return now;}},require:function componentRequire(id){
     if(id==='react')return react;if(id==='react/jsx-runtime')return require(id);
-    if(id==='./LeagueBaselineDirections'||id==='./DailyBulletinPanel'||id==='./ReviewedAnalysis'){
+    if(id==='../../services/publishedReviewCoverage')return require(path.join(dir,'publishedReviewCoverage.ts'));
+    if(id==='./PublishedReviewCoverage'||id==='./LeagueBaselineDirections'||id==='./DailyBulletinPanel'||id==='./ReviewedAnalysis'){
       const component={exports:{}};
       const source=fs.readFileSync(path.join(__dirname,'../src/components/recommendations',id.slice(2)+'.tsx'),'utf8');
       vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,
-        {module:component,exports:component.exports,Date,Intl,URL,require:key=>key==='./ReviewedAnalysis'?componentRequire(key):key.endsWith('.css')?{}:key==='../../services/recommendationCenterView'?view:require(key)});
+        {module:component,exports:component.exports,Date,Intl,URL,require:key=>key==='./ReviewedAnalysis'||key==='../../services/publishedReviewCoverage'?componentRequire(key):key.endsWith('.css')?{}:key==='../../services/recommendationCenterView'?view:require(key)});
       return component.exports;
     }
     if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
