@@ -15,6 +15,7 @@ function loadFrontendParser(){
   const load=(code,dependencies={})=>{const module={exports:{}};vm.runInNewContext(code,{module,exports:module.exports,require:id=>{
     if(id==='./coherentPrimarySelection.cjs')return require('../src/services/coherentPrimarySelection.cjs');
     if(id==='./publishedRecommendationStatus.cjs')return require('../src/services/publishedRecommendationStatus.cjs');
+    if(id==='./publishedReviewCoverage.ts')return require('../src/services/publishedReviewCoverage.ts');
     if(Object.hasOwn(dependencies,id))return dependencies[id];throw new Error('Unexpected dependency '+id);
   }});return module.exports;};
   const center=load(compile('recommendationCenterView.ts'));

@@ -173,9 +173,13 @@ test('combo version filter binds each frozen leg market, including HHAD policy',
 
 test('database read uses one read-only snapshot and returns source truth', async () => {
   const commands = [];
+  const coverageClient=require('./fixtures/coverageClient.cjs').client({legacy:source.decisions.map((payload,i)=>({sequence:String(i+1),payload}))});
   const client = {
-    async query(sql) {
+    async query(sql,args=[]) {
       commands.push(sql);
+      if(sql==='SELECT clock_timestamp() AS now')return {rows:[{now:new Date(at)}]};
+      if(sql.includes("current_setting('transaction_isolation')"))return {rows:[{isolation:'repeatable read'}]};
+      if(sql.includes('AS latest')||sql.includes('sequence=ANY'))return coverageClient.query(sql,args);
       if (sql.startsWith('SELECT payload FROM football.daily_featured_combo_state'))
         return { rows: [{ payload: { recommendationCenter: { version: 'recommendation-center-v1', updatedAt: new Date(at).toISOString() } } }] };
       if (sql.includes('DISTINCT ON')) return { rows: source.decisions.map(payload => ({ payload })) };
@@ -187,9 +191,13 @@ test('database read uses one read-only snapshot and returns source truth', async
     release() { commands.push('RELEASE'); },
   };
   const result = await readRecommendationReviewPage({ connect: async () => client },
-    new URL('https://example.test/api/v1/recommendations/review?pageSize=3'), at);
+    new URL('https://example.test/api/v1/recommendations/review?pageSize=3'), at,
+    {trustRegistry:require('../deploy/light-server/collector-trust-registry.json')});
   assert.equal(result.rows.length, 3);
   assert.equal(result.summary.all.published, 25);
+  assert.equal(result.publishedCoverage.tracks.legacy.publishedRecords,25);
+  assert.equal(result.publishedCoverage.tracks.manual.publishedRecords,0);
+  assert.equal(result.publishedCoverage.overall.distinctEvents,25);
   assert.match(commands[0], /READ ONLY/);
   assert.ok(commands.includes('COMMIT'));
   assert.equal(commands.at(-1), 'RELEASE');

@@ -35,6 +35,7 @@ function renderCenter(row,{now=NOW,language='zh',mode='recommendations',selected
  vm.runInNewContext(code,{module,exports:module.exports,Date:class extends Date{static now(){return now;}},Intl,Set,require:id=>{
   if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
   if(id==='../../hooks/useRecommendationReviewPage')return {useRecommendationReviewPage:()=>({data:mode==='review'?{rows:[{...row,selectedMarket:selectedMarket??'HAD',selectedOdds:selectedMarket==='HHAD'?row.decision.handicapAnalysis?.marketReference?.odds?.[row.decision.coherentPrimary?.hhadCode]:row.decision.odds,versionKey:'a'.repeat(64),versionLabel:'fixture'}],total:1,page:1,pageCount:1,summary:{windows:{}},versions:[]}:null,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
+  if(['./PublishedReviewCoverage','./ReviewedAnalysis','./LeagueBaselineDirections','./DailyBulletinPanel'].includes(id))return compile('../src/components/recommendations/'+id.slice(2)+'.tsx');
   if(id==='./SelectionQualityNote')return compile('../src/components/recommendations/SelectionQualityNote.tsx');
   if(id==='../../services/recommendationCenterView')return compile('../src/services/recommendationCenterView.ts');
   if(id==='../../services/publishedMatchRecommendation')return compile('../src/services/publishedMatchRecommendation.ts');

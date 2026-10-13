@@ -13,6 +13,7 @@ fs.writeFileSync(path.join(tmp, 'view.cjs'), ts.transpileModule(
 ).outputText);
 fs.copyFileSync(path.join(__dirname,'../src/services/publishedRecommendationStatus.cjs'),path.join(tmp,'publishedRecommendationStatus.cjs'));
 fs.copyFileSync(path.join(__dirname,'../src/services/coherentPrimarySelection.cjs'),path.join(tmp,'coherentPrimarySelection.cjs'));
+fs.copyFileSync(path.join(__dirname,'../src/services/publishedReviewCoverage.ts'),path.join(tmp,'publishedReviewCoverage.ts'));
 const V = require(path.join(tmp, 'view.cjs'));
 const parsed = p => V.parseRecommendationCenter({ recommendationCenter: p.state.view });
 const sizes = p => p.state.lanes.combos.previews.map(c => c.size);

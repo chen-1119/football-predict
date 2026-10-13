@@ -344,9 +344,21 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
         dailyBulletin={version:'jincai-daily-bulletin-v1',businessDate:day(now),updatedAt:new Date(now).toISOString(),status:'unavailable',records:[],tiers:[],review:null};}
       else dailyBulletin=attempted.value;
     }
+    let publishedCoverage;
+    if(repo.client){
+      const attempted=await repo.savepoint(async()=>{
+        const adapter=require('./publishedReviewCoverageRepository.cjs');
+        const observed=(await repo.client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
+        const asOf=observed instanceof Date?observed.toISOString():observed;
+        return adapter.publicCoverage((await adapter.loadVerifiedCoverage(repo.client,{asOf,trustRegistry:repo.trustRegistry})).coverage);
+      });
+      if(attempted.error)await repo.issue('published-coverage',{reason:'verified-ledger-read-unavailable'});
+      else publishedCoverage=attempted.value;
+    }
     const center={version:'recommendation-center-v1',policyVersion:VERSION,updatedAt:new Date(now).toISOString(),businessDate:day(now),
       inputAsOf:[lanes.publish?.inputAsOf,lanes.combos?.inputAsOf].filter(v=>Number.isFinite(time(v))).sort((a,b)=>time(b)-time(a))[0]||null,resultAsOf:lanes.settlement?.lastSuccessAt||null,lanes,
       current:selected,previews,todayCombos:today,todayDualResearch,overlapDecisionIds:overlap,coverage,...(dailyBulletin?{dailyBulletin}:{}),
+      ...(publishedCoverage?{publishedCoverage}:{}),
       ...(prdPaperView?{prdPaper:prdPaperView}:{}),...(leagueBaselineView?{leagueBaseline:leagueBaselineView}:{}),...(reviewedAnalysis?{reviewedAnalysis}:{}),
       review:{singles:singles.slice(0,100),combos:combos.slice(0,100),limit:100,qualityReport:buildQualityReport(singles,{asOf:now}),
         statistics:{single:summary(singles,true),supplementary:supplementarySummary(singles),qualifiedSingle:summary(singles.filter(r=>r.selectionQuality.qualified),true),handicap:handicapSummary(singles),handicapBreakdown:handicapBreakdown(singles),marketBaseline:marketBaseline(singles),daily:dailySummary(singles,combos),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},handicapCalibration,

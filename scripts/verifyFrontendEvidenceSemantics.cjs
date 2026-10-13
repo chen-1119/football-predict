@@ -17,7 +17,7 @@ const displayRecommendation = read('src/services/displayRecommendation.ts');
 const predictions = read('src/pages/PredictionsList.tsx');
 const bestTips = read('src/pages/BestTips.tsx');
 const detail = read('src/pages/MatchDetail.tsx');
-const worldCup = read('src/pages/WorldCup.tsx');
+const app = read('src/App.tsx');
 const betSlip = read('src/pages/BetSlipGenerator.tsx');
 const css = read('src/index.css');
 const recommendationEvidenceFacts = read('src/components/predictions/RecommendationEvidenceFacts.tsx');
@@ -35,6 +35,13 @@ const server = read('server/index.cjs');
 
 const checks = [];
 const check = (name, ok) => checks.push({ name, ok: Boolean(ok) });
+
+// The retired page cannot bypass live recommendation eligibility by being remounted.
+check('retired World Cup UI is absent and the compatibility route stays on live leagues',
+  ['src/pages/WorldCup.tsx', 'src/components/WorldCupSpotlight.tsx', 'src/components/WorldCupLastDance.tsx']
+    .every(relative => !fs.existsSync(path.join(rootDir, relative)))
+  && app.includes('<Route path="/worldcup" element={<Navigate to="/leagues" replace />} />')
+  && app.includes("import('./pages/BigFiveLeagues')"));
 
 // Execute the dependency-free helpers also used by the public components.
 const { selectionReferenceLabel, selectionPriceStatus, publicationLifecycle, publicationLifecycleLabel } = require('../src/services/publishedRecommendationStatus.cjs');
@@ -232,7 +239,6 @@ check('unified coverage and published picks keep qualified selection separate fr
   && selectionQualityNote.includes('暂不进入新串关'));
 check('new published surfaces are reference only and old formal actions retain their gate',
   detail.includes('isFormalPresentationAllowed(')
-  && worldCup.includes('isFormalPresentationAllowed(')
   && !predictions.includes('isFormalPresentationAllowed(')
   && predictions.includes('const nowMs = clockNow')
   && !predictions.includes('const nowMs = Math.max')

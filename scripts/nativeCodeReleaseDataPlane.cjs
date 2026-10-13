@@ -73,10 +73,11 @@ async function tryAllocate(sha, directory) {
     const selection=policy.selectWorkerCodeRepairPreparation(repair,
       require('./releaseWorkerPreflight.cjs').collectWorkerPreflight(),policy.collectWorkerCodeRepair);
     assert.equal(selection.report.ok,true,'worker preparation changed before allocation');
-    if(selection.useRepair && ['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5'].includes(repair.version)) {
+    if(selection.useRepair && ['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5','worker-code-repair-v6'].includes(repair.version)) {
       assert.equal(repair.baseRuntimeSha256,state.oldSha);
       assert.equal(repair.publication.databaseOid,state.oldDatabaseOid);
       state.committedGenerationRepairAuthorizationHash=crypto.createHash('sha256').update(fs.readFileSync(repairFile)).digest('hex');
+      if(repair.version==='worker-code-repair-v6') state.repairCapturePolicy=repair.bindingPolicy;
     }
   }
   state.schemaCatalogHash = (await verifySchema(state)).catalogHash;
@@ -129,22 +130,100 @@ function assertCodeCurrentPublication(session, storeDir = STORE) {
     throw error;
   } finally { held.release(); }
 }
-function assertRepairPair(state, session, current, previous, authorization, authorizationHash) {
+const FRESH_REPAIR_CAPTURE_FILE='code-repair-capture.json';
+const jsonHash=value=>crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const publicationIdentity=pointer=>({mode:'active-generation',...Object.fromEntries(
+  ['generationId','manifestHash','sourceCycleId','committedAt'].map(key=>[key,pointer[key]]))});
+function generationVerificationEvidence(context) {
+  const manifest=context?.manifest;
+  assert(manifest && Array.isArray(manifest.files) && manifest.files.length>0);
+  let bytes=0;
+  for(const entry of manifest.files) {assert(Number.isSafeInteger(entry.bytes)&&entry.bytes>=0);bytes+=entry.bytes;}
+  assert(Number.isSafeInteger(bytes));
+  // These contexts are returned only after the existing resolver has hashed
+  // every actual payload file. Bind the complete manifest, not just a pointer.
+  return {generationId:manifest.generationId,manifestHash:manifest.manifestHash,sourceCycleId:manifest.sourceCycleId,
+    files:manifest.files.length,bytes,verifiedManifestSha256:jsonHash(manifest),
+    verification:'dataGenerationStore.validateGenerationDirectory:all-file-bytes'};
+}
+function sealFreshRepairCapture(state,body) {
+  assert.match(state.key||'',/^[a-f0-9]{64}$/);
+  const sha256=jsonHash(body);
+  return {version:'code-repair-capture-v1',body,sha256,
+    hmac:crypto.createHmac('sha256',state.key).update('code-repair-capture-v1\0'+sha256).digest('hex')};
+}
+function assertFreshRepairCapture(state,capture,authorization,authorizationHash) {
+  const repair=require('./releaseWorkerCodeRepair.cjs');
+  assert.equal(authorization.version,'worker-code-repair-v6');
+  assert.equal(state.repairCapturePolicy,authorization.bindingPolicy);
+  assert.deepEqual(capture,sealFreshRepairCapture(state,capture.body),'repair capture content or state MAC changed');
+  const body=capture.body;
+  assert.equal(body.stateHash,jsonHash(state));assert.equal(body.sha,state.sha);assert.equal(body.oldSha,state.oldSha);
+  assert.equal(body.authorizationHash,authorizationHash);assert.equal(authorizationHash,state.committedGenerationRepairAuthorizationHash);
+  assert.equal(body.publication.databaseOid,state.oldDatabaseOid);
+  repair.validateRepairPublication(body.publication,true);
+  const clock=Date.parse(body.checkedAt);assert(Number.isFinite(clock)&&clock<=Date.now());
+  assert(clock>=Date.parse(state.createdAt)&&clock>=Date.parse(body.worker.checkedAt));
+  assert(clock-Date.parse(body.worker.checkedAt)<=60000,'captured worker observation stale');
+  assert(['repair','ordinary'].includes(body.route));
+  if(body.route==='repair') {
+    const report=repair.evaluateWorkerCodeRepair(authorization,body.worker,body.observed);
+    assert.equal(report.ok,true);assert.equal(report.workerHealthy,false);
+    assert.deepEqual(body.publication,body.observed.publication);
+    assert.deepEqual(body.incident,repair.repeatedResultIdentityIncident(authorization.incident,body.worker,body.observed.journal));
+  } else {
+    assert.equal(body.observed,null);assert.equal(body.incident,null);
+    assert.equal(require('./releaseWorkerPreflight.cjs').evaluateWorkerPreflight(body.worker).ok,true);
+    require('./codeReleaseAcceptance.cjs').assertSamePublication(body.publication.committed,body.publication.rawCurrent);
+  }
+  for(const name of ['committed','rawCurrent','rawPrevious']) {
+    const evidence=body.generationEvidence[name],identity=body.publication[name];
+    for(const key of ['generationId','manifestHash','sourceCycleId']) assert.equal(evidence[key],identity[key]);
+    assert(Number.isSafeInteger(evidence.files)&&evidence.files>0&&Number.isSafeInteger(evidence.bytes)&&evidence.bytes>=0);
+    assert.match(evidence.verifiedManifestSha256||'',/^[a-f0-9]{64}$/);
+    assert.equal(evidence.verification,'dataGenerationStore.validateGenerationDirectory:all-file-bytes');
+  }
+  return body;
+}
+function readFreshRepairCapture(state,authorization,authorizationHash) {
+  assert.match(state.sha||'',/^[a-f0-9]{64}$/);
+  const directory='/var/lib/football-release/native/'+state.sha;
+  // The existing root-owned reader checks every parent, plain/nlink/uid/mode,
+  // O_NOFOLLOW and inode. The writer uses wx + file and parent-directory fsync.
+  const capture=driver().read(path.join(directory,FRESH_REPAIR_CAPTURE_FILE));
+  const body=assertFreshRepairCapture(state,capture,authorization,authorizationHash);
+  const input=driver().read(path.join(directory,'code-lease-input.json'));
+  assert.equal(input.sha,state.sha);assert.equal(input.repairCaptureSha256,jsonHash(capture));
+  assert.equal(input.capturedAt,body.checkedAt);
+  require('./codeReleaseAcceptance.cjs').assertSamePublication(input.identity,body.publication.committed);
+  assertCodeArchiveCoverageClock(input.archiveReadiness,Date.now());
+  return capture;
+}
+function assertRepairPair(state, session, current, previous, authorization, authorizationHash, freshCapture=null) {
   const repair=require('./releaseWorkerCodeRepair.cjs');
   repair.validateWorkerCodeRepairAuthorization(authorization,Date.now());
-  assert(['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5'].includes(authorization.version));
+  assert(['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5','worker-code-repair-v6'].includes(authorization.version));
   assert.equal(authorizationHash,state.committedGenerationRepairAuthorizationHash);
   assert.equal(authorization.baseRuntimeSha256,state.oldSha);
   assert.equal(authorization.publication.databaseOid,state.oldDatabaseOid);
   assert.equal(state.dataPlane,'code-only');
   const same=require('./codeReleaseAcceptance.cjs').assertSamePublication;
-  same(authorization.publication.committed,session.identity);
+  const fresh=authorization.version==='worker-code-repair-v6'
+    ? assertFreshRepairCapture(state,freshCapture,authorization,authorizationHash) : null;
+  const publication=fresh?fresh.publication:authorization.publication;
+  same(publication.committed,session.identity);
   same(session.publication?.context?.pointer,session.identity);
   assert.equal(session.publication?.pairing?.reason,'exact-committed-postgres-generation');
-  same(authorization.publication.rawCurrent,current.pointer);
-  same(authorization.publication.rawPrevious,previous.pointer);
+  same(publication.rawCurrent,current.pointer);
+  same(publication.rawPrevious,previous.pointer);
+  if(fresh) {
+    assert.deepEqual(generationVerificationEvidence(current),fresh.generationEvidence.rawCurrent);
+    assert.deepEqual(generationVerificationEvidence(previous),fresh.generationEvidence.rawPrevious);
+    assert.deepEqual(generationVerificationEvidence(session.publication.context),fresh.generationEvidence.committed);
+  }
   return {version:'signed-committed-generation-repair-pair-v1',reason:'exact-signed-incident-pair',
-    committed:session.identity,rawCurrent:current.pointer,rawPrevious:previous.pointer,productionWrites:0};
+    committed:session.identity,rawCurrent:current.pointer,rawPrevious:previous.pointer,productionWrites:0,
+    ...(fresh?{captureSha256:jsonHash(freshCapture),bindingPolicy:authorization.bindingPolicy,route:fresh.route}:{})};
 }
 function assertCodePublicationForState(state,session,storeDir=STORE,pointerLockHandle=null) {
   if(!state.committedGenerationRepairAuthorizationHash) return assertCodeCurrentPublication(session,storeDir);
@@ -154,11 +233,73 @@ function assertCodePublicationForState(state,session,storeDir=STORE,pointerLockH
   const file=path.join(__dirname,'../deploy/light-server/worker-code-repair-authorization.json');
   const bytes=fs.readFileSync(file),authorization=JSON.parse(bytes),generations=require('../server/dataGenerationStore.cjs');
   require('./releaseWorkerCodeRepair.cjs').candidateAuthorization(path.resolve(__dirname,'..'),authorization);
+  const freshCapture=authorization.version==='worker-code-repair-v6'
+    ? readFreshRepairCapture(state,authorization,crypto.createHash('sha256').update(bytes).digest('hex')) : null;
   const held=pointerLockHandle||generations.acquirePointerCommitLock({lockDir:generations.storePaths(storeDir).pointerLockDir,timeoutMs:10000,staleMs:60000});
   try {
     return assertRepairPair(state,session,generations.resolveCurrentGeneration({storeDir}),
-      generations.resolvePreviousGeneration({storeDir}),authorization,crypto.createHash('sha256').update(bytes).digest('hex'));
+      generations.resolvePreviousGeneration({storeDir}),authorization,crypto.createHash('sha256').update(bytes).digest('hex'),freshCapture);
   } finally {if(!pointerLockHandle)held.release();}
+}
+function assertFreshCaptureAbsent(directory) {
+  // A partial first capture is terminal too. Never repair/replace these files
+  // in place or restart preparation with a newer pair or a later lease clock.
+  for(const name of [FRESH_REPAIR_CAPTURE_FILE,'code-lease-input.json','code-lease-current.json','code-transition-lease.json']) {
+    try {fs.lstatSync(path.join(directory,name));} catch(error) {if(error.code==='ENOENT')continue;throw error;}
+    throw new Error('fresh repair capture already exists; re-capture is forbidden');
+  }
+}
+function captureFreshRepairPair(state,session,directory,storeDir=STORE) {
+  const repair=require('./releaseWorkerCodeRepair.cjs'),generations=require('../server/dataGenerationStore.cjs');
+  const same=require('./codeReleaseAcceptance.cjs').assertSamePublication;
+  assert.equal(directory,'/var/lib/football-release/native/'+state.sha);
+  assertFreshCaptureAbsent(directory);
+  assert.deepEqual(driver().read(path.join(directory,'state.json')),state,'allocation state changed before capture');
+  const file=path.join(__dirname,'../deploy/light-server/worker-code-repair-authorization.json');
+  const bytes=fs.readFileSync(file),authorization=repair.candidateAuthorization(path.resolve(__dirname,'..'),JSON.parse(bytes));
+  const authorizationHash=crypto.createHash('sha256').update(bytes).digest('hex');
+  assert.equal(authorization.version,'worker-code-repair-v6');
+  assert.equal(authorizationHash,state.committedGenerationRepairAuthorizationHash);
+  assert.equal(state.repairCapturePolicy,authorization.bindingPolicy);
+  assert.equal(authorization.baseRuntimeSha256,state.oldSha);
+  assert.equal(authorization.publication.databaseOid,state.oldDatabaseOid);
+  // Expensive immutable payload hashing is outside the global pointer lock.
+  // The protected PG session has separately validated and retained its exact
+  // committed generation. Removal/mutation of a raw generation fails closed.
+  const current=generations.resolveCurrentGeneration({storeDir});
+  const previous=generations.resolvePreviousGeneration({storeDir});
+  const worker=require('./releaseWorkerPreflight.cjs').collectWorkerPreflight();
+  let observed=null;
+  const selected=repair.selectWorkerCodeRepairPreparation(authorization,worker,(auth,w)=>{
+    observed=repair.collectWorkerCodeRepair(auth,w);return observed;
+  });
+  assert.equal(selected.report.ok,true,'fresh worker repair observation rejected');
+  const publication=repair.validateRepairPublication({databaseOid:state.oldDatabaseOid,
+    committed:publicationIdentity(session.identity),rawCurrent:publicationIdentity(current.pointer),rawPrevious:publicationIdentity(previous.pointer)},true);
+  same(session.publication?.context?.pointer,session.identity);
+  assert.equal(session.publication?.pairing?.reason,'exact-committed-postgres-generation');
+  if(selected.useRepair) assert.deepEqual(observed.publication,publication,'fresh capture and read-only observation disagree');
+  else if(['generationId','manifestHash','sourceCycleId','committedAt'].some(key=>current.pointer[key]!==session.identity[key])) {
+    // Reuse the unchanged ordinary pending/malformed distinction. A recovered
+    // worker never reads, or falls back to, the earlier incident authorization.
+    assertCodeCurrentPublication(session,storeDir);
+    throw new Error('ordinary current publication changed during capture');
+  }
+  const paths=generations.storePaths(storeDir);
+  const held=generations.acquirePointerCommitLock({lockDir:paths.pointerLockDir,timeoutMs:10000,staleMs:60000});
+  try {
+    same(generations.readPointer(paths.currentPointer),current.pointer);
+    same(generations.readPointer(paths.previousPointer),previous.pointer);
+    const body={sha:state.sha,oldSha:state.oldSha,stateHash:jsonHash(state),authorizationHash,
+      checkedAt:new Date().toISOString(),route:selected.useRepair?'repair':'ordinary',publication,worker,observed,
+      incident:selected.useRepair?repair.repeatedResultIdentityIncident(authorization.incident,worker,observed.journal):null,
+      generationEvidence:{committed:generationVerificationEvidence(session.publication.context),
+        rawCurrent:generationVerificationEvidence(current),rawPrevious:generationVerificationEvidence(previous)}};
+    const capture=sealFreshRepairCapture(state,body);
+    const incidentPair=assertRepairPair(state,session,current,previous,authorization,authorizationHash,capture);
+    driver().write(path.join(directory,FRESH_REPAIR_CAPTURE_FILE),capture);
+    return {capture,incidentPair};
+  } finally {held.release();}
 }
 // A reader briefly competes with the normal publisher/retention pointer lock.
 // Retry the complete read session, never reuse its old PostgreSQL snapshot.
@@ -297,6 +438,7 @@ async function readCodeCutoverArchiveAuthority(client, rows, nowMs) {
 }
 async function captureLeaseInputOnce(state, directory) {
   assert.equal(state.dataPlane, 'code-only');
+  if(state.repairCapturePolicy) assertFreshCaptureAbsent(directory);
   if (state.emergencyActivationAuthorizationHash) {
     const authorization = require('./releaseTransitionLease.cjs').readEmergencyCodeAuthorization(
       path.join(__dirname, '../deploy/light-server/code-release-activation-authorization.json'),
@@ -314,12 +456,14 @@ async function captureLeaseInputOnce(state, directory) {
     await session.client.query("SET LOCAL statement_timeout = '8000ms'");
     const archiveRows = await session.client.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' ORDER BY match_id LIMIT 513");
     const archiveReadiness = await readCodeCutoverArchiveAuthority(session.client, archiveRows.rows.map(row => row.payload), Date.now());
-    const incidentPair=assertCodePublicationForState(state,session);
+    const fresh=state.repairCapturePolicy?captureFreshRepairPair(state,session,directory):null;
+    const incidentPair=fresh?fresh.incidentPair:assertCodePublicationForState(state,session);
     // The lease and seed must describe the same PostgreSQL-bound immutable
     // generation. The mutable APP projection may have different cutoff clocks.
     driver().write(path.join(directory, 'code-lease-current.json'), current);
     const proof = { sha: state.sha, identity: session.identity,
-      currentHash: crypto.createHash('sha256').update(JSON.stringify(current)).digest('hex'), capturedAt: new Date().toISOString(), archiveReadiness,
+      currentHash: crypto.createHash('sha256').update(JSON.stringify(current)).digest('hex'), capturedAt: fresh?fresh.capture.body.checkedAt:new Date().toISOString(), archiveReadiness,
+      ...(fresh?{repairCaptureSha256:jsonHash(fresh.capture)}:{}),
       ...(incidentPair?{incidentPair}:{}) };
     driver().write(path.join(directory, 'code-lease-input.json'), proof);
     return { ok: true, identity: session.identity, productionWrites: 0 };
@@ -425,7 +569,7 @@ function retireSeed(sha) {
   d.write(path.join(directory, 'code-seed-retired.json'), { ...intent, removed: true, completedAt: new Date().toISOString() });
   return { ok: true, bytes, removed: true };
 }
-module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, assertCodeCurrentPublication, assertCodePublicationForState, assertRepairPair, captureLeaseInput, retryLeaseRead, assertResultArchivesReady, assertCodeCutoverArchivesReady, readCodeCutoverArchiveAuthority, assertCodeArchiveCoverageClock, verifyCodeCutoverCompletionClock };
+module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, assertCodeCurrentPublication, assertCodePublicationForState, assertRepairPair, captureLeaseInput, retryLeaseRead, assertResultArchivesReady, assertCodeCutoverArchivesReady, readCodeCutoverArchiveAuthority, assertCodeArchiveCoverageClock, verifyCodeCutoverCompletionClock, generationVerificationEvidence, sealFreshRepairCapture, assertFreshRepairCapture, readFreshRepairCapture, assertFreshCaptureAbsent, captureFreshRepairPair };
 if (require.main === module) {
   (async () => {
     assert.equal(process.argv.length, 4); const action = process.argv[2], sha = process.argv[3];

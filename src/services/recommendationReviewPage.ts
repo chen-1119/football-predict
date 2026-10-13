@@ -1,3 +1,4 @@
+import { parsePublishedReviewCoverage, type PublishedReviewCoverage } from './publishedReviewCoverage.ts';
 import {
   parseRecommendationComboRow,
   parseRecommendationSingleRow,
@@ -23,6 +24,7 @@ export interface ReviewFilters {
 }
 export interface ReviewPage {
   version: 'recommendation-review-page-v1';
+  publishedCoverage?: PublishedReviewCoverage;
   updatedAt: string;
   filters: ReviewFilters;
   rows: Array<ReviewedSingleRow | ReviewedComboRow>;
@@ -126,5 +128,6 @@ export function parseRecommendationReviewPage(value: unknown): ReviewPage {
       byDate: summary.byDate, byMarket: summary.byMarket, byVersion: summary.byVersion,
     },
     versions,
+    publishedCoverage: root.publishedCoverage == null ? undefined : parsePublishedReviewCoverage(root.publishedCoverage),
   };
 }

@@ -75,6 +75,16 @@ test('previousValue keeps the actual injury and lineup records with original rec
   assert.match(words(tree), /09\/21 10:20/); assert.match(words(tree), /09\/21 10:30/); assert.doesNotMatch(words(tree), /13:59/); assertDataOnly(tree);
 });
 
+test('unsupported current match identity shows the collection gap and offers no impossible queue request', async () => {
+  const u = await harness({ data: { matchId: 'fivehundred_123', status: 'unsupported-identity', refreshEligible: false, predictionEligible: false } });
+  const tree = u.render();
+  assert.match(words(tree), /本场编号尚未接入补充资料采集，伤停与首发未核实/);
+  assert.equal(nodes(tree, n => n.type === 'button' && words(n).includes('更新本场资料')).length, 0);
+  assert.equal(nodes(tree, n => n.props?.['data-testid'] === 'prematch-injury-row').length, 0);
+  assert.equal(u.fetches.length, 1);
+  assert.match(u.fetches[0].url, /fivehundred_123\/prematch-evidence$/);
+});
+
 test('empty and failed data states never invent players, successful receipt times or collector diagnostics', async () => {
   for (const status of ['ok', 'missing', 'source_empty', 'unavailable', 'partial', 'stale', 'blocked', 'login_required', 'unmapped', 'conflict', 'parse_error']) {
     const data = evidence(); data.status = status;
@@ -130,4 +140,11 @@ test('priority errors remain visible and kicked-off matches cannot queue request
   const u = await harness({ kickoffTime: '2026-09-22T05:00:00Z' }), button = nodes(u.render(), n => n.type === 'button')[1];
   assert.equal(button.props.disabled, true); await button.props.onClick(); assert.equal(u.fetches.length, 1);
   assert.equal(nodes(u.render(), n => n.props?.className === 'prematch-report__lineup').length, 0); assert.match(words(u.render()), /不补造首发名单/); assertDataOnly(u.render());
+});
+test('finished unavailable sections show unknown counts, not zero healthy players or future lineup timing', async()=>{
+ const data=evidence();data.status='unavailable';data.sections={injuries:section('unavailable'),lineup:section('stale')};
+ const tree=(await harness({data,kickoffTime:'2026-09-22T05:00:00Z'})).render();
+ const metrics=nodes(tree,n=>n.props?.className==='prematch-report__metrics')[0],value=words(metrics);
+ assert.match(value,/伤停记录—/);assert.match(value,/确认首发—/);assert.match(value,/不代表没有伤停/);
+ assert.match(value,/未取得本场有效首发记录/);assert.doesNotMatch(words(tree),/尚未到|首发名单待更新|已过期，等待更新/);
 });

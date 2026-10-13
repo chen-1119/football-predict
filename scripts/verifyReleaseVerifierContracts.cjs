@@ -7,6 +7,19 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('detail keeps original acknowledged event publications and truthful missing-data states',()=>{
+ const files=['tests/match-detail-publication.test.cjs','tests/prematch-collection-panel.test.cjs','tests/match-detail-identity.test.cjs','collectors/leisu-prematch/website-reader.test.cjs'];
+ const child=require('node:child_process').spawnSync(process.execPath,['--test','--test-reporter=tap',...files],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:2*1024*1024});
+ assert.equal(child.status,0,child.stderr||child.stdout);
+ const count=name=>Number(child.stdout.match(new RegExp('^# '+name+' (\\d+)$','m'))?.[1]);
+ assert.ok(count('tests')>=43);assert.equal(count('pass'),count('tests'));assert.equal(count('fail'),0);assert.equal(count('skipped'),0);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const file of ["server/matchDetailPublication.cjs","server/postgresProjectionStore.cjs","server/index.cjs","src/services/matchDetailPublication.ts","src/pages/MatchDetail.tsx","src/components/predictions/PrematchCollectionPanel.tsx","src/components/recommendations/DetailPublicationEvidence.tsx","tests/match-detail-publication.test.cjs","tests/prematch-collection-panel.test.cjs","tests/match-detail-identity.test.cjs","tests/fixtures/detail-published-dijon-20261012.json"])assert(read(entry).includes('"'+file+'"'));
+});
+check('acknowledged manual and model publications join exact event review and natural settlement',()=>{
+ const coverage=require('./verifyPublishedReviewCoverage.cjs'),report=coverage.run();
+ assert.equal(report.ok,true);assert.ok(report.tests>=79);assert.equal(report.skipped,0);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const file of coverage.requiredEntries)assert(read(entry).includes('"'+file+'"'));
+});
 check('official generation and background model writers share an exclusive artifact permit',()=>{
  const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/official-model-artifact-isolation.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1048576});
  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 8$/m);assert.match(child.stdout,/^# skipped 0$/m);

@@ -423,7 +423,11 @@ const readPostgresMatchDetailById = async (pool, id, options = {}) => {
       const currentEvent = rows.rows.some((row, index) => row.dataset === 'current'
         && sourceMatchIdFor(candidates[index].sourceMatchId || candidates[index].id) === sourceMatchIdFor(value.sourceMatchId || value.id)
         && Date.parse(candidates[index].kickoffTime) === Date.parse(value.kickoffTime));
-      return currentEvent ? (await applyCurrentRecommendationAuthority(client, [value], options)).rows[0] : value;
+      const projected=currentEvent ? (await applyCurrentRecommendationAuthority(client, [value], options)).rows[0] : value;
+      if(!projected)return projected;
+      const {publishedDetail:untrustedDetail,...clean}=projected;void untrustedDetail;
+      return options.includePublishedDetail===true
+        ? {...clean,publishedDetail:await require('./matchDetailPublication.cjs').readMatchDetailPublication(client,clean)} : clean;
     };
     if (match.id === matchId) return project(match);
     const {DETAIL_ALIAS_DECISION_HEADS_SQL,decisionRowMatchesPayload,postgresClock,bindMatchDetailAlias} = require('./matchDetailIdentity.cjs');

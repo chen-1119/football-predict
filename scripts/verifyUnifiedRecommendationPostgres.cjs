@@ -80,6 +80,9 @@ async function verify(pool){
     await pool.query(`CREATE SCHEMA ${schema}`);
     await q(`CREATE TABLE football.projection_meta(key text PRIMARY KEY,value text,updated_at timestamptz DEFAULT clock_timestamp());
       CREATE TABLE football.match_snapshots(id text,dataset text,source_match_id text,kickoff_time timestamptz,payload jsonb,PRIMARY KEY(id,dataset));
+      CREATE TABLE football.private_model_artifacts(artifact_key text PRIMARY KEY,artifact_version text NOT NULL,
+        generated_at timestamptz NOT NULL,updated_at timestamptz NOT NULL,payload json NOT NULL,
+        payload_sha256 text NOT NULL CHECK(payload_sha256 ~ '^[0-9a-f]{64}$'),payload_bytes integer NOT NULL CHECK(payload_bytes>0));
       CREATE TABLE football.daily_featured_combo_state(id integer PRIMARY KEY,payload jsonb);`);
     for(const migration of ['007_market_collector_runtime.sql','011_unified_recommendation_runtime.sql','013_dual_choice_research.sql','014_dual_choice_market_neutral.sql'])
       await q(fs.readFileSync(path.join(__dirname,'../server/postgres/migrations/',migration),'utf8'));
@@ -109,8 +112,10 @@ async function verify(pool){
     const failed=await runtime.settlementCycle();check(()=>assert.equal(failed.settlement.ok,false));
     const retained=(await q('SELECT payload FROM football.daily_featured_combo_state WHERE id=1')).rows[0].payload.recommendationCenter;check(()=>assert.equal(retained.lanes.settlement.status,'error'));
     const count=await q('SELECT count(*)::int AS n FROM football.recommendation_decisions');check(()=>assert.equal(count.rows[0].n,4));
-    await q('DROP TRIGGER injected_failure ON football.recommendation_result_events');await runtime.settlementCycle();
-    await write({...fixture(1),status:'FINISHED',testOfficial:true,scoreHome:0,scoreAway:2,resultRevision:2},'history');await runtime.settlementCycle();
+    await q('DROP TRIGGER injected_failure ON football.recommendation_result_events');
+    const recoveredSettlement=await runtime.settlementCycle();check(()=>assert.equal(recoveredSettlement.settlement.ok,true,JSON.stringify(recoveredSettlement)));
+    await write({...fixture(1),status:'FINISHED',testOfficial:true,scoreHome:0,scoreAway:2,resultRevision:2},'history');
+    const revisedSettlement=await runtime.settlementCycle();check(()=>assert.equal(revisedSettlement.settlement.ok,true,JSON.stringify(revisedSettlement)));
     const center=(await q('SELECT payload FROM football.daily_featured_combo_state WHERE id=1')).rows[0].payload.recommendationCenter;
     check(()=>assert.equal(center.review.statistics.single.lost,1));check(()=>assert.equal(center.review.statistics.three.lost,1));
     const afterFrozen=(await q('SELECT payload FROM football.recommendation_combo_records ORDER BY size')).rows;check(()=>assert.deepEqual(afterFrozen,frozen));
@@ -227,7 +232,14 @@ async function verify(pool){
     try{
       const researchRepo=new Repository(researchClient);
       check(()=>assert.equal(researchRepo instanceof Repository,true));
-      const beforeResearchHistory=await researchRepo.history();
+      // Each history read owns a consistent snapshot. Writes below use other
+      // connections, so end this snapshot before observing their next version.
+      const readResearchHistory=async()=>{
+        await researchClient.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+        try{return await researchRepo.history();}
+        finally{await researchClient.query('ROLLBACK');}
+      };
+      const beforeResearchHistory=await readResearchHistory();
       check(()=>assert.equal(beforeResearchHistory.some(m=>m.sourceMatchId==='901'),false));
       const createdResearch=await researchRepo.insertDualResearchV2(researchRecord,researchFixture);
       check(()=>assert.equal(createdResearch,true));
@@ -240,7 +252,7 @@ async function verify(pool){
         {code:'DUAL_RESEARCH_V2_INVALID'});checks++;
       await write({...researchFixture,id:'sporttery_901_rescheduled',
         kickoffTime:`${researchDate}T17:00:00Z`,eventVersion:`${researchDate}T17:00:00Z`},'history');
-      const afterResearchHistory=await researchRepo.history();
+      const afterResearchHistory=await readResearchHistory();
       check(()=>assert.equal(afterResearchHistory.some(m=>m.sourceMatchId==='901'),true));
       check(()=>assert.equal(afterResearchHistory.some(m=>m.id==='sporttery_901_rescheduled'),false));
       await assert.rejects(q('UPDATE football.recommendation_dual_research_v2_records SET payload=payload'),{code:'23000'});checks++;
@@ -256,10 +268,15 @@ async function verify(pool){
     const newPublish=await switched.publish(),newCombos=await switched.combos(),switchedView=await switched.view();
     check(()=>assert.equal(newPublish.ok,true));check(()=>assert.equal(newCombos.ok,true));check(()=>assert.equal(switchedView.ok,true));
     check(()=>assert.deepEqual(newPublish.value.decisionIds,[]));
-    // Missing registry schema is a real blocked model cycle, recorded in the
-    // installed publish lane, never an unsupported league-baseline lane.
+    // Temporarily hide this disposable schema's artifact table to exercise a
+    // real missing-registry failure. Coverage history above needs the table.
+    // The error must still be recorded in the installed publish lane.
     switchedPorts.prdPaperPool=mappedPool;
-    const blockedModel=await switched.leagueBaseline();check(()=>assert.equal(blockedModel.ok,false));
+    await q('ALTER TABLE football.private_model_artifacts RENAME TO unavailable_private_model_artifacts');
+    let blockedModel;
+    try{blockedModel=await switched.leagueBaseline();}
+    finally{await q('ALTER TABLE football.unavailable_private_model_artifacts RENAME TO private_model_artifacts');}
+    check(()=>assert.equal(blockedModel.ok,false));
     const modelLane=(await q("SELECT payload FROM football.recommendation_lanes WHERE lane='publish'")).rows[0].payload;
     check(()=>assert.equal(modelLane.status,'error'));check(()=>assert.equal(modelLane.legacyRetired,true));
     check(()=>assert.equal(modelLane.errorCode,'LEAGUE_MODEL_CYCLE_FAILED'));

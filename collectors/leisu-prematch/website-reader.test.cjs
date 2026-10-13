@@ -292,6 +292,27 @@ test('invalid or traversal-shaped match IDs cannot become fixture calls or file 
   assert.deepEqual(opens, []);
 });
 
+test('existing fivehundred detail IDs expose the real collector scope gap without suffix aliases', async t => {
+  const { exportPath } = await temporaryExport(t), opens = trackOpens(t), calls = [];
+  const id = 'fivehundred_123';
+  const handler = createWebsiteHandler({ ...options(exportPath, async requested => {
+    calls.push(requested); return row({ id });
+  }), authorize: async () => true });
+  const res = response(); await handler({ method: 'GET' }, res, id);
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(JSON.parse(res.body), { matchId: id, status: 'unsupported-identity', refreshEligible: false, predictionEligible: false });
+  assert.deepEqual(calls, [id]); assert.deepEqual(opens, []);
+  const mismatched = createWebsiteHandler({ ...options(exportPath, async () => row()), authorize: async () => true });
+  const rejected = response(); await mismatched({ method: 'GET' }, rejected, id);
+  assert.equal(rejected.statusCode, 404); assert.deepEqual(opens, []);
+  const source = await fs.readFile(path.join(__dirname, '../../server/index.cjs'), 'utf8');
+  const route = source.match(/const prematchEvidenceRoute = url\.pathname\.match\((\/.*\/)[)]/);
+  assert.ok(route); const regex = new RegExp(route[1].slice(1, -1));
+  assert.equal(regex.exec(`/api/v1/matches/${id}/prematch-evidence`)?.[1], id);
+  assert.equal(regex.exec(`/api/v1/matches/${ID}/prematch-evidence`)?.[1], ID);
+  assert.equal(regex.test('/api/v1/matches/fivehundred_0/prematch-evidence'), false);
+});
+
 test('request query and path never override the one configured export file', async t => {
   const { directory, exportPath } = await temporaryExport(t);
   const decoy = path.join(directory, `${ID}.json`);

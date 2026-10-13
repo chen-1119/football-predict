@@ -213,7 +213,7 @@ function buildRecommendationReviewPage(source, filters, now = Date.now()) {
   };
 }
 
-async function readRecommendationReviewPage(pool, url, now = Date.now()) {
+async function readRecommendationReviewPage(pool, url, now = Date.now(), {trustRegistry} = {}) {
   const filters = parseReviewQuery(url);
   const client = await pool.connect();
   try {
@@ -246,6 +246,12 @@ async function readRecommendationReviewPage(pool, url, now = Date.now()) {
       resultEvents: results.rows.map(row => row.payload),
       boundDecisions: bindings.rows.map(row => row.payload),
     }, filters, now);
+    const coverageAdapter=require('../scripts/recommendationPlatform/publishedReviewCoverageRepository.cjs');
+    const observed=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
+    const asOf=observed instanceof Date?observed.toISOString():observed;
+    page.publishedCoverage=coverageAdapter.publicCoverage((await coverageAdapter.loadVerifiedCoverage(client,{
+      asOf,trustRegistry:trustRegistry||process.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH||require('node:path').resolve(__dirname,'../deploy/light-server/collector-trust-registry.json'),
+    })).coverage);
     await client.query('COMMIT');
     return page;
   } catch (error) {
