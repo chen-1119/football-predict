@@ -232,7 +232,14 @@ async function verify(pool){
     try{
       const researchRepo=new Repository(researchClient);
       check(()=>assert.equal(researchRepo instanceof Repository,true));
-      const beforeResearchHistory=await researchRepo.history();
+      // Each history read owns a consistent snapshot. Writes below use other
+      // connections, so end this snapshot before observing their next version.
+      const readResearchHistory=async()=>{
+        await researchClient.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+        try{return await researchRepo.history();}
+        finally{await researchClient.query('ROLLBACK');}
+      };
+      const beforeResearchHistory=await readResearchHistory();
       check(()=>assert.equal(beforeResearchHistory.some(m=>m.sourceMatchId==='901'),false));
       const createdResearch=await researchRepo.insertDualResearchV2(researchRecord,researchFixture);
       check(()=>assert.equal(createdResearch,true));
@@ -245,7 +252,7 @@ async function verify(pool){
         {code:'DUAL_RESEARCH_V2_INVALID'});checks++;
       await write({...researchFixture,id:'sporttery_901_rescheduled',
         kickoffTime:`${researchDate}T17:00:00Z`,eventVersion:`${researchDate}T17:00:00Z`},'history');
-      const afterResearchHistory=await researchRepo.history();
+      const afterResearchHistory=await readResearchHistory();
       check(()=>assert.equal(afterResearchHistory.some(m=>m.sourceMatchId==='901'),true));
       check(()=>assert.equal(afterResearchHistory.some(m=>m.id==='sporttery_901_rescheduled'),false));
       await assert.rejects(q('UPDATE football.recommendation_dual_research_v2_records SET payload=payload'),{code:'23000'});checks++;
