@@ -20,7 +20,10 @@ test('detail reads original completed event record plus second ACK and original 
  a.equal(r.publications.length,2);const manual=r.publications.find(r=>r.track==='manual');a.deepEqual(manual.record,v.record.records[0]);
  a.equal(manual.ack.storedSha256,manual.publication.payloadSha256);a.equal(manual.publication.recordHash,v.record.contentHash);
  a.equal(r.publications.find(r=>r.track==='trained').record.forecast.event.sourceMatchId,target(v).sourceMatchId);
- a.equal(db.log.some(q=>q.sql.includes('recommendation_decisions')||q.sql.includes('recommendation_result_heads')),false);
+ a.equal(db.log.some(q=>q.sql.includes('recommendation_decisions')),false);
+ const results=db.log.filter(q=>q.sql.includes('recommendation_result_heads'));a.equal(results.length,1);
+ a.match(results[0].sql,/eventKey'=ANY\(\$1::text\[\]\)/);a.equal(results[0].args[0].length,1);
+ a.deepEqual(r.postMatch.map(row=>row.state),['PENDING','PENDING']);
  const page=db.log.find(q=>q.sql.includes('artifact_key COLLATE "C">'));a.equal(page.args[2],target(v).businessDate);a.match(page.sql,/artifact_key LIKE 'reviewed-analysis-'/);
 });
 test('detail rejects incorrect ordered teams, cannot silently convert known event conflict into missing',async()=>{const v=f.setup(),t=target(v);await a.rejects(adapter.loadVerifiedPublicationForIdentity(client({pairs:[v.manual]}),{asOf:v.asOf,trustRegistry:v.trustRegistry,targetIdentity:{...t,homeTeamId:t.awayTeamId,awayTeamId:t.homeTeamId}}),/IDENTITY_CONFLICT/);});

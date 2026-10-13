@@ -45,7 +45,7 @@ function projectVerifiedPublication(match,loaded){
    trained={version:'league-baseline-directions-v1',businessDate:identity.businessDate,updatedAt:asOf,records:[record],blocked:0,formalEligible:false};
   }
  }
- return {version:'match-detail-publication-v1',status:receipts.length?'verified':'absent',identity,observedAt:asOf,receipts,reviewed,trained};
+ return {version:'match-detail-publication-v1',status:receipts.length?'verified':'absent',identity,observedAt:asOf,receipts,reviewed,trained,postMatch:loaded.postMatch||[]};
 }
 async function readMatchDetailPublication(client,match){
  // Always replace an untrusted persisted field. No raw snapshot can mint this

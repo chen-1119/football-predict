@@ -17,7 +17,7 @@ const view=frontend(path.resolve(__dirname,'../src/services/matchDetailPublicati
 const Evidence=frontend(path.resolve(__dirname,'../src/components/recommendations/DetailPublicationEvidence.tsx')).DetailPublicationEvidence;
 const words=n=>n==null||typeof n==='boolean'?'':Array.isArray(n)?n.map(words).join(''):typeof n==='object'?words(n.props?.children):String(n);
 async function setup(options={}){
- const v=f.setup(options),match={...v.matches[0],eventVersion:v.matches[0].kickoffTime,status:'FINISHED'},target=helper.identityFor(match),db=client({pairs:[v.manual,...(options.trained?[f.trained(v)]:[])]});
+ const v=f.setup(options),match={...v.matches[0],eventVersion:v.matches[0].kickoffTime,status:'FINISHED'},target=helper.identityFor(match),db=client({pairs:[v.manual,...(options.trained?[f.trained(v)]:[])],heads:options.result?[f.head(v.record.records[0],options.result)]:[]});
  const loaded=await adapter.loadVerifiedPublicationForIdentity(db,{asOf:v.asOf,targetIdentity:target,trustRegistry:v.trustRegistry});
  const wire=helper.projectVerifiedPublication(match,loaded),parsed=view.detailPublishedRecommendation(wire,match,Date.parse(v.asOf));
  return {v,match,db,loaded,wire,parsed};
@@ -29,6 +29,24 @@ test('same-RR real signed original manual+ACK reaches completed detail with orig
  a.ok(view.detailPublishedRecommendation(wire,{...match,odds:{odds1:9,oddsX:9,odds2:9}},Date.parse(v.asOf)));a.equal(db.log.some(q=>/INSERT|UPDATE|DELETE/.test(q.sql)),false);
 });
 test('HHAD original line and score semantics are retained, not relabelled as HAD',async()=>{const {parsed}=await setup({hhad:true});a.ok(parsed);a.equal(parsed.reviewed.market,'HHAD');a.equal(parsed.reviewed.handicap,-1);a.equal(parsed.reviewed.selection,'d');});
+
+test('later verified result is visible separately with original recommendation and ACK unchanged',async()=>{
+ const before=await setup(),after=await setup({result:{score:[2,0]}});
+ a.equal(before.parsed.postMatch[0].state,'PENDING');a.equal(after.parsed.postMatch[0].state,'WON');
+ a.equal(after.parsed.postMatch[0].score,'2-0');a.equal(after.parsed.postMatch[0].source,'synthetic-only');
+ a.equal(after.parsed.reviewed.sp,before.parsed.reviewed.sp);a.deepEqual(after.parsed.reviewed.scores,before.parsed.reviewed.scores);
+ a.equal(after.db.log.some(q=>/INSERT|UPDATE|DELETE/.test(q.sql)),false);
+ const text=words(Evidence({data:after.parsed,language:'zh'}));a.match(text,/赛后追加与结算/);a.match(text,/赛果采集时间/);a.match(text,/2-0/);
+});
+test('post-match cancellation and disputes do not display a settled score or win',async()=>{
+ for(const state of ['VOID','DISPUTED']){const {parsed}=await setup({result:{state}});a.ok(parsed);a.equal(parsed.postMatch[0].state,state);a.equal(parsed.postMatch[0].score,null);}
+});
+test('future result clocks and fake result references cannot be displayed as verified detail',async()=>{
+ const {wire,match,v}=await setup({result:{score:[2,0]}});
+ for(const mutate of [x=>x.postMatch[0].resultObservedAt='2099-01-01T00:00:00Z',x=>x.postMatch[0].resultEventId='fake',x=>x.postMatch.push(x.postMatch[0]),x=>x.postMatch[0].track='legacy']){
+  const changed=structuredClone(wire);mutate(changed);a.equal(view.detailPublishedRecommendation(changed,match,Date.parse(v.asOf)),null);
+ }
+});
 test('league model original forecast and model hashes survive detail display projection',async()=>{const {parsed,loaded}=await setup({trained:true});a.ok(parsed);a.equal(parsed.trained.modelHash,loaded.publications.find(x=>x.track==='trained').record.modelHash);a.equal(parsed.trained.scoreTop3.length,3);});
 test('wrong business day, rescheduled event, reversed teams, names and source never inherit detail pick',async()=>{
  const {match,wire,v}=await setup();for(const patch of [{businessDate:'2026-09-18'},{kickoffTime:'2026-09-18T15:00:00Z'},{eventVersion:'2026-09-18T15:00:00Z'},{eventVersion:undefined},{homeTeamId:match.awayTeamId,awayTeamId:match.homeTeamId},{homeTeamName:'Other'},{sourceMatchId:'fivehundred_'+match.sourceMatchId}])a.equal(view.detailPublishedRecommendation(wire,{...match,...patch},Date.parse(v.asOf)),null);

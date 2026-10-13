@@ -158,14 +158,21 @@ async function loadVerifiedCoverage(client,{asOf,trustRegistry,includeResults=tr
  }
  const selectedPublications=includePublications?coverage.rows.filter(r=>!conflicts.has(r.eventKey)&&(!target||matchesIdentity(r,target)))
   .map(r=>publications.get(r.recordId)).filter(Boolean):undefined;
- return {coverage,events:[...events.values()],audit,...(selectedPublications?{publications:selectedPublications}:{})};
+ return {coverage,events:[...events.values()],audit,...(selectedPublications?{publications:selectedPublications,resultHeads}:{})};
 }
 function publicCoverage(coverage){const {rows,...summary}=coverage;void rows;return summary;}
 async function loadVerifiedPublicationForIdentity(client,options={}){
  const target=targetOf(options.targetIdentity);
- const loaded=await loadVerifiedCoverage(client,{...options,targetIdentity:target,includeLegacy:false,includeResults:false,includePublications:true});
+ const loaded=await loadVerifiedCoverage(client,{...options,targetIdentity:target,includeLegacy:false,includeResults:true,includePublications:true});
  if(!loaded.coverage.complete)fail('COVERAGE_PUBLICATION_INCOMPLETE');
  if(loaded.coverage.rows.some(row=>coveragePolicy.eventKey(row)===coveragePolicy.eventKey(target)&&!matchesIdentity(row,target)))fail('COVERAGE_PUBLICATION_IDENTITY_CONFLICT');
- return {version:'verified-published-event-v1',identity:target,asOf:options.asOf,publications:loaded.publications,audit:loaded.audit};
+ const postMatch=loaded.coverage.rows.filter(r=>matchesIdentity(r,target)).map(r=>{
+  const settlement=r.settlement,e=loaded.resultHeads.find(e=>e.eventId===settlement.resultEventId);
+  const settled=['WON','LOST'].includes(settlement.state);
+  return {track:r.track,state:settlement.state,score:settled?settlement.score:null,
+   resultEventId:settled?e.eventId:null,revision:settled?e.revision:null,
+   resultObservedAt:settled?e.observedAt:null,source:settled?e.source:null};
+ });
+ return {version:'verified-published-event-v1',identity:target,asOf:options.asOf,publications:loaded.publications,postMatch,audit:loaded.audit};
 }
 module.exports={loadVerifiedCoverage,loadVerifiedPublicationForIdentity,publicCoverage,createVerificationCache,bounds,targetOf,matchesIdentity};
