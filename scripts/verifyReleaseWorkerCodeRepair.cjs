@@ -210,6 +210,26 @@ function verifyReleaseWorkerCodeRepair() {
     assert(client.includes('shellQuote(buildReadOnlyWorkerProbe())'));assert(client.includes('validateEmergencyCodeAuthorization'));
     assert(native.includes('native_code_verify_cutover_lease'));assert(native.includes('native_data final'));
   });
+  // Exercise the real client invocation without SSH: long signed probes must
+  // remain byte-exact on stdin and never become a Windows process argument.
+  const transportClient=fs.readFileSync(path.join(__dirname,'deployReleaseBundle.cjs'),'utf8');
+  const transportStart=transportClient.indexOf('const remotePreflight = runCommand');
+  const transportEnd=transportClient.indexOf('const remotePreflightOutput =',transportStart);
+  assert(transportStart>=0&&transportEnd>transportStart);
+  const transportSource=transportClient.slice(transportStart,transportEnd)+'\nresult=remotePreflight;';
+  for(const status of [0,27,null])check(()=>{
+    const command='set -euo pipefail; '+"printf '%s' '真实签名数据 $() ` quoted "+'x'.repeat(65536)+"'; exit 27";
+    let captured;
+    const context={sshOptions:['-p','22','-o','StrictHostKeyChecking=yes'],sshTarget:'ubuntu@fixed-host',remotePreflightCommand:command,
+      runCommand:(name,args,options)=>{captured={name,args:[...args],options};return{status,error:status===null?'transport unavailable':null};}};
+    new vm.Script(transportSource).runInNewContext(context);
+    assert.equal(captured.name,'ssh');
+    assert.deepEqual(captured.args,['-p','22','-o','StrictHostKeyChecking=yes','ubuntu@fixed-host','/bin/bash -se']);
+    assert.equal(captured.options.input,command+'\n');
+    assert(Buffer.byteLength(captured.options.input)>65536);
+    assert(captured.args.every(arg=>arg.length<100));
+    assert.equal(context.result.status,status);
+  });
   return {ok:true,checks,synthetic:true,productionWrites:0,workerHealthPromoted:false};
 }
 module.exports={verifyReleaseWorkerCodeRepair};
