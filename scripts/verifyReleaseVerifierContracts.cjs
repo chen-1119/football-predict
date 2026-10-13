@@ -7,6 +7,13 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('normal code serving preserves signed PG identity, archives and original worker failures',()=>{
+ const file='tests/normal-code-serving.test.cjs';
+ const child=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
+   for(const required of ['scripts/verifyNativeCodeServing.cjs','scripts/committedGenerationRecoveryServingCore.cjs',file])assert(read(entry).includes('"'+required+'"'));
+});
 check('detail keeps original acknowledged event publications and truthful missing-data states',()=>{
  const files=['tests/match-detail-publication.test.cjs','tests/prematch-collection-panel.test.cjs','tests/match-detail-identity.test.cjs','collectors/leisu-prematch/website-reader.test.cjs'];
  const child=require('node:child_process').spawnSync(process.execPath,['--test','--test-reporter=tap',...files],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:2*1024*1024});

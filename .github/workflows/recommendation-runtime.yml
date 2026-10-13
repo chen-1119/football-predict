@@ -55,6 +55,9 @@ on:
       - 'scripts/data/archive-successor-lineage.json'
       - 'scripts/data/frozen-archive-restoration.json'
       - 'scripts/verifyNativeRelease*.cjs'
+      - 'scripts/verifyNativeCodeServing.cjs'
+      - 'scripts/committedGenerationRecoveryServingCore.cjs'
+      - 'tests/normal-code-serving.test.cjs'
       - 'scripts/releaseStoragePreflight.cjs'
       - 'scripts/verifyReleaseStoragePreflight.cjs'
       - 'scripts/runReleaseWindowPreflight.cjs'
@@ -171,6 +174,8 @@ jobs:
           node-version: '22.22.1'
           cache: npm
       - run: npm ci --ignore-scripts
+      - name: Normal code serving and signed repair boundaries
+        run: node --test tests/normal-code-serving.test.cjs tests/code-data-release.test.cjs tests/staged-code-release.test.cjs tests/committed-generation-recovery-continuation.test.cjs
       - name: Controlled native release and rollback contracts
         run: node scripts/verifyReleaseArchivePreflight.cjs && node scripts/verifyReleaseWindowPreflight.cjs && node scripts/verifyReleaseStoragePreflight.cjs && node scripts/verifyNativeReleasePipeline.cjs && node scripts/verifyNativeReleaseJournal.cjs && node scripts/verifyNativeReleaseRecovery.cjs && node scripts/verifyReleaseArchiveSuccessorContracts.cjs
       - run: node scripts/verifyProductionPlanSourceContracts.cjs
