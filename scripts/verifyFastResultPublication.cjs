@@ -3930,6 +3930,16 @@ const run = async () => {
       && workerSource.includes('eventCycle: fullOfficialPublishedThisCycle ? activeEventCycle : failedCycle')
     ));
     const syncDataSource = fs.readFileSync(path.join(rootDir, "scripts", "syncData.cjs"), "utf8");
+    // Whitespace in a destructuring declaration is not the data contract.
+    // Retain the exact verified reader and all three explicit output bindings.
+    const runtimeFastInputBinding = /\bconst\s*\{\s*receipt\s*:\s*sqliteFastReceipt\s*,\s*finals\s*:\s*sqliteFastFinals\s*,\s*storage\s*:\s*fastInputStorage\s*\}\s*=\s*await\s+readRuntimeFastResultInput\s*\(\s*\{/;
+    check("full sync receipt binding retains the verified reader and storage witness", (
+      runtimeFastInputBinding.test(syncDataSource)
+      && runtimeFastInputBinding.test("const {\n receipt: sqliteFastReceipt,\n finals: sqliteFastFinals,\n storage: fastInputStorage\n} = await readRuntimeFastResultInput({")
+      && !runtimeFastInputBinding.test(syncDataSource.replace("finals: sqliteFastFinals, storage: fastInputStorage", "finals: unverifiedFinals, storage: fastInputStorage"))
+      && !runtimeFastInputBinding.test(syncDataSource.replace(", storage: fastInputStorage", ""))
+      && !runtimeFastInputBinding.test(syncDataSource.replace("} = await readRuntimeFastResultInput({", "} = await unverifiedRuntimeInput({"))
+    ));
     check("full sync applies and republishes the fast observation ledger", (
       syncDataSource.indexOf("applyFastResultObservation(match, fastResultObservations)")
         < syncDataSource.indexOf("output = output.map(settleTrustedPublishedPredictions)")
@@ -3937,7 +3947,7 @@ const run = async () => {
         < syncDataSource.indexOf("const postMatchReviews = attachPostMatchReviews(")
       && syncDataSource.includes("overlayFastObservedFinals(output, sqliteFastFinals, fastResultObservations)")
       && syncDataSource.includes("fastResultObservations,")
-      && syncDataSource.includes("const { receipt: sqliteFastReceipt, finals: sqliteFastFinals } = await readRuntimeFastResultInput({")
+      && runtimeFastInputBinding.test(syncDataSource)
       && syncDataSource.includes("sqliteFastReceipt?.observations || []")
       && syncDataSource.includes("fastResultPublication,")
       && syncDataSource.includes("const { receipt: latestFastReceipt } = await readRuntimeFastResultInput({")

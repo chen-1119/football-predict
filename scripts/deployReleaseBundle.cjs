@@ -615,8 +615,8 @@ steps.push({
 const remotePreflight = runCommand("ssh", [
   ...sshOptions,
   sshTarget,
-  remotePreflightCommand
-]);
+  "/bin/bash -se"
+], { input: remotePreflightCommand + "\n" });
 const remotePreflightOutput = remotePreflight.stdout || "";
 const remoteTrustedKeyId = remotePreflightOutput.match(/\bkeyId=([0-9a-f]{64})\b/)?.[1] || null;
 const remoteTrustedKeyMatches = Boolean(remotePreflight.dryRun || remoteTrustedKeyId === signatureVerification.keyId);
@@ -641,6 +641,8 @@ steps.push({
     && remoteRecoveryHelperAcceptable,
   command: remotePreflight.command,
   args: remotePreflight.args,
+  inputBytes: Buffer.byteLength(remotePreflightCommand + "\n", "utf8"),
+  inputSha256: crypto.createHash("sha256").update(remotePreflightCommand + "\n").digest("hex"),
   remoteTrustedKeyId,
   localSigningKeyId: signatureVerification.keyId,
   remoteTrustedKeyMatches,
