@@ -1,4 +1,5 @@
 import { validCoherentPrimary, type CoherentPrimary } from './coherentPrimarySelection.cjs';
+
 export { publicationLifecycle, publicationLifecycleLabel } from './publishedRecommendationStatus.cjs';
 export type Outcome = '1' | 'X' | '2';
 export type ResultState = 'PENDING' | 'WON' | 'LOST' | 'VOID' | 'DISPUTED';
@@ -41,7 +42,7 @@ export interface SupplementaryResearch {
 export interface SupplementaryResult {state:ResultState;actual?:string;score?:string|null;resultEventId?:string|null}
 export interface SupplementarySummary {exactScore:Summary;totalGoals:Summary;excludedWithoutFrozenPicks:number}
 export interface Settlement { state:ResultState; score?:string|null; actual?:Outcome; resultEventId?:string|null; legs?:Array<{decisionId:string;selectionId?:string;state:ResultState;score?:string|null}> }
-export interface SelectionQuality {version:'recommendation-selection-quality-v1'|'recommendation-selection-quality-v2';status:'watch'|'reference-qualified';qualified:boolean;reasons:string[];samples:{elo:{home:number|null;away:number|null};form:{home:number|null;away:number|null}}|null;probabilityLead:number|null;marketProbability:number|null;modelMarketGap:number|null;expectedValue:number|null;marketFavorite:boolean;directionSelectionMode?:'model-leader'|'market-edge-override';marketRole?:'favorite'|'draw'|'nonfavorite'|null;crossTrack?:{referenceTipCode:Outcome;referenceRecordedAt:string;knownAtPublication:boolean}}
+export interface SelectionQuality {version:'recommendation-selection-quality-v1'|'recommendation-selection-quality-v2';assessmentBasis?:'coherent-primary-anchor-v1';assessedMarket?:'HAD'|'HHAD';status:'watch'|'reference-qualified';qualified:boolean;reasons:string[];samples:{elo:{home:number|null;away:number|null};form:{home:number|null;away:number|null}}|null;probabilityLead:number|null;marketProbability:number|null;modelMarketGap:number|null;expectedValue:number|null;marketFavorite:boolean;directionSelectionMode?:'model-leader'|'market-edge-override';marketRole?:'favorite'|'draw'|'nonfavorite'|null;crossTrack?:{referenceTipCode:Outcome;referenceRecordedAt:string;knownAtPublication:boolean}}
 export interface PublishedScore {home:number;away:number;label:string;probability:number;hadCode:Outcome;hhadCode:Outcome|null}
 export interface PublishedTotalGoals {label:string;probability:number}
 export interface PublishedScores {status:'available'|'unavailable';version:'published-score-distribution-v1';decisionId:string;recordHash:string;topScores:PublishedScore[];alignedScores:PublishedScore[];totalGoals?:PublishedTotalGoals[]}
@@ -94,7 +95,14 @@ export function outcomeResearchReasonLabel(reason:string,zh:boolean):string{
   };
   return (labels[reason]??[reason,reason])[zh?0:1];
 }
-export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null;selectionQuality?:SelectionQuality|null;scoreDistribution?:PublishedScores|null;outcomeResearch?:OutcomeCategoryResearch|null;supplementarySettlement?:{exactScore:SupplementaryResult;totalGoals:SupplementaryResult}|null }
+export interface StrategyAssessment {
+  version:'evidence-price-recommendation-v1';id:string;contentHash:string;asOf:string;
+  decisionId:string;decisionRecordHash:string;scope:'shadow-reference-only';
+  selectionStatus:'observation'|'research-value-candidates'|'unavailable';reasons:string[];
+  formalEligible:false;primary:null;companion:null;calibration:{status:'unavailable'|'unverified'};
+  candidates:Array<{id:string;market:'HAD'|'HHAD';tipCode:Outcome;modelProbability:number|null;modelExpectedValue:number|null;researchValueEligible:boolean;reasons:string[];risks:string[]}>;
+}
+export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null;selectionQuality?:SelectionQuality|null;strategyAssessment?:StrategyAssessment|null;scoreDistribution?:PublishedScores|null;outcomeResearch?:OutcomeCategoryResearch|null;supplementarySettlement?:{exactScore:SupplementaryResult;totalGoals:SupplementaryResult}|null }
 export function boundOfficialHandicapSp(analysis:HandicapAnalysis|null|undefined,direction:Outcome|null|undefined):number|null{
   const quote=analysis?.marketReference;
   if(!direction||quote?.source!=='sporttery:HHAD')return null;
@@ -146,7 +154,23 @@ export interface DayCoverageData {
   coverageRatio:number|null;updatedAt:string;missingTotal:number;hasMore:boolean;
   missing:Array<{matchId:string|null;sourceMatchId:string|null;homeTeamName:string;awayTeamName:string;reasonCode:string;reasonText:string}>;
 }
+export interface PrdPaperDirection {
+  version:'prd-paper-direction-view-v1';id:string;recordHash:string;contentHash:string;businessDate:string;
+  sourceMatchId:string;eventVersion:string;homeTeamId:string;awayTeamId:string;homeTeamName:string;awayTeamName:string;
+  decidedAt:string;createdAt:string;cutoffAt:string;forecastAsOf:string;decisionPriceAsOf:string|null;modelHash:string;forecastHash:string;
+  paperArtifactHash:string;acknowledgementHash:string;paperCommitObservedAt:string;
+  formalEligible:false;productionEligible:false;primary:null;companion:null;modelValidation:'uncalibrated';
+  selectionStatus:'paper-primary'|'watch-ev-tie'|'watch-no-eligible-option';
+  paperPrimary:null|{market:'HAD'|'HHAD';tipCode:Outcome;handicapLine:number;probability:number;sp:number;marketProbability:number;edge:number;expectedValue:number;quoteReceivedAt:string;quoteRequestedAt:string;quoteHash:string};
+  reasons:string[];
+}
+export interface PrdPaperDirectionsData {
+  version:'prd-paper-pipeline-view-v1';businessDate:string;updatedAt:string;status:'awaiting-inputs'|'blocked'|'paper-recorded';
+  records:PrdPaperDirection[];blockedCount:number;truncated:boolean;formalEligible:false;formalStrategyChanged:false;
+  requestedStrategy:'prd-paper-recommendation-v1';activeFormalStrategy:null;legacyReferenceStrategy:'coherent-market-primary-v1';reasons:string[];
+}
 export interface RecommendationCenterData {
+  strategySwitch?:{version:'trained-strategy-switch-v1';activeReferenceStrategy:'league-trained-baseline-v1';legacyPublicationEnabled:false;legacyFallbackEnabled:false;formalEligible:false;modelAdoptionCount:number};
   version:'recommendation-center-v1';updatedAt:string;businessDate:string;inputAsOf:string|null;resultAsOf:string|null;
   lanes:Partial<Record<'publish'|'combos'|'settlement'|'view',Lane>>;
   current:SingleRow[];previews:Combo[];todayCombos:ComboRow[];overlapDecisionIds:string[];
@@ -154,6 +178,165 @@ export interface RecommendationCenterData {
   review:{singles:SingleRow[];combos:ComboRow[];limit:number;statistics:{single:Summary;supplementary?:SupplementarySummary;qualifiedSingle?:Summary;handicap?:Summary;handicapBreakdown?:HandicapBreakdown;two:Summary;three:Summary};qualityReport?:ModelQualityReport;handicapCalibration?:HandicapCalibrationProfile;definition:string};
   excludedCorruptRecords:number;modelValidation:'unvalidated';
   coverage?:DayCoverageData;
+  prdPaper?:PrdPaperDirectionsData;
+  leagueBaseline?:LeagueBaselineDirections;
+  reviewedAnalysis?:ReviewedAnalysis;
+  reviewedAnalysisHistory?:ReviewedAnalysis;
+  dailyBulletin?:DailyBulletin;
+}
+export interface LeagueBaselineDirection {
+ sourceMatchId:string;eventVersion:string;homeTeamId:string;awayTeamId:string;
+ id:string;homeTeamName:string;awayTeamName:string;createdAt:string;cutoffAt:string;
+ modelVersion:string;modelHash:string;parametersHash:string;direction:Outcome|null;
+ had:Record<Outcome,number>;scoreTop3:Array<{home:number;away:number;probability:number}>;
+}
+export interface ReviewedAnalysisRecord {
+ eventId:string;eventVersion:string;businessDate:string;matchNum:string;homeTeamId:string;awayTeamId:string;
+ homeTeamName:string;awayTeamName:string;market:'HAD'|'HHAD';handicap?:number;selection:'h'|'d'|'a';sp:number;originalSp:number;
+ scores:number[][];confidence:'高'|'中'|'低';reason:string;analysisUrl:string;limitations:string[];cutoffAt:string;quoteObservedAt:string;
+ evidence?:{hashes:string[];observedAt:string;missing:string[];verification:'official-single-source'};
+}
+export interface ReviewedAnalysisCombo {band:number;product:number|null;confidence:'高'|'中'|'低'|null;
+ legs:Array<{eventId:string;matchNum:string;market:'HAD'|'HHAD';handicap?:number;selection:'h'|'d'|'a';sp:number}>}
+export interface ReviewedAnalysis {businessDate:string;updatedAt:string;createdAt?:string;publicationHash?:string;records:ReviewedAnalysisRecord[];
+ combos:ReviewedAnalysisCombo[];threeCombos:ReviewedAnalysisCombo[];comboArchive?:{observedAt:string;view:ReviewedAnalysis;firstVersion?:{suppliedAt:string;combos:ReviewedAnalysisCombo[]}}}
+function reviewedPriceProduct(prices:number[]):number{
+ let coefficient=1n,scale=0;
+ for(const price of prices){
+  const [decimal,exponent='0']=price.toString().split('e'),[whole,fraction='']=decimal.split('.');
+  coefficient*=BigInt(whole+fraction);scale+=fraction.length-Number(exponent);
+ }
+ return Number(`${coefficient}e${-scale}`);
+}
+export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedAt:string,allowComboArchive=false):ReviewedAnalysis{
+ const v=object(value),rows=list(v.records),combos=list(v.combos),threeCombos=Object.hasOwn(v,'threeCombos')?list(v.threeCombos):[];
+ if(Object.hasOwn(v,'comboArchive')&&!allowComboArchive)throw Error('Reviewed combo archive scope');
+ if(v.version!=='reviewed-analysis-view-v1'||v.businessDate!==businessDate||v.updatedAt!==updatedAt||v.formalEligible!==false||rows.length>32||combos.length>3||threeCombos.length>3)throw Error('Reviewed analysis envelope');
+ if(!rows.length){if(combos.length||threeCombos.length)throw Error('Reviewed analysis empty');return {businessDate,updatedAt,records:[],combos:[],threeCombos:[]};}
+ const {contentHash,...body}=v;
+ if(paperHex(contentHash)!==reviewedAnalysisPublicHash(body)||paperClock(v.createdAt).ns>=paperClock(v.commitObservedAt).ns||paperClock(v.commitObservedAt).ns>paperClock(updatedAt).ns)throw Error('Reviewed analysis seal');
+ const ids=new Set<string>();
+ const records=rows.map(x=>{
+  const r=object(x),eventId=paperText(r.eventId,20),selection=r.selection;
+  if(!/^\d+$/.test(eventId)||ids.has(eventId)||!['h','d','a'].includes(String(selection))||r.businessDate!==businessDate||!['HAD','HHAD'].includes(String(r.market))||r.publicationMethod!=='reviewed-editorial'||r.formalEligible!==false||r.modelProbability!==null||r.modelVersion!==null)throw Error('Reviewed analysis record');ids.add(eventId);
+  const handicap=r.market==='HHAD'?number(r.handicap):0;
+  if((r.market==='HHAD'&&(!Number.isSafeInteger(handicap)||handicap===0||Math.abs(handicap)>12))||(r.market==='HAD'&&r.handicap!=null))throw Error('Reviewed handicap line');
+  const cutoffAt=paperClock(r.cutoffAt).text,eventVersion=paperClock(r.eventVersion).text;
+  const created=paperClock(r.publicationCreatedAt??v.createdAt),committed=paperClock(r.publicationCommitObservedAt??v.commitObservedAt);
+  if(Object.hasOwn(r,'publicationCreatedAt')!==Object.hasOwn(r,'publicationCommitObservedAt')||created.ns>=committed.ns||committed.ns>paperClock(v.commitObservedAt).ns
+   ||committed.ns>=paperClock(cutoffAt).ns||paperClock(cutoffAt).ns>paperClock(eventVersion).ns||paperClock(r.quoteObservedAt).ns>created.ns)throw Error('Reviewed analysis clock');
+  const sp=number(r.sp),originalSp=number(r.originalSp),scores=list(r.scores).map(x=>list(x).map(number));
+  if(sp<=1||originalSp<=1||scores.length!==2||scores.some(s=>s.length!==2||s.some(n=>!Number.isInteger(n)||n<0||n>15)||(s[0]+handicap===s[1]?'d':s[0]+handicap>s[1]?'h':'a')!==selection)||!['高','中','低'].includes(String(r.confidence)))throw Error('Reviewed analysis scores');
+  const analysisUrl=paperText(r.analysisUrl,2000),url=new URL(analysisUrl);if(url.protocol!=='https:'||url.username||url.password)throw Error('Reviewed analysis URL');
+  let evidence:ReviewedAnalysisRecord['evidence'];
+  if(Object.hasOwn(r,'evidenceAdoption')){const e=object(r.evidenceAdoption),{contentHash:eh,...eb}=e,ev=object(e.event),hashes=list(e.evidenceHashes).map(paperHex);
+   if(paperHex(eh)!==prdPaperPublicHash(eb)||e.version!=='team-evidence-adoption-view-v1'||!paperHex(e.adoptionHash)||e.verification!=='official-single-source'
+    ||e.secondIndependentSourceVerified!==false||e.formalEligible!==false||list(e.probabilityFactorsUsed).length||r.confidence!=='低'
+    ||ev.sourceMatchId!==eventId||ev.eventVersion!==eventVersion||ev.businessDate!==businessDate||ev.homeTeamId!==r.homeTeamId||ev.awayTeamId!==r.awayTeamId
+    ||hashes.length<1||hashes.length>4||JSON.stringify(hashes)!==JSON.stringify(r.evidenceHashes)||paperClock(e.asOf).ns!==created.ns)throw Error('Reviewed evidence binding');
+   evidence={hashes,observedAt:paperClock(e.asOf).text,missing:list(e.missing).map(x=>paperText(x,100)),verification:'official-single-source'};
+  }
+  return {eventId,eventVersion,businessDate,matchNum:paperText(r.matchNum,30),homeTeamId:paperText(r.homeTeamId,100),awayTeamId:paperText(r.awayTeamId,100),homeTeamName:paperText(r.homeTeamName,100),awayTeamName:paperText(r.awayTeamName,100),market:r.market as 'HAD'|'HHAD',...(r.market==='HHAD'?{handicap}:{}),selection:selection as 'h'|'d'|'a',sp,originalSp,scores,confidence:r.confidence as '高'|'中'|'低',reason:paperText(r.reason,500),analysisUrl,limitations:list(r.limitations).map(v=>paperText(v,200)),cutoffAt,quoteObservedAt:paperClock(r.quoteObservedAt).text,...(evidence?{evidence}:{})};
+ });
+ const parseCombos=(values:unknown[],size:2|3):ReviewedAnalysisCombo[]=>{
+  const bands=new Set<number>(),groups=new Set<string>(),asOf=paperClock(updatedAt).ns;
+  return values.map(x=>{
+   const c=object(x),band=number(c.band);if(![2.5,5,10].includes(band)||bands.has(band))throw Error('Reviewed combo band');bands.add(band);
+   const bound=list(c.legs).map(x=>{const l=object(x),r=records.find(r=>r.eventId===l.eventId);if(!r||l.market!==r.market||(r.market==='HHAD'?l.handicap!==r.handicap:l.handicap!=null)||l.selection!==r.selection||l.sp!==r.sp||l.matchNum!==r.matchNum)throw Error('Reviewed combo binding');return r;});
+   const legs=bound.map(r=>({eventId:r.eventId,matchNum:r.matchNum,market:r.market,...(r.market==='HHAD'?{handicap:r.handicap}:{}),selection:r.selection,sp:r.sp}));
+   if(!legs.length){if(c.product!==null||c.confidence!==null)throw Error('Reviewed combo empty');return {band,legs,product:null,confidence:null};}
+   const group=legs.map(l=>l.eventId).sort().join('/'),product=number(c.product);
+   if(legs.length!==size||new Set(legs.map(l=>l.eventId)).size!==size||groups.has(group)||product<band||product!==reviewedPriceProduct(legs.map(l=>l.sp)))throw Error('Reviewed combo product');groups.add(group);
+   const confidence=bound.some(r=>r.confidence==='低')?'低':bound.some(r=>r.confidence==='中')?'中':'高';
+   if(c.confidence!==confidence)throw Error('Reviewed combo confidence');
+   if(bound.some(r=>paperClock(r.cutoffAt).ns<=asOf))throw Error('Reviewed combo cutoff');
+   return {band,legs,product,confidence};
+  });
+ };
+ return {businessDate,updatedAt,createdAt:paperClock(v.createdAt).text,publicationHash:paperHex(v.publicationHash),records,combos:parseCombos(combos,2),threeCombos:parseCombos(threeCombos,3)};
+}
+export function parseReviewedAnalysisHistory(value:unknown,currentBusinessDate:string,centerUpdatedAt:string):ReviewedAnalysis{
+ const v=object(value),businessDate=date(v.businessDate),updatedAt=paperClock(v.updatedAt);
+ if(businessDate>=currentBusinessDate||updatedAt.ns<paperClock(centerUpdatedAt).ns)throw Error('Reviewed history clock');
+ const history=parseReviewedAnalysis(v,businessDate,updatedAt.text,true);
+ // The history endpoint replays original single freezes at the actual read
+ // clock. It does not reconstruct unpersisted combinations from past prices.
+ if(!history.records.length||history.combos.length||history.threeCombos.length)throw Error('Reviewed history records');
+ if(Object.hasOwn(v,'comboArchive')){
+  const archive=object(v.comboArchive),source=object(archive.source),original=object(archive.view);
+  const committed=archive.version==='reviewed-committed-combo-archive-v1';
+  if(committed){
+   paperKeys(archive,['version','businessDate','createdAt','settlementEligible','source','view','contentHash']);
+   paperKeys(source,['kind','artifactKey','generationId','committedAt','observedAt','viewJsonSha256']);
+   const {contentHash,...body}=archive;
+   const stateHash=reviewedAnalysisPublicHash({records:original.records,publicationHash:original.publicationHash,draftHash:original.draftHash,combos:original.combos,threeCombos:original.threeCombos??[]});
+   prdPaperPublicHash({...body,view:null});reviewedAnalysisPublicHash(original);
+   if(source.kind!=='postgres-committed-view'||archive.settlementEligible!==false||paperHex(contentHash)!==boundedPublicHash(body,35*512,35*16384)
+    ||source.artifactKey!==`reviewed-combo-view-${businessDate}-${stateHash}`||!/^g-[a-f0-9]{64}$/.test(text(source.generationId))
+    ||paperClock(source.committedAt).ns>paperClock(source.observedAt).ns||paperClock(archive.createdAt).ns!==paperClock(source.observedAt).ns)throw Error('Reviewed committed archive identity');
+  }else{
+   paperKeys(archive,['version','businessDate','source','view',...(Object.hasOwn(archive,'firstVersion')?['firstVersion']:[])]);
+   paperKeys(source,['receiptSha256','intentSha256','releaseSha256','observedAt','viewJsonSha256','productionWrites']);
+   for(const key of ['receiptSha256','intentSha256','releaseSha256','viewJsonSha256'])paperHex(source[key]);
+  }
+  const observed=paperClock(source.observedAt),published=paperClock(original.updatedAt);
+  if((!committed&&(archive.version!=='reviewed-combo-history-archive-v1'||source.productionWrites!==0))||archive.businessDate!==businessDate
+   ||published.ns>observed.ns||observed.ns>updatedAt.ns||sha256Text(JSON.stringify(original))!==source.viewJsonSha256
+   ||paperHex(original.publicationHash)!==paperHex(v.publicationHash)||paperHex(original.draftHash)!==paperHex(v.draftHash))throw Error('Reviewed combo archive binding');
+  const saved=parseReviewedAnalysis(original,businessDate,published.text),originalRecords=list(original.records);
+  if(originalRecords.length!==list(v.records).length||originalRecords.some((r,i)=>prdPaperPublicHash(r)!==prdPaperPublicHash(list(v.records)[i]))
+   ||(!saved.combos.some(c=>c.legs.length)&&!(committed&&saved.threeCombos.some(c=>c.legs.length)))||(!committed&&saved.threeCombos.length)
+   ||[...saved.combos,...saved.threeCombos].some(c=>c.legs.some(l=>paperClock(saved.records.find(r=>r.eventId===l.eventId)!.cutoffAt).ns<=observed.ns)))throw Error('Reviewed combo archive records');
+  history.comboArchive={observedAt:observed.text,view:saved};
+  if(Object.hasOwn(archive,'firstVersion')){
+   const first=object(archive.firstVersion),provenance=object(first.source),{contentHash,...body}=first;
+   paperKeys(first,['version','businessDate','source','recordHashes','combos','productionWrites','settlementEligible','contentHash']);
+   paperKeys(provenance,['kind','imageSha256','suppliedAt','originalObservedAt']);
+   const suppliedAt=paperClock(provenance.suppliedAt),hashes=list(first.recordHashes).map(paperHex);
+   if(paperHex(contentHash)!==prdPaperPublicHash(body)||first.version!=='reviewed-combo-user-first-version-v1'||first.businessDate!==businessDate
+    ||provenance.kind!=='user-provided-screenshot'||!paperHex(provenance.imageSha256)||provenance.originalObservedAt!==null||suppliedAt.ns>updatedAt.ns
+    ||first.productionWrites!==0||first.settlementEligible!==false||hashes.length!==originalRecords.length
+    ||hashes.some((h,i)=>h!==prdPaperPublicHash(originalRecords[i])))throw Error('Reviewed first version source');
+   const bands=new Set<number>(),groups=new Set<string>(),values=list(first.combos);
+   if(values.length!==3)throw Error('Reviewed first version count');
+   const firstCombos=values.map(value=>{
+    const c=object(value),band=number(c.band);paperKeys(c,['band','legs','product','confidence']);
+    if(![2.5,5,10].includes(band)||bands.has(band))throw Error('Reviewed first version band');bands.add(band);
+    const bound=list(c.legs).map(value=>{const l=object(value),r=history.records.find(r=>r.eventId===l.eventId);
+     if(!r)throw Error('Reviewed first version event');paperKeys(l,['eventId','matchNum','market','selection','sp',...(r.market==='HHAD'?['handicap']:[])]);
+     if(l.matchNum!==r.matchNum||l.market!==r.market||l.selection!==r.selection||l.sp!==r.sp||(r.market==='HHAD'?l.handicap!==r.handicap:l.handicap!=null))throw Error('Reviewed first version leg');return r;
+    });
+    const group=bound.map(r=>r.eventId).sort().join('/'),product=number(c.product),confidence=bound.some(r=>r.confidence==='低')?'低':bound.some(r=>r.confidence==='中')?'中':'高';
+    if(bound.length!==2||bound[0].eventId===bound[1].eventId||groups.has(group)||product<band||product!==reviewedPriceProduct(bound.map(r=>r.sp))||c.confidence!==confidence)throw Error('Reviewed first version product');groups.add(group);
+    return {band,product,confidence:confidence as '高'|'中'|'低',legs:bound.map(r=>({eventId:r.eventId,matchNum:r.matchNum,market:r.market,...(r.market==='HHAD'?{handicap:r.handicap}:{}),selection:r.selection,sp:r.sp}))};
+   });
+   history.comboArchive.firstVersion={suppliedAt:suppliedAt.text,combos:firstCombos};
+  }
+ }
+ return history;
+}
+export interface LeagueBaselineDirections {businessDate:string;updatedAt:string;records:LeagueBaselineDirection[];blocked:number}
+export function parseLeagueBaseline(value:unknown,businessDate:string,updatedAt:string):LeagueBaselineDirections{
+ const p=object(value);
+ if(p.version!=='league-baseline-directions-v1'||p.formalEligible!==false||p.businessDate!==businessDate||p.updatedAt!==updatedAt)throw new Error('Invalid league model envelope');
+ const raw=list(p.records);if(raw.length>32)throw new Error('League model bound');const ids=new Set<string>();
+ const records=raw.map(value=>{
+  const r=object(value),{contentHash,...body}=r;
+  if(paperHex(contentHash)!==prdPaperPublicHash(body)||r.version!=='league-baseline-direction-view-v1'||r.formalEligible!==false||r.businessDate!==businessDate)throw new Error('League model seal');
+  const id=paperText(r.id,90);if(!/^league-forecast-[a-f0-9]{64}$/.test(id)||ids.has(id))throw new Error('League model duplicate');ids.add(id);
+  const created=paperClock(r.createdAt),commit=paperClock(r.commitObservedAt),cutoff=paperClock(r.cutoffAt),event=object(r.event);
+  if(created.ns>=commit.ns||commit.ns>=cutoff.ns||cutoff.ns>paperClock(event.eventVersion).ns||commit.ns>paperClock(updatedAt).ns)throw new Error('League model clock');
+  const grid=object(r.grid),h=object(grid.had),had={1:number(h['1']),X:number(h.X),2:number(h['2'])};
+  if(Object.values(had).some(p=>p<0||p>1)||Math.abs(Object.values(had).reduce((a,b)=>a+b,0)-1)>1e-9)throw new Error('League model probabilities');
+  const direction=r.direction===null?null:outcome(r.direction),ranks=Object.entries(had).sort((a,b)=>b[1]-a[1]);
+  if((ranks[0][1]-ranks[1][1]>1e-12?ranks[0][0]:null)!==direction)throw new Error('League model direction');
+  const scoreTop3=list(grid.scoreTop3).map(value=>{const x=object(value),home=count(x.home),away=count(x.away),probability=number(x.probability);if(home>20||away>20||probability<0||probability>1)throw new Error('League score');return {home,away,probability};});
+  if(scoreTop3.length!==3||r.modelVersion!=='league-trained-baseline-v1')throw new Error('League model version');
+  paperHex(r.recordHash);paperHex(r.forecastHash);
+  return {id,sourceMatchId:paperText(event.sourceMatchId),eventVersion:paperClock(event.eventVersion).text,homeTeamId:paperText(event.homeTeamId),awayTeamId:paperText(event.awayTeamId),homeTeamName:paperText(r.homeTeamName),awayTeamName:paperText(r.awayTeamName),createdAt:created.text,cutoffAt:cutoff.text,
+   modelVersion:r.modelVersion,modelHash:paperHex(r.modelHash),parametersHash:paperHex(r.parametersHash),direction,had,scoreTop3};
+ });
+ return {businessDate,updatedAt,records,blocked:count(p.blocked)};
 }
 type Obj=Record<string,unknown>;
 const object=(v:unknown):Obj=>{if(!v||typeof v!=='object'||Array.isArray(v))throw new Error('Invalid recommendation response');return v as Obj;};
@@ -165,6 +348,97 @@ const date=(v:unknown)=>{const s=text(v);if(!/^\d{4}-\d{2}-\d{2}$/.test(s)||new 
 const list=(v:unknown):unknown[]=>{if(!Array.isArray(v))throw new Error('Missing array');return v;};
 const outcome=(v:unknown):Outcome=>{if(v!=='1'&&v!=='X'&&v!=='2')throw new Error('Invalid outcome');return v;};
 const state=(v:unknown):ResultState=>{if(!['PENDING','WON','LOST','VOID','DISPUTED'].includes(String(v)))throw new Error('Invalid result');return v as ResultState;};
+const paperText=(value:unknown,max=160):string=>{const s=text(value);if(s!==s.trim()||s.length>max||s.split('').some(c=>c.charCodeAt(0)<=31||c.charCodeAt(0)===127))throw new Error('Invalid PRD paper text');return s;};
+const paperHex=(value:unknown):string=>{const s=paperText(value,64);if(!/^[a-f0-9]{64}$/.test(s))throw new Error('Invalid PRD paper hash');return s;};
+const paperKeys=(value:Obj,keys:string[])=>{if(Object.keys(value).length!==keys.length||keys.some(k=>!Object.hasOwn(value,k)))throw new Error('Unsupported PRD paper schema');};
+// Same strict calendar and nanosecond comparison as prematchV3Clock.cjs;
+// signed clock bytes are retained, never rounded through Date.toISOString().
+const paperClock=(value:unknown):{text:string;ns:bigint}=>{
+ const s=paperText(value,64),m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(Z|[+-]\d{2}:\d{2})$/.exec(s);
+ if(!m)throw new Error('Invalid PRD paper clock');
+ const [y,mo,d,h,mi,se]=[m[1],m[2],m[3],m[4],m[5],m[6]||'0'].map(Number),leap=y%4===0&&(y%100!==0||y%400===0),days=[31,leap?29:28,31,30,31,30,31,31,30,31,30,31];
+ if(y<1||mo<1||mo>12||d<1||d>days[mo-1]||h>23||mi>59||se>59||(m[8]!=='Z'&&(Number(m[8].slice(1,3))>23||Number(m[8].slice(4,6))>59)))throw new Error('Invalid PRD paper clock');
+ const whole=s.replace(/\.\d{1,9}(?=Z|[+-]\d{2}:\d{2}$)/,''),milliseconds=Date.parse(whole);
+ if(!Number.isFinite(milliseconds))throw new Error('Invalid PRD paper clock');
+ return {text:s,ns:BigInt(milliseconds)*1000000n+BigInt((m[7]||'').padEnd(9,'0')||'0')};
+};
+// Public-body consistency only: this digest does not authenticate a collector,
+// a model, or a PostgreSQL acknowledgement. Those checks belong to the server.
+export function prdPaperPublicHash(value:unknown):string{
+ return boundedPublicHash(value,512,16384);
+}
+// A reviewed daily view contains up to 32 individually bounded records, plus
+// its header and two combo arrays. Keep the original paper/record budget per component;
+// only the aggregate envelope receives the sum of those bounded budgets.
+function reviewedAnalysisPublicHash(value:Obj):string{
+ const records=list(value.records),combos=list(value.combos),hasThree=Object.hasOwn(value,'threeCombos'),threeCombos=hasThree?list(value.threeCombos):[];
+ if(records.length>32||combos.length>3||threeCombos.length>3)throw new Error('Reviewed analysis envelope');
+ for(const record of records)prdPaperPublicHash(record);
+ prdPaperPublicHash(combos);
+ if(hasThree)prdPaperPublicHash(threeCombos);
+ const hasArchive=Object.hasOwn(value,'comboArchive');
+ if(hasArchive){
+  const archive=object(value.comboArchive),original=object(archive.view);
+  if(Object.hasOwn(original,'comboArchive'))throw Error('Reviewed combo archive scope');
+  reviewedAnalysisPublicHash(original);
+  prdPaperPublicHash({...archive,view:null});
+ }
+ prdPaperPublicHash({...value,records:[],combos:[],...(hasThree?{threeCombos:[]}:{} ),...(hasArchive?{comboArchive:null}:{})});
+ return boundedPublicHash(value,(hasArchive?71:35)*512,(hasArchive?71:35)*16384);
+}
+function boundedPublicHash(value:unknown,maxNodes:number,maxCharacters:number):string{
+ let nodes=0;const stable=(v:unknown,depth:number):unknown=>{
+  if(++nodes>maxNodes||depth>8)throw new Error('PRD paper hash exceeds budget');
+  if(v===null||typeof v==='boolean'||typeof v==='string')return v;
+  if(typeof v==='number'){if(!Number.isFinite(v))throw new Error('Invalid PRD paper hash number');return v;}
+  if(Array.isArray(v))return v.map(item=>stable(item,depth+1));
+  const o=object(v);return Object.fromEntries(Object.keys(o).sort().map(k=>[k,stable(o[k],depth+1)]));
+ };
+ const body=JSON.stringify(stable(value,0));if(body.length>maxCharacters)throw new Error('PRD paper hash exceeds budget');
+ return sha256Text(body);
+}
+function sha256Text(body:string):string{
+ const encoded=encodeURIComponent(body),bytes:number[]=[];
+ for(let i=0;i<encoded.length;i++){if(encoded[i]==='%'){bytes.push(parseInt(encoded.slice(i+1,i+3),16));i+=2;}else bytes.push(encoded.charCodeAt(i));}
+ const bitLength=bytes.length*8;bytes.push(0x80);while(bytes.length%64!==56)bytes.push(0);bytes.push(0,0,0,0,(bitLength>>>24)&255,(bitLength>>>16)&255,(bitLength>>>8)&255,bitLength&255);
+ const k=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2],h=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+ const rotate=(n:number,b:number)=>(n>>>b)|(n<<(32-b));
+ for(let offset=0;offset<bytes.length;offset+=64){const w:number[]=[];for(let i=0;i<16;i++){const p=offset+i*4;w[i]=((bytes[p]<<24)|(bytes[p+1]<<16)|(bytes[p+2]<<8)|bytes[p+3])>>>0;}for(let i=16;i<64;i++){const a=w[i-15],b=w[i-2];w[i]=(w[i-16]+(rotate(a,7)^rotate(a,18)^(a>>>3))+w[i-7]+(rotate(b,17)^rotate(b,19)^(b>>>10)))>>>0;}
+  let [a,b,c,d,e,f,g,z]=h;for(let i=0;i<64;i++){const t1=(z+(rotate(e,6)^rotate(e,11)^rotate(e,25))+((e&f)^((~e)&g))+k[i]+w[i])>>>0,t2=((rotate(a,2)^rotate(a,13)^rotate(a,22))+((a&b)^(a&c)^(b&c)))>>>0;z=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}[a,b,c,d,e,f,g,z].forEach((n,i)=>{h[i]=(h[i]+n)>>>0;});
+ }
+ return h.map(n=>n.toString(16).padStart(8,'0')).join('');
+}
+const paperTeamId=(name:string):string=>{let h=2166136261;for(const character of name.split('')){h^=character.charCodeAt(0);h=Math.imul(h,16777619);}return `team_${(h>>>0).toString(36)}`;};
+export function parsePrdPaperDirections(value:unknown,businessDate:string,centerUpdatedAt:string):PrdPaperDirectionsData{
+ const p=object(value);paperKeys(p,['version','businessDate','updatedAt','status','records','blockedCount','truncated','formalEligible','formalStrategyChanged','requestedStrategy','activeFormalStrategy','legacyReferenceStrategy','reasons']);
+ if(p.version!=='prd-paper-pipeline-view-v1'||p.formalEligible!==false||p.formalStrategyChanged!==false||p.requestedStrategy!=='prd-paper-recommendation-v1'||p.activeFormalStrategy!==null||p.legacyReferenceStrategy!=='coherent-market-primary-v1'||!['awaiting-inputs','blocked','paper-recorded'].includes(String(p.status))||typeof p.truncated!=='boolean')throw new Error('Unsupported PRD paper pipeline');
+ const day=date(p.businessDate),updated=paperClock(p.updatedAt),centerClock=paperClock(centerUpdatedAt),reasons=list(p.reasons).map(v=>paperText(v)),rawRecords=list(p.records),blockedCount=count(p.blockedCount);
+ if(day!==businessDate||updated.ns>centerClock.ns||rawRecords.length>32||reasons.length>32||(p.status==='paper-recorded'&&rawRecords.length===0)||(p.status==='awaiting-inputs'&&rawRecords.length!==0)||(p.status==='blocked'&&!reasons.length))throw new Error('Invalid PRD paper pipeline state');
+ const records=rawRecords.map(value=>{
+  const r=object(value);paperKeys(r,['version','id','recordHash','contentHash','businessDate','sourceMatchId','eventVersion','homeTeamId','awayTeamId','homeTeamName','awayTeamName','decidedAt','createdAt','cutoffAt','forecastAsOf','decisionPriceAsOf','modelHash','forecastHash','paperArtifactHash','acknowledgementHash','paperCommitObservedAt','formalEligible','productionEligible','primary','companion','modelValidation','selectionStatus','paperPrimary','reasons']);
+  const id=paperText(r.id,74),recordHash=paperHex(r.recordHash),contentHash=paperHex(r.contentHash),sourceMatchId=paperText(r.sourceMatchId,20),recordDay=date(r.businessDate),homeTeamName=paperText(r.homeTeamName),awayTeamName=paperText(r.awayTeamName),homeTeamId=paperText(r.homeTeamId,64),awayTeamId=paperText(r.awayTeamId,64);
+  if(r.version!=='prd-paper-direction-view-v1'||!/^prd_paper_[a-f0-9]{64}$/.test(id)||!/^[1-9]\d{0,19}$/.test(sourceMatchId)||recordDay!==day||homeTeamId!==paperTeamId(homeTeamName)||awayTeamId!==paperTeamId(awayTeamName)||homeTeamId===awayTeamId||r.formalEligible!==false||r.productionEligible!==false||r.primary!==null||r.companion!==null||r.modelValidation!=='uncalibrated'||!['paper-primary','watch-ev-tie','watch-no-eligible-option'].includes(String(r.selectionStatus)))throw new Error('Invalid PRD paper direction');
+  const event=paperClock(r.eventVersion),decided=paperClock(r.decidedAt),created=paperClock(r.createdAt),cutoff=paperClock(r.cutoffAt),forecast=paperClock(r.forecastAsOf),commit=paperClock(r.paperCommitObservedAt),price=r.decisionPriceAsOf===null?null:paperClock(r.decisionPriceAsOf),recordReasons=list(r.reasons).map(v=>paperText(v));
+  if(forecast.ns>decided.ns||decided.ns>created.ns||created.ns>commit.ns||commit.ns>updated.ns||commit.ns-decided.ns>30000000000n||commit.ns>=cutoff.ns||cutoff.ns>event.ns||(price&&price.ns>decided.ns)||!recordReasons.length||recordReasons.length>32)throw new Error('Invalid PRD paper knowledge clock');
+  const modelHash=paperHex(r.modelHash),forecastHash=paperHex(r.forecastHash),paperArtifactHash=paperHex(r.paperArtifactHash),acknowledgementHash=paperHex(r.acknowledgementHash);
+  let paperPrimary:PrdPaperDirection['paperPrimary']=null;
+  if(r.paperPrimary!==null){const q=object(r.paperPrimary);paperKeys(q,['market','tipCode','handicapLine','probability','sp','marketProbability','edge','expectedValue','quoteReceivedAt','quoteRequestedAt','quoteHash']);
+   const market=q.market,tipCode=outcome(q.tipCode),handicapLine=number(q.handicapLine),probability=number(q.probability),sp=number(q.sp),marketProbability=number(q.marketProbability),edge=number(q.edge),expectedValue=number(q.expectedValue),received=paperClock(q.quoteReceivedAt),requested=paperClock(q.quoteRequestedAt),quoteHash=paperHex(q.quoteHash);
+   if(!['HAD','HHAD'].includes(String(market))||!Number.isSafeInteger(handicapLine)||(market==='HAD'?handicapLine!==0:handicapLine===0||Math.abs(handicapLine)>5)||probability<0||probability>1||marketProbability<=0||marketProbability>=1||sp<=1||!/^\d+(?:\.\d{1,4})?$/.test(String(sp))||Math.abs(edge-(probability-marketProbability))>1e-12||Math.abs(expectedValue-(probability*sp-1))>1e-12||!(probability*sp>1.05&&edge>0.05)||requested.ns>received.ns||received.ns>decided.ns||created.ns-requested.ns>900000000000n||!price||price.ns<received.ns)throw new Error('Invalid PRD paper market, SP or price clock');
+   paperPrimary={market:market as 'HAD'|'HHAD',tipCode,handicapLine,probability,sp,marketProbability,edge,expectedValue,quoteReceivedAt:received.text,quoteRequestedAt:requested.text,quoteHash};
+  }
+  if((r.selectionStatus==='paper-primary')!==Boolean(paperPrimary))throw new Error('Invalid PRD paper selection state');
+  const {contentHash:ignoredHash,...body}=r;void ignoredHash;if(prdPaperPublicHash(body)!==contentHash)throw new Error('Invalid PRD paper public seal');
+  return {version:'prd-paper-direction-view-v1' as const,id,recordHash,contentHash,businessDate:recordDay,sourceMatchId,eventVersion:event.text,homeTeamId,awayTeamId,homeTeamName,awayTeamName,decidedAt:decided.text,createdAt:created.text,cutoffAt:cutoff.text,forecastAsOf:forecast.text,decisionPriceAsOf:price?.text??null,modelHash,forecastHash,paperArtifactHash,acknowledgementHash,paperCommitObservedAt:commit.text,formalEligible:false as const,productionEligible:false as const,primary:null,companion:null,modelValidation:'uncalibrated' as const,selectionStatus:r.selectionStatus as PrdPaperDirection['selectionStatus'],paperPrimary,reasons:recordReasons};
+ });
+ if(new Set(records.map(r=>r.id)).size!==records.length||new Set(records.map(r=>`${r.sourceMatchId}:${r.eventVersion}`)).size!==records.length)throw new Error('Duplicate PRD paper event');
+ return {version:'prd-paper-pipeline-view-v1',businessDate:day,updatedAt:updated.text,status:p.status as PrdPaperDirectionsData['status'],records,blockedCount,truncated:p.truncated,formalEligible:false,formalStrategyChanged:false,requestedStrategy:'prd-paper-recommendation-v1',activeFormalStrategy:null,legacyReferenceStrategy:'coherent-market-primary-v1',reasons};
+}
+export function prdPaperQuoteIsCurrent(record:PrdPaperDirection,now:number):boolean{
+ try{if(!Number.isSafeInteger(now)||!record.paperPrimary)return false;const instant=BigInt(now)*1000000n,requested=paperClock(record.paperPrimary.quoteRequestedAt).ns,received=paperClock(record.paperPrimary.quoteReceivedAt).ns;
+  return instant>=paperClock(record.paperCommitObservedAt).ns&&instant>=received&&instant<paperClock(record.cutoffAt).ns&&instant-requested<=900000000000n&&instant-received<=900000000000n;
+ }catch{return false;}
+}
 const frozenQuoteOdds=(value:unknown):Record<Outcome,number>|undefined=>{
   if(value==null)return undefined;
   const raw=object(value),prices={'1':number(raw['1']),X:number(raw.X),'2':number(raw['2'])};
@@ -330,6 +604,68 @@ function settlement(v:unknown):Settlement{
   if(s.legs!=null)result.legs=list(s.legs).map(v=>{const l=object(v);return {decisionId:text(l.decisionId),selectionId:l.selectionId==null?undefined:text(l.selectionId),state:state(l.state),score:l.score==null?null:text(l.score)};});
   return result;
 }
+function strategyAssessment(value:unknown,d:Decision):StrategyAssessment|null|undefined{
+  if(value===undefined)return undefined;if(value===null)return null;
+  const a=object(value),calibration=object(a.calibration),codes=['1','X','2'] as const;
+  const finiteTree=(v:unknown,depth=0):void=>{
+    if(depth>20)throw new Error('Strategy assessment nesting invalid');
+    if(typeof v==='number')number(v);
+    else if(v&&typeof v==='object')Object.values(v).forEach(item=>finiteTree(item,depth+1));
+  };finiteTree(a);
+  if(a.version!=='evidence-price-recommendation-v1'||a.scope!=='shadow-reference-only'
+    ||a.decisionId!==d.decisionId||a.decisionRecordHash!==d.recordHash
+    ||a.sourceMatchId!==d.sourceMatchId||a.eventVersion!==d.eventVersion||a.businessDate!==d.businessDate
+    ||a.formalEligible!==false||a.primary!==null||a.companion!==null
+    ||!['observation','research-value-candidates','unavailable'].includes(String(a.selectionStatus))
+    ||!['unavailable','unverified'].includes(String(calibration.status))||calibration.conservativeProbability!==null
+    ||!/^assessment_[a-f0-9]{64}$/.test(text(a.id))||!/^[a-f0-9]{64}$/.test(text(a.contentHash)))throw new Error('Invalid strategy assessment binding');
+  const probability=(v:unknown)=>{const p=number(v);if(p<0||p>1)throw new Error('Invalid strategy probability');return p;};
+  const nullable=(v:unknown,parse:(value:unknown)=>number)=>v===null?null:parse(v);
+  const distributions=object(a.distributions);
+  const vectors={} as Record<'HAD'|'HHAD',Record<Outcome,number>|null>;
+  const fairVectors={} as typeof vectors,quoteVectors={} as typeof vectors;
+  for(const market of ['HAD','HHAD'] as const){
+    const row=object(distributions[market]);
+    if(row.probabilityBasis!=='unconditional'||row.modelValidation!=='unvalidated')throw new Error('Invalid strategy distribution basis');
+    let model:Record<Outcome,number>|null=null,fair:Record<Outcome,number>|null=null;
+    for(const key of ['modelProbabilities','marketProbabilities']){
+      if(row[key]===null)continue;const raw=object(row[key]),p={'1':probability(raw['1']),X:probability(raw.X),'2':probability(raw['2'])};
+      if(Math.abs(p['1']+p.X+p['2']-1)>1e-6)throw new Error('Invalid strategy probability vector');
+      if(key==='modelProbabilities')model=p;else fair=p;
+    }
+    const expected=market==='HAD'?d.probabilities:d.handicapAnalysis?.overallProbabilities;
+    if(model&&expected&&codes.some(code=>Math.abs(model![code]-expected[code])>1e-8))throw new Error('Strategy probabilities differ from frozen decision');
+    const quote=row.quoteOdds===null?null:frozenQuoteOdds(row.quoteOdds)??null;
+    const expectedQuote=market==='HAD'?d.quoteOdds:d.handicapAnalysis?.marketReference?.odds;
+    if(quote&&expectedQuote&&codes.some(code=>quote[code]!==expectedQuote[code]))throw new Error('Strategy prices differ from frozen decision');
+    if((fair===null)!==(quote===null)||fair&&quote&&codes.some(code=>Math.abs(fair![code]-(1/quote[code])/codes.reduce((sum,item)=>sum+1/quote[item],0))>1e-8))throw new Error('Invalid strategy market prices');
+    vectors[market]=model;fairVectors[market]=fair;quoteVectors[market]=quote;
+  }
+  const candidates=list(a.candidates).map((value):StrategyAssessment['candidates'][number]=>{
+    const c=object(value),market=c.market,tipCode=outcome(c.tipCode);
+    if((market!=='HAD'&&market!=='HHAD')||c.probabilityBasis!=='unconditional'||c.formalEligible!==false
+      ||c.calibratedProbability!==null||c.conservativeProbability!==null||c.conservativeExpectedValue!==null
+      ||typeof c.researchValueEligible!=='boolean')throw new Error('Invalid strategy candidate');
+    const modelProbability=nullable(c.modelProbability,probability),marketProbability=nullable(c.marketProbability,probability);
+    const odds=nullable(c.odds,number),ev=nullable(c.modelExpectedValue,number),gap=nullable(c.modelMarketGap,number),breakEven=nullable(c.breakEvenProbability,probability);
+    if(modelProbability!==(vectors[market]?.[tipCode]??null)||marketProbability!==(fairVectors[market]?.[tipCode]??null)||odds!==(quoteVectors[market]?.[tipCode]??null)||odds!==null&&odds<=1
+      ||(ev===null)!==(modelProbability===null||odds===null)||ev!==null&&Math.abs(ev-(modelProbability!*odds!-1))>1e-8
+      ||(gap===null)!==(modelProbability===null||marketProbability===null)||gap!==null&&Math.abs(gap-(modelProbability!-marketProbability!))>1e-8
+      ||(breakEven===null)!==(odds===null)||breakEven!==null&&Math.abs(breakEven-1/odds!)>1e-8)throw new Error('Invalid strategy price arithmetic');
+    const reasons=list(c.reasons).map(text),risks=list(c.risks).map(text);
+    if(c.researchValueEligible&&(reasons.length||ev===null||ev<=0))throw new Error('Invalid strategy research candidate');
+    return{id:text(c.id),market,tipCode,modelProbability,modelExpectedValue:ev,researchValueEligible:c.researchValueEligible,reasons,risks};
+  });
+  if(candidates.length!==6||new Set(candidates.map(c=>`${c.market}:${c.tipCode}`)).size!==6||new Set(candidates.map(c=>c.id)).size!==6)throw new Error('Incomplete strategy candidates');
+  const eligible=list(a.eligibleCandidates).map(value=>text(object(value).id)),expectedEligible=candidates.filter(c=>c.researchValueEligible).map(c=>c.id);
+  const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>[key,canonical(item)])):value;
+  if(list(a.eligibleCandidates).some(value=>JSON.stringify(canonical(value))!==JSON.stringify(canonical(list(a.candidates).find(candidate=>object(candidate).id===object(value).id)))))throw new Error('Strategy eligible candidate differs from source');
+  if(eligible.length!==expectedEligible.length||new Set(eligible).size!==eligible.length||eligible.some(id=>!expectedEligible.includes(id))
+    ||(a.selectionStatus==='research-value-candidates')!==(eligible.length>0))throw new Error('Invalid strategy eligibility summary');
+  return{version:'evidence-price-recommendation-v1',id:text(a.id),contentHash:text(a.contentHash),asOf:stamp(a.asOf),decisionId:d.decisionId,decisionRecordHash:d.recordHash,scope:'shadow-reference-only',
+    selectionStatus:a.selectionStatus as StrategyAssessment['selectionStatus'],reasons:list(a.reasons).map(text),formalEligible:false,primary:null,companion:null,
+    calibration:{status:calibration.status as StrategyAssessment['calibration']['status']},candidates};
+}
 function single(v:unknown):SingleRow{
   const x=object(v),d=decision(x.decision),s=settlement(x.settlement);
   if(['WON','LOST'].includes(s.state)&&(!s.actual||!s.score||(s.actual===d.tipCode)!==(s.state==='WON')))throw new Error('Settlement disagrees with decision');
@@ -353,9 +689,19 @@ function single(v:unknown):SingleRow{
         ||qualified||!quality.reasons.includes('cross-track-direction-conflict'))throw new Error('Invalid cross-track diagnostic');
       quality.crossTrack={referenceTipCode,referenceRecordedAt,knownAtPublication:c.knownAtPublication};
     }
-    // This diagnostic belongs to the frozen HAD decision, never to a later
-    // model update or an HHAD review selection.
-    if(quality.expectedValue!=null&&Math.abs(quality.expectedValue-(d.modelProbability*d.odds-1))>1e-8)throw new Error('Selection quality EV disagrees with frozen decision');
+    // The explicit current-view scope binds to the frozen coherent anchor.
+    // Unscoped historical records retain their original HAD assessment.
+    let assessedProbability:number|undefined=d.modelProbability,assessedOdds:number|undefined=d.odds;
+    if(q.assessmentBasis!==undefined){
+      if(q.assessmentBasis!=='coherent-primary-anchor-v1'||d.primaryPickPolicyVersion!=='coherent-market-primary-v1'||!d.coherentPrimary)throw new Error('Invalid selection quality assessment basis');
+      quality.assessmentBasis=q.assessmentBasis;quality.assessedMarket=d.coherentPrimary.anchorMarket;
+      if(d.coherentPrimary.anchorMarket==='HHAD'){
+        const code=d.coherentPrimary.anchorCode;
+        assessedProbability=d.handicapAnalysis?.overallProbabilities?.[code];
+        assessedOdds=d.handicapAnalysis?.marketReference?.odds?.[code];
+      }
+    }
+    if(quality.expectedValue!=null&&(assessedProbability==null||assessedOdds==null||Math.abs(quality.expectedValue-(assessedProbability*assessedOdds-1))>1e-8))throw new Error('Selection quality EV disagrees with frozen decision');
     if(qualified&&quality.reasons.length)throw new Error('Contradictory selection quality');
   }
   if(x.scoreDistribution!=null){
@@ -417,7 +763,7 @@ function single(v:unknown):SingleRow{
     research={version:'outcome-category-research-v1',decisionId:d.decisionId,recordHash:d.recordHash,researchOnly:true,formalPromotionEligible:false,
       category:category as OutcomeCategoryResearch['category'],candidateCode,modelLeaderCode,marketFavoriteCode,researchQualified,reasons,evidenceCodes,outcomes};
   }
-  return {decision:d,settlement:s,handicapSettlement:hs,supplementarySettlement:supplementaryResults(x.supplementarySettlement,d,s),selectionQuality:quality,scoreDistribution:x.scoreDistribution===undefined?undefined:scores,outcomeResearch:x.outcomeResearch===undefined?undefined:research};
+  return {decision:d,settlement:s,handicapSettlement:hs,supplementarySettlement:supplementaryResults(x.supplementarySettlement,d,s),selectionQuality:quality,strategyAssessment:strategyAssessment(x.strategyAssessment,d),scoreDistribution:x.scoreDistribution===undefined?undefined:scores,outcomeResearch:x.outcomeResearch===undefined?undefined:research};
 }
 function comboSelection(v:unknown,parent:Decision,rawParent:Obj):ComboSelection{
   const s=object(v),market=s.market,tipCode=outcome(s.tipCode),handicapLine=number(s.handicapLine),odds=number(s.odds),modelProbability=number(s.modelProbability);
@@ -626,6 +972,18 @@ export function parseRecommendationCenter(response:unknown):RecommendationCenter
   const parsedLanes:RecommendationCenterData['lanes']={};
   for(const k of ['publish','combos','settlement','view'] as const){if(lanes[k]==null)continue;const l=object(lanes[k]);if(l.status!=='ok'&&l.status!=='error')throw new Error('Invalid lane status');parsedLanes[k]={status:l.status,lastAttemptAt:stamp(l.lastAttemptAt),lastSuccessAt:l.lastSuccessAt==null?undefined:stamp(l.lastSuccessAt),errorCode:l.errorCode==null?null:text(l.errorCode),inputAsOf:l.inputAsOf==null?undefined:stamp(l.inputAsOf),candidateCount:l.candidateCount==null?undefined:count(l.candidateCount),eligibleCount:l.eligibleCount==null?undefined:count(l.eligibleCount),bindingFailures:l.bindingFailures==null?undefined:count(l.bindingFailures),referenceCount:l.referenceCount==null?undefined:count(l.referenceCount),watchCount:l.watchCount==null?undefined:count(l.watchCount)};}
   const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),todayDualResearch:x.todayDualResearch==null?[]:list(x.todayDualResearch).map(dualResearchV2),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),qualityReport:review.qualityReport==null?undefined:modelQuality(review.qualityReport),statistics:{single:summary(stats.single),supplementary:stats.supplementary==null?undefined:supplementarySummary(stats.supplementary),qualifiedSingle:stats.qualifiedSingle==null?undefined:summary(stats.qualifiedSingle),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated',coverage:x.coverage==null?undefined:dayCoverage(x.coverage)};
+  if(Object.hasOwn(x,'prdPaper'))result.prdPaper=parsePrdPaperDirections(x.prdPaper,result.businessDate,result.updatedAt);
+  if(Object.hasOwn(x,'leagueBaseline'))result.leagueBaseline=parseLeagueBaseline(x.leagueBaseline,result.businessDate,result.updatedAt);
+  if(Object.hasOwn(x,'reviewedAnalysis'))result.reviewedAnalysis=parseReviewedAnalysis(x.reviewedAnalysis,result.businessDate,result.updatedAt);
+  if(Object.hasOwn(x,'reviewedAnalysisHistory'))result.reviewedAnalysisHistory=parseReviewedAnalysisHistory(x.reviewedAnalysisHistory,result.businessDate,result.updatedAt);
+  if(Object.hasOwn(x,'strategySwitch')){
+    const s=object(x.strategySwitch);
+    if(s.version!=='trained-strategy-switch-v1'||s.activeReferenceStrategy!=='league-trained-baseline-v1'||s.legacyPublicationEnabled!==false||s.legacyFallbackEnabled!==false||s.formalEligible!==false||result.current.length||result.previews.length||result.todayCombos.length||result.todayDualResearch?.length)throw new Error('Invalid trained strategy switch');
+    const modelAdoptionCount=count(s.modelAdoptionCount);
+    if(modelAdoptionCount!==(result.leagueBaseline?.records.length??0))throw new Error('Invalid trained adoption count');
+    result.strategySwitch={version:'trained-strategy-switch-v1',activeReferenceStrategy:'league-trained-baseline-v1',legacyPublicationEnabled:false,legacyFallbackEnabled:false,formalEligible:false,modelAdoptionCount};
+  }
+  if(Object.hasOwn(x,'dailyBulletin'))result.dailyBulletin=parseDailyBulletin(x.dailyBulletin,result.businessDate);
   if(result.coverage&&result.coverage.businessDate!==result.businessDate)throw new Error('Day coverage date mismatch');
   if(new Set(result.current.map(r=>r.decision.decisionId)).size!==result.current.length)throw new Error('Duplicate current decision');
   if(result.todayDualResearch?.some(r=>r.businessDate!==result.businessDate)
@@ -727,11 +1085,11 @@ export function handicapExtensionText(h:NonNullable<ReturnType<typeof primarySel
   const zh=language==='zh';
   const title=(code:Outcome)=>zh?({'1':'让胜',X:'让平','2':'让负'}[code]):({'1':'Handicap home',X:'Handicap draw','2':'Handicap away'}[code]);
   if(h.status==='recommend')return {
-    title:`${h.lineText} · ${title(h.code!)}`,
-    detail:`${h.conditional?(zh?'条件占比 ':'Conditional share '):''}${(h.probability!*100).toFixed(1)}%${h.odds?' · SP '+h.odds.toFixed(2):''}${!h.conditional?(zh?' · 低置信':' · low confidence'):h.calibrated?(zh?' · 已校准':' · calibrated'):''}`,
+    title:`${handicapLineLabel(h.line,zh)} · ${title(h.code!)}`,
+    detail:`${h.conditional?(zh?'条件占比 ':'Conditional share '):(zh?'无条件概率 ':'Unconditional probability ')}${(h.probability!*100).toFixed(1)}%${h.odds?' · SP '+h.odds.toFixed(2):''}${!h.conditional?(zh?' · 低置信':' · low confidence'):h.calibrated?(zh?' · 已校准':' · calibrated'):''}`,
   };
   return {
-    title:`${h.lineText} · ${zh?'不追让球':'Pass handicap'}`,
+    title:`${handicapLineLabel(h.line,zh)} · ${zh?'不追让球':'Pass handicap'}`,
     detail:`${h.conditional?(zh?'条件模型偏 ':'Conditional model leans '):(zh?'盘口模型偏 ':'Model leans ')}${title(h.riskCode!)} ${(h.riskProbability!*100).toFixed(1)}%${h.suggestedCode?(zh?' · 同向备选 ':' · aligned alternative ')+title(h.suggestedCode)+' '+(h.suggestedProbability!*100).toFixed(1)+'%':''}`,
   };
 }
@@ -748,5 +1106,79 @@ export function publishedHandicapCode(d:Pick<Decision,'primaryPickPolicyVersion'
 }
 export function primaryMarketLabel(d:Pick<Decision,'coherentPrimary'>,market:'HAD'|'HHAD',zh:boolean):string{
   const name=market==='HAD'?(zh?'胜平负':'1X2'):(zh?'让球':'Handicap');
-  return name+(d.coherentPrimary?(d.coherentPrimary.anchorMarket===market?(zh?' · 主方向':' · primary'):(zh?' · 伴随方向':' · companion')):(zh?'首选':' primary'));
+  if(d.coherentPrimary&&market==='HHAD'&&!d.coherentPrimary.hhadCode)return name+(zh?' · 暂不可用':' · unavailable');
+  return name+(d.coherentPrimary?(d.coherentPrimary.anchorMarket===market?(zh?' · 主方向':' · primary'):(zh?' · 条件分支':' · conditional branch')):(zh?'首选':' primary'));
+}
+
+export function handicapLineLabel(line:number,zh:boolean):string{
+  const signed=`${line>0?'+':''}${line}`;
+  return zh?`主队${line<0?'让':'受让'}${Math.abs(line)}球（${signed}）`:`Home handicap ${signed}`;
+}
+
+export function coherentProbabilityNote(d:Pick<Decision,'primaryPickPolicyVersion'|'coherentPrimary'>,zh:boolean):string|null{
+  const c=d.primaryPickPolicyVersion==='coherent-market-primary-v1'?d.coherentPrimary:null;
+  if(!c?.hhadCode||c.companionConditionalProbability==null||c.jointProbability==null)return null;
+  const conditional=(c.companionConditionalProbability*100).toFixed(2),joint=(c.jointProbability*100).toFixed(2);
+  return zh?`主方向成立时，冻结条件分支占比 ${conditional}%；两方向同时成立的无条件概率 ${joint}%。条件分支不是独立推荐，接近一半的占比不代表明显优势。条件占比不用于串关，也不是实际命中率。`:
+    `If the primary lands, the frozen conditional branch has a ${conditional}% share. Both landing has ${joint}% unconditional probability. This branch is not an independent recommendation; a share near one half is not a clear advantage. Conditional shares are not used for combos and are not observed hit rates.`;
+}
+
+/** Counts and reasons are reported evidence, never inferred from an empty preview. */
+export function comboEligibilityEvidence(data:RecommendationCenterData|null|undefined,zh:boolean){
+  const lane=data?.lanes.combos;
+  const values:Array<[string,number|undefined]>=[
+    [zh?'合格候选':'Eligible candidates',lane?.candidateCount],
+    [zh?'参考':'Reference',lane?.referenceCount],
+    [zh?'观察':'Watch',lane?.watchCount],
+  ];
+  const summary=values.filter(([,value])=>value!==undefined).map(([label,value])=>`${label} ${value}`).join(' · ');
+  const coverage=data?.coverage?.businessDate===data?.businessDate?data?.coverage:undefined;
+  const reasons=coverage?.missing.map(row=>`${row.homeTeamName} - ${row.awayTeamName}：${row.reasonText}`)??[];
+  return {summary,reasons,partial:coverage?.hasMore===true};
+}
+
+export interface BulletinPick {
+ id:string;sourceMatchId:string;homeTeamName:string;awayTeamName:string;matchNo:string|null;kickoffTime:string;cutoffAt:string;
+ publishedAt:string;modelVersion:string;confidence:'high'|'medium'|'low';summary:string;analysisLink:string|null;
+ selection:{market:'HAD'|'HHAD';tipCode:'1'|'X'|'2';handicapLine:number;label:string;odds:number};
+ scores:Array<{home:number;away:number;label:string;probability:number}>;quoteObservedAt:string;
+ marketProbabilities:Record<'1'|'X'|'2',number>;evidence:Array<{name:string;status:string;text:string;sources:Array<{url:string}>}>;
+}
+interface Stats {published:number;settled:number;won:number;hitRate:number|null;scoreTop1:number;scoreTop2:number;pending:number;excluded:number}
+export interface DailyBulletin {
+ version:'jincai-daily-bulletin-v1';businessDate:string;updatedAt:string;status:string;
+ schedule?:{earlyAt:string;featuredAt:string;fullAt:string;reviewAt:string};records:BulletinPick[];
+ tiers:Array<{minimum:number;status:string;reason?:string;totalOdds:number|null;legs:Array<{id:string;homeTeamName:string;awayTeamName:string;matchNo:string|null;selection:BulletinPick['selection']}>}>;
+ review:null|{previousBusinessDate:string;previous:Stats;cumulative:Stats;confidence:Record<string,Stats>;markets:Record<string,Stats>;combos:Array<{id:string;businessDate:string;minimum:number;state:string}>};
+}
+const dailyObj=(v:unknown):Record<string,unknown>=>v!==null&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:{};
+const dailyStr=(v:unknown)=>typeof v==='string'&&v.length<=2000;
+const dailyStamp=(v:unknown)=>dailyStr(v)&&Number.isFinite(Date.parse(v as string));
+export function parseDailyBulletin(v:unknown,day:string):DailyBulletin|undefined {
+ const x=dailyObj(v);if(x.version!=='jincai-daily-bulletin-v1'||x.businessDate!==day||!dailyStamp(x.updatedAt)||!Array.isArray(x.records)||x.records.length>512||!Array.isArray(x.tiers)||x.tiers.length>3)return undefined;
+ const seen=new Set();
+ for(const raw of x.records){const r=dailyObj(raw),s=dailyObj(r.selection);
+  if(!dailyStr(r.id)||seen.has(r.id)||!dailyStr(r.homeTeamName)||!dailyStr(r.awayTeamName)||!dailyStamp(r.kickoffTime)||!dailyStamp(r.cutoffAt)||!dailyStamp(r.publishedAt)||!dailyStamp(r.quoteObservedAt)
+   ||!['high','medium','low'].includes(String(r.confidence))||!['HAD','HHAD'].includes(String(s.market))||!['1','X','2'].includes(String(s.tipCode))
+   ||!Number.isSafeInteger(s.handicapLine)||(s.market==='HAD'&&s.handicapLine!==0)||typeof s.odds!=='number'||!Number.isFinite(s.odds)||s.odds<=1||!dailyStr(s.label)
+   ||!Array.isArray(r.scores)||r.scores.length!==2||!Array.isArray(r.evidence)||r.evidence.length!==6||!dailyStr(r.summary)||!dailyStr(r.modelVersion))return undefined;
+  for(const q of r.scores){const score=dailyObj(q);if(!Number.isSafeInteger(score.home)||!Number.isSafeInteger(score.away)||(score.home as number)<0||(score.away as number)<0||score.label!==`${score.home}-${score.away}`)return undefined;
+   const margin=(score.home as number)-(score.away as number)+(s.market==='HHAD'?s.handicapLine as number:0);if((margin>0?'1':margin<0?'2':'X')!==s.tipCode)return undefined;}
+  if(r.analysisLink!==null){try{if(new URL(String(r.analysisLink)).protocol!=='https:')return undefined;}catch{return undefined;}}
+  if(r.evidence.some(f=>!dailyStr(dailyObj(f).name)||!dailyStr(dailyObj(f).text)||!['unverified','verified'].includes(String(dailyObj(f).status))))return undefined;
+  const probs=dailyObj(r.marketProbabilities);if(['1','X','2'].some(c=>typeof probs[c]!=='number'||!Number.isFinite(probs[c])||(probs[c] as number)<0||(probs[c] as number)>1))return undefined;
+  seen.add(r.id);
+ }
+ for(const raw of x.tiers){const t=dailyObj(raw);if(![2.5,5,10].includes(Number(t.minimum))||!Array.isArray(t.legs))return undefined;
+  if(t.status==='available'){if(t.legs.length!==2||typeof t.totalOdds!=='number'||t.totalOdds<Number(t.minimum))return undefined;
+   const a=dailyObj(t.legs[0]),b=dailyObj(t.legs[1]);if(a.id===b.id||[a,b].some(l=>!dailyStr(l.id)||!dailyStr(l.homeTeamName)||!dailyStr(l.awayTeamName)||!dailyStr(dailyObj(l.selection).label)))return undefined;
+   const product=Number(dailyObj(a.selection).odds)*Number(dailyObj(b.selection).odds);if(!Number.isFinite(product)||Math.abs(product-t.totalOdds)>1e-8)return undefined;
+  }else if(t.status!=='unavailable'||t.totalOdds!==null||t.legs.length!==0)return undefined;
+ }
+ if(x.schedule&&Object.values(dailyObj(x.schedule)).some(v=>typeof v==='string'&&v.includes('T')&&!dailyStamp(v)))return undefined;
+ if(x.review!==null){const review=dailyObj(x.review);for(const stat of [review.previous,review.cumulative,...Object.values(dailyObj(review.confidence)),...Object.values(dailyObj(review.markets))]){
+   const s=dailyObj(stat);if(['published','settled','won','scoreTop1','scoreTop2','pending','excluded'].some(k=>!Number.isSafeInteger(s[k])||(s[k] as number)<0)
+    ||Number(s.won)>Number(s.settled)||s.hitRate!==(Number(s.settled)?Number(s.won)/Number(s.settled):null))return undefined;}
+   if(!Array.isArray(review.combos)||review.combos.some(c=>!dailyStr(dailyObj(c).id)||!['WON','LOST','PENDING','VOID','DISPUTED'].includes(String(dailyObj(c).state))))return undefined;}
+ return x as unknown as DailyBulletin;
 }

@@ -10,7 +10,8 @@ const helperSource = fs.readFileSync(path.join(__dirname, "../deploy/light-serve
 const sidecarUnits = [
   ["football-market-collector.service", true, true],
   ["football-featured-combo.service", true, true],
-  ["football-recommendation-settlement.service", false, false]
+  ["football-recommendation-settlement.service", false, false],
+  ["football-read-api-component-6073aafaaf5dae590bfb2b50.service", true, true]
 ];
 const sidecarTimers = [
   ["football-daily-prematch.timer", true, true],

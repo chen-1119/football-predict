@@ -121,7 +121,8 @@ ok(
 );
 
 const projectedQuality = buildQuality({
-  match: lateCutoffMatch,
+  match: {...lateCutoffMatch, buyEndTime: '2026-09-01T19:30:00+08:00'},
+  asOf: '2026-09-01T10:02:00Z',
   signal: {
     sourceObservedAt: "2026-09-01T10:00:00.000Z",
     projectedRoster: {
@@ -130,6 +131,8 @@ const projectedQuality = buildQuality({
       summary: { zh: "预计名单", en: "Projected roster" },
       usableForPreMatch: true,
       sourceObservedAt: "2026-09-01T10:00:00.000Z",
+      receivedAt: "2026-09-01T10:01:00.000Z",
+      home: [{playerId: 'synthetic-projected-player'}],
     },
   },
   teamHistory: { home: null, away: null },
@@ -139,7 +142,8 @@ equal(projectedQuality.components.lineup.confirmed, false, "projected roster exp
 equal(projectedQuality.weights.lineup, 2, "quality layer caps projected roster weight");
 
 const postCutoffQuality = buildQuality({
-  match: lateCutoffMatch,
+  match: {...lateCutoffMatch, buyEndTime: '2026-09-01T19:30:00+08:00'},
+  asOf: '2026-09-01T12:02:00Z',
   signal: {
     confirmedLineup: {
       source: "official-league",
@@ -149,6 +153,7 @@ const postCutoffQuality = buildQuality({
       usableForPreMatch: false,
       observationPhase: "post-cutoff",
       sourceObservedAt: "2026-09-01T12:00:00.000Z",
+      receivedAt: "2026-09-01T12:01:00.000Z",
     },
   },
   teamHistory: { home: null, away: null },

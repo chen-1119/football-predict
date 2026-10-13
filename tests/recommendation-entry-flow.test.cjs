@@ -3,7 +3,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {memoryPorts,validators}=require('./recommendationFixture.cjs');
 const jsx={jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
-function compile(file,req,globals={}){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve(file),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>id.endsWith('/coherentPrimarySelection.cjs')?require('../src/services/coherentPrimarySelection.cjs'):id.endsWith('/publishedRecommendationStatus.cjs')?require('../src/services/publishedRecommendationStatus.cjs'):req(id),Date,URLSearchParams,...globals});return module.exports;}
+function compile(file,req,globals={}){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve(file),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>['./ReviewedAnalysis','./LeagueBaselineDirections','./DailyBulletinPanel'].includes(id)?compile(require.resolve('../src/components/recommendations/'+id.slice(2)+'.tsx'),req,globals):id.endsWith('/coherentPrimarySelection.cjs')?require('../src/services/coherentPrimarySelection.cjs'):id.endsWith('/publishedRecommendationStatus.cjs')?require('../src/services/publishedRecommendationStatus.cjs'):req(id),Date,URLSearchParams,...globals});return module.exports;}
 const nodes=(n,p)=>n&&typeof n==='object'?(Array.isArray(n)?n.flatMap(v=>nodes(v,p)):[...(p(n)?[n]:[]),...nodes(n.props?.children,p)]):[];
 const words=n=>n==null||typeof n==='boolean'?'':Array.isArray(n)?n.map(words).join(''):typeof n==='object'?words(n.props?.children):String(n);
 test('BestTips honors login return tab, keeps query state through tab changes and browser navigation',()=>{
@@ -23,6 +23,7 @@ test('BestTips honors login return tab, keeps query state through tab changes an
 async function center(){
  const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();
  const view=compile('../src/services/recommendationCenterView.ts',require),data=view.parseRecommendationCenter({recommendationCenter:p.state.view});
+ const publishedResults=compile('../src/services/publishedMatchRecommendation.ts',require);
  let now=p.now,index=0,interval,cleanup,props={selectedTab:'two'};const state=[];let mounted=false;
  class Clock extends Date{static now(){return now;}}
  const mod=compile('../src/components/recommendations/RecommendationCenter.tsx',id=>{
@@ -33,8 +34,10 @@ async function center(){
   if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
   if(id==='./DayCoverage')return{DayCoverage:()=>null};
   if(id==='./MarketComparison')return{MarketComparison:()=>null};
+  if(id==='./PrdPaperDirections')return{PrdPaperDirections:()=>null};
   if(id==='./DualResearchV2')return{DualResearchV2:()=>null};
   if(id.endsWith('/recommendationCenterView'))return view;
+  if(id.endsWith('/publishedMatchRecommendation'))return publishedResults;
   if(id.endsWith('/TeamBadge'))return{TeamBadge:()=>null};if(id.endsWith('/FollowButton'))return{FollowButton:()=>null};
   if(id==='lucide-react'||id.endsWith('.css'))return{};throw Error(id);
  },{Date:Clock,window:{setInterval:fn=>{interval=fn;return 1;},clearInterval:()=>{interval=null;}}});
@@ -57,6 +60,6 @@ test('source freshness failure stays distinct from SP floor failure and retains 
  h.data.todayCombos=[{combo:{...preview,frozenAt:new Date(h.initialNow).toISOString()},settlement:{state:'PENDING'}}];assert.equal(combos(h.render()).length,1);assert.equal(combos(h.render())[0].props.combo.id,preview.id);h.stop();
 });
 test('genuinely fresh empty pool keeps its candidate shortage or SP-floor explanation',async()=>{
- const h=await center();h.data.previews=[];h.data.lanes.combos.candidateCount=1;assert.match(words(h.render()),/当前可用1场，2串1需要2场/);assert.doesNotMatch(words(h.render()),/报价已超过15分钟/);
+ const h=await center();h.data.previews=[];h.data.lanes.combos.candidateCount=1;assert.match(words(h.render()),/本轮通过筛选的候选为1场，2串1需要2场不同比赛/);assert.doesNotMatch(words(h.render()),/报价已超过15分钟/);
  h.data.lanes.combos.candidateCount=3;assert.match(words(h.render()),/今日无合格组合/);assert.match(words(h.render()),/SP≥2.50/);h.stop();
 });

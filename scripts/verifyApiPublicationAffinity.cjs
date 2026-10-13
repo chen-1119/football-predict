@@ -78,7 +78,7 @@ check("match payload uses one publication for metadata risk and cache identity",
   assert.match(matchPayload, /sqliteReadCacheToken\(meta, basePublication\.identity\)/);
   assert.match(matchPayload, /`generation:\$\{basePublication\.identity\.generationId \|\| basePublication\.identity\.mode\}`/);
   assert.match(matchPayload, /`manifest:\$\{basePublication\.identity\.manifestHash \|\| ""\}`/);
-  assert.match(matchPayload, /readMatchById\(decodedId, \{ basePublication \}\)/);
+  assert.match(matchPayload, /readMatchDetailById\(decodedId, \{ basePublication, recommendationAuthorityPolicy: currentRecommendationPolicy \}\)/);
 });
 
 check("recommendation risk takes the conservative floor across immutable and latest evaluations", () => {

@@ -1,4 +1,9 @@
+import { reviewedMatchRecommendation } from '../services/publishedMatchRecommendation';
+import { TrainedMatchPick } from '../components/recommendations/LeagueBaselineDirections';
+import { ReviewedMatchPick, ReviewedMatchPrice, ReviewedMatchStatus } from '../components/recommendations/ReviewedAnalysis';
+import { trainedMatchRecommendation } from '../services/publishedMatchRecommendation';
 import React, { useMemo, useState } from 'react';
+import { PublishedPrimaryPrice } from '../components/recommendations/SelectionQualityNote';
 import { CalendarDays, ChevronDown, ChevronUp, RotateCcw, Search, SlidersHorizontal, Trophy, X } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
 import { formatBeijingDateString, getDateStringOffset } from '../services/mockData';
@@ -26,7 +31,8 @@ import { DateScopeBar } from '../components/predictions/DateScopeBar';
 import { MatchSummaryRow } from '../components/predictions/MatchSummaryRow';
 import { MatchMarketOdds } from '../components/predictions/MatchMarketOdds';
 import { useRecommendationCenter } from '../hooks/useRecommendationCenter';
-import { publishedMatchRecommendation, usesPublishedRecommendation, publishedResultLabel } from '../services/publishedMatchRecommendation';
+import { publishedMatchRecommendation, usesPublishedRecommendation, publishedResultLabel, publishedResultProjection } from '../services/publishedMatchRecommendation';
+import { primaryMarketLabel } from '../services/recommendationCenterView';
 import { PublishedMatchPick } from '../components/recommendations/PublishedMatchPick';
 import type { SavedMatchCapture } from '../components/predictions/CapturedMatchData';
 import { buildCapturedReferenceAnalysis } from '../services/capturedReferenceAnalysis';
@@ -820,8 +826,11 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const scoreText = match.status === 'FINISHED' && hasOfficialScore(match) ? match.scoreHome + ':' + match.scoreAway
       : liveScore?.hasScore ? liveScore.scoreText : '';
     const unifiedRow = publishedMatchRecommendation(published.data, match);
+    const reviewedRow = reviewedMatchRecommendation(published.data, match);
     const useUnified = published.loading || published.failed || usesPublishedRecommendation(match, unifiedRow, nowMs);
-    const hasPick = !isVoid && (useUnified ? Boolean(unifiedRow) : Boolean(pickedPrediction && directionLabel));
+    const unifiedResult = useUnified ? publishedResultProjection(unifiedRow) : null;
+    const displayedResultState = useUnified ? unifiedResult?.primary.settlement?.state : settledStatus;
+    const hasPick = !isVoid && (useUnified ? Boolean(reviewedRow || unifiedRow) : Boolean(pickedPrediction && directionLabel));
     const savedAnalysis = !hasPick && !isVoid && !isFinished ? capturedAnalyses.get(match.id) : undefined;
     const capturedReference = savedAnalysis?.status === 'available' ? savedAnalysis : undefined;
     const capturedDirection = capturedReference ? (language === 'zh'
@@ -839,10 +848,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         follow={<FollowButton matchId={match.id} decisionId={unifiedRow?.decision.decisionId} compact />}
         time={<div className="time-stack"><strong className="kickoff-time">{getRowKickoffLabel(match, language)}</strong><span className="status-note">{statusLabel}</span>{getSportteryMeta(match) && <span className="status-note is-muted">{getSportteryMeta(match)}</span>}</div>}
         teams={<div className="team-stack"><div className="team-line"><TeamBadge team={homeTeam} size="sm" /><span className="team-name">{homeTeam.name[language]}</span></div><div className="team-line"><TeamBadge team={awayTeam} size="sm" /><span className="team-name">{awayTeam.name[language]}</span></div>{scoreText && <span className="match-score-summary">{scoreText}</span>}</div>}
-        pick={useUnified ? <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} compact now={nowMs} /> : <div className="compact-pick"><small>{language === 'zh' ? '旧版归档' : 'Legacy archive'}</small><strong>{hasPick ? directionLabel : capturedReference ? capturedDirection : (language === 'zh' ? '暂无推荐' : 'No pick')}</strong>{hasPick && pickedPrediction && <><span className={'compact-pick__tier ' + (isFormal ? 'is-formal' : 'is-reference')}>{isFormal ? (language === 'zh' ? '正式' : 'Formal') : (language === 'zh' ? '参考' : 'Reference')}</span><small>{getPredictionMarketLabel(pickedPrediction, language)}</small></>}{capturedReference && <><span className="compact-pick__tier is-reference">{language === 'zh' ? '参考' : 'Reference'}</span><small>{(capturedReference.outcome.probability * 100).toFixed(1)}% · {language === 'zh' ? '胜平负推导' : '1X2 estimate'}</small><small>{capturedReference.scores[0].home}-{capturedReference.scores[0].away} · {capturedReference.goalsPick.label}{language === 'zh' ? '球' : ' goals'}</small></>}</div>}
+        pick={useUnified ? (reviewedRow ? <ReviewedMatchPick record={reviewedRow} now={nowMs}/> : published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)) ? <TrainedMatchPick record={trainedMatchRecommendation(published.data,match)} reviewed={reviewedRow} now={nowMs} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} compact now={nowMs} />) : <div className="compact-pick"><small>{language === 'zh' ? '旧版归档' : 'Legacy archive'}</small><strong>{hasPick ? directionLabel : capturedReference ? capturedDirection : (language === 'zh' ? '暂无推荐' : 'No pick')}</strong>{hasPick && pickedPrediction && <><span className={'compact-pick__tier ' + (isFormal ? 'is-formal' : 'is-reference')}>{isFormal ? (language === 'zh' ? '正式' : 'Formal') : (language === 'zh' ? '参考' : 'Reference')}</span><small>{getPredictionMarketLabel(pickedPrediction, language)}</small></>}{capturedReference && <><span className="compact-pick__tier is-reference">{language === 'zh' ? '参考' : 'Reference'}</span><small>{(capturedReference.outcome.probability * 100).toFixed(1)}% · {language === 'zh' ? '胜平负推导' : '1X2 estimate'}</small><small>{capturedReference.scores[0].home}-{capturedReference.scores[0].away} · {capturedReference.goalsPick.label}{language === 'zh' ? '球' : ' goals'}</small></>}</div>}
         marketOdds={<MatchMarketOdds match={match} language={language} capturedData={capturedDataByMatchId?.[match.id]} />}
-        odds={<><strong className="compact-sp">{useUnified ? unifiedRow?.decision.odds.toFixed(2) || '—' : sp}</strong><small className="compact-sp-note">{useUnified ? (language === 'zh' ? '发布时胜平负 SP' : 'Published 1X2 SP') : (language === 'zh' ? '推荐方向' : 'Selected pick')}</small></>}
-        result={<span className={'compact-result ' + ((useUnified ? unifiedRow?.settlement.state : settledStatus) === 'WON' ? 'is-hit' : (useUnified ? unifiedRow?.settlement.state : settledStatus) === 'LOST' ? 'is-miss' : 'is-pending')}>{useUnified ? publishedResultLabel(unifiedRow,language) : resultLabel}</span>}
+        odds={useUnified ? reviewedRow ? <ReviewedMatchPrice record={reviewedRow} language={language}/> : <PublishedPrimaryPrice decision={unifiedRow?.decision ?? null} language={language} now={nowMs} /> : <><strong className="compact-sp">{sp}</strong><small className="compact-sp-note">{language === 'zh' ? '推荐方向' : 'Selected pick'}</small></>}
+        result={<span className={'compact-result ' + (!reviewedRow&&displayedResultState === 'WON' ? 'is-hit' : !reviewedRow&&displayedResultState === 'LOST' ? 'is-miss' : 'is-pending')} data-result-market={reviewedRow?reviewedRow.market:unifiedResult?.primary.market}>{!reviewedRow&&unifiedResult?.coherent&&unifiedRow?`${primaryMarketLabel(unifiedRow.decision,unifiedResult.primary.market,language==='zh')}：`:''}{useUnified ? reviewedRow ? <ReviewedMatchStatus record={reviewedRow} now={nowMs} language={language}/> : publishedResultLabel(unifiedRow,language) : resultLabel}</span>}
       />
     );
   };

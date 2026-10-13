@@ -95,6 +95,55 @@ function verifyInstalledSystemdContracts() {
       assert.equal(same(active, before, { ...before, ExecStart: after.ExecStart }), true);
     }
   });
+  check("actual backup unit parser accepts only the fixed Bash executable and distinct script argv", () => {
+    const backupUnit = "football-postgres-backup.service", backup = boundary.EXTERNAL_UNITS[backupUnit];
+    assert.deepEqual(backup, { executable: "/usr/bin/bash", scriptPath: "/usr/local/sbin/football-postgres-backup-v2",
+      argv: ["/usr/bin/bash", "/usr/local/sbin/football-postgres-backup-v2"], source: "deploy/light-server/football-postgres-backup.sh" });
+    const observed = { ...read(), Id: backupUnit, FragmentPath: "/etc/systemd/system/" + backupUnit,
+      ExecStart: "{ path=/usr/bin/bash ; argv[]=/usr/bin/bash /usr/local/sbin/football-postgres-backup-v2 ; ignore_errors=no ; pid=0 ; }",
+      User: "postgres", WorkingDirectory: "", ActiveState: "inactive", MainPID: "0", InvocationID: "" };
+    files = [];
+    const result = context.module.exports.inspectForFixture(ctx, backupUnit, observed, new Map(), new Map());
+    assert.equal(result.record.unit, backupUnit);
+    assert.deepEqual(files, ["/etc/systemd/system/" + backupUnit]);
+    for (const ExecStart of [
+      observed.ExecStart.replace("path=/usr/bin/bash ;", "path=/usr/bin/sh ;"),
+      observed.ExecStart.replace("argv[]=/usr/bin/bash", "argv[]=/usr/bin/sh"),
+      observed.ExecStart.replace("football-postgres-backup-v2 ;", "football-postgres-backup ;"),
+      observed.ExecStart.replace("football-postgres-backup-v2 ;", "football-postgres-backup-v2 --extra ;"),
+      observed.ExecStart.replace("path=/usr/bin/bash ;", "path=/usr/bin/bash /usr/local/sbin/football-postgres-backup-v2 ;")
+    ]) {
+      files = [];
+      assert.throws(() => context.module.exports.inspectForFixture(ctx, backupUnit, { ...observed, ExecStart },
+        new Map(), new Map()), /unreviewed-installed-exec-start/);
+      assert.deepEqual(files, [], "invalid startup must fail before reading fragments or environment files");
+    }
+  });
+  check("actual fixed interpreter capture reads the absolute Bash path and rejects a nonexecutable POSIX binary", () => {
+    const start = source.indexOf("    const externalExecutables =");
+    const end = source.indexOf("    const node =", start);
+    assert(start >= 0 && end > start);
+    const executableReads = [];
+    let mode = 0o755;
+    const captureFixed = () => vm.runInNewContext(`${source.slice(start, end)}\nexternalExecutables`, {
+      boundary, ctx: { windows: false, readFile: logical => {
+        executableReads.push(logical);
+        assert.equal(logical, "/usr/bin/bash", "a PATH shadow must never be the fixed interpreter input");
+        return { path: logical, bytes: 10, sha256: "b".repeat(64), mode };
+      } }, fail: code => { throw new Error(code); }
+    }, { timeout: 1000 });
+    const rows = captureFixed();
+    assert.equal(rows.length, 1); assert.equal(rows[0].unit, "football-postgres-backup.service");
+    assert.equal(rows[0].path, "/usr/bin/bash");
+    assert.deepEqual(executableReads, ["/usr/bin/bash"]);
+    mode = 0o644;
+    assert.throws(captureFixed, /fixed-external-interpreter-not-executable/);
+    const bindingStart = source.indexOf("    const binding =");
+    const bindingEnd = source.indexOf("    observations.runtimeSourceFiles", bindingStart);
+    assert(source.slice(bindingStart, bindingEnd).includes("sources, externalScripts, externalExecutables,"));
+    assert(source.indexOf("ctx.recheck();", start) > end,
+      "the original final stable metadata recheck must follow all fixed interpreter reads");
+  });
   return { ok: true, verifier: "frontend-installed-systemd-contracts-v1", checks: checks.length, results: checks,
     verificationScope: "systemd-vm-contracts-only", platform: process.platform, linuxFilesystemProof: false,
     fullInstalledRuntimeProofRequired: true, signingEligible: false, realSystemdExecuted: false,
@@ -126,12 +175,13 @@ function verifyFrontendInstalledRuntime() {
   };
   try {
     mkdir(baselineRoot);
-    for (const directory of ["server", "scripts", "src", "deploy/light-server", "cloudflare/sync-trigger/src"])
+    for (const directory of ["server", "scripts", "src", "collectors", "deploy/light-server", "cloudflare/sync-trigger/src"])
       copy(path.join(repository, directory), path.join(baselineRoot, directory));
     for (const file of ["package.json", "package-lock.json"]) write(path.join(baselineRoot, file), fs.readFileSync(path.join(repository, file)));
     fs.cpSync(baselineRoot, fixture.at(runtime.APP), { recursive: true });
     const baselineInventory = captureReleaseSourceInventory(baselineRoot), input = { baselineRoot, baselineInventory };
-    for (const entry of Object.values(boundary.EXTERNAL_UNITS)) logicalWrite(entry.executable, fs.readFileSync(path.join(baselineRoot, entry.source)), 0o755);
+    for (const entry of Object.values(boundary.EXTERNAL_UNITS)) logicalWrite(entry.scriptPath || entry.executable,
+      fs.readFileSync(path.join(baselineRoot, entry.source)), entry.scriptPath ? 0o644 : 0o755);
     for (const name of runtime.COMMANDS) if (!["node", "npm"].includes(name)) logicalWrite("/usr/bin/" + name, "fixture-binary-" + name, 0o755);
     logicalWrite(runtime.NODE, "fixture-pinned-node-binary", 0o755);
     logicalWrite("/usr/local/bin/coscli", "fixture-coscli-binary", 0o755);
@@ -158,7 +208,8 @@ function verifyFrontendInstalledRuntime() {
       const state = Object.fromEntries([...runtime.CONFIG_FIELDS, ...runtime.OBSERVATION_FIELDS].map(key => [key, ""]));
       Object.assign(state, { Id: unit, LoadState: "loaded", NeedDaemonReload: "no", FragmentPath: "/etc/systemd/system/" + unit,
         ExecStart: "{ path=" + (entry ? runtime.NODE : external.executable) + " ; argv[]=" +
-          (entry ? runtime.NODE + " " + runtime.APP + "/" + entry.script + entry.args : external.executable) +
+          (entry ? runtime.NODE + " " + runtime.APP + "/" + entry.script + entry.args
+            : external.argv ? external.argv.join(" ") : external.executable) +
           " ; ignore_errors=no ; start_time=[fixture] ; stop_time=[n/a] ; pid=" + pid + " ; code=(null) ; status=0/0 }",
         User: entry ? "football" : "postgres", Group: "football", WorkingDirectory: entry ? runtime.APP : "", DynamicUser: "no",
         Environment: "PATH=" + runtime.FIXED_PATH, ActiveState: active ? "active" : "inactive", SubState: active ? "running" : "dead",
@@ -184,6 +235,41 @@ function verifyFrontendInstalledRuntime() {
       assert.equal(original.externalProgramBehaviorVerified, false); assert.equal(original.observations.fixtureOnly, true);
       assert.equal(capture().installedRuntimeSha256, original.installedRuntimeSha256);
     });
+    check("real systemd backup interpreter path and exact two-argument startup bind the distinct installed script", () => {
+      const backup = boundary.EXTERNAL_UNITS["football-postgres-backup.service"];
+      assert.equal(backup.executable, "/usr/bin/bash");
+      assert.equal(backup.scriptPath, "/usr/local/sbin/football-postgres-backup-v2");
+      assert.deepEqual(backup.argv, ["/usr/bin/bash", "/usr/local/sbin/football-postgres-backup-v2"]);
+      const state = states.get("football-postgres-backup.service");
+      assert(state.ExecStart.startsWith("{ path=/usr/bin/bash ; argv[]=/usr/bin/bash /usr/local/sbin/football-postgres-backup-v2 ;"));
+      assert.deepEqual(fs.readFileSync(fixture.at(backup.scriptPath)), fs.readFileSync(path.join(baselineRoot, backup.source)));
+      assert.equal(fs.readFileSync(fixture.at(backup.executable), "utf8"), "fixture-binary-bash",
+        "the interpreter must not be replaced by script bytes in the fixture");
+      const cos = boundary.EXTERNAL_UNITS["football-postgres-cos-upload.service"];
+      assert.deepEqual(cos, { executable: "/usr/local/sbin/football-postgres-cos-upload", source: "deploy/light-server/football-postgres-cos-upload.sh" });
+      assert(states.get("football-postgres-cos-upload.service").ExecStart.startsWith(
+        "{ path=/usr/local/sbin/football-postgres-cos-upload ; argv[]=/usr/local/sbin/football-postgres-cos-upload ;"));
+      for (const name of ["ln", "unlink", "flock", "sync", "realpath", "id"]) assert(runtime.COMMANDS.includes(name));
+    });
+    check("replacing the backup interpreter, startup script or exact argv fails closed", () => {
+      const unit = "football-postgres-backup.service", before = states.get(unit);
+      const invalid = [
+        before.ExecStart.replace("path=/usr/bin/bash ;", "path=/usr/bin/sh ;"),
+        before.ExecStart.replace("argv[]=/usr/bin/bash", "argv[]=/usr/bin/sh"),
+        before.ExecStart.replace("football-postgres-backup-v2 ;", "football-postgres-backup ;"),
+        before.ExecStart.replace("football-postgres-backup-v2 ;", "football-postgres-backup-v2 --extra ;"),
+        before.ExecStart.replace("path=/usr/bin/bash ;", "path=/usr/bin/bash /usr/local/sbin/football-postgres-backup-v2 ;")
+      ];
+      try {
+        for (const ExecStart of invalid) {
+          saveUnit(unit, { ...before, ExecStart });
+          const result = capture();
+          assert.equal(result.ok, false);
+          assert(result.blockers.includes("unreviewed-installed-exec-start"));
+          assert.equal(result.installedRuntimeSha256, null);
+        }
+      } finally { saveUnit(unit, before); }
+    });
     check("PID InvocationID journal stream process start and observation time never become long-lived identity", () => {
       const unit = "football-predict.service", state = states.get(unit);
       state.MainPID = "303"; state.InvocationID = "b".repeat(32);
@@ -202,12 +288,51 @@ function verifyFrontendInstalledRuntime() {
       const file = fixture.at(logical), before = fs.readFileSync(file), mode = fs.statSync(file).mode & 0o777;
       write(file, change(before), mode); try { fn(capture()); } finally { write(file, before, mode); }
     };
+    check("the fixed Bash binary bytes remain in the installed dependency binding", () => mutate("/usr/bin/bash",
+      bytes => Buffer.concat([bytes, Buffer.from("-changed-interpreter-byte")]), result => {
+        assert.equal(result.ok, true, JSON.stringify(result));
+        assert.notEqual(result.installedRuntimeSha256, original.installedRuntimeSha256);
+      }));
+    check("PATH-shadowed Bash cannot remove the fixed ExecStart interpreter from the installed binding", () => {
+      const shadow = "/usr/local/bin/bash";
+      logicalWrite(shadow, "fixture-path-shadow-bash", 0o755);
+      try {
+        const shadowed = capture(); assert.equal(shadowed.ok, true, JSON.stringify(shadowed));
+        mutate("/usr/bin/bash", bytes => Buffer.concat([bytes, Buffer.from("-fixed-interpreter-changed")]), result => {
+          assert.equal(result.ok, true, JSON.stringify(result));
+          assert.notEqual(result.installedRuntimeSha256, shadowed.installedRuntimeSha256,
+            "fixed ExecStart binary must stay bound even when the PATH Bash is unchanged");
+        });
+        const real = fixture.at("/usr/bin/bash"), bytes = fs.readFileSync(real), mode = fs.statSync(real).mode & 0o777;
+        fs.unlinkSync(real);
+        try { assert.equal(capture().ok, false, "PATH shadow cannot rescue a missing fixed interpreter"); }
+        finally { write(real, bytes, mode); }
+        if (process.platform !== "win32") {
+          fs.chmodSync(real, 0o644);
+          try { assert(capture().blockers.includes("fixed-external-interpreter-not-executable")); }
+          finally { fs.chmodSync(real, mode); }
+        }
+      } finally { fs.unlinkSync(fixture.at(shadow)); }
+    });
+    check("missing any new backup runtime command blocks the complete installed capture", () => {
+      for (const name of ["ln", "unlink", "flock", "sync", "realpath", "id"]) {
+        const file = fixture.at("/usr/bin/" + name), bytes = fs.readFileSync(file);
+        const mode = fs.statSync(file).mode & 0o777;
+        fs.unlinkSync(file);
+        try {
+          const result = capture();
+          assert.equal(result.ok, false, name);
+          assert(result.blockers.includes("missing-required-runtime-command"), `${name}: ${result.blockers}`);
+          assert.equal(result.installedRuntimeSha256, null);
+        } finally { write(file, bytes, mode); }
+      }
+    });
     check("installed source drift fails rather than redefining the original baseline", () => mutate(runtime.APP + "/server/index.cjs",
       bytes => Buffer.concat([bytes, Buffer.from("\n// unauthorized runtime change\n")]), result => {
         assert.equal(result.ok, false); assert.equal(result.installedRuntimeSha256, null);
         assert.ok(result.blockers.includes("installed-runtime-source-differs-from-original-baseline"));
       }));
-    check("external operational script bytes remain bound to original source", () => mutate("/usr/local/sbin/football-postgres-backup",
+    check("external operational script bytes remain bound to original source", () => mutate("/usr/local/sbin/football-postgres-backup-v2",
       bytes => Buffer.concat([bytes, Buffer.from("\n# changed\n")]), result => assert.ok(result.blockers.includes("installed-external-unit-script-drift"))));
     check("entire installed dependency tree file bytes and membership affect identity", () => {
       mutate(runtime.APP + "/node_modules/example/cli.js", () => Buffer.from("fixture-cli-byte-2"), result => {

@@ -1,7 +1,7 @@
 'use strict';
 const {test,after}=require('node:test'),assert=require('node:assert/strict');
 const ts=require(process.env.TYPESCRIPT_LIBRARY||'typescript');
-const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),vm=require('node:vm');
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'recommendation-center-test-'));
 after(()=>fs.rmSync(dir,{recursive:true,force:true}));
 const source=fs.readFileSync(path.join(__dirname,'../src/services/recommendationCenterView.ts'),'utf8');
@@ -9,6 +9,7 @@ fs.writeFileSync(path.join(dir,'view.cjs'),ts.transpileModule(source,{compilerOp
 fs.copyFileSync(path.join(__dirname,'../src/services/publishedRecommendationStatus.cjs'),path.join(dir,'publishedRecommendationStatus.cjs'));
 fs.copyFileSync(path.join(__dirname,'../src/services/coherentPrimarySelection.cjs'),path.join(dir,'coherentPrimarySelection.cjs'));
 const view=require(path.join(dir,'view.cjs'));
+const modelModule={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/services/publishedMatchRecommendation.ts'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{module:modelModule,exports:modelModule.exports,Date});
 const {parseRecommendationCenter,visiblePreview,primarySelectionSummary,comboLegSelection,handicapAnalysisBasis,calibrationSampleBasis,sameDirectionConcentration,boundOfficialHandicapSp}=view;
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {match,memoryPorts,validators}=require('./recommendationFixture.cjs');
@@ -18,7 +19,61 @@ const {settleCombo}=require('../scripts/recommendationPlatform/results.cjs');
 const {hash}=require('../src/services/publishedForecastPolicy.cjs');
 const {bindPublicReferenceDecision}=require('../src/services/publicReferenceDecision.cjs');
 const {withVerifiedInputEvidence}=require('./fixtures/recommendation-input-helper.cjs');
+const publishedStatus=require('../src/services/publishedRecommendationStatus.cjs');
+test('daily bulletin parser accepts market-compatible scores and rejects contradictory or incorrect products',()=>{
+ const at='2026-10-09T12:00:00.000Z';
+ const pick={id:'one',sourceMatchId:'1',homeTeamName:'Home',awayTeamName:'Away',matchNo:'周五001',kickoffTime:'2026-10-09T15:00:00Z',cutoffAt:'2026-10-09T14:00:00Z',
+  publishedAt:at,quoteObservedAt:at,modelVersion:'legacy',confidence:'low',summary:'未核实',analysisLink:null,
+  selection:{market:'HAD',tipCode:'1',handicapLine:0,label:'胜',odds:2},scores:[{home:1,away:0,label:'1-0',probability:.1},{home:2,away:0,label:'2-0',probability:.1}],
+  marketProbabilities:{'1':.5,X:.25,'2':.25},evidence:Array.from({length:6},(_,i)=>({name:String(i),status:'unverified',text:'未核实',sources:[]}))};
+ const bulletin={version:'jincai-daily-bulletin-v1',businessDate:'2026-10-09',updatedAt:at,status:'reference-recorded',records:[pick],tiers:[],review:null};
+ assert.ok(view.parseDailyBulletin(bulletin,'2026-10-09'));
+ const bad=structuredClone(bulletin);bad.records[0].scores[0]={home:0,away:1,label:'0-1',probability:.1};
+ assert.equal(view.parseDailyBulletin(bad,'2026-10-09'),undefined);
+ bulletin.tiers=[{minimum:2.5,status:'available',totalOdds:4,legs:[{...pick,id:'one'},{...pick,id:'two'}]}];
+ assert.ok(view.parseDailyBulletin(bulletin,'2026-10-09'));bulletin.tiers[0].totalOdds=5;
+ assert.equal(view.parseDailyBulletin(bulletin,'2026-10-09'),undefined);
+});
 async function sample(){const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();return {recommendationCenter:p.state.view};}
+
+test('trained model status uses installed publish lane and never masks model load failure',async()=>{
+ const p=memoryPorts();p.trainedOnly=true;
+ const transaction=p.transaction;
+ p.transaction=async(lane,action)=>{assert.ok(['publish','combos','view','settlement'].includes(lane));return transaction(lane,action);};
+ p.prdPaperPool={async connect(){return {async query(){return {rows:[]};},release(){}};}};
+ const runtime=createRuntime(p,{validators});await runtime.publish();
+ const waiting=await runtime.leagueBaseline();assert.equal(waiting.ok,true);
+ assert.equal(p.state.lanes.publish.modelStatus,'awaiting-model');assert.equal(p.state.lanes.publish.legacyRetired,true);
+ assert.equal((await runtime.prdPaper()).enabled,false);
+ p.prdPaperPool.connect=async()=>{throw new Error('unavailable');};
+ const failure=await runtime.leagueBaseline();assert.equal(failure.ok,false);
+ assert.equal(p.state.lanes.publish.status,'error');assert.equal(p.state.lanes.publish.errorCode,'LEAGUE_MODEL_CYCLE_FAILED');
+});
+test('trained cutover retires all old writers without changing archived records or review denominators',async()=>{
+ const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();
+ const before=structuredClone({decisions:p.state.decisions,combos:p.state.combos,statistics:p.state.view.review.statistics});
+ p.trainedOnly=true;p.now+=1000;p.calls.length=0;
+ const result=await createRuntime(p,{validators}).publishingCycle();assert.equal(result.publication.ok,true);assert.equal(result.combinations.ok,true);
+ assert.equal(p.calls.some(c=>['insertDecision','insertCombo'].includes(c[0])),false);
+ assert.deepEqual(p.state.decisions,before.decisions);assert.deepEqual(p.state.combos,before.combos);
+ const raw={recommendationCenter:p.state.view},parsed=parseRecommendationCenter(raw);
+ assert.equal(parsed.strategySwitch.legacyFallbackEnabled,false);assert.equal(parsed.strategySwitch.modelAdoptionCount,0);
+ assert.deepEqual(parsed.current,[]);assert.deepEqual(parsed.previews,[]);assert.deepEqual(parsed.todayCombos,[]);
+ assert.deepEqual(p.state.view.review.statistics,before.statistics);
+ const m=p.current[0];assert.equal(modelModule.exports.publishedMatchRecommendation(parsed,m),null);
+ for(const mutation of [x=>x.strategySwitch.legacyFallbackEnabled=true,x=>x.strategySwitch.modelAdoptionCount=1,
+   x=>x.current=structuredClone(before.decisions).map(decision=>({decision,settlement:{state:'PENDING'}}))]){
+   const bad=structuredClone(raw);mutation(bad.recommendationCenter);assert.throws(()=>parseRecommendationCenter(bad));
+ }
+});
+test('trained match matching requires ordered identities and never substitutes another event',()=>{
+ const m=match('22'),r={sourceMatchId:'22',eventVersion:m.kickoffTime,homeTeamId:m.homeTeamId,awayTeamId:m.awayTeamId,
+ homeTeamName:m.homeTeamName,awayTeamName:m.awayTeamName,modelHash:'a'.repeat(64)};
+ const data={strategySwitch:{},leagueBaseline:{records:[r]}};
+ assert.equal(modelModule.exports.trainedMatchRecommendation(data,m),r);
+ for(const bad of [{...m,homeTeamId:m.awayTeamId},{...m,kickoffTime:'2030-01-01T00:00:00Z'},{...m,homeTeamName:'other'}])assert.equal(modelModule.exports.trainedMatchRecommendation(data,bad),null);
+ data.leagueBaseline.records.push(r);assert.equal(modelModule.exports.trainedMatchRecommendation(data,m),null);
+});
 test('the actual runtime projection parses for current UI',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.current.length,3);assert.equal(x.previews.length,2);assert.equal(x.review.statistics.single.published,3);});
 
 async function targetPayload(){
@@ -58,11 +113,10 @@ test('published lifecycle distinguishes fresh, expired, future quotes and review
  assert.equal(view.publicationLifecycle(d,Date.parse(d.cutoffTime)),'review-only');
  assert.equal(view.publicationLifecycle(d,NaN),'review-only');
  assert.match(view.publicationLifecycleLabel('quote-stale','zh'),/观望/);
- const note=require('./fixtures/selection-quality-note-module.cjs');
  const q={...row.selectionQuality,qualified:true,expectedValue:-.1};
- assert.match(note.selectionReferenceLabel(q,'zh'),/价格不支持/);
- assert.match(note.selectionReferenceLabel({...q,expectedValue:.1},'zh'),/模型未验证/);
- assert.match(note.selectionReferenceLabel({...q,qualified:false},'zh'),/低置信/);
+ assert.match(publishedStatus.selectionReferenceLabel(q,'zh'),/价格不支持/);
+ assert.match(publishedStatus.selectionReferenceLabel({...q,expectedValue:.1},'zh'),/模型未验证/);
+ assert.match(publishedStatus.selectionReferenceLabel({...q,qualified:false},'zh'),/低置信/);
  assert.match(renderPublished({...row,selectionQuality:q},true),/模型方向 · 当前价格不支持/);
 });
 test('current outcome study keeps its decision binding and rejects changed prices or promotion flags',async()=>{
@@ -265,11 +319,20 @@ test('legacy narratives and calibration denominator retain their original probab
 function renderedText(data,props,now){
   const vm=require('node:vm'),module={exports:{}},react=require('react'),{renderToStaticMarkup}=require('react-dom/server');
   const code=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/components/recommendations/RecommendationCenter.tsx'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-  vm.runInNewContext(code,{module,exports:module.exports,Date:now==null?Date:class extends Date{static now(){return now;}},require:id=>{
+  vm.runInNewContext(code,{module,exports:module.exports,Date:now==null?Date:class extends Date{static now(){return now;}},require:function componentRequire(id){
     if(id==='react')return react;if(id==='react/jsx-runtime')return require(id);
+    if(id==='./LeagueBaselineDirections'||id==='./DailyBulletinPanel'||id==='./ReviewedAnalysis'){
+      const component={exports:{}};
+      const source=fs.readFileSync(path.join(__dirname,'../src/components/recommendations',id.slice(2)+'.tsx'),'utf8');
+      vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,
+        {module:component,exports:component.exports,Date,Intl,URL,require:key=>key==='./ReviewedAnalysis'?componentRequire(key):key.endsWith('.css')?{}:key==='../../services/recommendationCenterView'?view:require(key)});
+      return component.exports;
+    }
     if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
+    if(id==='../../services/publishedRecommendationStatus.cjs')return publishedStatus;
     if(id==='./DayCoverage')return {DayCoverage:()=>null};
     if(id==='./MarketComparison')return {MarketComparison:()=>null};
+    if(id==='./PrdPaperDirections')return {PrdPaperDirections:()=>null};
     if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
     if(id==='../../hooks/useRecommendationReviewPage')return {useRecommendationReviewPage:filters=>{
       const source=filters.kind==='single'?data.review.singles:data.review.combos.filter(row=>row.combo.size===(filters.kind==='two'?2:3));
@@ -279,10 +342,23 @@ function renderedText(data,props,now){
     }};
     if(id==='../FollowButton')return {FollowButton:()=>null};
     if(id==='../TeamBadge')return {TeamBadge:({team})=>react.createElement('span',{'data-badge-name':team.name.zh})};
+    if(id==='../../services/publishedMatchRecommendation')return modelModule.exports;
     if(id==='../../services/recommendationCenterView')return view;if(id==='./DualResearchV2')return {DualResearchV2:()=>null};if(id==='lucide-react')return {RefreshCw:()=>null,ChevronDown:()=>null,Search:()=>null,ArrowUpRight:()=>null};if(id.endsWith('.css'))return {};throw Error(id);
   }});
   return renderToStaticMarkup(react.createElement(module.exports.RecommendationCenter,{language:'zh',onSelectMatch:()=>{},...props}));
 }
+
+test('empty combo renders reported candidate/reference/watch counts and supplied coverage reasons',async()=>{
+  const data=parseRecommendationCenter(await sample()),now=Date.parse(data.updatedAt);
+  data.previews=[];data.todayCombos=[];
+  Object.assign(data.lanes.combos,{candidateCount:0,referenceCount:7,watchCount:7});
+  data.coverage={businessDate:data.businessDate,missing:[{homeTeamName:'法国',awayTeamName:'比利时',reasonText:'模型与同期官方市场差异过大，仅供观望'}],hasMore:false};
+  const markup=renderedText(data,{selectedTab:'two'},now);
+  assert.match(markup,/本轮通过筛选的候选为0场/);
+  assert.match(markup,/合格候选 0 · 参考 7 · 观察 7/);
+  assert.match(markup,/法国 - 比利时：模型与同期官方市场差异过大/);
+  assert.doesNotMatch(markup,/新场次到达后自动重算/);
+});
 test('rendered mixed combo shows selected HHAD line and SP plus unconditional explanation',async()=>{
   const payload=await mixedSample(),c=payload.recommendationCenter.previews.find(c=>c.size===2);c.frozenAt=c.generatedAt;
   payload.recommendationCenter.review.combos=[{combo:c,settlement:{state:'PENDING'}}];
@@ -331,10 +407,10 @@ test('conditional risk stays conditional even when the independent diagnostic pr
 function renderPublished(row,compact,language='zh'){
   const vm=require('node:vm'),module={exports:{}},react=require('react'),{renderToStaticMarkup}=require('react-dom/server');
   const code=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/components/recommendations/PublishedMatchPick.tsx'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-  const modelModule={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/services/publishedMatchRecommendation.ts'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{module:modelModule,exports:modelModule.exports,Date});
   vm.runInNewContext(code,{module,exports:module.exports,Date,Intl,require:id=>{
     if(id==='react/jsx-runtime')return require(id);if(id==='../../services/recommendationCenterView')return view;
     if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
+    if(id==='../../services/publishedRecommendationStatus.cjs')return publishedStatus;
     if(id==='../../services/publishedMatchRecommendation')return modelModule.exports;if(id.endsWith('.css'))return {};throw Error(id);
   }});
   return renderToStaticMarkup(react.createElement(module.exports.PublishedMatchPick,{row,language,compact,now:Date.parse(row.decision.publishedAt)}));
@@ -351,7 +427,7 @@ test('new v3 narrow-win record renders the same independent selection in recomme
     assert.ok(html.includes(copy.title));assert.ok(html.includes(copy.detail));assert.match(html,/data-handicap-extension="recommend"/);
     assert.ok(html.includes(row.decision.decisionId));assert.ok(html.includes(row.decision.recordHash));
   }
-  const detailed=renderedText(data,{},p.now);assert.match(detailed,/无条件概率/);assert.match(detailed,/主方向确定后/);
+  const detailed=renderedText(data,{},p.now);assert.match(detailed,/无条件概率/);assert.match(detailed,/条件分支不是独立推荐/);assert.match(detailed,/不把条件分支占比当作模型胜率/);
   const combo=renderedText(data,{mode:'review',initialTab:frozen.size===2?'two':'three'});
   assert.match(combo,/让球胜平负<!-- --> -2|让球胜平负 -2/);assert.match(combo,/SP 1\.60/);
   assert.equal(JSON.stringify(data),before);

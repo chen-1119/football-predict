@@ -11,7 +11,7 @@ const RUNTIME_ENV = "/etc/football-predict/env";
 const UNITS = Object.freeze(Object.keys({ ...boundary.ENTRYPOINTS, ...boundary.EXTERNAL_UNITS }).sort());
 const COMMANDS = Object.freeze(["node", "npm", "curl", "systemctl", "busctl", "pgrep", "df", "bash", "env", "python3", "tar", "gzip",
   "psql", "openssl", "ps", "scp", "ssh", "pg_dump", "pg_restore", "sha256sum", "awk", "stat", "basename", "mv", "find",
-  "date", "rm", "mkdir", "chmod", "cat"]);
+  "date", "rm", "mkdir", "chmod", "cat", "ln", "unlink", "flock", "sync", "realpath", "id"]);
 const TRANSIENT_ENV = Object.freeze(["INVOCATION_ID", "JOURNAL_STREAM", "SYSTEMD_EXEC_PID"]);
 const CONFIG_FIELDS = Object.freeze(["Id", "LoadState", "NeedDaemonReload", "FragmentPath", "DropInPaths", "ExecStart", "ExecStartPre",
   "ExecStartPost", "ExecCondition", "ExecReload", "ExecStop", "ExecStopPost", "User", "Group", "WorkingDirectory", "Environment",
@@ -375,7 +375,8 @@ function inspectUnit(ctx, unit, observed, envFiles, envValues) {
   if (observed.Id !== unit || observed.LoadState !== "loaded" || observed.NeedDaemonReload !== "no") fail("unloaded-or-stale-systemd-unit");
   const entry = boundary.ENTRYPOINTS[unit], external = boundary.EXTERNAL_UNITS[unit];
   const expectedPath = entry ? NODE : external.executable;
-  const expectedArgv = entry ? NODE + " " + APP + "/" + entry.script + entry.args : external.executable;
+  const expectedArgv = entry ? NODE + " " + APP + "/" + entry.script + entry.args
+    : external.argv ? external.argv.join(" ") : external.executable;
   const executable = /^\{ path=([^;]+) ; argv\[\]=([^;]+) ; ignore_errors=(yes|no) ;[^{}]*\}$/.exec(observed.ExecStart);
   if (!executable || executable[1] !== expectedPath || executable[2] !== expectedArgv || executable[3] !== "no") fail("unreviewed-installed-exec-start");
   for (const key of ["ExecStartPre", "ExecStartPost", "ExecCondition", "ExecReload", "ExecStop", "ExecStopPost", "PassEnvironment",
@@ -478,9 +479,17 @@ function capture(input, fixtureRoot = null) {
       return actual;
     });
     const externalScripts = Object.values(boundary.EXTERNAL_UNITS).map(entry => {
-      const original = inspected.files.find(row => row.path === entry.source), actual = ctx.readFile(entry.executable, 1024 * 1024);
+      const original = inspected.files.find(row => row.path === entry.source), actual = ctx.readFile(entry.scriptPath || entry.executable, 1024 * 1024);
       if (!original || actual.sha256 !== original.sha256 || actual.bytes !== original.bytes) fail("installed-external-unit-script-drift"); return actual;
     });
+    // A fixed ExecStart interpreter must be captured at its absolute path even
+    // if PATH command resolution selects a different, root-owned Bash binary.
+    const externalExecutables = Object.entries(boundary.EXTERNAL_UNITS).filter(([, entry]) => entry.scriptPath)
+      .map(([unit, entry]) => {
+        const actual = ctx.readFile(entry.executable);
+        if (!ctx.windows && !(actual.mode & 0o111)) fail("fixed-external-interpreter-not-executable");
+        return { unit, ...actual };
+      });
     const node = ctx.readFile(NODE); if (!ctx.windows && !(node.mode & 0o111)) fail("fixed-node-not-executable");
     const dependencies = captureDependencyTree(ctx, APP + "/node_modules"), npm = captureDependencyTree(ctx, NPM_ROOT);
     const commandRows = COMMANDS.map(name => ctx.command(name));
@@ -509,7 +518,7 @@ function capture(input, fixtureRoot = null) {
     for (const process of processes) process.recheck(); dependencies.recheck(); npm.recheck(); ctx.recheck();
     const binding = { version: VERSION, assurance: fixtureRoot ? "isolated-filesystem-fixture" : "fixed-root-systemd-proc-v1",
       policyHash: POLICY_HASH, runtimeClosureHash, baselineInventoryHash: input.baselineInventory.treeHash,
-      sources, externalScripts, node, systemctl, busctl, dependenciesSha256: digest(dependencies.rows), npmSha256: digest(npm.rows), commands: commandRows,
+      sources, externalScripts, externalExecutables, node, systemctl, busctl, dependenciesSha256: digest(dependencies.rows), npmSha256: digest(npm.rows), commands: commandRows,
       units, environmentFiles: [...envFiles.values()].sort((a, b) => a.path.localeCompare(b.path, "en")),
       activeProcesses: processes.map(process => process.stable), pathResolutions };
     observations.runtimeSourceFiles = sources.length; observations.installedDependencyMembers = dependencies.rows.length;

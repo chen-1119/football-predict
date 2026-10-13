@@ -36,6 +36,9 @@ const rootDir = path.resolve(__dirname, "..");
 const tmpDir = path.join(rootDir, ".codex-tmp");
 const dryRun = process.env.RELEASE_DEPLOY_DRY_RUN === "1" || process.argv.includes("--dry-run");
 const recoverMode = process.env.RELEASE_DEPLOY_RECOVER === "1" || process.argv.includes("--recover");
+const uploadOnly = process.argv.includes("--upload-only");
+const activateOnly = process.argv.includes("--activate-only");
+if ((uploadOnly && activateOnly) || ((uploadOnly || activateOnly) && recoverMode)) throw new Error("conflicting release stages");
 const host = process.env.RELEASE_DEPLOY_HOST || "134.175.132.183";
 const user = process.env.RELEASE_DEPLOY_USER || "ubuntu";
 const sshPort = Number(process.env.RELEASE_DEPLOY_PORT || 22);
@@ -207,7 +210,7 @@ const extractSection = (text, name, nextName = null) => {
   return String(text || "").slice(bodyStart, end >= 0 ? end : undefined).trim();
 };
 
-const buildRemotePreflightCommand = (expectedRecoveryHelperSha256, rotationContractReady) => [
+const buildRemotePreflightCommand = (expectedRecoveryHelperSha256, rotationContractReady, workerCodeRepairProbe = null) => [
   "set -euo pipefail",
   `test -x ${shellQuote(remoteEntrypoint)} || { echo "release-entrypoint-missing"; exit 20; }`,
   `test -d ${shellQuote(remoteDir)} && test -w ${shellQuote(remoteDir)} || { echo "release-incoming-not-writable"; exit 21; }`,
@@ -222,7 +225,7 @@ const buildRemotePreflightCommand = (expectedRecoveryHelperSha256, rotationContr
   "case \"$entrypoint_check\" in *\"appPresent=1\"*) ;; *) echo \"app-dir-missing\"; exit 22 ;; esac",
   "test ! -e /var/lib/football-release/reference-repairs/current && test ! -L /var/lib/football-release/reference-repairs/current || { echo 'release-reference-repair-recovery-pending'; exit 28; }",
   "systemctl is-active football-predict >/dev/null || { echo \"service-inactive\"; exit 23; }",
-  `sudo -n /opt/node-v22.22.1/bin/node -e ${shellQuote(buildReadOnlyWorkerProbe())} || { echo "release-worker-preflight-rejected"; exit 27; }`,
+  `sudo -n /opt/node-v22.22.1/bin/node -e ${workerCodeRepairProbe ? shellQuote(workerCodeRepairProbe) : shellQuote(buildReadOnlyWorkerProbe())} || { echo "release-worker-preflight-rejected"; exit 27; }`,
   `if test "$recovery_helper_sha" = ${shellQuote(expectedRecoveryHelperSha256)}; then echo "recoveryHelperRotationRequired=0"; elif test ${shellQuote(rotationContractReady ? "1" : "0")} = "1"; then echo "recoveryHelperRotationRequired=1"; else echo "release-recovery-helper-mismatch"; exit 26; fi`,
   `echo "recoveryHelperRotationContractReady=${rotationContractReady ? "1" : "0"}"`,
   "echo preflight-ok"
@@ -430,6 +433,21 @@ if (!frontendOnly && bundleInspection.entries.some(entry => entry.replace(/^\.\/
   } catch (error) { fail("signed native storage dispatch rejected", { reason: error.message }); }
 }
 
+// A short-lived emergency instruction is an actual member of the signed
+// archive. No CLI flag or environment variable can turn an older package into
+// an emergency release. The native allocator must still prove code-only.
+let emergencyCodeAuthorization = null;
+const emergencyAuthorizationEntry = "deploy/light-server/code-release-activation-authorization.json";
+if (bundleInspection.entries.some(entry => entry.replace(/^\.\//, "") === emergencyAuthorizationEntry)) {
+  if (!nativeFullRelease || frontendOnly) fail("emergency activation requires signed native code release");
+  const authorization = inspectBundleEntryBytes(bundlePath, emergencyAuthorizationEntry);
+  if (!authorization.ok || authorization.bytes > 4096) fail("signed emergency activation authorization unavailable");
+  try {
+    emergencyCodeAuthorization = require("./releaseTransitionLease.cjs").validateEmergencyCodeAuthorization(
+      JSON.parse(authorization.content.toString("utf8")), { at: new Date().toISOString(), dataPlane: "code-only" });
+  } catch (error) { fail("signed emergency activation authorization rejected", { reason: error.message }); }
+}
+
 let releaseWindowPreflight = { windowChecked: false, reason: frontendOnly ? "frontend-only-no-data-cutover" : "dry-run",
   readyToCutover: false, windowPreauthorized: false };
 if (frontendOnly) {
@@ -448,9 +466,20 @@ if (frontendOnly) {
     try {
       // nativeFullRelease is derived only from the verified signed archive
       // policy above; unknown or legacy full bundles retain the larger budget.
-      const windowPreflight = require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({
-        stage: "before-upload", nativeFullRelease
-      });
+      // Reject a certainly closed short activation window before invoking the
+      // root allocator/sequence consumer. This is only a necessary minimum;
+      // installed-schema classification and every final server gate still run.
+      const windowPreflight = emergencyCodeAuthorization
+        ? { ok: true, windowChecked: false, reason: "signed-time-limited-emergency-code-activation",
+          emergencyCodeAuthorization, readyToCutover: false, windowPreauthorized: false,
+          scope: "User-authorized schedule-window exception only; server code-only classification, signature, lock, PG, archive and recovery gates remain mandatory." }
+        : nativeFullRelease && activateOnly
+        ? require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({stage:"before-upload",nativeFullRelease:true,activationMinimum:true})
+        : nativeFullRelease
+        ? { ok: true, windowChecked: false, reason: "signed-native-prepare-only", readyToCutover: false, windowPreauthorized: false }
+        : require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({
+          stage: "before-upload", nativeFullRelease
+        });
       if (!windowPreflight.ok) fail("release window unavailable before clone/upload", { windowPreflight });
       releaseWindowPreflight = { windowChecked: true, ...windowPreflight };
     } catch (error) { fail("release window preflight rejected before clone/upload", { reason: error.message }); }
@@ -492,9 +521,32 @@ if (newerWorkspaceFiles.length && !allowStaleBundle) {
 
 const releaseRunId = actualSha256;
 const expectedRecoveryHelperSha256 = recoveryHelperInspection.sha256;
+// This separate route is available only from the verified signed full archive.
+// Keep the original failed-worker report in the result; this authorizes repair
+// preparation only and leaves all native/final/cutover checks in place.
+let workerCodeRepairProbe = null;
+const workerCodeRepairEntry = 'deploy/light-server/worker-code-repair-authorization.json';
+if (bundleInspection.entries.some(entry => entry.replace(/^\.\//, '') === workerCodeRepairEntry)) {
+  if (!nativeFullRelease || frontendOnly) fail('worker code repair requires signed native full source');
+  const authorization = inspectBundleEntryBytes(bundlePath, workerCodeRepairEntry);
+  const policy = inspectBundleEntryBytes(bundlePath, 'scripts/releaseWorkerCodeRepair.cjs');
+  if (!authorization.ok || authorization.bytes > 16384 || !policy.ok
+    || policy.sha256 !== crypto.createHash('sha256').update(fs.readFileSync(path.join(rootDir,'scripts/releaseWorkerCodeRepair.cjs'))).digest('hex'))
+    fail('signed worker code repair policy unavailable');
+  try {
+    const repair = require('./releaseWorkerCodeRepair.cjs');
+    const auth = repair.candidateAuthorization(rootDir, JSON.parse(authorization.content.toString('utf8')));
+    for (const row of auth.files) {
+      const file=inspectBundleEntryBytes(bundlePath,row.path);
+      if (!file.ok || file.sha256 !== row.afterSha256) throw new Error('signed repair target differs');
+    }
+    workerCodeRepairProbe = repair.buildWorkerCodeRepairProbe(auth);
+  } catch (error) { fail('signed worker code repair authorization rejected',{reason:error.message}); }
+}
 const remotePreflightCommand = buildRemotePreflightCommand(
   expectedRecoveryHelperSha256,
-  !frontendOnly && recoveryHelperRotationContract.ok === true
+  !frontendOnly && recoveryHelperRotationContract.ok === true,
+  workerCodeRepairProbe
 );
 const remoteBundlePath = remoteJoin(remoteDir, `${actualSha256}.tgz`);
 const remoteShaPath = remoteJoin(remoteDir, `${actualSha256}.sha256`);
@@ -608,7 +660,7 @@ if (steps[steps.length - 1].ok !== true) {
   process.exit(1);
 }
 
-for (const artifact of uploads) {
+for (const artifact of (activateOnly ? [] : uploads)) {
   const uploadRuns = [];
   let upload = null;
   for (let attempt = 1; attempt <= uploadAttempts; attempt += 1) {
@@ -645,6 +697,18 @@ for (const artifact of uploads) {
   }
 }
 
+// Verify all four incoming byte strings even for an upload-only preparation.
+// This receipt grants no launch authority and consumes no server sequence.
+const uploadedProof = runCommand("ssh", [...sshOptions, sshTarget, uploads.map(item =>
+  `test -f ${shellQuote(item.remotePath)} && test ! -L ${shellQuote(item.remotePath)} && test "$(sha256sum ${shellQuote(item.remotePath)} | cut -d ' ' -f 1)" = ${shellQuote(crypto.createHash("sha256").update(fs.readFileSync(item.localPath)).digest("hex"))}`
+).join(" && ")]);
+if (uploadedProof.status !== 0) fail("uploaded signed bytes differ", { status: uploadedProof.status });
+if (uploadOnly) {
+  console.log(JSON.stringify({ ok: true, stage: "uploaded", sha256: actualSha256,
+    remoteBytesVerified: !dryRun, readyToCutover: false, controllerStarted: false,
+    serverSequenceConsumed: false, releaseWindowPreflight, steps }, null, 2));
+  return;
+}
 const release = runCommand("ssh", sshArgs);
 const releaseStep = {
   name: "remote bundle release",

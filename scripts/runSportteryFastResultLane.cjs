@@ -9,6 +9,8 @@ const {
   computeDelayFromCompletion,
   createFastUploadSnapshot,
   fastLanePublishDecision,
+  fastLaneOpeningState,
+  confirmedFastLaneOpeningDate,
   finiteNumber,
   postSnapshot,
   postSnapshotOverSsh,
@@ -261,6 +263,7 @@ const runCycle = async (previousState) => {
       lastUploadedResultFingerprint: previousState?.lastUploadedResultFingerprint,
       lastUploadOkAt: previousState?.lastUploadOkAt,
       currentHeartbeatMs,
+      openingDue: fastLaneOpeningState({ nowMs: Date.now(), lastConfirmedBusinessDate: state.lastConfirmedOpeningBusinessDate }).openingDue,
       nowMs: Date.now()
     });
     state.lastProbeOkAt = nowIso();
@@ -289,7 +292,7 @@ const runCycle = async (previousState) => {
     const companionSnapshot = await runCollector({
       collectorScript,
       outputPath: companionPath,
-      methods: "none",
+      methods: fastLaneOpeningState({ nowMs: Date.now() }).priceCollection ? "none" : "schedule-only",
       skipInitial: false,
       timeoutMs: collectorTimeoutMs
     });
@@ -313,6 +316,8 @@ const runCycle = async (previousState) => {
       integer: true
     }) + 1;
     state.lastUploadOkAt = state.updatedAt;
+    const confirmedOpeningDate = confirmedFastLaneOpeningDate({ snapshot: companionSnapshot, nowMs: Date.now() });
+    if (confirmedOpeningDate) state.lastConfirmedOpeningBusinessDate = confirmedOpeningDate;
     state.lastUploadFailedAt = null;
     state.lastUploadedResultFingerprint = fingerprint;
     state.lastUploadedResultFingerprintShort = compactFingerprint(fingerprint);
@@ -354,16 +359,17 @@ const runCycle = async (previousState) => {
       lastUploadedResultFingerprint: previousState?.lastUploadedResultFingerprint || null,
       lastUploadOkAt: previousState?.lastUploadOkAt,
       currentHeartbeatMs,
+      openingDue: fastLaneOpeningState({ nowMs: Date.now(), lastConfirmedBusinessDate: state.lastConfirmedOpeningBusinessDate }).openingDue,
       nowMs: Date.now()
     });
     let currentHeartbeatUpload = null;
     let currentHeartbeatFailure = null;
-    if (failure.code === "official-waf" && heartbeatDecision.currentHeartbeatDue) {
+    if (failure.code === "official-waf" && (heartbeatDecision.currentHeartbeatDue || heartbeatDecision.openingDue)) {
       try {
         const companionSnapshot = await runCollector({
           collectorScript,
           outputPath: companionPath,
-          methods: "none",
+          methods: fastLaneOpeningState({ nowMs: Date.now() }).priceCollection ? "none" : "schedule-only",
           skipInitial: false,
           timeoutMs: collectorTimeoutMs
         });
@@ -379,6 +385,8 @@ const runCycle = async (previousState) => {
           integer: true
         }) + 1;
         state.lastUploadOkAt = nowIso();
+        const confirmedOpeningDate = confirmedFastLaneOpeningDate({ snapshot: companionSnapshot, nowMs: Date.now() });
+        if (confirmedOpeningDate) state.lastConfirmedOpeningBusinessDate = confirmedOpeningDate;
         state.lastCurrentHeartbeatAt = state.lastUploadOkAt;
         state.lastUploadFailedAt = null;
         state.lastUploadReason = "current-heartbeat-result-probe-unavailable";

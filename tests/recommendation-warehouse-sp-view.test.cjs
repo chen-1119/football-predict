@@ -11,7 +11,8 @@ const {parseRecommendationCenter,quoteSourceLabel}=require(path.join(dir,'view.c
 const {normalizeRows,hash,SOURCE}=require('../collectors/market/policy.cjs');
 const {projectSignalRows}=require('../collectors/market/signalBridge.cjs');
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
-const {NOW,match,validators,memoryPorts}=require('./recommendationFixture.cjs');
+const {makeDecision,chooseCombo,validDecision}=require('../scripts/recommendationPlatform/decision.cjs');
+const {NOW,match,publication,validators,memoryPorts}=require('./recommendationFixture.cjs');
 async function input(){
  const ports=memoryPorts();
  ports.current=[1,2,3].map(id=>{
@@ -22,7 +23,14 @@ async function input(){
    acquisition:{run_id:'run-1',source:SOURCE,status:'completed',source_sha256:'a'.repeat(64),started_at:stamp,finished_at:stamp,payload:{url:'https://trade.500.com/jczq/'}}};
   return {...m,oddsSource:'500.com:HAD',externalSignals:projectSignalRows([row])[0].signal};
  });
- const runtime=createRuntime(ports,{validators});await runtime.publishingCycle();
+ // Explicit old-policy immutable seeds exercise historical frontend replay.
+ // They are not a copied-source acquisition accepted for a new publication.
+ const decisions=ports.current.map(m=>makeDecision(m,{now:NOW,publication:publication(NOW)}).decision);
+ assert(decisions.every(validDecision));ports.state.decisions=decisions;
+ const previews=[2,3].map(size=>chooseCombo(decisions,size,NOW));assert(previews.every(Boolean));
+ ports.state.lanes.publish={status:'ok',lastAttemptAt:new Date(NOW).toISOString(),lastSuccessAt:new Date(NOW).toISOString(),inputAsOf:new Date(NOW).toISOString()};
+ ports.state.lanes.combos={status:'ok',lastAttemptAt:new Date(NOW).toISOString(),lastSuccessAt:new Date(NOW).toISOString(),inputAsOf:new Date(NOW).toISOString(),previews};
+ const runtime=createRuntime(ports,{validators});await runtime.view();
  return {recommendationCenter:ports.state.view};
 }
 test('both copied-SP combinations survive real API-shape frontend parsing',async()=>{

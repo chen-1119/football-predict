@@ -52,7 +52,8 @@ const { validateSignedArchiveSourceEvidence } = require("./releaseArchiveSourceI
 
 const rootDir = path.resolve(__dirname, "..");
 const nativePolicyPath = path.join(rootDir, "deploy/light-server/native-release-policy.json");
-if (fs.existsSync(nativePolicyPath)) require("./validateNativeReleasePolicy.cjs").readPolicy(nativePolicyPath);
+const nativePreparation = fs.existsSync(nativePolicyPath);
+if (nativePreparation) require("./validateNativeReleasePolicy.cjs").readPolicy(nativePolicyPath);
 // Online release callers already supply the pinned deployment key. Reject
 // unrestorable originals before any sequence reservation or frontend build.
 // Offline bundle creation does not claim live readiness; deployment rechecks.
@@ -60,7 +61,15 @@ if (process.env.RELEASE_DEPLOY_KEY) {
   const workerPreflight = require("./runReleaseWorkerPreflight.cjs").runLiveWorkerPreflight();
   console.error(JSON.stringify({ phase: "worker-preflight-before-build", ...workerPreflight }));
   if (!workerPreflight.ok) throw new Error(`release foundation unavailable before sequence reservation and build: ${workerPreflight.blockers.join(",")}`);
-  const windowPreflight = require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({ stage: "before-build" });
+  const capacityPreflight = require("./runReleaseCapacityPreflight.cjs").runLiveCapacityPreflight();
+  console.error(JSON.stringify({ phase: "capacity-preflight-before-build", ...capacityPreflight }));
+  if (!capacityPreflight.ok) throw new Error("release capacity unavailable before sequence reservation and build");
+  // A signed native package is preparation, not a cutover lease. The root
+  // executor reclassifies the actual installed schema immediately before use.
+  // Database changes retain the complete server-side migration window.
+  const windowPreflight = nativePreparation
+    ? { ok: true, windowChecked: false, reason: "native-prepare-only", readyToCutover: false, windowPreauthorized: false }
+    : require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({ stage: "before-build" });
   console.error(JSON.stringify({ phase: "window-preflight-before-build", ...windowPreflight }));
   if (!windowPreflight.ok) throw new Error("release window unavailable before archive preflight, sequence reservation and build");
   const { report } = require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight();
@@ -88,6 +97,27 @@ if (frontendEvidenceSemantics.status !== 0) {
     output: String(frontendEvidenceSemantics.stderr || frontendEvidenceSemantics.stdout || "").slice(-2000),
   })}`);
 }
+// Reject a byte-reader regression before reserving a release sequence. This
+// verifier uses only synthetic streams and loopback HTTP, never provider data.
+const requestJsonUtf8 = spawnSync(process.execPath, ["scripts/verifyRequestJsonUtf8.cjs"], {
+  cwd: rootDir, encoding: "utf8", windowsHide: true, timeout: 30_000, maxBuffer: 2 * 1024 * 1024,
+});
+if (requestJsonUtf8.status !== 0) {
+  throw new Error(`Request JSON UTF-8 preflight failed: ${String(
+    requestJsonUtf8.error?.message || requestJsonUtf8.stderr || requestJsonUtf8.stdout
+  ).slice(-2000)}`);
+}
+// A fresh signed quote may only refresh an exact-event ephemeral input. Run
+// signature/sales/deadline/model/frozen replay contracts before reserving a
+// sequence, signing a bundle or starting a remote transaction.
+const signedHadPublication = spawnSync(process.execPath, ["scripts/verifySignedLiveHadPublication.cjs"], {
+  cwd: rootDir, encoding: "utf8", windowsHide: true, timeout: 40_000, maxBuffer: 2 * 1024 * 1024,
+});
+if (signedHadPublication.status !== 0) {
+  throw new Error(`Signed HAD publication preflight failed: ${String(
+    signedHadPublication.error?.message || signedHadPublication.stderr || signedHadPublication.stdout
+  ).slice(-4000)}`);
+}
 // Catch production-only verification dependencies and stale exact contracts
 // locally, before reserving/signing a sequence or starting a remote transaction.
 // The bounded source-boundary fixture owns a 300-second budget. Its outer
@@ -98,6 +128,12 @@ const verifierContracts = spawnSync(process.execPath, ["scripts/verifyReleaseVer
 });
 if (verifierContracts.status !== 0) {
   throw new Error(`Release verifier contract preflight failed: ${String(verifierContracts.error?.message || verifierContracts.stderr || verifierContracts.stdout).slice(-2000)}`);
+}
+const sportteryOpening = spawnSync(process.execPath, ["scripts/verifySportteryOpeningPolicy.cjs"], {
+  cwd: rootDir, encoding: "utf8", windowsHide: true, timeout: 40_000, maxBuffer: 2 * 1024 * 1024,
+});
+if (sportteryOpening.status !== 0) {
+  throw new Error(`Sporttery opening preflight failed: ${String(sportteryOpening.error?.message || sportteryOpening.stderr || sportteryOpening.stdout).slice(-4000)}`);
 }
 const outDir = path.join(rootDir, ".codex-tmp");
 const workspaceActionPath = path.join(rootDir, ".release-actions");
@@ -231,6 +267,7 @@ const excludes = [
   "logs",
   "coverage",
   ".vite",
+  ".next",
   "*.log",
   ...runtimeMutableSourceEntries,
   ...sensitiveTarExcludes
@@ -405,14 +442,118 @@ const blockedEntries = entries.filter((entry) => {
     || runtimeMutableSourceEntries.includes(normalized);
 });
 const requiredEntries = [
+  "services/read-api/server.cjs",
+  "services/read-api/repository.cjs",
+  "services/read-api/authorization.cjs",
+  "services/tasks/run.cjs",
+  "services/release/writerHandoverTransaction.cjs",
+  "tests/writer-handover-transaction.test.cjs",
+  "services/tasks/writerResourcePlan.cjs",
+  "tests/writer-resource-plan.test.cjs",
+  "tests/separated-web-business-clock.test.cjs",
+  "services/tasks/roles.cjs",
+  "services/tasks/team.cjs",
+  "services/tasks/settlement.cjs",
+  "services/release/componentPolicy.cjs",
+  "scripts/buildServiceArtifact.cjs",
+    "scripts/buildSeparatedWeb.cjs",
+  "scripts/planServiceRelease.cjs",
+  "tests/service-separation-v1.test.cjs",
+    "services/recommendation/comboArchive.cjs",
+    "services/tasks/combo-archive.cjs",
+    "tests/committed-combo-archive.test.cjs",
+  "tests/emergency-code-activation.test.cjs",
+  "tests/code-cutover-archive-horizon.test.cjs",
+  "src/services/prematchV3FeedbackLoop.cjs",
+  "scripts/registerPrematchV3Parameters.cjs",
+  "tests/prematch-v3-feedback-loop.test.cjs",
+  "src/services/sportteryOpeningPolicy.cjs",
+  "scripts/verifySportteryOpeningPolicy.cjs",
+  "scripts/verifyDailyBulletinPolicy.cjs",
+  "scripts/captureDailySourceEvidence.cjs",
+  "scripts/recommendationPlatform/dailyBulletinPolicy.cjs",
+  "scripts/recommendationPlatform/dailyBulletinRuntime.cjs",
+  "scripts/recommendationPlatform/dailySourceEvidence.cjs",
+  "tests/daily-bulletin-policy.test.cjs",
+  "src/components/recommendations/DailyBulletinPanel.tsx",
+  "src/components/recommendations/daily-bulletin.css",
+  "tests/sporttery-opening-policy.test.cjs",
+  "tests/sporttery-fast-opening.test.cjs",
+  "tests/sync-worker-eleven-opening.test.cjs",
+  "tests/sporttery-opening-projection.test.cjs",
+  "scripts/zeroMarketResearchBaseline.cjs",
+  "src/services/marketSeparatedDirectionResearch.cjs",
+  "tests/zero-market-research-baseline.test.cjs",
+  "tests/market-separated-direction-research.test.cjs",
+  "scripts/verifyPrdPaperPipeline.cjs",
+  "scripts/releaseOwnedWorkerStop.cjs",
+  "scripts/releaseInstalledReadApiIdentity.cjs",
+  "tests/installed-read-api-identity.test.cjs",
+  "tests/owned-worker-stop.test.cjs",
+  "scripts/nativeSnapshotCopyProof.cjs",
+  "tests/native-snapshot-copy-proof.test.cjs",
+  "scripts/publishReviewedAnalysis.cjs",
+  "scripts/teamEvidenceSources.cjs",
+  "scripts/teamEvidenceStore.cjs",
+  "scripts/syncTeamEvidence.cjs",
+  "scripts/collectExpandedLeagueHistory.cjs",
+  "scripts/expandedLeagueHistoryParser.cjs",
+  "tests/team-evidence-pipeline.test.cjs",
+  "tests/expanded-league-history.test.cjs",
+  "scripts/recommendationPlatform/reviewedAnalysis.cjs",
+  "scripts/recommendationPlatform/reviewedHandicapQuote.cjs",
+  "tests/maintenance-quiescence.test.cjs",
+  "scripts/fixedPrematchEvidencePack.cjs",
+  "scripts/buildFixedPrematchEvidencePack.cjs",
+  "tests/fixed-prematch-evidence-pack.test.cjs",
+  "scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs",
+  "src/components/recommendations/ReviewedAnalysis.tsx",
+  "tests/reviewed-analysis.test.cjs",
+  "tests/reviewed-three-combo-view.test.cjs",
+  "scripts/leagueBaselineRegistry.cjs",
+  "scripts/registerLeagueBaseline.cjs",
+  "scripts/prepareLeagueModelRegistration.cjs",
+  "scripts/collectLeagueTextHistory.cjs",
+  "scripts/runLeagueBaselineExperiment.cjs",
+  "scripts/recommendationPlatform/leagueBaselineRuntime.cjs",
+  "src/services/leagueBaselineModel.cjs",
+  "src/services/leagueBaselineRecommendation.cjs",
+  "src/components/recommendations/LeagueBaselineDirections.tsx",
+  "tests/league-model-adoption.test.cjs",
+  "scripts/recommendationPlatform/prdPaperRuntime.cjs",
+  "scripts/recommendationPlatform/prdPaperRepository.cjs",
+  "src/services/prdPaperRecommendation.cjs",
+  "src/components/recommendations/PrdPaperDirections.tsx",
+  "tests/prd-paper-recommendation.test.cjs",
+  "tests/prd-paper-repository.test.cjs",
+  "tests/prd-paper-runtime.test.cjs",
+  "tests/prd-paper-directions-view.test.cjs",
   "package.json",
+  "scripts/verifySignedLiveHadPublication.cjs",
+  "scripts/officialClubResearchEvidence.cjs",
+  "tests/official-club-research-evidence.test.cjs",
+  "scripts/recommendationPlatform/liveOfficialHad.cjs",
+  "scripts/recommendationPlatform/quotePublicationLatency.cjs",
+  "tests/fixtures/signed-live-had.cjs",
+  "tests/recommendation-live-official-had.test.cjs",
+  "tests/recommendation-signed-had-publication.test.cjs",
+  "tests/recommendation-quote-publication-latency.test.cjs",
   "scripts/data/football-data-discipline.json",
   "scripts/footballDataDiscipline.cjs",
   "scripts/verifyFootballDataDiscipline.cjs",
   "server/index.cjs",
+  "server/readRequestJson.cjs",
+  "scripts/verifyRequestJsonUtf8.cjs",
   "server/candidateProspectiveTemporalAudit.cjs",
   "scripts/verifyCandidateProspectiveTemporalAudit.cjs",
   "server/recommendationProjectionParity.cjs",
+  "server/recommendationAuthority.cjs",
+  "docs/recommendation-publication-authority.md",
+  "src/services/recommendationAuthorityPresentation.ts",
+  "tests/recommendation-authority.test.cjs",
+  "tests/recommendation-authority-integration.test.cjs",
+  "tests/recommendation-authority-presentation.test.cjs",
+  "tests/remote-recommendation-authority.test.cjs",
   "scripts/verifyRecommendationProjectionParity.cjs",
   "server/currentPublicationSafety.cjs",
   "scripts/verifyCurrentPublicationSafety.cjs",
@@ -673,6 +814,10 @@ const requiredEntries = [
   "scripts/verifyQaAccessOperator.cjs",
   "scripts/verifyReleaseTransactionSafety.cjs",
   "scripts/releaseWorkerPreflight.cjs",
+  "scripts/releaseWorkerCodeRepair.cjs",
+  "scripts/verifyReleaseWorkerCodeRepair.cjs",
+  "tests/official-model-artifact-isolation.test.cjs",
+  "tests/installed-read-api-identity.test.cjs",
   "scripts/runReleaseWorkerPreflight.cjs",
   "scripts/releaseWorkspaceFreshness.cjs",
   "scripts/verifyReleaseWorkspaceFreshness.cjs",
@@ -716,6 +861,11 @@ const requiredEntries = [
   "scripts/frontendReleaseAuthorization.cjs",
   "scripts/verifyFrontendReleaseAuthorization.cjs",
   "scripts/frontendReleaseController.cjs",
+  "scripts/frontendPolicyRefresh.cjs",
+  "scripts/verifyFrontendPolicyRefresh.cjs",
+    "scripts/verifyFrontendPolicyBootstrap.cjs",
+  "scripts/frontendReleaseAttempt.cjs",
+  "scripts/verifyFrontendReleaseAttempt.cjs",
   "scripts/verifyFrontendReleaseController.cjs",
   "scripts/verifyFrontendReleaseEntrypoints.cjs",
   "scripts/frontendReleaseTransaction.cjs",
@@ -758,10 +908,32 @@ const requiredEntries = [
   "scripts/postgresReleaseMirror.cjs",
   "scripts/nativeReleaseDatabaseSession.cjs",
   "scripts/nativeReleaseDataPlane.cjs",
+  "scripts/nativeReleaseCapacity.cjs",
+  "scripts/releaseDataPlanePolicy.cjs",
+  "scripts/nativeCodeReleaseDataPlane.cjs",
+  "tests/code-data-release.test.cjs",
+  "tests/postgres-committed-publication.test.cjs",
+  "scripts/verifyCodeReleaseShell.cjs",
+  "scripts/codeReleaseAcceptance.cjs",
+  "scripts/verifyStagedCodeRelease.cjs",
+  "tests/staged-code-release.test.cjs",
+  "scripts/verifyCodeReleasePostgresIsolation.cjs",
+  "scripts/runReleaseCapacityPreflight.cjs",
+  "tests/release-capacity-preflight.test.cjs",
+  "scripts/releaseRetentionPlan.cjs",
+  "tests/native-release-capacity.test.cjs",
+  "tests/release-retention-plan.test.cjs",
   "scripts/nativeReleaseGenerationCopy.cjs",
   "scripts/nativeReleasePostgresTransport.cjs",
   "scripts/validateNativeReleasePolicy.cjs",
   "scripts/verifyNativeReleasePipeline.cjs",
+  "scripts/verifyNativeReleaseFailureCleanup.cjs",
+  "scripts/verifyScheduledStorageRetention.cjs",
+  "scripts/verifyPostgresBackupRetention.cjs",
+  "deploy/light-server/football-postgres-backup.sh",
+  "deploy/light-server/football-postgres-backup.service",
+  "deploy/light-server/football-postgres-backup.timer",
+  "deploy/light-server/football-journald-retention.conf",
   "scripts/verifyNativeReleaseDataPlane.cjs",
   "scripts/verifyNativeReleaseGenerationCopy.cjs",
   "scripts/verifyNativeReleaseDatabaseSession.cjs",

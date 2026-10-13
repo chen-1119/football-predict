@@ -1,5 +1,5 @@
 import type { Match, OutcomeProbability } from './mockData';
-import type { RecommendationCenterData, SingleRow, Outcome, Decision } from './recommendationCenterView';
+import type { RecommendationCenterData, SingleRow, Outcome, Decision, Settlement } from './recommendationCenterView';
 
 const sourceId = (value: unknown) => String(value || '').replace(/^sporttery_/, '');
 const name = (value: unknown) => String(value || '').normalize('NFKC').trim().toLocaleLowerCase();
@@ -21,9 +21,29 @@ export function publishedMatchRecommendation(data: RecommendationCenterData | nu
   // Current is authoritative, just as on /best. Review is only its historical
   // counterpart; an old review row must not override a current publication.
   const rows = data.current.filter(matches);
+  if(data.strategySwitch&&['SCHEDULED','LIVE'].includes(match.status))return null;
   const candidates = rows.length ? rows : data.review.singles.filter(matches);
   return [...candidates].sort((a,b) => Date.parse(b.decision.publishedAt)-Date.parse(a.decision.publishedAt)
     || b.decision.decisionId.localeCompare(a.decision.decisionId))[0] || null;
+}
+
+/** The new lane binds exact ordered team IDs and event time; never fall back
+ * to old review records or infer a mapping from names. */
+export function trainedMatchRecommendation(data:RecommendationCenterData|null,match:Match){
+  if(!data?.strategySwitch)return null;
+  const records=data.leagueBaseline?.records.filter(r=>r.sourceMatchId===sourceId(match.sourceMatchId||match.id)
+    && Date.parse(r.eventVersion)===Date.parse(match.kickoffTime)
+    && r.homeTeamId===match.homeTeamId&&r.awayTeamId===match.awayTeamId
+    && name(r.homeTeamName)===name(match.homeTeamName)&&name(r.awayTeamName)===name(match.awayTeamName))??[];
+  return records.length===1?records[0]:null;
+}
+
+export function reviewedMatchRecommendation(data:RecommendationCenterData|null,match:Match){
+ const records=data?.reviewedAnalysis?.records.filter(r=>r.eventId===sourceId(match.sourceMatchId||match.id)
+  &&Date.parse(r.eventVersion)===Date.parse(match.kickoffTime)&&r.businessDate===data.businessDate
+  &&r.homeTeamId===match.homeTeamId&&r.awayTeamId===match.awayTeamId
+  &&r.homeTeamName===match.homeTeamName&&r.awayTeamName===match.awayTeamName)??[];
+ return records.length===1?records[0]:null;
 }
 
 function uniquePosteriorLeader(probabilities: OutcomeProbability | null | undefined): Outcome | null {
@@ -84,8 +104,28 @@ export function publishedPickLabel(code: Outcome, language: 'zh'|'en', handicap 
     : (language === 'zh' ? { '1':'主胜', X:'平局', '2':'客胜' } : { '1':'Home', X:'Draw', '2':'Away' }))[code];
 }
 
-export function publishedResultLabel(row: SingleRow | null, language: 'zh'|'en'): string {
-  if (!row) return language === 'zh' ? '待发布' : 'Awaiting publication';
+type ResultRow = Pick<SingleRow, 'decision'|'settlement'|'handicapSettlement'>;
+type MarketResult = {market:'HAD'|'HHAD';settlement:Settlement|null};
+
+/** Present existing frozen settlements; this does not derive or rewrite results. */
+export function publishedResultProjection(row:ResultRow|null, selectedMarket?:'HAD'|'HHAD') {
+  if(!row)return null;
+  const coherent=row.decision?.primaryPickPolicyVersion==='coherent-market-primary-v1';
+  const market=coherent&&row.decision.coherentPrimary?.anchorMarket==='HHAD'?'HHAD':'HAD';
+  const resultFor=(market:'HAD'|'HHAD'):MarketResult=>({market,settlement:market==='HHAD'?row.handicapSettlement??null:row.settlement});
+  const primary=resultFor(market);
+  const companion=coherent&&row.decision.coherentPrimary?.hhadCode?resultFor(market==='HHAD'?'HAD':'HHAD'):null;
+  const explicitMarket=selectedMarket==='HAD'||selectedMarket==='HHAD';
+  return {coherent,primary,companion,displayed:explicitMarket?resultFor(selectedMarket):primary,explicitMarket};
+}
+
+export function settlementResultLabel(settlement:Settlement|null|undefined, language:'zh'|'en'):string {
+  if(!settlement)return language==='zh'?'结果待核':'Result awaiting verification';
   return (language === 'zh' ? { PENDING:'待赛果', WON:'命中', LOST:'未命中', VOID:'无效', DISPUTED:'赛果待核' }
-    : { PENDING:'Pending', WON:'Won', LOST:'Lost', VOID:'Void', DISPUTED:'Disputed' })[row.settlement.state];
+    : { PENDING:'Pending', WON:'Won', LOST:'Lost', VOID:'Void', DISPUTED:'Disputed' })[settlement.state];
+}
+
+export function publishedResultLabel(row:ResultRow|null, language:'zh'|'en', selectedMarket?:'HAD'|'HHAD'):string {
+  if(!row)return language==='zh'?'待发布':'Awaiting publication';
+  return settlementResultLabel(publishedResultProjection(row,selectedMarket)?.displayed.settlement,language);
 }

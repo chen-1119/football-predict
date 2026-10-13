@@ -11,8 +11,8 @@ Group=football
 Environment=PGHOST=/var/run/postgresql
 Environment=PGDATABASE=football
 Environment=FOOTBALL_POSTGRES_BACKUP_DIR=/var/lib/football-predict/postgres-backups
-Environment=FOOTBALL_POSTGRES_BACKUP_RETENTION_DAYS=14
-ExecStart=/usr/local/sbin/football-postgres-backup
+Environment=FOOTBALL_POSTGRES_BACKUP_RETENTION_DAYS=7
+ExecStart=/usr/bin/bash /usr/local/sbin/football-postgres-backup-v2
 Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7

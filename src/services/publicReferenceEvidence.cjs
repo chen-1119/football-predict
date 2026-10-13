@@ -1,7 +1,27 @@
 "use strict";
 const { createHash } = require("node:crypto");
 const VERSION = "public-reference-evidence-v1";
-const digest = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+// Retain the exact JSON.stringify byte contract without allocating one string
+// for the complete archive. Each persisted companion remains a bounded item.
+const digest = (value) => {
+  const hash = createHash("sha256");
+  if (!Array.isArray(value) || Object.hasOwn(value, "toJSON")
+    || typeof value.toJSON === "function") {
+    return hash.update(JSON.stringify(value)).digest("hex");
+  }
+  hash.update("[");
+  const length = value.length;
+  for (let index = 0; index < length; index++) {
+    if (index) hash.update(",");
+    // The holder supplies the original index to an item's toJSON method;
+    // JSON.stringify(item) alone would supply an empty key instead.
+    const key = String(index), holder = Object.create(null);
+    holder[key] = value[index];
+    const serialized = JSON.stringify(holder);
+    hash.update(serialized === "{}" ? "null" : serialized.slice(key.length + 4, -1));
+  }
+  return hash.update("]").digest("hex");
+};
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const instant = (value) => typeof value === "string" && value.trim() ? Date.parse(value) : NaN;
 const text = (value) => typeof value === "string" && value.trim() ? value.trim() : null;

@@ -3,10 +3,11 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const ts=require('typescript');
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {memoryPorts,validators}=require('./recommendationFixture.cjs');
-function compile(file,requireFn){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>id.endsWith('/coherentPrimarySelection.cjs')?require('../src/services/coherentPrimarySelection.cjs'):id.endsWith('/publishedRecommendationStatus.cjs')?require('../src/services/publishedRecommendationStatus.cjs'):requireFn(id),Date});return module.exports;}
+function compile(file,requireFn){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>['./ReviewedAnalysis','./LeagueBaselineDirections','./DailyBulletinPanel'].includes(id)?compile(require.resolve('../src/components/recommendations/'+id.slice(2)+'.tsx'),requireFn):id.endsWith('/coherentPrimarySelection.cjs')?require('../src/services/coherentPrimarySelection.cjs'):id.endsWith('/publishedRecommendationStatus.cjs')?require('../src/services/publishedRecommendationStatus.cjs'):requireFn(id),Date});return module.exports;}
 test('incoming lane timestamp between timer ticks stays visible without accepting future inputs',async()=>{
   const p=memoryPorts(),runtime=createRuntime(p,{validators});await runtime.publishingCycle();
   const V=compile(require.resolve('../src/services/recommendationCenterView.ts'),require);let data=V.parseRecommendationCenter({recommendationCenter:p.state.view});
+  const publishedResults=compile(require.resolve('../src/services/publishedMatchRecommendation.ts'),require);
   const original=Date.now;let now=p.now,index=0;const state=[];
   Date.now=()=>now;
   try{
@@ -18,10 +19,12 @@ test('incoming lane timestamp between timer ticks stays visible without acceptin
       if(id==='../../hooks/useRecommendationReviewPage')return{useRecommendationReviewPage:()=>({data:null,loading:false,failed:false})};
       if(id==='./DayCoverage')return{DayCoverage:()=>null};
       if(id==='./MarketComparison')return{MarketComparison:()=>null};
+      if(id==='./PrdPaperDirections')return{PrdPaperDirections:()=>null};
   if(id==='./DualResearchV2')return{DualResearchV2:()=>null};
       if(id==='../FollowButton')return {FollowButton:()=>null};
     if(id==='../TeamBadge')return{TeamBadge:()=>null};
       if(id==='../../services/recommendationCenterView')return V;
+      if(id==='../../services/publishedMatchRecommendation')return publishedResults;
       if(id==='lucide-react')return{};if(id.endsWith('.css'))return{};throw Error(id);
     });
     const hasCombo=node=>!!node&&typeof node==='object'&&(node.type?.name==='ComboCard'||Object.values(node).some(value=>Array.isArray(value)?value.some(hasCombo):hasCombo(value)));

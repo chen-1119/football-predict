@@ -33,13 +33,15 @@ const options = (client, rows, extra = {}) => ({
 });
 const row = (id, payload) => ({ id, source: "sporttery:public-reference", captured_at: "2026-09-27T00:00:00.000Z", payload });
 
-const fakeDatabase = ({ onParts, failAt } = {}) => {
+const fakeDatabase = ({ onParts, failAt, statementTimeoutMs = 0, toastOptions = ['pglz', 'lz4'] } = {}) => {
   const state = { calls: [], committed: new Map(), pending: null, parts: new Map(),
-    maxPartBytes: 0, maxBatchBytes: 0, assembled: 0, released: false, normalBatches: [] };
+    maxPartBytes: 0, maxBatchBytes: 0, assembled: 0, released: false, normalBatches: [], sessionChanges: [] };
   const client = {
     async query(sql, values = []) {
       const normalized = sql.trim().replace(/\s+/g, " ");
       state.calls.push(normalized);
+      if (normalized.startsWith("SELECT current_setting('statement_timeout')")) return { rows: [{ statement_timeout: String(statementTimeoutMs), statement_timeout_ms: statementTimeoutMs, toast_compression: 'pglz', toast_options: toastOptions }] };
+      if (normalized.startsWith('SELECT set_config(')) { state.sessionChanges.push({ sql: normalized, value: values[0] }); return { rows: [] }; }
       if (normalized.startsWith("BEGIN")) { state.pending = new Map(state.committed); return { rows: [] }; }
       if (normalized === "ROLLBACK") { state.pending = null; state.parts.clear(); return { rows: [] }; }
       if (normalized === "COMMIT") { state.committed = state.pending; state.pending = null; state.parts.clear(); return { rows: [] }; }
@@ -100,6 +102,28 @@ after(() => {
   assert.equal(path.dirname(path.resolve(dir)), path.resolve(os.tmpdir()));
   assert.ok(path.basename(dir).startsWith("football-pg-json-parts-"));
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('projection writer has a finite response budget separate from ordinary readers', async () => {
+  const { createProjectionWritePool } = require('../scripts/postgresProjectionSync.cjs');
+  const { createPostgresPool } = require('../server/postgresStore.cjs');
+  const prior = process.env.FOOTBALL_POSTGRES_URL;
+  process.env.FOOTBALL_POSTGRES_URL = 'postgres://localhost/football_test';
+  const writer = createProjectionWritePool('incremental'), reader = createPostgresPool({ queryTimeoutMillis: 30000 });
+  try { assert.equal(writer.options.query_timeout, 120000); assert.equal(reader.options.query_timeout, 30000); assert.throws(() => createProjectionWritePool('invalid')); }
+  finally { await writer.end(); await reader.end(); if (prior === undefined) delete process.env.FOOTBALL_POSTGRES_URL; else process.env.FOOTBALL_POSTGRES_URL = prior; }
+});
+
+for (const [name, statementTimeoutMs, toastOptions, expected] of [
+  ['unlimited', 0, ['pglz', 'lz4'], ['90000', 'lz4', 'pglz', '0']],
+  ['operator-stricter', 15000, ['pglz', 'lz4'], ['15000', 'lz4', 'pglz', '15000']],
+  ['no-lz4-support', 0, ['pglz'], ['90000', '0']],
+]) test('source assembly local settings restore after '+name, async () => {
+  const { withSourceFileAssemblySession } = require('../scripts/postgresProjectionSync.cjs');
+  const db = fakeDatabase({ statementTimeoutMs, toastOptions });
+  assert.deepEqual(await withSourceFileAssemblySession(db.client, async () => ({ rowCount: 1 })), { rowCount: 1 });
+  assert.deepEqual(db.state.sessionChanges.map(r => r.value), expected);
+  assert(db.state.sessionChanges.every(r => r.sql.endsWith(',true)')));
 });
 
 test("file descriptors are immutable, internally branded and strictly bounded", async () => {

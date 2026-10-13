@@ -1,10 +1,16 @@
+import { reviewedMatchRecommendation } from '../services/publishedMatchRecommendation';
+import { TrainedMatchPick } from '../components/recommendations/LeagueBaselineDirections';
+import { trainedMatchRecommendation } from '../services/publishedMatchRecommendation';
 import { PrematchCollectionPanel } from '../components/predictions/PrematchCollectionPanel';
+import { acceptMatchDetail, detailResponseMatchesFields } from '../services/matchDetailIdentity.js';
+import type { DetailIdentityBinding } from '../services/matchDetailIdentity.js';
 import { useRecommendationCenter } from '../hooks/useRecommendationCenter';
 import { publishedMatchRecommendation, publishedPosteriorDisagreement, usesPublishedRecommendation } from '../services/publishedMatchRecommendation';
-import { PublishedMatchPick } from '../components/recommendations/PublishedMatchPick';
+import { MixedModelEstimateNote, PublishedMatchPick } from '../components/recommendations/PublishedMatchPick';
+import { PublishedHadDistribution } from '../components/recommendations/SelectionQualityNote';
 import { DualResearchV2 } from '../components/recommendations/DualResearchV2';
 import { publishedDetailPresentation } from '../services/publishedDetailPresentation';
-import { boundOfficialHandicapSp } from '../services/recommendationCenterView';
+import { boundOfficialHandicapSp, handicapLineLabel, primaryMarketLabel } from '../services/recommendationCenterView';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContextCore';
 import type { FiveHundredRecentFormRow, League, Match, MatchProbabilityModel, MultiLangString, OutcomeProbability, PredictionDetail, ScoreProbability } from '../services/mockData';
@@ -36,7 +42,7 @@ import {
   sameMatchEvent
 } from '../services/matchLifecycle';
 import { TeamBadge } from '../components/TeamBadge';
-import { RecommendationEvidenceFacts } from '../components/predictions/RecommendationEvidenceFacts';
+import { FrozenHadPosteriorNote, RecommendationEvidenceFacts } from '../components/predictions/RecommendationEvidenceFacts';
 import { CapturedMatchData, matchesSavedCaptureIdentity } from '../components/predictions/CapturedMatchData';
 import { CapturedReferenceAnalysisPanel } from '../components/predictions/CapturedReferenceAnalysisPanel';
 import type { SavedMatchCapture } from '../components/predictions/CapturedMatchData';
@@ -61,8 +67,9 @@ interface MatchDetailProps {
 
 type MatchDetailCacheEntry = {
   etag: string;
-  match: Match;
+  match: DetailMatch;
 };
+type DetailMatch = Match & { detailIdentity?: DetailIdentityBinding };
 
 type DetailRequestStatus = 'loading' | 'ready' | 'failed';
 
@@ -1208,7 +1215,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   const displayText = (value: string | null | undefined, fallback = '') => formatSourceNeutralText(value, language, fallback);
   const [activeTab, setActiveTab] = useState<DetailTab>(initialTab);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [fullMatch, setFullMatch] = useState<Match | null>(null);
+  const [fullMatch, setFullMatch] = useState<DetailMatch | null>(null);
   const [detailRequestState, setDetailRequestState] = useState<{
     matchId: string;
     status: DetailRequestStatus;
@@ -1355,7 +1362,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           }
           if (!response) continue;
           if (response.status === 304 && cached) {
+            if (!await acceptMatchDetail(matchId,cached.match)) {
+              matchDetailResponseCache.delete(requestUrl);
+              lastFailure = 'cached-identity-invalid';
+              continue;
+            }
             if (!cancelled) {
+              setNowMs(Date.now());
               setFullMatch(cached.match);
               setDetailRequestState({ matchId, status: 'ready' });
               markDetailNavigation(matchId, detailNavigationStartedAtRef.current, 'data', 'ready', `${detailRequest.source}-cache`);
@@ -1372,8 +1385,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
             }
           }
           const matchPayload = data?.match || data;
-          if (!cancelled && matchPayload?.id === matchId) {
-            const resolvedMatch = matchPayload as Match;
+          if (!cancelled && response.ok && await acceptMatchDetail(matchId,matchPayload)) {
+            if (cancelled || controller.signal.aborted) return;
+            const resolvedMatch = matchPayload as DetailMatch;
             const etag = response.headers.get('etag');
             if (etag) {
               matchDetailResponseCache.set(requestUrl, { etag, match: resolvedMatch });
@@ -1382,6 +1396,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 if (oldestKey) matchDetailResponseCache.delete(oldestKey);
               }
             }
+            setNowMs(Date.now());
             setFullMatch(resolvedMatch);
             setDetailRequestState({ matchId, status: 'ready' });
             markDetailNavigation(matchId, detailNavigationStartedAtRef.current, 'data', 'ready', detailRequest.source);
@@ -1409,11 +1424,15 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
   // 获取比赛详情
   const match = useMemo(() => {
-    const detailMatch = fullMatch?.id === matchId ? fullMatch : null;
+    const detailMatch = fullMatch && detailResponseMatchesFields(matchId,fullMatch,nowMs) ? fullMatch : null;
+    // A verified alias response is one atomic PG snapshot. Do not let a
+    // differently named context row replace it via the permissive lifecycle
+    // fallback or merge source clocks from a different observation.
+    if (detailMatch && detailMatch.id !== matchId) return resolveMatchLifecycle(detailMatch,nowMs);
     const contextMatch = matches.find((item) => item.id === matchId);
     return selectFreshestMatch(detailMatch, contextMatch, worldCupSeededMatch, nowMs);
   }, [fullMatch, matchId, matches, nowMs, worldCupSeededMatch]);
-  const hasAuthoritativeDetailMatch = fullMatch?.id === matchId;
+  const hasAuthoritativeDetailMatch = detailResponseMatchesFields(matchId,fullMatch,nowMs);
   const shellKickoffAt = Date.parse(match?.kickoffTime || '');
   const isPastKickoffAwaitingAuthoritativeDetail = Boolean(
     match
@@ -1478,7 +1497,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           <p>{language === 'zh' ? '开赛时间：' : 'Kickoff: '}{displayText(capturedKickoff)}{language === 'zh' ? '（北京时间）' : ' (Beijing time)'}</p>
           <strong>{language === 'zh' ? '赛前推荐与比赛参数' : 'Pre-match picks and match parameters'}</strong>
         </header>
-        {useUnified ? <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} /> : <CapturedReferenceAnalysisPanel match={match} capture={capturedData} language={language} now={nowMs} />}
+        {useUnified ? ((reviewedMatchRecommendation(published.data,match) || (published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)))) ? <TrainedMatchPick record={trainedMatchRecommendation(published.data,match)} reviewed={reviewedMatchRecommendation(published.data,match)} now={nowMs} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} />) : <CapturedReferenceAnalysisPanel match={match} capture={capturedData} language={language} now={nowMs} />}
         <CapturedMatchData capture={capturedData} language={language} />
       </div>
     );
@@ -1856,12 +1875,17 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     ? publishedPosteriorDisagreement(match, unifiedRow?.decision || null)
     : null;
   const publishedDetail = publishedDetailPresentation(unifiedRow?.decision || null, probabilityModel?.scoreDistribution, unifiedRow?.scoreDistribution);
+  const isCoherentPublication = unifiedRow?.decision.primaryPickPolicyVersion === 'coherent-market-primary-v1';
+  const isIndependentPublication = unifiedRow?.decision.primaryPickPolicyVersion === 'independent-market-primary-v1';
   const publishedMatrix = useUnified && publishedDetail?.scoreSource === 'published-matrix'
     ? unifiedRow?.scoreDistribution : null;
+  const publishedGlobalScores = publishedDetail?.globalTopScores ?? [];
   const publishedTotals = publishedMatrix?.status === 'available' ? publishedMatrix.totalGoals : undefined;
   const leadingPublishedTotal = publishedTotals?.reduce((best, row) => row.probability > best.probability ? row : best);
+  const publishedMarketOrder: ('HAD' | 'HHAD')[] = isCoherentPublication && unifiedRow?.decision.coherentPrimary?.anchorMarket === 'HHAD'
+    ? ['HHAD', 'HAD'] : ['HAD', 'HHAD'];
   const publishedHandicap = unifiedRow?.decision.handicapAnalysis;
-  const publishedHandicapDirection = unifiedRow?.decision.coherentPrimary?.hhadCode ?? (unifiedRow?.decision.primaryPickPolicyVersion==='coherent-market-primary-v1'?null:publishedHandicap?.overallTipCode ?? publishedHandicap?.tipCode);
+  const publishedHandicapDirection = unifiedRow?.decision.coherentPrimary?.hhadCode ?? (isCoherentPublication ? null : publishedHandicap?.overallTipCode ?? publishedHandicap?.tipCode);
   const publishedHandicapProbability = publishedHandicapDirection ? publishedHandicap?.overallProbabilities?.[publishedHandicapDirection] ?? publishedHandicap?.modelProbability : null;
   const publishedHandicapSp = boundOfficialHandicapSp(publishedHandicap, publishedHandicapDirection);
   const publishedHadNames = language === 'zh'
@@ -2131,11 +2155,38 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     ? [publishedDetail?.primaryScore, publishedDetail?.alternativeScore].filter((score): score is ScoreProbability => Boolean(score)).map((score, index) => ({
       ...score, tone: index === 0 ? 'aligned' : 'alternate',
       tag: index === 0
-        ? publishedDetail?.scoreSource === 'published-matrix' ? (unifiedRow?.decision.primaryPickPolicyVersion ? (language === 'zh' ? '比分首选 · 低置信' : 'Score primary · low confidence') : (language === 'zh' ? '同一模型同向比分' : 'Aligned score from the same model')) : (language === 'zh' ? '旧补充分布 · 同向参考' : 'Legacy supplemental aligned score')
-        : (language === 'zh' ? '全局备选 · 不改变首选' : 'Global alternative · primary unchanged'),
+        ? publishedDetail?.scoreSource === 'published-matrix'
+          ? isIndependentPublication
+            ? (language === 'zh' ? '全局比分分布参考 · 低置信' : 'Global score distribution reference · low confidence')
+            : (language === 'zh' ? '同向比分参考 · 低置信' : 'Aligned score reference · low confidence')
+          : (language === 'zh' ? '旧补充分布 · 同向参考' : 'Legacy supplemental aligned score')
+        : (language === 'zh' ? '全局比分分布参考' : 'Global score distribution reference'),
     }))
     : legacyScoreRecommendations;
-  const displayedScoreText = useUnified ? publishedDetail?.primaryScore?.label || (language === 'zh' ? '暂无同向比分' : 'No aligned score available') : projectedScoreText;
+  const displayedScoreText = useUnified
+    ? isCoherentPublication
+      ? publishedGlobalScores.map(score => score.label).join(' / ') || (language === 'zh' ? '同源比分分布暂不可用' : 'Bound score distribution unavailable')
+      : publishedDetail?.primaryScore?.label || (language === 'zh' ? '暂无同向比分' : 'No aligned score available')
+    : projectedScoreText;
+  const coherentScoreReference = publishedGlobalScores.length ? publishedGlobalScores.map((score, index) => (
+    <div key={score.label} className="recommendation-score-option" data-global-score-rank={index + 1} data-primary-compatible={score.primaryCompatible ?? 'unknown'}>
+      <span>{language === 'zh' ? `全局比分参考 ${index + 1}` : `Global score reference ${index + 1}`}</span>
+      <strong>{score.label}</strong>
+      <small>{score.probability.toFixed(1)}% · {language === 'zh' ? '无条件概率' : 'Unconditional probability'}</small>
+      <em>{score.primaryCompatible === true
+        ? (language === 'zh' ? '符合主方向' : 'Compatible with the primary')
+        : score.primaryCompatible === false
+          ? (language === 'zh' ? '不符合主方向' : 'Not compatible with the primary')
+          : (language === 'zh' ? '主方向关系待核' : 'Primary compatibility unverified')}</em>
+    </div>
+  )) : <div className="recommendation-score-option is-empty"><strong>{language === 'zh' ? '同源比分分布暂不可用' : 'Bound score distribution unavailable'}</strong></div>;
+  const coherentAlignedArchive = isCoherentPublication && <details data-score-reference="aligned-archive">
+    <summary>{language === 'zh' ? '查看冻结同向比分说明' : 'View archived aligned-score explanation'}</summary>
+    <p>{language === 'zh' ? '同向比分说明主方向与已有条件分支同时成立的情形，不作为独立比分推荐，也不替代全局分布。' : 'Aligned scores illustrate the primary and any recorded conditional branch landing together. They are not independent score picks or replacements for the global distribution.'}</p>
+    {publishedDetail?.alignedScores.length
+      ? publishedDetail.alignedScores.slice(0, 3).map(score => <p key={score.label}>{score.label} · {score.probability.toFixed(1)}% · {language === 'zh' ? '无条件概率' : 'Unconditional probability'}</p>)
+      : <p>{language === 'zh' ? '暂无可核验的冻结同向比分' : 'No verified archived aligned scores'}</p>}
+  </details>;
   const lockedTagText = useUnified
     ? publishedDetail?.scoreSource === 'published-matrix' ? (language === 'zh' ? '同一发布记录' : 'Same published record')
       : publishedDetail?.scoreSource === 'legacy-supplemental' ? (language === 'zh' ? '旧补充分布' : 'Legacy supplemental distribution')
@@ -2206,7 +2257,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     : publicRecommendationCopy.oddsLabel;
   const publicScoreNote = useUnified
     ? publishedDetail?.scoreSource === 'published-matrix'
-      ? (unifiedRow?.decision.primaryPickPolicyVersion ? (language === 'zh' ? '各玩法来自同一完整比分分布，分别选择首选。比分首选不强制符合胜平负或让球首选；单个比分概率不等于总进球或胜平负概率。' : 'Each market selects its own primary from the same full score distribution. The score mode need not match the marginal 1X2 or handicap pick.') : (language === 'zh' ? '比分与胜平负、让球来自同一发布记录。首选比分同时符合两个方向；全局备选保留模型原始排序。单一比分概率不是胜平负总概率，也不是实际命中率。' : 'Scores, 1X2 and handicap use the same published record. The primary score matches both directions; the global alternative keeps the model ranking. An individual score probability is neither an outcome total nor an observed hit rate.'))
+      ? isCoherentPublication
+        ? (language === 'zh' ? '按同一冻结矩阵的原始概率展示全局前三比分，不设唯一比分首选。兼容标记只判断是否符合主方向，不要求符合条件分支；概率均为无条件概率，未重新归一化，也不是实际命中率。' : 'The top three global scores retain their original frozen-matrix ranking, without a unique score pick. Compatibility checks only the primary, not the conditional branch. Probabilities are unconditional and unrenormalized, not observed hit rates.')
+        : isIndependentPublication
+          ? (language === 'zh' ? '此旧版记录的各玩法独立选择方向。比分展示全局分布最高项，可能与胜平负或让球方向不同；单一比分与总进球均为无条件概率，仅作分布参考。' : 'This legacy record selects each market independently. The global score mode may differ from its 1X2 or handicap direction. Score and total-goals probabilities are unconditional distribution references.')
+          : (language === 'zh' ? '比分与胜平负、让球来自同一发布记录。同向比分符合已记录方向；全局分布参考保留模型原始排序。单一比分概率不是胜平负总概率，也不是实际命中率。' : 'Scores, 1X2 and handicap use the same published record. Aligned scores match the recorded directions; global distribution references retain the original model ranking. A score probability is neither an outcome total nor an observed hit rate.')
       : publishedDetail?.scoreSource === 'legacy-supplemental'
         ? (language === 'zh' ? '此旧记录尚无同源比分，当前为旧补充模型中的同向参考，未绑定该发布记录。单一比分概率不等于胜平负总概率。' : 'This older publication has no bound score projection. The aligned reference uses an older supplemental model, not this publication. A score probability is not an outcome total.')
         : (language === 'zh' ? '当前发布记录暂无可核验的同源比分，待比分依据补齐后展示。胜平负、让球推荐保留原记录。' : 'No verified score projection is available for this publication. Scores will appear when its evidence is available; the recorded 1X2 and handicap picks remain available.')
@@ -2319,9 +2374,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     && Number.isFinite(worldCupPriorWeight)
     && Number(worldCupPriorWeight) > 0
   );
-  const predictionDataPolicyCopy = language === 'zh'
-    ? `赛前独立模型使用 Elo、长期历史、近期状态、赛程密度和比分分布${worldCupPriorEnabled ? '，并使用已通过安全校验的世界杯先验' : '；世界杯先验仅在安全校验通过时启用，本场未启用'}。官方 HAD/HHAD SP 只用于市场与价值风险校验；截止后只结算赛果，不回写赛前方向。`
-    : `The pre-match model uses Elo, long-run history, recent form, schedule density, and score distributions${worldCupPriorEnabled ? ', plus a safety-validated World Cup prior' : '; World Cup priors are enabled only after safety validation and are disabled for this match'}. Official HAD/HHAD SP only validates market and value risk; after cutoff, settlement is added without rewriting the pre-match direction.`;
+  const predictionDataPolicyCopy = <><MixedModelEstimateNote language={language}/>{' '}{language === 'zh'
+    ? '截止后只结算赛果，不回写赛前方向。'
+    : 'After cutoff, settlement is added without rewriting the pre-match direction.'}</>;
   const worldCupPriorStrengthDiff = Number(worldCupPrior?.strengthDiff);
   const worldCupPriorHomeName = language === 'zh'
     ? worldCupPrior?.home?.nameZh || worldCupPrior?.home?.nameEn
@@ -2405,7 +2460,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       Number.isFinite(match.oddsTrend.odds2Change) ? `${language === 'zh' ? '客' : 'A'} ${Number(match.oddsTrend.odds2Change) > 0 ? '+' : ''}${formatDecimal(match.oddsTrend.odds2Change)}` : ''
     ].filter(Boolean).join(' / ')
     : '';
-  const injuryCount = Number(externalSignals?.injuries?.home?.length || 0) + Number(externalSignals?.injuries?.away?.length || 0);
+  const evidenceCoverage = preMatchQuality?.evidenceCoverage;
+  const injuryCount = evidenceCoverage
+    ? (evidenceCoverage.sides.home.injuryPlayers ?? 0) + (evidenceCoverage.sides.away.injuryPlayers ?? 0)
+    : Number(externalSignals?.injuries?.home?.length || 0) + Number(externalSignals?.injuries?.away?.length || 0);
   const lineupQuality = preMatchQuality?.components?.lineup;
   const legacyLineupIsConfirmed = lineupQuality?.confirmed === true
     || ['confirmed-lineup', 'official-starting-xi'].includes(String(lineupQuality?.evidenceType || '').toLowerCase());
@@ -2428,25 +2486,18 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     && signal.usableForPreMatch !== false
   );
   const lineupSignalReady = Boolean(
-    hasAuditableSource(confirmedLineupSignal)
-    && (
-      confirmedLineupSummaryText
-      || confirmedLineupSignal?.homeFormation
-      || confirmedLineupSignal?.awayFormation
-    )
+    evidenceCoverage?.confirmedBoth === true
+    && hasAuditableSource(confirmedLineupSignal)
   );
   const projectedRosterReady = Boolean(
-    String(projectedRosterSignal?.source || '').trim()
+    evidenceCoverage?.projectedAny === true
+    && String(projectedRosterSignal?.source || '').trim()
     && Number.isFinite(Date.parse(String(projectedRosterSignal?.sourceObservedAt || '')))
     && projectedRosterSignal?.usableForPreMatch !== false
-    && (
-      projectedRosterSummaryText
-      || projectedRosterSignal?.homeFormation
-      || projectedRosterSignal?.awayFormation
-    )
   );
   const injurySignalReady = Boolean(
-    hasAuditableSource(externalSignals?.injuries)
+    evidenceCoverage && Object.values(evidenceCoverage.sides).some(side => side.injuryStatus === 'reported')
+    && hasAuditableSource(externalSignals?.injuries)
     && (injuryCount > 0 || injurySummaryText)
   );
   const refereeSignalReady = Boolean(
@@ -2477,7 +2528,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       ? (injuryCount > 0
         ? (language === 'zh' ? `伤停 ${injuryCount} 条` : `${injuryCount} injury notes`)
         : injurySummaryText)
-      : '',
+      : (language === 'zh' ? '伤停未知，分析降级' : 'Injuries unknown; reduced evidence'),
     refereeText,
     Number.isFinite(yellowCardsTotal)
       ? (language === 'zh' ? `预计黄牌 ${formatDecimal(yellowCardsTotal)}` : `expected yellows ${formatDecimal(yellowCardsTotal)}`)
@@ -2645,7 +2696,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     if (!trace) return null;
 
     const components = trace.outcome?.components || [];
-    const modelComponents = components.filter((component) => component.role === 'model' && Number(component.weight) > 0);
+    const weightedComponents = components.filter((component) => Number(component.weight) > 0);
     const marketComponent = components.find((component) => component.key === 'market');
     const lambdaValues = trace.expectedGoals?.values;
     const goalValues = trace.goals?.values;
@@ -2658,9 +2709,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           <div>
             <h4>{language === 'zh' ? '计算公式' : 'Calculation Formula'}</h4>
             <p>
-              {displayText(trace.policy?.[language] || (language === 'zh'
-                ? '先计算独立模型概率，再做风险校准；SP 只做市场校验。'
-                : 'Compute independent model probabilities first, then calibrate risk; SP is validation only.'))}
+              <MixedModelEstimateNote language={language}/>
             </p>
           </div>
           <span>{displayText(trace.version)}</span>
@@ -2669,11 +2718,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         <div className="formula-card-grid">
           <article className="formula-card is-primary">
             <span>{language === 'zh' ? '胜平负总公式' : '1X2 formula'}</span>
-            <code>{displayText(trace.outcome?.formula?.[language] || 'P_final=calibrate(normalize(sum(w_i*P_i)))')}</code>
+            <code>{displayText(trace.outcome?.formula?.[language] || 'P_base=heuristic_adjust(normalize(sum(w_i*P_i)))')}</code>
             <p>
               {language === 'zh'
-                ? '主胜、平局、客胜分别套用同一条公式，最后归一化并应用冷却/风险校准。'
-                : 'Home, draw, and away use the same formula, then normalization and risk calibration are applied.'}
+                ? '主胜、平局、客胜分别加权、归一化，再应用启发式风险调整。原公式中的 calibrate 是调整函数名，不代表概率已校准；基础输出也不等于最终公开方向。'
+                : 'Home, draw, and away are weighted and normalized, then adjusted by heuristic risk rules. In stored formulas, calibrate names an adjustment function, not validated probability calibration; base output is not the final public direction.'}
             </p>
           </article>
 
@@ -2687,8 +2736,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
             {trace.outcome?.calibration?.applied && (
               <p>
                 {language === 'zh'
-                  ? `已触发 ${trace.outcome.calibration.adjustments?.length || 0} 条风险校准。`
-                  : `${trace.outcome.calibration.adjustments?.length || 0} risk calibration rules applied.`}
+                  ? `已触发 ${trace.outcome.calibration.adjustments?.length || 0} 条启发式风险调整，概率仍未校准。`
+                  : `${trace.outcome.calibration.adjustments?.length || 0} heuristic risk rules applied; probabilities remain uncalibrated.`}
               </p>
             )}
           </article>
@@ -2696,9 +2745,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           <article className="formula-card">
             <span>{language === 'zh' ? '组件权重' : 'Component weights'}</span>
             <div className="formula-component-list">
-              {modelComponents.map((component) => (
+              {weightedComponents.map((component) => (
                 <div key={component.key}>
-                  <b>{displayText(component.label?.[language] || component.key)}</b>
+                  <b>{component.key === 'market' ? (language === 'zh' ? '市场概率输入' : 'Market probability input') : component.key === 'teamStrength' ? (language === 'zh' ? '球队强度输入' : 'Team strength input') : displayText(component.label?.[language] || component.key)}</b>
                   <strong>{formatModelWeight(component.weight)}</strong>
                   <em>{renderOutcomeLine(component.probabilities)}</em>
                 </div>
@@ -2710,7 +2759,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
             <span>{language === 'zh' ? '进球期望 lambda' : 'Expected goals lambda'}</span>
             <code>{displayText(trace.expectedGoals?.formula?.[language] || '--')}</code>
             <p>
-              {language === 'zh' ? '独立初值' : 'Independent seed'}:
+              {language === 'zh' ? '模型初值' : 'Model seed'}:
               {' '}
               <strong>{formatDecimal(lambdaValues?.independentHome)} / {formatDecimal(lambdaValues?.independentAway)}</strong>
               {' · '}
@@ -2749,9 +2798,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               <strong>{formatProbabilityValue(goalValues?.bttsYes)}</strong>
             </p>
             <p>
-              <strong>{displayText(trace.marketUse?.formula || 'marketWeight=0')}</strong>
+              <strong>{language === 'zh' ? '基础市场权重' : 'Base market weight'} {formatModelWeight(marketComponent?.weight ?? trace.outcome?.weights?.market)}</strong>
               {' · '}
-              {displayText(trace.marketUse?.[language] || (language === 'zh' ? 'SP 只做校验。' : 'SP is validation only.'))}
+              {language === 'zh' ? '市场概率可参与基础混合，SP 也用于偏离与风险诊断。保存的阶段权重不代表最终方向贡献度；实际采用以可核验回执为准。' : 'Market probabilities can enter the base blend; SP also supports divergence and risk diagnostics. A saved stage weight is not final-direction attribution; actual use requires a verifiable receipt.'}
             </p>
             {marketComponent && (
               <p>
@@ -3023,7 +3072,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 </span>
               </div>
             )}
-            {useUnified ? <div className="card recommendation-overview-card recommendation-outcome-card"><section className="recommendation-overview-panel is-outcome"><PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} /></section></div> : <div className="card recommendation-overview-card recommendation-outcome-card">
+            {useUnified ? <div className="card recommendation-overview-card recommendation-outcome-card"><section className="recommendation-overview-panel is-outcome">{((reviewedMatchRecommendation(published.data,match) || (published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)))) ? <TrainedMatchPick record={trainedMatchRecommendation(published.data,match)} reviewed={reviewedMatchRecommendation(published.data,match)} now={nowMs} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} />)}</section></div> : <div className="card recommendation-overview-card recommendation-outcome-card">
               <section className="recommendation-overview-panel is-outcome">
                 <small>{language === 'zh' ? '旧版赛前归档' : 'Legacy pre-match archive'}</small>
                 <div className="recommendation-overview-head">
@@ -3147,14 +3196,16 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
             </div>
 
             }
+            <details className="published-match-pick__basis recommendation-detail-secondary-evidence">
+              <summary>{language === 'zh' ? '查看分析依据' : 'View analysis evidence'}</summary>
             <div className="card recommendation-score-card">
               <section className="recommendation-overview-panel is-score">
                 <div className="recommendation-overview-head">
-                  <span>{language === 'zh' ? '比分推演' : 'Score Projection'}</span>
+                  <span>{useUnified && isCoherentPublication ? (language === 'zh' ? '全局比分前三参考' : 'Top three global score references') : (language === 'zh' ? '比分推演' : 'Score Projection')}</span>
                   <b>{lockedTagText}</b>
                 </div>
                 <div className="recommendation-score-list">
-                  {!useUnified && isPreMatchRecordSettling ? (
+                  {useUnified && isCoherentPublication ? coherentScoreReference : !useUnified && isPreMatchRecordSettling ? (
                     <div className="recommendation-score-option is-empty">
                       <span>{language === 'zh' ? '赛前记录' : 'Pre-match record'}</span>
                       <strong>--</strong>
@@ -3165,7 +3216,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       <span>{index === 0 ? (language === 'zh' ? '比分一' : 'Score 1') : (language === 'zh' ? '比分二' : 'Score 2')}</span>
                       <strong>{score.label}</strong>
                       <em>{score.tag}</em>
-                      {useUnified && typeof score.probability === 'number' && Number.isFinite(score.probability) && <small>{score.probability.toFixed(1)}% · {language === 'zh' ? '单一比分概率' : 'Individual score probability'}</small>}
+                      {useUnified && typeof score.probability === 'number' && Number.isFinite(score.probability) && <small>{score.probability.toFixed(1)}% · {language === 'zh' ? '单一比分无条件概率' : 'Unconditional score probability'}</small>}
                     </div>
                   )) : (
                     <div className="recommendation-score-option is-empty">
@@ -3183,6 +3234,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   </p>
                 )}
                 <p>{publicScoreNote}</p>
+                {useUnified && coherentAlignedArchive}
                 <div className="recommendation-mini-tags">
                   {isPreMatchRecordSettling ? (
                     <>
@@ -3208,46 +3260,59 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   <b>{language === 'zh' ? '参考分析' : 'Reference analysis'}</b>
                 </div>
                 <div className="recommendation-score-list">
-                  <div className="recommendation-score-option">
-                    <span>{language === 'zh' ? '胜平负' : '1X2'}</span>
+                  {publishedMarketOrder.map(market => market === 'HAD' ? <div key={market} className="recommendation-score-option">
+                    <span>{primaryMarketLabel(unifiedRow.decision, 'HAD', language === 'zh')}</span>
                     <strong>{publishedHadNames[unifiedRow.decision.tipCode]}</strong>
-                    <em>{language === 'zh' ? '已冻结方向' : 'Frozen direction'}</em>
-                    <small>{(unifiedRow.decision.modelProbability * 100).toFixed(1)}% · SP {unifiedRow.decision.odds.toFixed(2)}</small>
-                  </div>
-                  <div className="recommendation-score-option">
-                    <span>{language === 'zh' ? '让球胜平负' : 'Handicap 1X2'}</span>
+                    <em>{isCoherentPublication
+                      ? unifiedRow.decision.coherentPrimary?.anchorMarket === 'HAD'
+                        ? (language === 'zh' ? '有效玩法中概率最高' : 'Highest probability among available markets')
+                        : (language === 'zh' ? '主方向成立时的条件分支 · 非独立推荐' : 'Conditional branch if the primary lands · not an independent pick')
+                      : (language === 'zh' ? '已冻结方向' : 'Frozen direction')}</em>
+                    <small>{(unifiedRow.decision.modelProbability * 100).toFixed(1)}% · {language === 'zh' ? '无条件概率' : 'Unconditional probability'} · SP {unifiedRow.decision.odds.toFixed(2)}</small>
+                  </div> : <div key={market} className="recommendation-score-option">
+                    <span>{publishedHandicapDirection ? primaryMarketLabel(unifiedRow.decision, 'HHAD', language === 'zh') : (language === 'zh' ? '让球胜平负' : 'Handicap 1X2')}</span>
                     <strong>{publishedHandicapDirection
-                      ? `${handicapTipLabel(publishedHandicapDirection)[language]} (${publishedHandicap!.handicapLine > 0 ? '+' : ''}${publishedHandicap!.handicapLine})`
+                      ? `${handicapTipLabel(publishedHandicapDirection)[language]} · ${handicapLineLabel(publishedHandicap!.handicapLine, language === 'zh')}`
                       : '—'}</strong>
                     <em>{publishedHandicapDirection
-                      ? publishedHandicap?.version === 'handicap-margin-v3'
-                        ? (language === 'zh' ? '完整比分矩阵概率最高' : 'Highest full-matrix probability')
-                        : publishedHandicap?.probabilityBasis === 'conditional-on-straight-primary'
-                          ? (language === 'zh' ? '旧版条件让球分析' : 'Legacy conditional handicap analysis')
-                          : (language === 'zh' ? '旧版独立让球分析' : 'Legacy standalone handicap analysis')
-                      : (language === 'zh' ? '冻结记录未包含让球分析' : 'No bound handicap analysis')}</em>
-                    <small>{publishedHandicapDirection && Number.isFinite(publishedHandicapProbability) ? `${(Number(publishedHandicapProbability) * 100).toFixed(1)}% · ` : ''}{publishedHandicapSp !== null
+                      ? isCoherentPublication
+                        ? unifiedRow.decision.coherentPrimary?.anchorMarket === 'HHAD'
+                          ? (language === 'zh' ? '有效玩法中概率最高' : 'Highest probability among available markets')
+                          : (language === 'zh' ? '主方向成立时的条件分支 · 非独立推荐' : 'Conditional branch if the primary lands · not an independent pick')
+                        : publishedHandicap?.version === 'handicap-margin-v3'
+                          ? (language === 'zh' ? '完整比分矩阵概率最高' : 'Highest full-matrix probability')
+                          : publishedHandicap?.probabilityBasis === 'conditional-on-straight-primary'
+                            ? (language === 'zh' ? '旧版条件让球分析' : 'Legacy conditional handicap analysis')
+                            : (language === 'zh' ? '旧版独立让球分析' : 'Legacy standalone handicap analysis')
+                      : (language === 'zh' ? '本条暂无可用让球方向' : 'No available handicap direction in this record')}</em>
+                    <small>{publishedHandicapDirection && Number.isFinite(publishedHandicapProbability) ? `${(Number(publishedHandicapProbability) * 100).toFixed(1)}% · ${isCoherentPublication ? (language === 'zh' ? '无条件概率 · ' : 'Unconditional probability · ') : ''}` : ''}{publishedHandicapSp !== null
                       ? `SP ${publishedHandicapSp.toFixed(2)}`
                       : (language === 'zh' ? '本条未绑定该方向的官方让球 SP' : 'No official handicap SP bound to this outcome')}</small>
-                  </div>
-                  <div className="recommendation-score-option">
-                    <span>{language === 'zh' ? '比分' : 'Exact score'}</span>
+                  </div>)}
+                  {isCoherentPublication ? <div className="recommendation-score-option">
+                    <span>{language === 'zh' ? '全局比分前三参考' : 'Top three global score references'}</span>
+                    <div className="recommendation-score-list">{coherentScoreReference}</div>
+                    {coherentAlignedArchive}
+                    <small>{language === 'zh' ? '本条未绑定竞彩比分 SP，仅作分布参考' : 'No official exact-score SP bound; distribution reference only'}</small>
+                  </div> : <div className="recommendation-score-option">
+                    <span>{isIndependentPublication ? (language === 'zh' ? '全局比分分布参考' : 'Global score distribution reference') : (language === 'zh' ? '比分参考' : 'Score reference')}</span>
                     <strong>{publishedDetail?.scoreSource === 'published-matrix' ? publishedDetail.primaryScore?.label || '—' : '—'}</strong>
                     <em>{publishedDetail?.scoreSource === 'published-matrix'
                       ? (language === 'zh' ? '同一冻结比分矩阵' : 'Same frozen score matrix')
                       : (language === 'zh' ? '同源比分矩阵不可用' : 'Bound score matrix unavailable')}</em>
                     <small>{publishedDetail?.scoreSource === 'published-matrix' && publishedDetail.primaryScore
-                      ? `${publishedDetail.primaryScore.probability.toFixed(1)}% · ` : ''}{language === 'zh' ? '本条未绑定竞彩比分 SP，仅作模型参考' : 'No official exact-score SP bound; model reference only'}</small>
-                  </div>
+                      ? `${publishedDetail.primaryScore.probability.toFixed(1)}% · ${language === 'zh' ? '无条件概率' : 'Unconditional probability'} · ` : ''}{language === 'zh' ? '本条未绑定竞彩比分 SP，仅作模型参考' : 'No official exact-score SP bound; model reference only'}</small>
+                  </div>}
                   <div className="recommendation-score-option">
-                    <span>{language === 'zh' ? '总进球数' : 'Total goals'}</span>
+                    <span>{language === 'zh' ? '总进球分布最高项' : 'Leading total-goals bucket'}</span>
                     <strong>{leadingPublishedTotal ? `${leadingPublishedTotal.label}${language === 'zh' ? ' 球' : ' goals'}` : '—'}</strong>
                     <em>{leadingPublishedTotal
-                      ? `${(leadingPublishedTotal.probability * 100).toFixed(1)}% · ${language === 'zh' ? '完整矩阵聚合' : 'Full-matrix aggregate'}`
+                      ? `${(leadingPublishedTotal.probability * 100).toFixed(1)}% · ${language === 'zh' ? '完整矩阵无条件概率' : 'Unconditional full-matrix probability'}`
                       : (language === 'zh' ? '同源总进球分布不可用' : 'Bound total-goals distribution unavailable')}</em>
                     <small>{language === 'zh' ? '本条未绑定竞彩总进球 SP，仅作模型参考' : 'No official total-goals SP bound; model reference only'}</small>
                   </div>
                 </div>
+                {isCoherentPublication && <PublishedHadDistribution decision={unifiedRow.decision} language={language}/>}
                 {publishedTotals?.length === 8 && <div className="recommendation-mini-tags" aria-label={language === 'zh' ? '竞彩总进球概率分布' : 'Total-goals probability distribution'}>
                   {publishedTotals.map(row => <span key={row.label}>{row.label}{language === 'zh' ? ' 球' : ' goals'} {(row.probability * 100).toFixed(1)}%</span>)}
                 </div>}
@@ -3257,9 +3322,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               </section>
             </div>}
 
+            </details>
       </section>
 
-      {dualStudy && <DualResearchV2 row={dualStudy} language={language} />}
+      {dualStudy && <details className="published-match-pick__basis"><summary>{language === 'zh' ? '查看双选研究依据' : 'View dual-choice study evidence'}</summary><DualResearchV2 row={dualStudy} language={language} /></details>}
 
       {/* 4. 单层详情导航 */}
       <div className="tabs-container detail-tabs-nav match-detail-v4__tabs" role="tablist" aria-label={language === 'zh' ? '详情导航' : 'Detail sections'}>
@@ -3398,11 +3464,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   ? useUnified ? '已发布概率和时间来自同一记录；补充模型快照与最新采集资料分别标明来源，不作为该记录的采用证明。' : '下面的缺项与分析对应推荐生成时点；后续补到的伤停、阵容在上方单独展示，不会自动改写这里的历史依据。'
                   : useUnified ? 'Published probabilities and times share one record. Supplemental model snapshots and newly collected data are separate, not proof of adoption by that record.' : 'Gaps and analysis below reflect the decision time. Subsequently collected injuries and lineups are shown above and do not automatically rewrite this record.'}
               </p>
-              {posteriorDisagreement && <p className="match-detail-v4__model-disagreement" role="note" data-model-direction-disagreement="true">
-                {language === 'zh'
-                  ? `补充模型快照的研究后验偏向${({ '1': '主胜', X: '平局', '2': '客胜' } as const)[posteriorDisagreement.research]}，与已发布的${({ '1': '主胜', X: '平局', '2': '客胜' } as const)[posteriorDisagreement.published]}不同。两者时间及基础概率一致，但缺少后验内容绑定，不能证明发布时采用过该后验；公开方向仍以冻结记录为准。`
-                  : `The supplemental model's research posterior favors ${({ '1': 'home', X: 'draw', '2': 'away' } as const)[posteriorDisagreement.research]}, while the published direction is ${({ '1': 'home', X: 'draw', '2': 'away' } as const)[posteriorDisagreement.published]}. The times and base probabilities align, but no posterior content binding proves it was used at publication. The frozen record remains the public direction.`}
-              </p>}
+              {posteriorDisagreement && <FrozenHadPosteriorNote
+                decision={unifiedRow?.decision || null}
+                disagreement={posteriorDisagreement}
+                language={language}
+              />}
             </section>
 
             {hasUsableFiveHundredDetails && (
@@ -3489,7 +3555,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
         {activeTab === 'history' && (
           <div className="match-detail-v4__section-stack" data-section="history">
-            {useUnified && <div className="card review-card"><h3>{language === 'zh' ? '已发布推荐复盘' : 'Published recommendation review'}</h3><PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} /></div>}
+            {useUnified && <div className="card review-card"><h3>{language === 'zh' ? '已发布推荐复盘' : 'Published recommendation review'}</h3>{((reviewedMatchRecommendation(published.data,match) || (published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)))) ? <TrainedMatchPick record={trainedMatchRecommendation(published.data,match)} reviewed={reviewedMatchRecommendation(published.data,match)} now={nowMs} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} />)}</div>}
             {!useUnified && isResultPhase && hasReviewPredictions && (
               <div className="card review-card">
                 <div className="review-head">
@@ -3631,7 +3697,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               <div className="signal-summary-meta">
                 <span>{language === 'zh' ? '证据评分' : 'Evidence score'} <strong>{navEvidenceDetail}</strong></span>
                 {calibratedModelProbability && (
-                  <span>{language === 'zh' ? '模型概率' : 'Model probability'} <strong>{calibratedModelProbability}</strong></span>
+                  <span>{language === 'zh' ? '混合模型估计·未校准' : 'Mixed model estimate · uncalibrated'} <strong>{calibratedModelProbability}</strong></span>
                 )}
                 <span>{language === 'zh' ? '风险项' : 'Risks'} <strong>{matchSignal.riskCount}</strong></span>
                 {match.oddsTrend && (
@@ -3689,7 +3755,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   <span className="review-kicker">{language === 'zh' ? '官方市场' : 'Official market'}</span>
                   <h3 id="match-detail-odds-heading">{language === 'zh' ? '胜平负与让球赔率' : '1X2 and handicap odds'}</h3>
                 </div>
-                <span>{language === 'zh' ? '去水支持率仅用于市场校验' : 'De-vig support is market validation only'}</span>
+                <span>{language === 'zh' ? '去水概率是市场估计，基础模型可将其作为输入' : 'De-vig probabilities are market estimates and can be base-model inputs'}</span>
               </div>
               {poolRows.length > 0 ? (
                 <div className="detail-pool-table match-detail-v4__pool-table">
@@ -3817,7 +3883,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       {language === 'zh' ? '概率预测系统' : 'Probability Forecast'}
                     </span>
                     <h3>{language === 'zh' ? '赛前概率分布' : 'Pre-Match Probability Distribution'}</h3>
-                    <p>{displayText(probabilityModel.basis[language])}</p>
+                    <p><MixedModelEstimateNote language={language}/></p>
                   </div>
                   <span>{displayText(probabilityModel.version)}</span>
                 </div>
@@ -3835,7 +3901,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       </span>
                       {probabilityModel.oneXTwo.teamStrength && (
                         <span>
-                          {language === 'zh' ? '独立强度：' : 'Team strength: '}
+                          {language === 'zh' ? '球队强度输入：' : 'Team strength input: '}
                           {renderOutcomeLine(probabilityModel.oneXTwo.teamStrength)}
                         </span>
                       )}
@@ -3875,13 +3941,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                         <span className="probability-weight-line">
                           {language === 'zh' ? '集成权重' : 'Ensemble weights'}：
                           {language === 'zh'
-                            ? `独立强度 ${formatModelWeight(probabilityModel.ensembleWeights.teamStrength)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}${worldCupPriorEnabled ? ` / 世界杯先验 ${formatModelWeight(probabilityModel.ensembleWeights.worldCupPrior)}` : ''} / SP校验 ${formatModelWeight(probabilityModel.ensembleWeights.market)}`
-                            : `team strength ${formatModelWeight(probabilityModel.ensembleWeights.teamStrength)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}${worldCupPriorEnabled ? ` / World Cup prior ${formatModelWeight(probabilityModel.ensembleWeights.worldCupPrior)}` : ''} / SP validation ${formatModelWeight(probabilityModel.ensembleWeights.market)}`}
+                            ? `球队强度 ${formatModelWeight(probabilityModel.ensembleWeights.teamStrength)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}${worldCupPriorEnabled ? ` / 世界杯先验 ${formatModelWeight(probabilityModel.ensembleWeights.worldCupPrior)}` : ''} / 市场概率输入 ${formatModelWeight(probabilityModel.ensembleWeights.market)}`
+                            : `team strength ${formatModelWeight(probabilityModel.ensembleWeights.teamStrength)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}${worldCupPriorEnabled ? ` / World Cup prior ${formatModelWeight(probabilityModel.ensembleWeights.worldCupPrior)}` : ''} / market probability input ${formatModelWeight(probabilityModel.ensembleWeights.market)}`}
                         </span>
                       )}
                       {probabilityModel.dynamicCalibration && (
                         <span className="probability-weight-line">
-                          {language === 'zh' ? '动态校准' : 'Dynamic calibration'}：
+                          {language === 'zh' ? '动态风险调整（未校准）' : 'Dynamic risk adjustment (uncalibrated)'}：
                           {displayText(calibrationReasonLabels[probabilityModel.dynamicCalibration.gate?.reason || 'neutral-profile']?.[language] || probabilityModel.dynamicCalibration.gate?.reason || '--')}
                         </span>
                       )}
@@ -4020,14 +4086,14 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       <div className="probability-pair-grid" style={{ marginBottom: '0.75rem' }}>
                         {calibrationAdjustment?.oneXTwo?.applied && (
                           <span>
-                            {language === 'zh' ? '胜平负校准' : '1X2 calibration'}
+                            {language === 'zh' ? '胜平负启发式调整' : 'Heuristic 1X2 adjustment'}
                             <strong>{language === 'zh' ? '已降温' : 'Active'}</strong>
                             <em>{oneXTwoCalibrationAdjustments.length} {language === 'zh' ? '项' : 'rules'}</em>
                           </span>
                         )}
                         {calibrationAdjustment?.goals?.applied && (
                           <span>
-                            {language === 'zh' ? '进球校准' : 'Goals calibration'}
+                            {language === 'zh' ? '进球启发式调整' : 'Heuristic goal adjustment'}
                             <strong>{formatModelWeight(calibrationAdjustment.goals?.shrinkFactor)}</strong>
                             <em>{calibrationAdjustment.goals?.before?.over25 ?? '--'}% {'to'} {calibrationAdjustment.goals?.after?.over25 ?? '--'}%</em>
                           </span>
@@ -4050,9 +4116,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 </div>
 
                 <p className="probability-calibration-note">
-                  {language === 'zh'
-                    ? `概率先由独立强度、Elo、Poisson${worldCupPriorEnabled ? '和已通过安全校验的世界杯先验' : ''}生成，再按滚动表现做风险校准；SP 只参与市场分歧校验。`
-                    : `Probabilities are generated from independent strength, Elo, Poisson${worldCupPriorEnabled ? ', and a safety-validated World Cup prior' : ''}, then risk-calibrated on rolling results; SP is market-divergence validation only.`}
+                  <MixedModelEstimateNote language={language}/>
                 </p>
               </div>
             )}
@@ -4074,8 +4138,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                     : (isFormalPrimaryRecommendation ? 'What this formal pick is based on' : isLivePrimaryRecommendation || isArchivedLiveRecommendation ? 'What this live pick is based on' : 'What this analysis direction is based on')}</h3>
                   <p>
                     {useUnified ? (language === 'zh' ? '以下展示原模型快照中的输入信息；未提供与当前统一发布记录的独立采用绑定，不据此生成第二个推荐方向。' : 'These inputs belong to the original model snapshot. No independent adoption binding to the current publication is provided, and they do not generate a second pick.') : language === 'zh'
-                      ? '方向判断不是单点结论，会综合长期强弱、近况、进球区间、世界杯背景和可验证赛前信息，再用官方赔率与外部均赔做交叉确认；只有完整通过门槛才会标为正式推荐。'
-                      : 'The direction is not based on a single signal: it combines long-run strength, form, goal range, World Cup context, and verified pre-match information, then checks official and external odds; only the full gate can promote it to a formal pick.'}
+                      ? '基础模型混合市场概率和球队/比分输入。下列快照不证明各项已被本条发布记录采用，实际采用以可核验回执为准；启发式门槛不证明概率已校准。'
+                      : 'The base model blends market probabilities with team/score inputs. These snapshots do not prove adoption by this publication; actual use requires a verifiable receipt. Heuristic gates do not establish probability calibration.'}
                   </p>
                 </div>
               </div>
@@ -4149,8 +4213,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   <h3>{language === 'zh' ? '12项赛前分析框架' : '12-Point Pre-Match Framework'}</h3>
                   <p>
                     {language === 'zh'
-                      ? '综合长期强弱、近一年攻防、赛程密度、比分区间、世界杯背景与赛前信息生成判断；官方赔率、让球和走势只做校验与风险标记。'
-                      : 'Combines long-run strength, last-year form, schedule density, score range, World Cup context, and pre-match signals; official odds, handicap, and movement are validation and risk markers only.'}
+                      ? '此框架用于整理可用赛前资料。基础概率包含市场概率和球队/比分输入，仍属混合模型估计·未校准；每项资料是否被本条记录采用，以可核验回执为准。'
+                      : 'This framework organizes available pre-match data. Base probabilities include market probabilities and team/score inputs and remain uncalibrated mixed model estimates; adoption of each input requires a verifiable receipt for this record.'}
                   </p>
                 </div>
                 <span>{displayText(predictionMeta?.promptVersion || 'professional-football-analyst-v1')}</span>
@@ -4164,8 +4228,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 </span>
                 <span>
                   {language === 'zh'
-                    ? '伤停、首发、天气、裁判、攻防质量与外部赔率进入赛前信息层，随可验证信号辅助修正风险判断。'
-                    : 'Injuries, lineups, weather, referees, attacking quality, and external odds feed the pre-match signal layer when verified.'}
+                    ? '伤停、首发、天气、裁判、攻防质量与外部赔率须分别核验来源与采用回执；缺少回执时不宣称已进入本条模型计算。'
+                    : 'Injuries, lineups, weather, referees, attacking quality, and external odds each require verified sources and adoption receipts; without a receipt, their use in this model record is not established.'}
                 </span>
               </div>
               <div className="professional-framework-grid">
@@ -4257,11 +4321,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               <div className="card score-projection-card match-detail-v4__score-projection">
                 <h4 className="match-detail-v4__score-heading">
                   <Trophy size={16} />
-                  {t('scorePrediction')}
+                  {useUnified && isCoherentPublication ? (language === 'zh' ? '全局比分前三参考' : 'Top three global score references') : t('scorePrediction')}
                 </h4>
-                <div className="match-detail-v4__score-value">
+                {useUnified && isCoherentPublication ? <div className="recommendation-score-list">{coherentScoreReference}</div> : <div className="match-detail-v4__score-value">
                   {displayedScoreText}
-                </div>
+                </div>}
+                {useUnified && coherentAlignedArchive}
+                {useUnified && isCoherentPublication && unifiedRow && <PublishedHadDistribution decision={unifiedRow.decision} language={language}/>}
                 {actualScoreText && (
                   <p className="match-detail-v4__score-final">
                     {actualScoreText}

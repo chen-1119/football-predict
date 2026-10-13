@@ -18,7 +18,21 @@ const publicDataDir = path.resolve(
   || path.join(rootDir, "public", "data"),
 );
 
-try {
+// Cleanup must retain the database's accepted generation even if several raw
+// publications are waiting for their PostgreSQL projection. Hold the normal
+// shared projection barrier and a generation read lease through deletion.
+async function cleanupCommittedDataGenerations(options, sessionOptions = {}) {
+  if (!require('../server/storageMode.cjs').readStorageMode().postgresOnly) {
+    return cleanupDataGenerations(options);
+  }
+  const session = await require('./postgresRuntimeReadSession.cjs').openPostgresRuntimeReadSession({
+    ...sessionOptions, storeDir: options.storeDir, publicDataDir: options.publicDataDir, protectReceipt: true });
+  try {
+    return cleanupDataGenerations({ ...options, protectedGenerationIds: [session.identity.generationId] });
+  } finally { await session.close(); }
+}
+
+async function main() {
   const result = commitCurrentDataGeneration({
     storeDir,
     publicDataDir,
@@ -27,8 +41,9 @@ try {
   });
   let cleanup;
   try {
-    cleanup = cleanupDataGenerations({
+    cleanup = await cleanupCommittedDataGenerations({
       storeDir,
+      publicDataDir,
       retainCount: Number(process.env.DATA_GENERATION_RETENTION_COUNT || 4),
       graceMs: Number(process.env.DATA_GENERATION_CLEANUP_GRACE_MINUTES || 10) * 60 * 1000,
     });
@@ -65,7 +80,10 @@ try {
       maxRssKiB: process.resourceUsage().maxRSS,
     },
   }, null, 2));
-} catch (error) {
+}
+
+module.exports = { cleanupCommittedDataGenerations };
+if (require.main === module) main().catch(error => {
   console.error(JSON.stringify({
     ok: false,
     version: "immutable-base-generation-v1",
@@ -76,4 +94,4 @@ try {
     details: error?.details || null,
   }, null, 2));
   process.exitCode = 1;
-}
+});

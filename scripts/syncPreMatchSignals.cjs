@@ -17,6 +17,7 @@ const {
 } = require("./preMatchEvidenceAvailability.cjs");
 const { buildObservedGoalHistoryIndex, buildGoalFitEvidence } = require("../src/services/jointGoalFit.cjs");
 const { strictInstant } = require("../src/services/strictInstant.cjs");
+const { summarizePrematchEvidence } = require("../src/services/prematchEvidenceCoverage.cjs");
 
 const rootDir = path.join(__dirname, "..");
 const publicDir = path.join(rootDir, "public");
@@ -314,11 +315,14 @@ const prioritizeComponentGaps = (coverageByComponent) => Object.entries(coverage
     || left.key.localeCompare(right.key)
   ));
 
-const buildQuality = ({ match, signal, teamHistory }) => {
+const buildQuality = ({ match, signal, teamHistory, asOf = nowIso() }) => {
+  const rawCutoff = match.buyEndTime || match.predictionMeta?.cutoffTime || null;
+  const cutoff = require('../src/services/sportteryDeadlineClock.cjs').sportteryDeadlineClock(match, rawCutoff,
+    {field: match.buyEndTime ? 'buyEndTime' : 'predictionMeta.cutoffTime'}).instant;
+  const evidenceCoverage = summarizePrematchEvidence({signal, asOf, cutoff});
   const referee = signal.referee || {};
   const legacyLineups = signal.lineups || {};
   const legacyLineupConfirmed = legacyLineups.confirmed === true
-    || legacyLineups.verified === true
     || ["confirmed-lineup", "official-starting-xi"].includes(norm(legacyLineups.evidenceType).toLowerCase());
   const confirmedLineup = signal.confirmedLineup || (legacyLineupConfirmed ? legacyLineups : {});
   const projectedRoster = signal.projectedRoster || (!legacyLineupConfirmed ? legacyLineups : {});
@@ -357,30 +361,14 @@ const buildQuality = ({ match, signal, teamHistory }) => {
   const strengthAvailable = Boolean(freeStrength.available);
   const formAvailable = Boolean(freeForm.available);
   const refereeVerified = Boolean(num(referee.cardsPerMatch) !== null || num(referee.penaltiesPerMatch) !== null);
-  const confirmedLineupAvailable = Boolean(
-    confirmedLineup.summary?.zh
-    || confirmedLineup.summary?.en
-    || confirmedLineup.homeFormation
-    || confirmedLineup.awayFormation
-    || (Array.isArray(confirmedLineup.home) && confirmedLineup.home.length >= 11)
-    || (Array.isArray(confirmedLineup.away) && confirmedLineup.away.length >= 11)
-  );
-  const projectedRosterAvailable = Boolean(
-    projectedRoster.summary?.zh
-    || projectedRoster.summary?.en
-    || projectedRoster.homeFormation
-    || projectedRoster.awayFormation
-    || (Array.isArray(projectedRoster.home) && projectedRoster.home.length)
-    || (Array.isArray(projectedRoster.away) && projectedRoster.away.length)
-  );
-  const lineupEvidence = confirmedLineupAvailable ? confirmedLineup : projectedRoster;
+  const confirmedLineupAvailable = evidenceCoverage.confirmedBoth;
+  const projectedRosterAvailable = evidenceCoverage.projectedAny;
+  const lineupEvidence = confirmedLineupAvailable ? confirmedLineup : projectedRosterAvailable ? projectedRoster
+    : Object.keys(confirmedLineup).length ? confirmedLineup : projectedRoster;
   const lineupAvailable = confirmedLineupAvailable || projectedRosterAvailable;
-  const injuryAvailable = Boolean(
-    injuries.summary?.zh
-    || injuries.summary?.en
-    || (Array.isArray(injuries.home) && injuries.home.length)
-    || (Array.isArray(injuries.away) && injuries.away.length)
-  );
+  const lineupDisplayOnly = !lineupAvailable && (evidenceCoverage.windows.confirmed === 'display-only'
+    || evidenceCoverage.windows.projected === 'display-only');
+  const injuryAvailable = Object.values(evidenceCoverage.sides).some(side => side.injuryStatus === 'reported');
   const xgAvailable = Boolean(
     num(xg.homeXg) !== null
     || num(xg.awayXg) !== null
@@ -419,8 +407,8 @@ const buildQuality = ({ match, signal, teamHistory }) => {
   });
   const lineupAvailability = classifyEvidenceAvailability({
     match,
-    evidence: lineupEvidence,
-    available: lineupAvailable,
+    evidence: lineupDisplayOnly ? {...lineupEvidence, usableForPreMatch: false} : lineupEvidence,
+    available: lineupAvailable || lineupDisplayOnly,
     verified: confirmedLineupAvailable,
     releaseLeadMinutes: 75,
     fallbackObservedAt,
@@ -653,6 +641,7 @@ const buildQuality = ({ match, signal, teamHistory }) => {
 
   return {
     version: "pre-match-quality-v53-temporal-evidence",
+    evidenceCoverage,
     score,
     sourceQuality,
     recommendationUsable,
@@ -746,7 +735,7 @@ const main = () => {
         teamDisciplineProfile(footballDataDiscipline, teamNames(match, "away"), forecastTime),
       )
     };
-    const quality = buildQuality({ match, signal: resolvedSignal, teamHistory });
+    const quality = buildQuality({ match, signal: resolvedSignal, teamHistory, asOf: updatedAt });
     const discipline = buildDisciplineFromQuality(teamHistory, quality);
     const payload = {
       version: "sync-pre-match-signals-v53-temporal-evidence",

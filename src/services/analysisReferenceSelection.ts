@@ -5,6 +5,7 @@ import {
 import type { Match, PredictionDetail } from './mockData';
 import { canonicalSourceMatchId, isBeforeMatchSaleCutoff } from './matchLifecycle';
 import { getVisiblePrediction } from './predictionVisibility';
+import { isLegacyCurrentRecommendationRetired } from './recommendationAuthorityPresentation';
 import {
   isCalibratedMarketAnalysisReferenceEligible,
   isDirectionalAnalysisReferenceEligible,
@@ -1012,6 +1013,7 @@ export const selectOnSaleAnalysisReference = (
   match: Match,
   options: AnalysisReferenceSelectionOptions = {},
 ): AnalysisReferenceSelection | undefined => {
+  if (isLegacyCurrentRecommendationRetired(match)) return undefined;
   const now = Number.isFinite(options.now) ? Number(options.now) : Date.now();
   const kickoffAt = Date.parse(String(match.kickoffTime || ''));
   if (

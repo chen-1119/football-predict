@@ -17,10 +17,137 @@ const {
   upper,
   validateArchivedDecision,
 } = require("../server/recommendationProjectionParity.cjs");
+const { TRAINED_ONLY_POLICY, isTrustedPolicy } = require("../server/recommendationAuthority.cjs");
+const { hash: authorityHash } = require("../src/services/leagueBaselineModel.cjs");
+const { day: authorityDay } = require("../src/services/publishedForecastPolicy.cjs");
 
 const VERSION = "remote-recommendation-parity-v1";
 
 const compareRecommendationParity = compareRecommendationProjectionPair;
+
+// Remote observations can validate the complete server receipt, but cannot
+// mint the private database authority or its row tokens.
+const validateRemoteAuthoritySummary = (receipt, { policy, nowMs = Date.now() } = {}) => {
+  const reasons = [];
+  const object = value => value && typeof value === 'object' && !Array.isArray(value);
+  if (!isTrustedPolicy(policy)) reasons.push('local-retirement-policy-untrusted');
+  if (!object(receipt) || receipt.version !== 'recommendation-publication-authority-v1'
+    || receipt.mode !== 'reviewed-and-trained' || receipt.legacyCurrentEnabled !== false) reasons.push('retirement-receipt-invalid');
+  const validNow = Number.isSafeInteger(nowMs) && Number.isFinite(new Date(nowMs).getTime());
+  if (!validNow) reasons.push('retirement-read-clock-invalid');
+  const updated = typeof receipt?.updatedAt === 'string' ? Date.parse(receipt.updatedAt) : NaN;
+  const observed = typeof receipt?.observedAt === 'string' ? Date.parse(receipt.observedAt) : NaN;
+  const validUpdated = Number.isSafeInteger(updated), currentDay = validNow ? authorityDay(nowMs) : null;
+  const currentPublication = receipt?.businessDate === currentDay;
+  if (!validUpdated || !Number.isSafeInteger(observed) || updated > observed || observed > nowMs
+    || nowMs - observed > 60_000 || receipt?.currentBusinessDate !== currentDay
+    || receipt?.businessDate !== (validUpdated ? authorityDay(updated) : null)
+    || receipt?.availableForCurrentDay !== currentPublication
+    || receipt?.publicationState !== (currentPublication ? 'current' : 'stale')) reasons.push('retirement-receipt-clock-invalid');
+  if (receipt?.activeValidation?.ok !== true) reasons.push('retirement-active-validation-failed');
+  for (const name of ['reviewed', 'trained']) {
+    const lane = receipt?.activeValidation?.[name];
+    if (!object(lane) || !['verified', 'unavailable'].includes(lane.status)
+      || ![lane.records, lane.openRecords, lane.closedRecords].every(count => Number.isSafeInteger(count) && count >= 0 && count <= 32)
+      || lane.records !== lane.openRecords + lane.closedRecords
+      || (!currentPublication && lane.openRecords !== 0)
+      || (lane.status === 'unavailable' && lane.records !== 0)) reasons.push('retirement-' + name + '-validation-invalid');
+  }
+  return { present: receipt != null, valid: reasons.length === 0, reasons };
+};
+
+// This recognizes a receipt from the protected server response. It does not
+// mint a database authority and cannot be enabled by a match-level flag alone.
+const validateRemoteRetirementReceipt = (body, { policy, nowMs = Date.now() } = {}) => {
+  const rows = Array.isArray(body?.rows) ? body.rows : [];
+  const receipt = body?.recommendationAuthority;
+  const rowReceiptPresent = rows.some(row => row?.recommendationAuthority != null);
+  if (receipt == null && !rowReceiptPresent) return { present: false, valid: false, reasons: [], retiredRows: [] };
+  const { reasons } = validateRemoteAuthoritySummary(receipt, { policy, nowMs });
+  const object = value => value && typeof value === 'object' && !Array.isArray(value);
+  if (!Array.isArray(body?.rows) || rows.length > 512) reasons.push('retirement-row-bound-invalid');
+  for (const row of rows) {
+    const rowReceipt = row?.recommendationAuthority;
+    if (!object(rowReceipt)) { reasons.push('row-retirement-receipt-missing'); continue; }
+    const { legacyArchiveState, ...summary } = rowReceipt;
+    if (!object(receipt) || authorityHash(summary) !== authorityHash(receipt)) reasons.push('row-retirement-receipt-mismatch');
+    if (!Array.isArray(row.predictions) || row.predictions.length !== 0) reasons.push('row-retired-predictions-not-empty');
+    if (row.archivedPreMatchPrediction != null) {
+      if (legacyArchiveState !== 'valid' || !validateArchivedDecision(row).valid) reasons.push('row-existing-archive-invalid');
+    } else if (!['missing', 'none'].includes(legacyArchiveState)) reasons.push('row-archive-diagnostic-invalid');
+  }
+  return { present: true, valid: reasons.length === 0, reasons: [...new Set(reasons)],
+    retiredRows: reasons.length === 0 ? rows : [] };
+};
+
+// The public health endpoint exposes aggregate evidence, not private tokens.
+// Check every raw/effective relationship and the complete authority receipt;
+// neither a retirement flag nor an exemption count is sufficient on its own.
+const validateRemoteRecommendationCoverage = (coverage, { policy, nowMs = Date.now() } = {}) => {
+  const value = coverage && typeof coverage === 'object' && !Array.isArray(coverage) ? coverage : {};
+  const reasons = [];
+  const counts = ['scheduledMatches', 'bestDirectionMatches', 'watchMatches', 'missingDirectionMatches',
+    'publicationDispositionMatches', 'missingDispositionMatches', 'trainingBackedMatches',
+    'hhadMarketMatches', 'hhadBoundDirectionMatches', 'hhadMissingDirectionMatches', 'hhadOnlyMarketMatches',
+    'dualMarketEligibleMatches', 'dualMarketAtomicMatches', 'dualMarketAtomicMissingMatches'];
+  const bounded = count => Number.isSafeInteger(count) && count >= 0 && count <= 512;
+  if (!counts.every(field => bounded(value[field]))) reasons.push('coverage-count-invalid');
+  if (value.version !== 'current-recommendation-coverage-v6') reasons.push('coverage-version-invalid');
+  if (value.coverageOk !== true || value.trainingCoverageOk !== true
+    || value.trainingBackedMatches !== value.scheduledMatches) reasons.push('coverage-or-training-failed');
+  if (value.publicationDispositionMatches !== value.bestDirectionMatches + value.watchMatches
+    || value.publicationDispositionMatches > value.scheduledMatches
+    || value.missingDispositionMatches !== value.scheduledMatches - value.publicationDispositionMatches
+    || value.missingDirectionMatches !== value.scheduledMatches - value.bestDirectionMatches) reasons.push('coverage-disposition-count-mismatch');
+  if (value.hhadMarketMatches > value.scheduledMatches
+    || value.hhadMarketMatches !== value.hhadOnlyMarketMatches + value.dualMarketEligibleMatches
+    || value.hhadBoundDirectionMatches > value.hhadMarketMatches
+    || value.hhadMissingDirectionMatches !== value.hhadMarketMatches - value.hhadBoundDirectionMatches
+    || value.dualMarketAtomicMatches > value.dualMarketEligibleMatches
+    || value.dualMarketAtomicMissingMatches !== value.dualMarketEligibleMatches - value.dualMarketAtomicMatches
+    || value.hhadBoundDirectionMatches < value.dualMarketAtomicMatches
+    || value.hhadBoundDirectionMatches - value.dualMarketAtomicMatches > value.hhadOnlyMarketMatches) reasons.push('coverage-market-count-mismatch');
+  if (value.dualMarketAtomicMissingMatches !== 0 || value.dualMarketAtomicMatches !== value.dualMarketEligibleMatches)
+    reasons.push('coverage-dual-market-binding-failed');
+  if (value.dualMarketAtomicCoverageOk !== (value.hhadMissingDirectionMatches === 0
+    && value.dualMarketAtomicMissingMatches === 0)) reasons.push('coverage-raw-dual-market-diagnostic-mismatch');
+  const parity = value.projectionParity || {};
+  if (parity.version !== 'current-list-detail-recommendation-parity-v1'
+    || parity.scope !== 'same-current-read-model-list-detail-projection'
+    || parity.disclosure !== 'aggregate-counts-only' || parity.mismatchRows !== 0
+    || parity.ok !== true) reasons.push('coverage-projection-parity-failed');
+  const authorityPresent = value.publicationAuthority != null;
+  const effectiveFields = ['retiredDispositionMatches', 'retiredHhadOnlyDirectionMatches',
+    'effectiveMissingDispositionMatches', 'effectiveHhadMissingDirectionMatches'];
+  const effectivePresent = effectiveFields.some(field => Object.hasOwn(value, field));
+  if (authorityPresent) {
+    const checked = validateRemoteAuthoritySummary(value.publicationAuthority, { policy, nowMs });
+    reasons.push(...checked.reasons);
+    if (!effectiveFields.every(field => bounded(value[field]))) reasons.push('coverage-retirement-count-invalid');
+  } else if (effectivePresent) {
+    if (!effectiveFields.every(field => bounded(value[field]))) reasons.push('coverage-retirement-count-invalid');
+    if (value.retiredDispositionMatches !== 0 || value.retiredHhadOnlyDirectionMatches !== 0) reasons.push('coverage-retirement-authority-missing');
+  }
+  if (authorityPresent || effectivePresent) {
+    if (value.retiredDispositionMatches > value.missingDispositionMatches
+      || value.retiredHhadOnlyDirectionMatches > value.retiredDispositionMatches
+      || value.retiredHhadOnlyDirectionMatches > value.hhadOnlyMarketMatches
+      || value.retiredHhadOnlyDirectionMatches > value.hhadMissingDirectionMatches
+      || value.effectiveMissingDispositionMatches !== value.missingDispositionMatches - value.retiredDispositionMatches
+      || value.effectiveHhadMissingDirectionMatches !== value.hhadMissingDirectionMatches - value.retiredHhadOnlyDirectionMatches)
+      reasons.push('coverage-effective-count-mismatch');
+    if (value.effectiveMissingDispositionMatches !== 0 || value.effectiveHhadMissingDirectionMatches !== 0)
+      reasons.push('coverage-effective-disposition-missing');
+  } else if (value.missingDispositionMatches !== 0 || value.hhadMissingDirectionMatches !== 0
+    || value.publicationDispositionMatches !== value.scheduledMatches
+    || value.missingDirectionMatches !== value.watchMatches
+    || value.hhadBoundDirectionMatches !== value.hhadMarketMatches) reasons.push('coverage-legacy-disposition-missing');
+  if (Object.hasOwn(value, 'legacyCoverageOk') && value.legacyCoverageOk !== (
+    value.missingDispositionMatches === 0 && value.trainingCoverageOk === true
+    && value.hhadMissingDirectionMatches === 0 && value.dualMarketAtomicMissingMatches === 0 && parity.ok === true))
+    reasons.push('coverage-legacy-diagnostic-mismatch');
+  return { valid: reasons.length === 0, reasons: [...new Set(reasons)], mode: authorityPresent ? 'reviewed-and-trained' : 'legacy' };
+};
 
 // A source can first appear after kickoff with an authoritative final score.
 // It has no pre-match BEST, no pool direction, and therefore cannot honestly
@@ -319,11 +446,25 @@ const runVerificationWithAccess = async (config) => {
     error: current.error || null,
   });
 
-  const scheduledWithoutBest = scheduledWithoutBestIds(rows, verifiedAtMs);
+  const retirement = validateRemoteRetirementReceipt(current.body, { policy: TRAINED_ONLY_POLICY, nowMs: Date.now() });
+  if (retirement.present) checks.push({
+    name: "retired current directions have a complete verified server authority receipt",
+    ok: retirement.valid,
+    reasons: retirement.reasons,
+  });
+  const retiredRows = new Set(retirement.retiredRows);
+  const scheduledWithoutBest = scheduledWithoutBestIds(rows.filter(row => !retiredRows.has(row)), verifiedAtMs);
   checks.push({
     name: "every scheduled row that exposes a direction has an explicit BEST recommendation",
     ok: scheduledWithoutBest.length === 0,
     missingIds: scheduledWithoutBest,
+  });
+  const invalidExistingArchives = rows.filter(row => row?.archivedPreMatchPrediction != null && !validateArchivedDecision(row).valid)
+    .map(row => canonicalId(row) || text(row?.id) || "unknown");
+  checks.push({
+    name: "every existing pre-match archive independently validates",
+    ok: invalidExistingArchives.length === 0,
+    invalidIds: invalidExistingArchives,
   });
 
   const resultOnlyArchives = rows.filter((row) => isAuthoritativeResultOnlyArchive(row, verifiedAtMs));
@@ -412,6 +553,8 @@ const runVerificationWithAccess = async (config) => {
       rows: rows.length,
       checked: parityRows.length,
       scheduledWithoutBest: scheduledWithoutBest.length,
+      retiredCurrentRows: retiredRows.size,
+      invalidExistingArchives: invalidExistingArchives.length,
       resultPhaseWithoutArchive: resultPhaseWithoutArchive.length,
       resultOnlyArchives: resultOnlyArchives.length,
       postKickoffScheduled: postKickoffScheduled.length,
@@ -600,4 +743,7 @@ module.exports = {
   runVerificationWithAccess,
   scheduledWithoutBestIds,
   validateArchivedDecision,
+  validateRemoteAuthoritySummary,
+  validateRemoteRecommendationCoverage,
+  validateRemoteRetirementReceipt,
 };

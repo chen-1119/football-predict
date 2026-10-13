@@ -136,8 +136,10 @@ function probeNativeWindow(input, preparationSeconds, observedAt) {
   }
 }
 
-function evaluateReleaseWindowObservation(observation, now = Date.now(), { stage = "before-build", nativeFullRelease = false } = {}) {
-  const budget = preparationBudget(stage);
+function evaluateReleaseWindowObservation(observation, now = Date.now(), { stage = "before-build", nativeFullRelease = false, activationMinimum = false } = {}) {
+  assert.equal(typeof activationMinimum, "boolean");
+  assert.ok(!activationMinimum || nativeFullRelease, "activation minimum requires signed native policy");
+  const budget = activationMinimum ? {stage:"activation-minimum",preparationSeconds:0,buildPreparationSeconds:0,uploadPreparationSeconds:0} : preparationBudget(stage);
   assert.equal(typeof nativeFullRelease, "boolean", "native release selection must be authenticated");
   assert.equal(observation?.version, "release-window-observation-v1");
   assert.equal(observation.productionWrites, 0);
@@ -160,7 +162,16 @@ function evaluateReleaseWindowObservation(observation, now = Date.now(), { stage
   // has already crossed it. Reserve transport/clock uncertainty instead of
   // rebuilding the projection at a later instant and silently dropping it.
   const observationReserveSeconds = Math.ceil(Math.max(0, age) / 1000) + 5;
-  const proof = nativeFullRelease
+  let minimumProof;
+  if(activationMinimum){
+    try{const lease=createTransitionLease(input.payload,{refreshAt:observation.checkedAt,
+      verifierRuntimeMaxSeconds:300,preverifyRefreshBudgetSeconds:570+observationReserveSeconds,atomicSwapMarginSeconds:30});
+      minimumProof={safe:true,generationId:input.generationId,minimumHorizonSeconds:lease.minimumHorizonSeconds,nextTransition:lease.nextTransition,availableHorizonSeconds:lease.availableHorizonSeconds};
+    }catch(error){if(error?.message!=="candidate transition horizon is too short")throw error;
+      minimumProof={safe:false,reason:"transition-window-closed",generationId:input.generationId,minimumHorizonSeconds:900+observationReserveSeconds,
+        nextTransition:error.details?.nextTransition||null,nextSafeWindow:error.details?.nextSafeWindow?.refreshStrictlyAfter||null};}
+  }
+  const proof = activationMinimum ? minimumProof : nativeFullRelease
     ? probeNativeWindow(input, budget.preparationSeconds + observationReserveSeconds, Date.parse(observation.checkedAt))
     : probeWindow(input, { preparationSeconds: budget.preparationSeconds + observationReserveSeconds },
       Date.parse(observation.checkedAt), createTransitionLease);
@@ -170,8 +181,8 @@ function evaluateReleaseWindowObservation(observation, now = Date.now(), { stage
   return { version: "release-window-preflight-v1", checkedAt: new Date(now).toISOString(), observationAt: observation.checkedAt,
     ok: proof.safe === true, ...proof, releaseMarker: observation.releaseMarker, legacyUnaccepted,
     sourceCycleId: observation.pointer.sourceCycleId, committedAt: observation.pointer.committedAt,
-    releaseHorizonSeconds: nativeFullRelease ? NATIVE_RELEASE_HORIZON_SECONDS : RELEASE_HORIZON_SECONDS,
-    releaseWindowProfile: nativeFullRelease ? "signed-native-runtime" : "legacy-full", ...budget,
+    releaseHorizonSeconds: activationMinimum ? 900 : nativeFullRelease ? NATIVE_RELEASE_HORIZON_SECONDS : RELEASE_HORIZON_SECONDS,
+    releaseWindowProfile: activationMinimum ? "necessary-activation-minimum-not-authorization" : nativeFullRelease ? "signed-native-runtime" : "legacy-full", ...budget,
     observationReserveSeconds, latestStartBeforeNextTransition,
     generationAgeMs: generationAge, providerFreshnessVerified: false,
     productionWrites: 0, readyToCutover: false, windowReserved: false,
@@ -179,7 +190,7 @@ function evaluateReleaseWindowObservation(observation, now = Date.now(), { stage
     scope: "Preparation only; fresh signed early, candidate lease, and final cutover checks remain mandatory." };
 }
 
-function runLiveReleaseWindowPreflight({ stage = "before-build", nativeFullRelease = false } = {}) {
+function runLiveReleaseWindowPreflight({ stage = "before-build", nativeFullRelease = false, activationMinimum = false } = {}) {
   preparationBudget(stage); // Reject typos before reading a key or making SSH calls.
   assert.equal(typeof nativeFullRelease, "boolean", "native release selection must be authenticated");
   const rootDir = path.resolve(__dirname, ".."), tmpDir = path.join(rootDir, ".codex-tmp");
@@ -195,7 +206,7 @@ function runLiveReleaseWindowPreflight({ stage = "before-build", nativeFullRelea
     windowsHide: true, timeout: 30_000, maxBuffer: 48 * 1024 * 1024 });
   // Do not echo remote stdout/stderr: stdout contains fixture data, not a report.
   if (child.status !== 0) throw new Error(`read-only release window observation failed (status=${Number.isInteger(child.status) ? child.status : "unknown"})`);
-  return evaluateReleaseWindowObservation(JSON.parse(child.stdout), Date.now(), { stage, nativeFullRelease });
+  return evaluateReleaseWindowObservation(JSON.parse(child.stdout), Date.now(), { stage, nativeFullRelease, activationMinimum });
 }
 
 module.exports = { PREPARATION_SECONDS, BUILD_PREPARATION_SECONDS, MAX_OBSERVATION_AGE_MS,
