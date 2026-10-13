@@ -36,6 +36,12 @@ test('authorization shape, purpose and two-hour validity are fixed',()=>{
     assert.throws(()=>validateEmergencyCodeAuthorization({...authorization(),...change},{at:AT}));
   assert.equal(validateEmergencyCodeAuthorization(authorization(),{at:AT}).authorizationHash.length,64);
 });
+test('explicit data-sync repair uses the same code-only lifetime and database refusal',()=>{
+  const sync={...authorization(),reason:'user-requested-immediate-data-sync-repair'};
+  assert.equal(validateEmergencyCodeAuthorization(sync,{at:AT}).authorization.reason,sync.reason);
+  assert.throws(()=>validateEmergencyCodeAuthorization(sync,{at:AT,dataPlane:'database'}),/database release/);
+  assert.throws(()=>validateEmergencyCodeAuthorization({...sync,expiresAt:'2026-10-11T14:58:00.000Z'},{at:AT}),/bounded validity/);
+});
 test('all 900 seconds must fit inside signed authorization and cannot be shortened',()=>{
   assert.throws(()=>createTransitionLease(rows(),{...options(),preverifyRefreshBudgetSeconds:1}),/complete 900/);
   assert.throws(()=>createTransitionLease(rows(),{...options(),emergencyAuthorization:{...authorization(),expiresAt:later(899)}}),/complete 900/);

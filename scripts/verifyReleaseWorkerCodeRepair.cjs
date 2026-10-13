@@ -14,6 +14,66 @@ function verifyReleaseWorkerCodeRepair() {
     files:auth.files.map(row=>({path:row.path,sha256:row.beforeSha256})),dataContract:auth.dataContract,migrationNames:['001_core.sql'],
     journal:[{unit:'football-sync-worker.service',pid:'43',message:'Invalid string length',timestampMs:Date.parse('2026-10-11T10:14:59Z')}]};
   const run=(a=auth,w=observation,e=extra)=>p.evaluateWorkerCodeRepair(a,w,e);
+  const now=Date.now(), identity=(n,ago)=>({mode:'active-generation',generationId:'g-'+hex(n),manifestHash:hex(n),
+    sourceCycleId:'cycle-'+n,committedAt:new Date(now-ago).toISOString()});
+  const pairAuth={...auth,version:'worker-code-repair-v2',reason:'postgres-committed-generation-pairing',
+    createdAt:new Date(now-600000).toISOString(),expiresAt:new Date(now+3600000).toISOString(),
+    files:p.PAIR_TARGETS.map(name=>({path:name,beforeSha256:hex(2),afterSha256:hex(3)})),
+    publication:{databaseOid:'42',committed:identity(1,3600000),rawPrevious:identity(2,1800000),rawCurrent:identity(3,900000)}};
+  const pairWorker={...observation,checkedAt:new Date(now).toISOString(),serviceBefore:{...service,ExecMainStartTimestamp:new Date(now-7200000).toUTCString()},
+    serviceAfter:{...service,ExecMainStartTimestamp:new Date(now-7200000).toUTCString()},
+    status:{...observation.status,checkedAt:new Date(now-1000).toISOString(),lastCycle:{...observation.status.lastCycle,
+      startedAt:new Date(now-60000).toISOString(),finishedAt:new Date(now-2000).toISOString()}}};
+  const pairExtra={...extra,files:pairAuth.files.map(r=>({path:r.path,sha256:r.beforeSha256})),publication:pairAuth.publication,
+    journal:[{unit:'football-sync-worker.service',pid:'43',timestampMs:now-2050,
+      message:'SQLite publication identity matches neither the serving generation nor its immutable previous generation'}]};
+  check(()=>{const r=run(pairAuth,pairWorker,pairExtra);assert.equal(r.ok,true);assert.equal(r.workerHealthy,false);assert.equal(r.readyToCutover,false);});
+  const writerAuth={...pairAuth,version:'worker-code-repair-v3',reason:'postgres-source-file-assembly-timeout',
+    files:p.WRITER_TARGETS.map(name=>({path:name,beforeSha256:hex(2),afterSha256:hex(3)}))};
+  const writerWorker={...pairWorker,status:{...pairWorker.status,lastCycle:{...pairWorker.status.lastCycle,error:'npm run postgres:sync exited with 1'}}};
+  const writerExtra={...pairExtra,files:writerAuth.files.map(r=>({path:r.path,sha256:r.beforeSha256})),journal:[{...pairExtra.journal[0],message:'  "error": "Query read timeout",'}]};
+  check(()=>{const r=run(writerAuth,writerWorker,writerExtra);assert.equal(r.ok,true);assert.equal(r.workerHealthy,false);assert.equal(r.readyToCutover,false);assert.equal(r.productionWrites,0);});
+  check(()=>{const recovered={...writerWorker,status:{...writerWorker.status,lastCycle:{...writerWorker.status.lastCycle,ok:true}}};
+    const selection=p.selectWorkerCodeRepairPreparation(writerAuth,recovered,()=>{throw Error('inactive incident must not be read');});
+    assert.equal(selection.useRepair,false);assert.equal(selection.report.ok,true);assert.equal(selection.report.readyToCutover,false);});
+  check(()=>{const selection=p.selectWorkerCodeRepairPreparation(writerAuth,writerWorker,()=>writerExtra);assert.equal(selection.useRepair,true);assert.equal(selection.report.workerHealthy,false);});
+  check(()=>{const selection=p.selectWorkerCodeRepairPreparation(writerAuth,writerWorker,()=>({...writerExtra,journal:[]}));assert.equal(selection.useRepair,false);assert.equal(selection.report.ok,false);});
+  check(()=>{const selection=p.selectWorkerCodeRepairPreparation(writerAuth,{...writerWorker,processMatches:false},()=>writerExtra);assert.equal(selection.useRepair,false);assert.equal(selection.report.ok,false);});
+  for(const key of ['rawCurrent','rawPrevious'])check(()=>{const x=JSON.parse(JSON.stringify(writerAuth));x.publication.committed={...x.publication[key]};const e={...writerExtra,publication:x.publication};assert.equal(run(x,writerWorker,e).ok,true);x.publication.committed.sourceCycleId='different';assert.equal(run(x,writerWorker,e).ok,false);});
+  for(const change of [e=>e.journal[0].message='fetch failed',e=>e.journal[0].timestampMs=now-120000,e=>e.files[0].sha256=hex(8),e=>e.publication={...e.publication,databaseOid:'other'},e=>e.recoveryPending=true])
+    check(()=>{const e=JSON.parse(JSON.stringify(writerExtra));change(e);assert.equal(run(writerAuth,writerWorker,e).ok,false);});
+  check(()=>assert.equal(run(writerAuth,pairWorker,writerExtra).ok,false));
+  check(()=>{new vm.Script(p.buildWorkerCodeRepairProbe(writerAuth));assert(p.buildWorkerCodeRepairProbe(writerAuth).includes('WRITER_TARGETS='));});
+  const snapshotAuth={...writerAuth,version:'worker-code-repair-v4',reason:'model-artifact-generation-snapshot-race',files:p.SNAPSHOT_TARGETS.map(name=>({path:name,beforeSha256:hex(2),afterSha256:hex(3)}))};
+  const snapshotWorker={...writerWorker,status:{...writerWorker.status,lastCycle:{...writerWorker.status.lastCycle,error:'npm run datastore:generation exited with 1'}}};
+  const snapshotExtra={...writerExtra,files:snapshotAuth.files.map(r=>({path:r.path,sha256:r.beforeSha256})),journal:[{...writerExtra.journal[0],message:'  "error": "source file size changed before staging: model-evaluation.json",'}]};
+  check(()=>assert.equal(run(snapshotAuth,snapshotWorker,snapshotExtra).ok,true));
+  for(const key of ['rawCurrent','rawPrevious'])check(()=>{const x=JSON.parse(JSON.stringify(snapshotAuth));x.publication.committed={...x.publication[key]};const e={...snapshotExtra,publication:x.publication};assert.equal(run(x,snapshotWorker,e).ok,true);x.publication.committed.manifestHash=hex(8);assert.equal(run(x,snapshotWorker,e).ok,false);});
+  check(()=>assert.equal(run(snapshotAuth,writerWorker,snapshotExtra).ok,false));
+  check(()=>assert.equal(run(snapshotAuth,snapshotWorker,{...snapshotExtra,journal:writerExtra.journal}).ok,false));
+  check(()=>assert.equal(run({...snapshotAuth,files:snapshotAuth.files.slice(1)},snapshotWorker,snapshotExtra).ok,false));
+  for(const patch of [{publication:{...pairAuth.publication,databaseOid:'bad'}},
+    {publication:{...pairAuth.publication,committed:pairAuth.publication.rawCurrent}},
+    {publication:{...pairAuth.publication,rawPrevious:pairAuth.publication.rawCurrent}},
+    {publication:{...pairAuth.publication,rawCurrent:{...pairAuth.publication.rawCurrent,manifestHash:hex(6)}}},
+    {publication:{...pairAuth.publication,rawPrevious:{...pairAuth.publication.rawPrevious,committedAt:'not-a-clock'}}},
+    {files:pairAuth.files.slice(1)}, {reason:'ignore-database-divergence'}, {expiresAt:new Date(now-1).toISOString()}, {bypass:true}])
+    check(()=>assert.equal(run({...pairAuth,...patch},pairWorker,pairExtra).ok,false));
+  for(const patch of [{publication:{...pairAuth.publication,databaseOid:'43'}}, {journal:extra.journal}])
+    check(()=>assert.equal(run(pairAuth,pairWorker,{...pairExtra,...patch}).ok,false));
+  const code=require('./nativeCodeReleaseDataPlane.cjs');
+  const state={dataPlane:'code-only',oldSha:pairAuth.baseRuntimeSha256,oldDatabaseOid:'42',committedGenerationRepairAuthorizationHash:hex(9)};
+  const session={identity:pairAuth.publication.committed,publication:{context:{pointer:pairAuth.publication.committed},pairing:{reason:'exact-committed-postgres-generation'}}};
+  const admit=(s=state,se=session,c=pairAuth.publication.rawCurrent,pr=pairAuth.publication.rawPrevious,h=hex(9))=>
+    code.assertRepairPair(s,se,{pointer:c},{pointer:pr},pairAuth,h);
+  check(()=>{const r=admit();assert.equal(r.productionWrites,0);assert.equal(r.reason,'exact-signed-incident-pair');});
+  for(const s of [{...state,dataPlane:'database'},{...state,oldSha:hex(7)},{...state,oldDatabaseOid:'43'},
+    {...state,committedGenerationRepairAuthorizationHash:hex(7)}]) check(()=>assert.throws(()=>admit(s)));
+  check(()=>assert.throws(()=>admit(state,{...session,identity:pairAuth.publication.rawPrevious})));
+  check(()=>assert.throws(()=>admit(state,{...session,publication:{...session.publication,pairing:{reason:'previous'}}})));
+  check(()=>assert.throws(()=>admit(state,session,pairAuth.publication.rawPrevious)));
+  check(()=>assert.throws(()=>admit(state,session,pairAuth.publication.rawCurrent,pairAuth.publication.committed)));
+  check(()=>assert.throws(()=>admit(state,session,pairAuth.publication.rawCurrent,pairAuth.publication.rawPrevious,hex(6))));
   check(()=>{const r=run();assert.equal(r.ok,true);assert.equal(r.repairPreparationAllowed,true);assert.equal(r.workerHealthy,false);
     assert.equal(r.workerReport.ok,false);assert.deepEqual(r.workerReport.blockers,['worker-official-recovery-unproven']);assert.equal(r.readyToCutover,false);assert.equal(r.productionWrites,0);});
   check(()=>assert.equal(run(auth,{...observation,status:{...observation.status,ok:false,phase:'failed'}}).ok,true));
@@ -39,19 +99,22 @@ function verifyReleaseWorkerCodeRepair() {
   check(()=>{
     const source=p.buildWorkerCodeRepairProbe({...auth,createdAt:new Date(Date.now()-1000).toISOString(),expiresAt:new Date(Date.now()+3600000).toISOString()});
     new vm.Script(source);assert(!source.includes('systemctl\",[\"start'));assert(source.includes('repairPreparationAllowed'));
-    const original=p.buildWorkerCodeRepairProbe.toString();assert(original.includes('base.ok?base:'));
+    const original=p.buildWorkerCodeRepairProbe.toString();assert(original.includes('selectWorkerCodeRepairPreparation'));
   });
   // Exercise the actual serialized collector/evaluator in the same VM context
   // as the native entry. fs.readdirSync returns a host-realm Array here.
-  for(const variant of ['exact','extra-migration','no-journal']) check(()=>{
+  for(const variant of ['exact','extra-migration','no-journal','writer-exact','writer-aligned','writer-recovered','snapshot-exact','snapshot-aligned']) check(()=>{
     const crypto=require('node:crypto'), now=Date.now(), hexHash=b=>crypto.createHash('sha256').update(b).digest('hex');
     const start=new Date(now-60000).toISOString(),end=new Date(now-2000).toISOString();
-    const localAuth=JSON.parse(JSON.stringify(auth));
+    const localAuth=JSON.parse(JSON.stringify(variant.startsWith('writer')?writerAuth:variant.startsWith('snapshot')?snapshotAuth:auth));
+    if(variant.endsWith('aligned'))localAuth.publication.committed={...localAuth.publication.rawCurrent};
     localAuth.createdAt=new Date(now-600000).toISOString();localAuth.expiresAt=new Date(now+3600000).toISOString();
     const files=new Map();for(const row of localAuth.files){const b=Buffer.from('old:'+row.path);files.set('/opt/football-predict/'+row.path,b);row.beforeSha256=hexHash(b);}
     for(const row of localAuth.dataContract){const b=Buffer.from('unchanged:'+row.path);files.set('/opt/football-predict/'+row.path,b);row.sha256=hexHash(b);}
     for(const name of ['.release-bundle-sha256','.release-live-complete'])files.set('/opt/football-predict/'+name,Buffer.from(localAuth.baseRuntimeSha256+'\n'));
-    const status={pid:42,checkedAt:new Date(now-1000).toISOString(),ok:false,phase:'failed',lastCycle:{ok:false,phase:'official-result-failed',startedAt:start,finishedAt:end,errorCode:'SYNC_WORKER_COMMAND_FAILED',error:'node scripts/syncData.cjs exited with 1'}};
+    const status={pid:42,checkedAt:new Date(now-1000).toISOString(),ok:false,phase:'failed',lastCycle:{ok:false,phase:'official-result-failed',startedAt:start,finishedAt:end,errorCode:'SYNC_WORKER_COMMAND_FAILED',error:variant.startsWith('writer')?'npm run postgres:sync exited with 1':variant.startsWith('snapshot')?'npm run datastore:generation exited with 1':'node scripts/syncData.cjs exited with 1'}};
+    if(variant==='writer-recovered'){status.ok=true;status.phase='official-result';status.lastCycle.ok=true;}
+    if(localAuth.publication)for(const name of ['current','previous'])files.set('/var/lib/football-predict/data-generations/'+name+'.json',Buffer.from(JSON.stringify({schemaVersion:1,...localAuth.publication[name==='current'?'rawCurrent':'rawPrevious']})));
     files.set('/var/lib/football-predict/sync-worker-status.json',Buffer.from(JSON.stringify(status)));
     files.set('/proc/42/cmdline',Buffer.from('/opt/node/bin/node\0/opt/football-predict/scripts/runSyncWorker.cjs\0'));
     const fixtureFs={realpathSync:file=>file,readlinkSync:()=>'/opt/football-predict',openSync:file=>{assert(files.has(file));return file;},closeSync:()=>{},
@@ -61,15 +124,18 @@ function verifyReleaseWorkerCodeRepair() {
       readdirSync:()=>variant==='extra-migration'?['001_core.sql','002_unknown.sql']:['001_core.sql']};
     const fixtureChild={execFileSync:(cmd,args)=>{
       if(cmd==='systemctl')return 'ActiveState=active\nMainPID=42\nExecMainStartTimestamp='+new Date(now-3600000).toUTCString()+'\n';
+      assert.notEqual(variant,'writer-recovered','healthy native probe must not collect the old incident');
+      if(cmd==='/usr/sbin/runuser'){const c=localAuth.publication.committed;return JSON.stringify({databaseOid:localAuth.publication.databaseOid,readOnly:'on',meta:{data_publication_mode:c.mode,data_generation_id:c.generationId,manifest_hash:c.manifestHash,data_generation_source_cycle_id:c.sourceCycleId,committed_at:c.committedAt}});}
       assert.equal(cmd,'/usr/bin/journalctl');assert(args.includes('--lines=4'));
-      return variant==='no-journal'?'':JSON.stringify({_SYSTEMD_UNIT:'football-sync-worker.service',_PID:'43',MESSAGE:'Invalid string length',__REALTIME_TIMESTAMP:String((now-2050)*1000)})+'\n';
+      return variant==='no-journal'?'':JSON.stringify({_SYSTEMD_UNIT:'football-sync-worker.service',_PID:'43',MESSAGE:variant.startsWith('writer')?'  "error": "Query read timeout",':variant.startsWith('snapshot')?'  "error": "source file size changed before staging: model-evaluation.json",':'Invalid string length',__REALTIME_TIMESTAMP:String((now-2050)*1000)})+'\n';
     }};
     const fixtureRequire=name=>name==='node:fs'?fixtureFs:name==='node:child_process'?fixtureChild:name==='node:path'?path.posix:require(name);
     const output=[],fixtureProcess={exitCode:0};
     new vm.Script(p.buildWorkerCodeRepairProbe(localAuth)).runInNewContext({require:fixtureRequire,process:fixtureProcess,console:{log:line=>output.push(line)},Date});
     assert.equal(output.length,1);const report=JSON.parse(output[0]);
-    assert.equal(report.ok,variant==='exact',JSON.stringify(report));assert.equal(report.workerHealthy,false);assert.equal(report.readyToCutover,false);assert.equal(report.productionWrites,0);
-    assert.equal(fixtureProcess.exitCode,variant==='exact'?0:1);
+    const accepted=!['extra-migration','no-journal'].includes(variant);
+    assert.equal(report.ok,accepted,JSON.stringify(report));if(variant!=='writer-recovered')assert.equal(report.workerHealthy,false);assert.equal(report.readyToCutover,false);assert.equal(report.productionWrites,0);
+    assert.equal(fixtureProcess.exitCode,accepted?0:1);
   });
   check(()=>{
     const root=path.resolve(__dirname,'..'),native=fs.readFileSync(path.join(root,'deploy/light-server/release-native.sh'),'utf8');

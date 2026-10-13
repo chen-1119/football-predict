@@ -7,6 +7,11 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('official generation and background model writers share an exclusive artifact permit',()=>{
+ const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/official-model-artifact-isolation.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1048576});
+ assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 8$/m);assert.match(child.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"tests/official-model-artifact-isolation.test.cjs"'));
+});
 check('trusted current authority replays published lanes and preserves retired evidence',()=>{
  const files=['tests/recommendation-authority.test.cjs','tests/recommendation-authority-integration.test.cjs',
    'tests/recommendation-authority-presentation.test.cjs','tests/remote-recommendation-authority.test.cjs'];
@@ -76,6 +81,12 @@ check('independent read API and SSR preserve committed rows, auth and component 
 check('future writer handover retains unresolved commits and requires quiescence before grants',()=>{
   const files=['services/release/writerHandoverTransaction.cjs','tests/writer-handover-transaction.test.cjs'];
   const child=require('node:child_process').spawnSync(process.execPath,['--test',files[1]],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# skipped 0$/m);
+  for(const file of files)for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+file+'"'));
+});
+check('separated task plans expose unresolved writer ownership and use the Beijing business clock',()=>{
+  const files=['services/tasks/writerResourcePlan.cjs','tests/writer-resource-plan.test.cjs','tests/separated-web-business-clock.test.cjs'];
+  const child=require('node:child_process').spawnSync(process.execPath,['--test',...files.slice(1)],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
   assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# skipped 0$/m);
   for(const file of files)for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+file+'"'));
 });

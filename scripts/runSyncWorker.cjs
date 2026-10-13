@@ -82,6 +82,11 @@ const sharedSlowArtifactScripts = new Set([
   "sync:web-consensus",
   "sync:free-football",
   "sync:prematch",
+  "model:backtest",
+  "model:learn:autonomous",
+  "model:learn",
+  "audit:capability",
+  "optimize:strategy",
 ]);
 const usesSharedSlowArtifact = (script) => sharedSlowArtifactScripts.has(String(script || ""));
 const sharedSlowArtifactLockDir = path.join(storeDir, "locks", "sync-enrichment-artifacts.lock");
@@ -2308,6 +2313,19 @@ const runWithSharedSlowArtifactLock = async ({
   }
 };
 
+const runOfficialArtifactGeneration = async ({ task, isInterrupted, acquireLock = acquireSyncLock } = {}) => {
+  if (typeof task !== 'function') throw new TypeError('official artifact publication task required');
+  const lock = await acquireSyncLockInterruptibly({ lockDir: sharedSlowArtifactLockDir,
+    owner: 'football-sync-worker', source: 'shared-artifact:official-generation',
+    waitMs: 0, acquireLock, isInterrupted });
+  if (!lock.acquired) {
+    const error = new Error('Official generation deferred while a shared model/evidence artifact writer is active');
+    error.code = 'SYNC_WORKER_SHARED_ARTIFACT_BUSY';
+    throw error;
+  }
+  try { return await task(); } finally { await lock.release(); }
+};
+
 const describePostEnrichmentPublicationNeed = (stepsInput = []) => {
   const steps = Array.isArray(stepsInput) ? stepsInput : [];
   // A command that was actually invoked may have mutated part of the source
@@ -3333,11 +3351,11 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       timeoutMs: commandTimeouts.validation
     });
     await onBeforeHeavyStep("datastore:generation:official");
-    const officialGenerationStep = await runOptional(true, "datastore:generation", {
+    const officialGenerationStep = await runOfficialArtifactGeneration({ isInterrupted, task: () => runOptional(true, "datastore:generation", {
       SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
     }, {
       timeoutMs: commandTimeouts.sqlite
-    });
+    }) });
     await onBeforeHeavyStep(storageMode.postgresOnly ? "postgres:sync:official" : "datastore:sqlite:official");
     const sqliteStep = await runRuntimeProjectionOrReuse({
       enabled: runtimeProjectionEnabled,
@@ -3431,6 +3449,9 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
 
     const executeSlowPhase = async () => {
     const slowPhaseStartedAt = new Date().toISOString();
+    const runModelArtifactTask = (enabled, script, task) => runWithSharedSlowArtifactLock({
+      enabled, script, task, waitMs: phaseLockWaitMs, isInterrupted,
+    });
     let slowPhaseLock = null;
     let slowFinalArtifactLock = null;
     const releaseSlowFinalArtifactLock = async () => {
@@ -3601,14 +3622,14 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     });
     if (sourceCycleObservation.ready) await onBeforeHeavyStep("model:backtest");
     const modelBacktestStep = sourceCycleObservation.ready
-      ? await runBestEffort(
+      ? await runModelArtifactTask(true, 'model:backtest', () => runBestEffort(
           "model:backtest",
           () => maybeRunModelBacktest({
             sqliteStep,
             forceCandidateImplementationRefreeze:
               requiresCandidateImplementationRefreeze() === true,
           })
-        )
+        ))
       : {
           ok: runtimeProjectionEnabled === false,
           skipped: true,
@@ -3623,7 +3644,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
         };
     await onAfterModelBacktest(modelBacktestStep);
     await onBeforeHeavyStep("model:learn:autonomous");
-    const autonomousModelLearningStep = await runOptional(
+    const autonomousModelLearningStep = await runModelArtifactTask(true, 'model:learn:autonomous', () => runOptional(
       sourceCycleObservation.ready
         && process.env.ENABLE_AUTONOMOUS_MODEL_LEARNING !== "0"
         && modelBacktestStep?.ok === true
@@ -3634,9 +3655,9 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
         MODEL_LEARNING_ACTOR_ID: process.env.MODEL_LEARNING_ACTOR_ID || "football-sync-worker",
       },
       { fatal: false, timeoutMs: commandTimeouts.model }
-    );
+    ));
     await onBeforeHeavyStep("model:learn");
-    const modelLearningStep = await runOptional(
+    const modelLearningStep = await runModelArtifactTask(true, 'model:learn', () => runOptional(
       sourceCycleObservation.ready
         && process.env.ENABLE_MODEL_LEARNING_REGISTRY !== "0"
         && modelBacktestStep?.ok === true
@@ -3650,16 +3671,16 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
         MODEL_LEARNING_PRODUCTION_POLICY_VERSION: process.env.MODEL_LEARNING_PRODUCTION_POLICY_VERSION || ""
       },
       { fatal: false, timeoutMs: commandTimeouts.model }
-    );
+    ));
     await onBeforeHeavyStep("audit:capability");
-    const capabilityAuditStep = await runOptional(
+    const capabilityAuditStep = await runModelArtifactTask(true, 'audit:capability', () => runOptional(
       process.env.ENABLE_CAPABILITY_AUDIT !== "0",
       "audit:capability",
       {
         SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
       },
       { fatal: false, timeoutMs: commandTimeouts.model }
-    );
+    ));
     const modelStrategyRecovery = describeModelStrategyReconciliationNeed();
     const modelStrategyEnabled = process.env.ENABLE_MODEL_STRATEGY_ON_SYNC === "1"
       || (modelBacktestStep?.ok === true && modelBacktestStep?.skipped !== true)
@@ -3673,13 +3694,13 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       await acquireSlowPhaseLock("sync-worker-model-strategy-and-publication");
     }
     const modelStrategyFingerprintBefore = modelStrategyReconciliationFingerprint();
-    const modelStrategyCommandStep = await runOptional(modelStrategyEnabled, "optimize:strategy", {
+    const modelStrategyCommandStep = await runModelArtifactTask(modelStrategyEnabled, 'optimize:strategy', () => runOptional(modelStrategyEnabled, "optimize:strategy", {
       SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
       DATA_STORE_DIR: process.env.DATA_STORE_DIR || process.env.SERVER_STORE_DIR || storeDir
     }, {
       fatal: false,
       timeoutMs: commandTimeouts.model
-    });
+    }));
     const modelStrategyFingerprintAfter = modelStrategyReconciliationFingerprint();
     const modelStrategyArtifactsChanged = modelStrategyCommandStep?.ok === true
       && modelStrategyCommandStep?.skipped !== true
@@ -4836,6 +4857,7 @@ module.exports = {
   runCandidateProspectiveDeadlineCapture,
   runBenchmarkProspectiveDeadlineCapture,
   runWithSharedSlowArtifactLock,
+  runOfficialArtifactGeneration,
   scheduledCycleWake,
   startCandidateProspectiveDeadlineHeartbeat,
   startBenchmarkProspectiveDeadlineCapture,

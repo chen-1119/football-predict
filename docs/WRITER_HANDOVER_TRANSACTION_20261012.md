@@ -1,5 +1,7 @@
 # 独立采集与推荐任务的持久交接顺序
 
+2026-10-13 更新：只读 `--plan` 已接入 [写入资源计划](WRITER_RESOURCE_PLAN_20261013.md)，候选已合并 r853 修复。真实 writer 启动仍未开放；后续依赖和验收见 [继续优化工作方案](OPTIMIZATION_WORK_PLAN_20261013.md)。下文 r844 为当时历史状态。
+
 `services/release/writerHandoverTransaction.cjs` 实现交接的持久状态机，提供给后续独立安装的控制器。它没有生产 CLI，不签发许可，不包含数据库写入适配器，也不能启动生产采集任务。
 
 原 `FOOTBALL_SERVICE_LAYOUT=separated-v1` 标志只描述布局，不能证明原 writer 已停止。现在任务 CLI 除 `--plan` 外一律退出75；默认 `runTask` 也拒绝真实 spawn。原 r844 和已安装只读 API 都未修改。生命周期测试可注入模拟 spawn，但这不是生产启用入口。

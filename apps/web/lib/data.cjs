@@ -1,6 +1,14 @@
 'use strict';
 const fallback = new Map();
 const MAX_BODY = 16 * 1024 * 1024;
+function beijingBusinessDate(at = Date.now()) {
+  return new Date(at + 8 * 3600_000).toISOString().slice(0, 10);
+}
+function fixtureQuery(query = {}, at = Date.now()) {
+  // Keep the selected day in both API requests and fallback cache keys.
+  // Existing date/cursor validation and generation binding remain with the API.
+  return { ...query, date: query.date == null || query.date === '' ? beijingBusinessDate(at) : query.date };
+}
 function origin() {
   const value = process.env.FOOTBALL_READ_API_ORIGIN || 'http://127.0.0.1:8790';
   const url = new URL(value);
@@ -27,7 +35,7 @@ async function body(response) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 async function loadFixtures(query = {}, { fetchImpl = fetch, now = Date.now } = {}) {
-  const params = new URLSearchParams(query), key = params.toString();
+  const params = new URLSearchParams(fixtureQuery(query, now())), key = params.toString();
   try {
     const response = await fetchImpl(origin() + '/api/v2/fixtures' + (key ? '?' + key : ''), { cache: 'no-store', redirect: 'error', headers: headers(), signal: AbortSignal.timeout(7000) });
     if (response.status === 409) return { ok: false, matches: [], availability: 'generation-changed', stale: true };
@@ -65,4 +73,4 @@ async function loadRecommendations(cookie) {
     return await body(response);
   } catch { return { ok: false }; }
 }
-module.exports = { loadFixtures, loadMatch, loadRecommendations, body };
+module.exports = { loadFixtures, loadMatch, loadRecommendations, body, beijingBusinessDate, fixtureQuery };

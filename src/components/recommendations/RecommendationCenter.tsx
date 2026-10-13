@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ReviewedAnalysisPanel } from './ReviewedAnalysis';
+import { ReviewedAnalysisPanel, reviewedLabel } from './ReviewedAnalysis';
+import type { ReviewedAnalysis, ReviewedAnalysisCombo, RecommendationCenterData } from '../../services/recommendationCenterView';
 import { LeagueBaselineDirections } from './LeagueBaselineDirections';
 import { DailyBulletinPanel } from './DailyBulletinPanel';
 import { RefreshCw, ChevronDown, Search, ArrowUpRight } from 'lucide-react';
@@ -28,6 +29,49 @@ const format=(s:string|null|undefined,lang:Language)=>s?new Intl.DateTimeFormat(
 const title=(code:Outcome,zh:boolean)=>code==='1'?(zh?'主胜':'Home'):code==='X'?(zh?'平局':'Draw'):(zh?'客胜':'Away');
 const resultLabel=(s:Settlement['state'],zh:boolean)=>({PENDING:zh?'待赛果':'Pending',WON:zh?'命中':'Won',LOST:zh?'未命中':'Lost',VOID:zh?'无效':'Void',DISPUTED:zh?'赛果待核':'Disputed'}[s]);
 const handicapTitle=(code:Outcome,zh:boolean)=>code==='1'?(zh?'让胜':'Handicap home'):code==='X'?(zh?'让平':'Handicap draw'):(zh?'让负':'Handicap away');
+
+// This optional card is a current, display-only combination of committed picks.
+// It neither replaces an archived combo nor changes a leg's frozen SP/direction.
+export function highestAvailableReviewedTwo(data:ReviewedAnalysis|undefined,now:number):ReviewedAnalysisCombo|null{
+ const today=new Date(now+8*3600000).toISOString().slice(0,10);
+ if(!data||data.businessDate!==today||data.records.length>32||!data.combos.some(c=>c.band===10&&c.legs.length===0))return null;
+ const records=data.records.filter(r=>r.businessDate===today&&now<Date.parse(r.cutoffAt)&&now<Date.parse(r.eventVersion)&&Number.isFinite(r.sp)&&r.sp>1&&r.sp<1000);
+ if(new Set(records.map(r=>r.eventId)).size!==records.length)return null;
+ const used=new Set(data.combos.filter(c=>c.legs.length===2).map(c=>c.legs.map(l=>l.eventId).sort().join(':')));
+ let best:ReviewedAnalysisCombo|null=null;
+ for(let i=0;i<records.length;i++)for(let j=i+1;j<records.length;j++){
+  const pair=[records[i],records[j]];
+  if(used.has(pair.map(r=>r.eventId).sort().join(':')))continue;
+  let coefficient=1n,places=0;
+  for(const r of pair){const [decimal,exponent='0']=String(r.sp).split('e'),[whole,fraction='']=decimal.split('.');coefficient*=BigInt(whole+fraction);places+=fraction.length-Number(exponent);}
+  const product=Number(`${coefficient}e${-places}`);
+  // A near-target card cannot be presented as achieving the 10x threshold.
+  if(product<9||product>=10||(best?.product??0)>=product)continue;
+  best={band:10,product,confidence:null,legs:pair.map(r=>({eventId:r.eventId,matchNum:r.matchNum,market:r.market,...(r.market==='HHAD'?{handicap:r.handicap}:{}),selection:r.selection,sp:r.sp}))};
+ }
+ return best;
+}
+export function reviewedCoverageCounts(data:RecommendationCenterData|undefined,now:number){
+ const today=new Date(now+8*3600000).toISOString().slice(0,10);
+ if(!data||data.businessDate!==today||data.coverage?.businessDate!==today)return null;
+ const manual=new Set((data.reviewedAnalysis?.businessDate===today?data.reviewedAnalysis.records:[]).filter(r=>r.businessDate===today).map(r=>r.eventId));
+ const model=new Set((data.leagueBaseline?.businessDate===today?data.leagueBaseline.records:[]).map(r=>r.sourceMatchId.replace(/^sporttery_/,'')));
+ const all=new Set([...manual,...model]),target=data.coverage.targetCount;
+ if(all.size>target)return null;
+ return {target,manual:manual.size,model:model.size,published:all.size,missing:target-all.size,ratio:target?all.size/target:null};
+}
+function PublishedDirectionCoverage({data,now,zh}:{data:RecommendationCenterData|undefined;now:number;zh:boolean}){
+ const counts=reviewedCoverageCounts(data,now);
+ return <section className="rc-coverage" aria-label={zh?'当日比赛与推荐覆盖':'Match-day recommendation coverage'}>
+  <h2>{zh?'当日推荐覆盖':'Published match-day coverage'}</h2>
+  {counts?<><div className="rc-coverage__numbers">
+   <div><span>{zh?'目标比赛':'Target matches'}</span><strong>{counts.target}</strong></div>
+   <div><span>{zh?'已发布方向':'Published picks'}</span><strong>{counts.published}</strong></div>
+   <div><span>{zh?'尚未推荐':'Without a pick'}</span><strong>{counts.missing}</strong></div>
+   <div><span>{zh?'推荐覆盖率':'Pick coverage'}</span><strong>{counts.ratio===null?'—':`${Math.round(counts.ratio*100)}%`}</strong></div>
+  </div><p>{zh?`人工审核 ${counts.manual} 场 · 球队模型 ${counts.model} 场；同场不重复计数。资料完整度、正式模型准入和命中率分别核验。`:`Reviewed editorial: ${counts.manual}; team model: ${counts.model}. Events are deduplicated; evidence completeness, model admission and accuracy remain separate.`}</p></>:<p role="status">{zh?'正在核对当日推荐覆盖，暂不显示零值。':'Checking match-day coverage; no zero count is inferred.'}</p>}
+ </section>;
+}
 
 function FrozenMatchTeams({d}:{d:Decision}){
   // Badge lookup follows the archived names, never a replacement current fixture.
@@ -266,18 +310,21 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
   const reviewedData=data?.reviewedAnalysis?.records.length?data.reviewedAnalysis:data?.reviewedAnalysisHistory;
   const reviewedVisible=!review&&!failed&&!authorizationRequired&&(reviewedData?.records.length??0)>0&&reviewedData!.businessDate<=new Date(now+8*3600000).toISOString().slice(0,10);
   const reviewedHistory=reviewedVisible&&reviewedData!.businessDate<new Date(now+8*3600000).toISOString().slice(0,10);
+  const maximumTwo=!review&&!failed&&!authorizationRequired&&tab==='two'?highestAvailableReviewedTwo(reviewedData,now):null;
+  const reviewedDisplay=maximumTwo&&reviewedData?{...reviewedData,combos:reviewedData.combos.filter(c=>!(c.band===10&&c.legs.length===0))}:reviewedData;
   const activeInputs=tab==='single'?data?.inputAsOf:data?.lanes.combos?.inputAsOf??data?.inputAsOf;
   return <section className="recommendation-center" aria-labelledby="rc-title">
     <header className="rc-heading"><div><span className="rc-eyebrow">{zh?'比赛日 '+(reviewedHistory?reviewedData!.businessDate:data?.businessDate||'—'):'MATCH DAY '+(reviewedHistory?reviewedData!.businessDate:data?.businessDate||'—')}</span><h1 id="rc-title">{review?(zh?'赛后复盘':'Result Review'):reviewedHistory?(zh?'历史推荐':'Published History'):(zh?'今日推荐':'Today’s Recommendations')}</h1><p>{review?(zh?'查看真实赛果，复盘每一次选择。':'Review every selection against actual results.'):reviewedHistory?(zh?'查看原竞彩日已冻结记录；不作为今日新推荐。':'Frozen records from their original match day; not new recommendations for today.'):(zh?'先看比赛与方向，再看选择依据。':'Start with the match and pick, then explore the evidence.')}</p></div><button type="button" className="rc-refresh" onClick={()=>{refresh();if(review)reviewPage.refresh();}} disabled={loading||reviewPage.loading} aria-label={zh?'刷新推荐与复盘':'Refresh recommendations and review'}><RefreshCw size={16} aria-hidden="true"/>{loading||reviewPage.loading?(zh?'更新中':'Updating'):(zh?'刷新':'Refresh')}</button></header>
     {(!data?.strategySwitch||review)&&<DailyBulletinPanel data={data?.dailyBulletin} now={now} failed={failed||authorizationRequired} review={review}/>}
-    {!review&&<ReviewedAnalysisPanel data={reviewedData} tab={tab} now={now} failed={failed||authorizationRequired}/>}
+    {!review&&<ReviewedAnalysisPanel data={reviewedDisplay} tab={tab} now={now} failed={failed||authorizationRequired}/>}
+    {maximumTwo&&<section className="rc-paper" aria-label="最高可用2串1" data-reviewed-display-only="highest-available-two"><h2>最高可用2串1（目标10倍）</h2><article className="rc-paper__record"><strong>实际 {maximumTwo.product} 倍</strong><p>{maximumTwo.legs.map(l=>`${l.matchNum} ${reviewedLabel(l)} ${l.sp}`).join(' × ')} = {maximumTwo.product}</p><p>按已发布单场组合的当前展示参考，未达到10倍；保留原方向与发布SP。组合赔率不等于命中概率。</p></article></section>}
     {!review&&tab==='single'&&<LeagueBaselineDirections data={data?.leagueBaseline} language={language} now={now} failed={failed||authorizationRequired}/>}
     {!review&&tab==='single'&&<PrdPaperDirections data={data?.prdPaper} language={language} now={now} loading={loading} failed={failed||authorizationRequired}/>}
     {!review&&data?.strategySwitch&&<p role="status">{zh?'赛前综合分析采用已审核方向；球队模型另列其真实采用记录。旧策略已停止发布。原赛前综合分析可在本页查看历史，赛后复盘保留原策略台账。':'Reviewed editorial directions and actual trained-model records are identified separately. Legacy publishing remains disabled. Reviewed history is shown here; the original strategy ledger remains in Result Review.'}</p>}
     {!review&&!data?.strategySwitch&&<h2 className="rc-legacy-heading" data-legacy-strategy="coherent-market-primary-v1">{zh?'旧策略冻结记录':'Frozen records from the previous strategy'}</h2>}
     <div className="rc-meta"><span className="rc-reference-label">{zh?'参考推荐 · 模型验证中':'Reference picks · Model unvalidated'}</span><span>{zh?'行情更新':'Inputs updated'} {format(activeInputs,language)}</span><span>{zh?'赛果核对':'Results checked'} {format(data?.resultAsOf,language)}</span></div>
     <div className="rc-tabs" role="group" aria-label={zh?'推荐类型':'Recommendation type'}>{(['single','two','three'] as const).map(t=><button key={t} type="button" aria-pressed={tab===t} onClick={()=>setTab(t)}>{t==='single'?(zh?'单场推荐':'Singles'):t==='two'?(zh?'2串1':'2-leg combo'):(zh?'3串1':'3-leg combo')}{t==='two'&&<small>SP≥2.50</small>}</button>)}</div>
-    {!review&&tab==='single'&&<DayCoverage coverage={data?.coverage} businessDate={data?.businessDate||''} qualifiedOnly={qualifiedOnly} onQualifiedOnlyChange={setQualifiedOnly} onSelectMatch={onSelectMatch} language={language}/>}
+    {!review&&tab==='single'&&(data?.strategySwitch?<PublishedDirectionCoverage data={failed||authorizationRequired?undefined:data} now={now} zh={zh}/>:<DayCoverage coverage={data?.coverage} businessDate={data?.businessDate||''} qualifiedOnly={qualifiedOnly} onQualifiedOnlyChange={setQualifiedOnly} onSelectMatch={onSelectMatch} language={language}/>)}
     {!review&&tab==='single'&&sameDirection&&<details className="rc-direction-record-evidence"><summary>{zh?'查看原HAD记录依据':'View frozen HAD record evidence'}</summary><p className="rc-notice rc-notice--concentration" role="note" data-direction-concentration={sameDirection.direction}>{zh?`原冻结HAD记录同向：当前竞彩日 ${sameDirection.count} 场胜平负记录均为${title(sameDirection.direction,true)}，其中可能包含条件分支；这不是当前主方向汇总，也不能据此判断命中率。`:`Frozen HAD records: all ${sameDirection.count} match-day 1X2 records are ${title(sameDirection.direction,false)}, including possible conditional branches. This is not a current-primary aggregate and does not establish accuracy.`}</p></details>}
     {!review&&tab==='single'&&priceUnsupported>0&&<p className="rc-notice rc-notice--price" role="note" data-price-unsupported={priceUnsupported}>{zh?`价格提示：今天 ${priceUnsupported} / ${data?.current.length??0} 场冻结模型方向的“模型概率 × SP − 1”为负。入选不等于价格已验证；这些方向仅供复盘研究。`:`Price check: ${priceUnsupported} / ${data?.current.length??0} frozen model directions have negative model probability × SP − 1. Reference admission does not validate price; these directions remain research references.`}</p>}
     {!review&&tab==='single'&&data&&<details className="rc-dual-research-evidence"><summary>{zh?'双选研究依据 · 非正式推荐':'Dual-choice study evidence · not formal picks'}</summary><section className="rc-dual-research-list" aria-label={zh?'双选研究':'Dual-choice study'}>

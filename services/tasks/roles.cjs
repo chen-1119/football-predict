@@ -14,8 +14,8 @@ const ROLES = Object.freeze({
   settlement: { script: 'services/tasks/settlement.cjs', args: ['--watch'], env: {} },
 });
 function rolePlan(role) {
+  if (typeof role !== 'string' || !Object.hasOwn(ROLES, role)) throw Object.assign(new Error('Unknown task role'), { code: 'INVALID_TASK_ROLE' });
   const plan = ROLES[role];
-  if (!plan) throw Object.assign(new Error('Unknown task role'), { code: 'INVALID_TASK_ROLE' });
   return { role, root: ROOT, script: path.join(ROOT, plan.script), args: [...plan.args], env: { ...plan.env }, intervalMs: plan.intervalMs || null };
 }
 module.exports = { ROLES, rolePlan };

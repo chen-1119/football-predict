@@ -30,7 +30,9 @@ function runTask(role, { spawnImpl = spawn, env = process.env, executable = proc
 }
 if (require.main === module) {
   const role = process.argv[2];
-  if (process.argv.includes('--plan')) console.log(JSON.stringify(rolePlan(role), null, 2));
+  if (process.argv.includes('--plan')) console.log(JSON.stringify({ ...rolePlan(role),
+    writerResources: require('./writerResourcePlan.cjs').writerResourcePlan([role]),
+  }, null, 2));
   else {
     // A layout flag cannot transfer production writer ownership. The root
     // handover controller and per-transaction fencing are not installed yet.

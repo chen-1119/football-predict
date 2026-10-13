@@ -302,7 +302,9 @@ async function finalizeRuntime(state, directory) {
     await session.guardedFinals(); assertWritersStopped();
     if (state.dataPlane === 'code-only') require('./codeReleaseAcceptance.cjs').assertSamePublication(seed.identity, session.identity);
     const { storePaths, readPointer } = require("../server/dataGenerationStore.cjs"), pointer = readPointer(storePaths(STORE).currentPointer);
-    for (const name of ["generationId", "manifestHash", "sourceCycleId", "committedAt"]) assert.equal(pointer[name], session.identity[name]);
+    if(state.dataPlane==='code-only' && state.committedGenerationRepairAuthorizationHash)
+      require('./nativeCodeReleaseDataPlane.cjs').assertCodePublicationForState(state,session,STORE,held);
+    else for (const name of ["generationId", "manifestHash", "sourceCycleId", "committedAt"]) assert.equal(pointer[name], session.identity[name]);
     const legacyBaselineTransition = state.contract.legacyBaselineSha256
       ? legacyGenerationTransition(read(path.join(directory, "legacy-unaccepted-baseline.json")), session.identity) : null;
     const proof = { ok: true, sha: state.sha, kind: state.kind, publication: session.identity, databaseOid: state.oldDatabaseOid,
