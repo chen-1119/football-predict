@@ -6,9 +6,10 @@
 
 - `GET /api/operator/research/day?date=YYYY-MM-DD`：按竞彩日列出 PostgreSQL 原发布批次和 ACK 状态。仅列出不等于验签通过。
 - `GET /api/operator/research/artifact?key=reviewed-analysis-...`：在同一只读 RR 事务内读取原始 JSON 文本、原始字节长度与 SHA，运行既有官方签名输入/冻结记录/第二事务 ACK 回放后返回。
+- `GET /api/operator/research/official?date=YYYY-MM-DD`：使用数据库观察钟和原验签器核当前 calculator/current 两个完整官方签名载荷、同采集批次与15分钟新鲜度。返回重新序列化的完整签名载荷、SHA、字节数和采集时钟；不冒充原始HTTP字节，也不把请求日期或来源验签通过当作每个事件可发布。截止/身份/市场必须在提交时再次核验。此接口不触发采集。
 - 沿用现有账号会话，仅 operator/admin 可读。匿名401、普通账号403；POST405；私有 no-store。没有新增凭据、角色、公开私有档案或数据库迁移。
 - 缺失 ACK 明确返回 `record-present-ack-missing`。查询失败或找不到记录都不构成自动重试发布许可。
-- 此接口只覆盖已正常发布时保存的原研究和签名输入。未发布的20/21点独立报告、今天新官方报价和受控提交入口尚不由本批提供。
+- 档案接口覆盖已正常发布时保存的原研究和签名输入，official接口覆盖当前完整签名源。未发布的20/21点独立报告和受控提交入口尚不由本批提供；源码合并不表示生产已安装。
 
 ## 2. 后续服务端闭环
 

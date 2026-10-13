@@ -8,7 +8,7 @@ const row = (k, payload) => {
   return { artifact_key: k, artifact_version: 'test-v1', generated_at: at, updated_at: at,
     payload_json: json, payload_sha256: crypto.createHash('sha256').update(json).digest('hex'), payload_bytes: Buffer.byteLength(json) };
 };
-function fixture({ ack = true, readonly = 'on', corrupt = false, bytes, actualBytes, replayError = false } = {}) {
+function fixture({ ack = true, readonly = 'on', corrupt = false, bytes, actualBytes, replayError = false, readOfficial, trustRegistry, now = at } = {}) {
   const records = new Map([[key, row(key, { version: 'reviewed-analysis-freeze-v1', draft, record: { businessDate: draft.businessDate } })]]);
   if (ack) records.set(key + '-ack', row(key + '-ack', { recordKey: key }));
   if (corrupt) records.get(key).payload_json += ' ';
@@ -16,14 +16,14 @@ function fixture({ ack = true, readonly = 'on', corrupt = false, bytes, actualBy
   const client = {
     async query(sql, args) {
       queries.push(sql);
-      if (sql.startsWith('SELECT clock_timestamp')) return { rows: [{ now: at, readonly }] };
+      if (sql.startsWith('SELECT clock_timestamp')) return { rows: [{ now, readonly }] };
       if (sql.startsWith('SELECT artifact_key,payload_sha256')) return { rows: [records.get(key)] };
       if (sql.startsWith('SELECT payload_bytes')) return { rows: records.has(args[0]) ? [{ payload_bytes: bytes ?? records.get(args[0]).payload_bytes, actual_bytes: actualBytes ?? Buffer.byteLength(records.get(args[0]).payload_json) }] : [] };
       if (sql.includes('payload::text')) return { rows: records.has(args[0]) ? [records.get(args[0])] : [] };
       assert.match(sql, /^(BEGIN|SET LOCAL|COMMIT|ROLLBACK)/); return { rows: [] };
     }, release() { released++; },
   };
-  const reader = createResearchArchiveRead({ pool: { connect: async () => client }, replay: async (c, k, clock) => {
+  const reader = createResearchArchiveRead({ pool: { connect: async () => client }, readOfficial, trustRegistry, replay: async (c, k, clock) => {
     assert.equal(c, client); assert.equal(k, key); assert.equal(clock, at); replayed++; if (replayError) throw Error('signature mismatch');
   } });
   return { reader, records, queries, released: () => released, replayed: () => replayed };
@@ -101,4 +101,52 @@ test('concurrent cloud readers are bounded and capacity is returned after comple
   await handler(req, c, url); assert.equal(c.status, 503);
   release(); await Promise.all([first, second]); assert.equal(a.status, 200); assert.equal(b.status, 200);
   const next = response(); await handler(req, next, url); assert.equal(next.status, 200);
+});
+
+function officialFixture(change = () => {}, clockDelta = 0) {
+  const signed = require('./fixtures/signed-live-had.cjs');
+  const first = signed.snapshot([signed.source(1)]);
+  const second = signed.snapshot([signed.source(1)], { pair: first.pair, mutate: e => {
+    e.method = 'calculator';
+    e.url = require('../scripts/sportteryEndpointContract.cjs').SPORTTERY_CALCULATOR_URL;
+    e.sourceRequest = { ...e.sourceRequest, url: e.url, role: 'calculator' };
+  } });
+  const input = { endpoints: [...first.snapshot.endpoints, ...second.snapshot.endpoints] };
+  change(input, first);
+  return { input, f: fixture({ readOfficial: () => input, trustRegistry: first.registry,
+    now: signed.stamp(signed.NOW + clockDelta) }) };
+}
+test('official source exports both complete Ed25519 signed payloads without promising event eligibility', async () => {
+  const {input,f} = officialFixture();
+  const result = await f.reader.official('2026-09-17');
+  assert.equal(result.collectorSignatureVerified, true); assert.equal(result.eventEligibilityVerified, false);
+  assert.equal(result.publishSupported, false); assert.equal(result.productionWrites, 0);
+  assert.deepEqual(JSON.parse(result.source.json), input);
+  assert.equal(result.source.bytes, Buffer.byteLength(result.source.json));
+  assert.equal(result.source.sha256, crypto.createHash('sha256').update(result.source.json).digest('hex'));
+  assert.match(f.queries[0], /READ ONLY/);
+});
+for (const [name,change,delta] of [
+  ['tampered price', s => { s.endpoints[0].payload.value.matchInfoList[0].subMatchList[0].oddsList[0].h = 99; }, 0],
+  ['missing calculator', s => { s.endpoints.pop(); }, 0],
+  ['duplicate current', s => { s.endpoints.push(s.endpoints[0]); }, 0],
+  ['untrusted key', (_s,first) => { first.registry.keys = []; }, 0],
+  ['future acquisition', () => {}, -60000],
+  ['expired acquisition', () => {}, 16*60000],
+  ['cycle mismatch', s => { s.endpoints[1].sourceCycleId = 'other'; }, 0],
+  ['oversize snapshot', s => { s.padding = 'x'.repeat(4*1024*1024); }, 0],
+]) {
+  test('official source refuses ' + name, async () => {
+    const {f} = officialFixture(change,delta);
+    await assert.rejects(f.reader.official('2026-09-17'), /OFFICIAL_SOURCE_UNAVAILABLE/);
+    assert.equal(f.queries.at(-1), 'ROLLBACK'); assert.equal(f.released(), 1);
+  });
+}
+test('official route uses existing authorization and cannot trigger collection or publish', async () => {
+  const path = '/api/operator/research/official?date=2026-09-17';
+  let calls = 0; const reader = { official: async () => { calls++; return {collectorSignatureVerified:true}; } };
+  for (const [role,method,status] of [[null,'GET',401],['user','GET',403],['operator','POST',405],['operator','GET',200]]) {
+    const result = await request({pathname:path,role,method,reader}); assert.equal(result.status,status);
+  }
+  assert.equal(calls,1);
 });
