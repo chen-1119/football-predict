@@ -5,6 +5,8 @@ on:
       - 'server/accounts.cjs'
       - 'server/publicProduct.cjs'
       - 'server/index.cjs'
+      - 'server/researchArchiveRead.cjs'
+      - 'tests/research-archive-read.test.cjs'
       - 'server/recommendationReviewPage.cjs'
       - 'server/prematchRefresh.cjs'
       - 'collectors/leisu-prematch/**'
@@ -176,6 +178,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Normal code serving and signed repair boundaries
         run: node --test tests/normal-code-serving.test.cjs tests/code-data-release.test.cjs tests/staged-code-release.test.cjs tests/committed-generation-recovery-continuation.test.cjs
+      - name: Authenticated immutable research archive reads
+        run: node --test tests/research-archive-read.test.cjs tests/reviewed-analysis.test.cjs
       - name: Controlled native release and rollback contracts
         run: node scripts/verifyReleaseArchivePreflight.cjs && node scripts/verifyReleaseWindowPreflight.cjs && node scripts/verifyReleaseStoragePreflight.cjs && node scripts/verifyNativeReleasePipeline.cjs && node scripts/verifyNativeReleaseJournal.cjs && node scripts/verifyNativeReleaseRecovery.cjs && node scripts/verifyReleaseArchiveSuccessorContracts.cjs
       - run: node scripts/verifyProductionPlanSourceContracts.cjs
