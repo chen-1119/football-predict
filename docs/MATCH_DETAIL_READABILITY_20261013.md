@@ -10,7 +10,7 @@
 
 ## Verification
 
-TypeScript project checks pass. Eleven rendered supplemental-panel cases pass, including empty/error/unsupported identities, real player fields, old timestamps, partial coverage, authentication and request cooldown. Eight original-publication cases pass, including real Dijon frozen SP 3.15, HAD/HHAD identity and same-snapshot history. MatchDetail scoped lint passes; the supplemental component retains two pre-existing React hook lint findings (effect setState and render clock). This is not a full-repository lint claim.
+TypeScript project checks pass. Twelve rendered supplemental-panel cases pass, including empty/error/unsupported identities, real player fields, old timestamps, partial coverage, authentication, denied requests and request cooldown. Eight original-publication cases pass, including real Dijon frozen SP 3.15, HAD/HHAD identity and same-snapshot history. MatchDetail scoped lint passes; the supplemental component retains two pre-existing React hook lint findings (effect setState and render clock). This is not a full-repository lint claim.
 
 ## Production status at 2026-10-13 15:22 Beijing
 

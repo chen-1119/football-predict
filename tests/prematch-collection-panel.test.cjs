@@ -162,3 +162,12 @@ test('partial coverage keeps actual players expanded and collapses only the abse
  assert.equal(nodes(tree,n=>String(n.props?.className||'').includes('prematch-report__lineup-empty')).length,0);
  assert.doesNotMatch(words(notes[0]),/球员甲/);
 });
+
+test('empty disclosure preserves denied refresh explanation without implying verified player data',async()=>{
+ const data=evidence();data.sections={injuries:section(),lineup:section()};
+ const u=await harness({data,postStatus:403});
+ assert.doesNotMatch(words(u.render()),/资料校验通过/);
+ await nodes(u.render(),n=>n.type==='button'&&words(n)==='更新本场资料')[0].props.onClick();
+ assert.match(words(u.render()),/补采请求未通过验证/);
+ assert.equal(u.fetches.filter(r=>r.options.method==='POST').length,1);assertDataOnly(u.render());
+});

@@ -110,7 +110,7 @@ export function PrematchCollectionPanel({ matchId, language, homeName, awayName,
       : beforeLineupWindow
         ? (zh ? '首发：通常临近开赛公布，取得有效名单后展示。' : 'Lineup: usually announced near kickoff; shown when received.')
         : (zh ? '首发：尚未取得可展示名单。' : 'Lineup: no displayable list received.')}</p>}
-    {evidence && !hasRecords && <p role="status">{evidence.status === 'unavailable'
+    {evidence && !hasRecords && !['ok', 'missing'].includes(evidence.status) && <p role="status">{evidence.status === 'unavailable'
       ? (zh ? '本场资料暂不可用，可刷新重试。' : 'Match data is unavailable. Retry to check.') : label(evidence.status)}</p>}
   </>;
   if (!hasRecords) return <details className="card prematch-report prematch-report--compact" data-testid="prematch-collection" aria-busy={fetching}>
@@ -118,7 +118,9 @@ export function PrematchCollectionPanel({ matchId, language, homeName, awayName,
     {missingData}
     <button type="button" className="prematch-report__refresh" disabled={fetching} onClick={() => setRefreshTick(value => value + 1)}>{fetching ? (zh ? '读取中…' : 'Loading…') : (zh ? '刷新资料' : 'Refresh data')}</button>
     {canRequest && <button type="button" className="prematch-report__refresh" disabled={requesting || requestCooling} onClick={requestRefresh}>{requestCooling ? (zh ? '更新请求已提交' : 'Update requested') : (zh ? '更新本场资料' : 'Update match data')}</button>}
-    {activeRequest && <p role="status">{activeRequest.state === 'error' ? label(activeRequest.error || 'unavailable') : (zh ? '更新请求已提交，有新资料后会自动显示。' : 'Update requested. New data will appear when available.')}</p>}
+    {activeRequest && <p role="status">{activeRequest.state === 'error'
+      ? activeRequest.error === 'request-denied' ? (zh ? '补采请求未通过验证，请重新打开本站后重试。' : 'Request verification failed. Reopen this site and retry.') : label(activeRequest.error || 'unavailable')
+      : (zh ? '更新请求已提交，有新资料后会自动显示。' : 'Update requested. New data will appear when available.')}</p>}
   </details>;
   return <section className="card prematch-report" data-testid="prematch-collection" aria-labelledby={`prematch-heading-${matchId}`} aria-busy={fetching}>
     <header className="prematch-report__head">
