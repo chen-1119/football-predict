@@ -108,4 +108,4 @@ async function readLatestHistory(c,beforeDay,asOf){
  const history=await projection(c,matched[1],asOf,{historical:true});
  return require('./reviewedComboHistory.cjs').restoreArchivedCombos(history,asOf);
 }
-module.exports={publish,projection,deadline,readLatestHistory};
+module.exports={publish,projection,deadline,readLatestHistory,readPublication};
