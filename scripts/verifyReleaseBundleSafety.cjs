@@ -592,6 +592,7 @@ const requiredReleaseEntries = [
   "scripts/verifyNativeCodeServing.cjs",
   "scripts/committedGenerationRecoveryServingCore.cjs",
   "tests/normal-code-serving.test.cjs",
+  "tests/reference-index-repair-boundary.test.cjs",
   "server/researchArchiveRead.cjs",
   "tests/research-archive-read.test.cjs",
   "scripts/verifyResearchArchivePostgres.cjs",

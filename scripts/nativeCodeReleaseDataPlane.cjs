@@ -73,11 +73,11 @@ async function tryAllocate(sha, directory) {
     const selection=policy.selectWorkerCodeRepairPreparation(repair,
       require('./releaseWorkerPreflight.cjs').collectWorkerPreflight(),policy.collectWorkerCodeRepair);
     assert.equal(selection.report.ok,true,'worker preparation changed before allocation');
-    if(selection.useRepair && ['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5','worker-code-repair-v6'].includes(repair.version)) {
+    if(selection.useRepair && ['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5','worker-code-repair-v6','worker-code-repair-v7'].includes(repair.version)) {
       assert.equal(repair.baseRuntimeSha256,state.oldSha);
       assert.equal(repair.publication.databaseOid,state.oldDatabaseOid);
       state.committedGenerationRepairAuthorizationHash=crypto.createHash('sha256').update(fs.readFileSync(repairFile)).digest('hex');
-      if(repair.version==='worker-code-repair-v6') state.repairCapturePolicy=repair.bindingPolicy;
+      if(['worker-code-repair-v6','worker-code-repair-v7'].includes(repair.version)) state.repairCapturePolicy=repair.bindingPolicy;
     }
   }
   state.schemaCatalogHash = (await verifySchema(state)).catalogHash;
@@ -154,7 +154,7 @@ function sealFreshRepairCapture(state,body) {
 }
 function assertFreshRepairCapture(state,capture,authorization,authorizationHash) {
   const repair=require('./releaseWorkerCodeRepair.cjs');
-  assert.equal(authorization.version,'worker-code-repair-v6');
+  assert(['worker-code-repair-v6','worker-code-repair-v7'].includes(authorization.version));
   assert.equal(state.repairCapturePolicy,authorization.bindingPolicy);
   assert.deepEqual(capture,sealFreshRepairCapture(state,capture.body),'repair capture content or state MAC changed');
   const body=capture.body;
@@ -170,7 +170,7 @@ function assertFreshRepairCapture(state,capture,authorization,authorizationHash)
     const report=repair.evaluateWorkerCodeRepair(authorization,body.worker,body.observed);
     assert.equal(report.ok,true);assert.equal(report.workerHealthy,false);
     assert.deepEqual(body.publication,body.observed.publication);
-    assert.deepEqual(body.incident,repair.repeatedResultIdentityIncident(authorization.incident,body.worker,body.observed.journal));
+    assert.deepEqual(body.incident,repair.repeatedRepairIncident(authorization,body.worker,body.observed.journal));
   } else {
     assert.equal(body.observed,null);assert.equal(body.incident,null);
     assert.equal(require('./releaseWorkerPreflight.cjs').evaluateWorkerPreflight(body.worker).ok,true);
@@ -202,13 +202,13 @@ function readFreshRepairCapture(state,authorization,authorizationHash) {
 function assertRepairPair(state, session, current, previous, authorization, authorizationHash, freshCapture=null) {
   const repair=require('./releaseWorkerCodeRepair.cjs');
   repair.validateWorkerCodeRepairAuthorization(authorization,Date.now());
-  assert(['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5','worker-code-repair-v6'].includes(authorization.version));
+  assert(['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5','worker-code-repair-v6','worker-code-repair-v7'].includes(authorization.version));
   assert.equal(authorizationHash,state.committedGenerationRepairAuthorizationHash);
   assert.equal(authorization.baseRuntimeSha256,state.oldSha);
   assert.equal(authorization.publication.databaseOid,state.oldDatabaseOid);
   assert.equal(state.dataPlane,'code-only');
   const same=require('./codeReleaseAcceptance.cjs').assertSamePublication;
-  const fresh=authorization.version==='worker-code-repair-v6'
+  const fresh=['worker-code-repair-v6','worker-code-repair-v7'].includes(authorization.version)
     ? assertFreshRepairCapture(state,freshCapture,authorization,authorizationHash) : null;
   const publication=fresh?fresh.publication:authorization.publication;
   same(publication.committed,session.identity);
@@ -233,7 +233,7 @@ function assertCodePublicationForState(state,session,storeDir=STORE,pointerLockH
   const file=path.join(__dirname,'../deploy/light-server/worker-code-repair-authorization.json');
   const bytes=fs.readFileSync(file),authorization=JSON.parse(bytes),generations=require('../server/dataGenerationStore.cjs');
   require('./releaseWorkerCodeRepair.cjs').candidateAuthorization(path.resolve(__dirname,'..'),authorization);
-  const freshCapture=authorization.version==='worker-code-repair-v6'
+  const freshCapture=['worker-code-repair-v6','worker-code-repair-v7'].includes(authorization.version)
     ? readFreshRepairCapture(state,authorization,crypto.createHash('sha256').update(bytes).digest('hex')) : null;
   const held=pointerLockHandle||generations.acquirePointerCommitLock({lockDir:generations.storePaths(storeDir).pointerLockDir,timeoutMs:10000,staleMs:60000});
   try {
@@ -258,7 +258,7 @@ function captureFreshRepairPair(state,session,directory,storeDir=STORE) {
   const file=path.join(__dirname,'../deploy/light-server/worker-code-repair-authorization.json');
   const bytes=fs.readFileSync(file),authorization=repair.candidateAuthorization(path.resolve(__dirname,'..'),JSON.parse(bytes));
   const authorizationHash=crypto.createHash('sha256').update(bytes).digest('hex');
-  assert.equal(authorization.version,'worker-code-repair-v6');
+  assert(['worker-code-repair-v6','worker-code-repair-v7'].includes(authorization.version));
   assert.equal(authorizationHash,state.committedGenerationRepairAuthorizationHash);
   assert.equal(state.repairCapturePolicy,authorization.bindingPolicy);
   assert.equal(authorization.baseRuntimeSha256,state.oldSha);
@@ -292,7 +292,7 @@ function captureFreshRepairPair(state,session,directory,storeDir=STORE) {
     same(generations.readPointer(paths.previousPointer),previous.pointer);
     const body={sha:state.sha,oldSha:state.oldSha,stateHash:jsonHash(state),authorizationHash,
       checkedAt:new Date().toISOString(),route:selected.useRepair?'repair':'ordinary',publication,worker,observed,
-      incident:selected.useRepair?repair.repeatedResultIdentityIncident(authorization.incident,worker,observed.journal):null,
+      incident:selected.useRepair?repair.repeatedRepairIncident(authorization,worker,observed.journal):null,
       generationEvidence:{committed:generationVerificationEvidence(session.publication.context),
         rawCurrent:generationVerificationEvidence(current),rawPrevious:generationVerificationEvidence(previous)}};
     const capture=sealFreshRepairCapture(state,body);
