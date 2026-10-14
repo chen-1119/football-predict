@@ -15,3 +15,8 @@ test('model input preserves exact admitted bytes; missing, malformed and changed
   fs.writeFileSync(file,raw);fs.linkSync(file,path.join(root,'alias.json'));a.equal(inspect(file).ok,false);
  }finally{a.equal(path.dirname(fs.realpathSync(root)),fs.realpathSync(os.tmpdir()));a(path.basename(root).startsWith('release-model-input-'));fs.rmSync(root,{recursive:true,force:true});}
 });
+test('fixed broker task budget accommodates both Node runtimes and their worker threads',()=>{
+ const unit=fs.readFileSync(path.join(__dirname,'../deploy/light-server/football-research-broker.service'),'utf8');
+ a.match(unit,/^TasksMax=32\r?$/m);a.match(unit,/^KillMode=control-group\r?$/m);a.match(unit,/^MemoryMax=512M\r?$/m);
+ a.match(unit,/^NoNewPrivileges=true\r?$/m);a.match(unit,/^RestrictSUIDSGID=true\r?$/m);
+});

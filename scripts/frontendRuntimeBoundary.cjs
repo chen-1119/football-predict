@@ -40,7 +40,7 @@ const EXTERNAL_UNITS = deepFreeze({
 const RESEARCH_COMPONENT = deepFreeze({
   unit: "football-research-broker.service",
   argv: "/usr/bin/python3.12 -I -S -B /usr/local/libexec/football-research-broker/researchSocketServer.py",
-  unitSha: "6c3b920c533cb97b03c93deee8ed5219885b8e1ec34bb4d76c38781e6f17092a",
+  unitSha: "2743dac26bb53747962f19ad965499e86bd7329cc625730e24bf9f1e5d414d61",
   sources: {
     "scripts/researchSocketServer.py": "5e5203536eca56413bfab5cad5e9be319c66c04359db7df83ef1a8eff9be5d0c",
     "scripts/researchSocketPeer.py": "9019356aa8a63c0683d7c82435210528d20e943630e3091fc483d65631138786",
