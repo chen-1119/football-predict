@@ -51,6 +51,10 @@ const {
 const { validateSignedArchiveSourceEvidence } = require("./releaseArchiveSourceInventory.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
+const { MODEL_EVALUATION_ENTRY, EXPECTED_MODEL_EVALUATION_VERSION, EXPECTED_WALK_FORWARD_VERSION,
+  EXPECTED_WALK_FORWARD_PROTOCOL, inspectModelEvaluationFile } = require("./releaseModelEvaluationInput.cjs");
+const admittedModelEvaluation = inspectModelEvaluationFile(path.join(rootDir, MODEL_EVALUATION_ENTRY));
+if (!admittedModelEvaluation.ok) throw new Error(`required model evaluation input rejected before sequence reservation: ${admittedModelEvaluation.error}`);
 const nativePolicyPath = path.join(rootDir, "deploy/light-server/native-release-policy.json");
 const nativePreparation = fs.existsSync(nativePolicyPath);
 if (nativePreparation) require("./validateNativeReleasePolicy.cjs").readPolicy(nativePolicyPath);
@@ -246,10 +250,10 @@ const prebuiltDistArtifact = Object.freeze({
 const runtimeMutableSourceEntries = [
   "public/data/gpt-predictions.json"
 ];
-const modelEvaluationBundleEntry = "public/data/model-evaluation.json";
-const expectedModelEvaluationVersion = "rolling-backtest-v19";
-const expectedWalkForwardValidationVersion = "walk-forward-promotion-validation-v3";
-const expectedWalkForwardProtocolVersion = "nested-expanding-window-candidate-selection-v2";
+const modelEvaluationBundleEntry = MODEL_EVALUATION_ENTRY;
+const expectedModelEvaluationVersion = EXPECTED_MODEL_EVALUATION_VERSION;
+const expectedWalkForwardValidationVersion = EXPECTED_WALK_FORWARD_VERSION;
+const expectedWalkForwardProtocolVersion = EXPECTED_WALK_FORWARD_PROTOCOL;
 
 const cleanupActionStage = () => {
   if (actionStageDir) fs.rmSync(actionStageDir, { recursive: true, force: true });
@@ -382,7 +386,8 @@ if (extractedModelEvaluation.status === 0
   try {
     const parsed = JSON.parse(extractedModelEvaluation.stdout.toString("utf8"));
     modelEvaluationArtifact = {
-      ok: parsed?.ok === true
+      ok: crypto.createHash("sha256").update(extractedModelEvaluation.stdout).digest("hex") === admittedModelEvaluation.sha256
+        && parsed?.ok === true
         && parsed?.version === expectedModelEvaluationVersion
         && parsed?.walkForwardValidation?.version === expectedWalkForwardValidationVersion
         && parsed?.walkForwardValidation?.protocolVersion === expectedWalkForwardProtocolVersion,
