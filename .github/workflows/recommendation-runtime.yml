@@ -6,6 +6,9 @@ on:
       - 'server/publicProduct.cjs'
       - 'server/index.cjs'
       - 'server/researchArchiveRead.cjs'
+      - 'server/researchReportStore.cjs'
+      - 'tests/research-report-store.test.cjs'
+      - 'scripts/verifyResearchReportPostgres.cjs'
       - 'tests/research-archive-read.test.cjs'
       - 'scripts/verifyResearchArchivePostgres.cjs'
       - 'server/recommendationReviewPage.cjs'
@@ -185,6 +188,12 @@ jobs:
         run: node scripts/verifyResearchArchivePostgres.cjs
         env:
           RESEARCH_ARCHIVE_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
+      - name: Immutable report archive storage and unknown commit recovery
+        run: node --test tests/research-report-store.test.cjs
+      - name: Native PostgreSQL report archive concurrency
+        run: node scripts/verifyResearchReportPostgres.cjs
+        env:
+          RESEARCH_REPORT_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Controlled native release and rollback contracts
         run: node scripts/verifyReleaseArchivePreflight.cjs && node scripts/verifyReleaseWindowPreflight.cjs && node scripts/verifyReleaseStoragePreflight.cjs && node scripts/verifyNativeReleasePipeline.cjs && node scripts/verifyNativeReleaseJournal.cjs && node scripts/verifyNativeReleaseRecovery.cjs && node scripts/verifyReleaseArchiveSuccessorContracts.cjs
       - run: node scripts/verifyProductionPlanSourceContracts.cjs
