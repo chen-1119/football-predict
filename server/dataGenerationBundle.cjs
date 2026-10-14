@@ -138,6 +138,7 @@ const validateBundleReader = ({
   hasPayload,
   readPayload,
   inspectMatchArray,
+  inspectRowsObject,
   sourceCycleId,
   reportedFiles,
   includeSemanticHash = false,
@@ -177,6 +178,16 @@ const validateBundleReader = ({
 
   for (const definition of validationDefinitions) {
     if (!hasPayload(definition.path)) continue;
+    // Serving startup needs the complete JSON grammar/hash and exact rows
+    // count, without retaining a gigabyte of historical prediction objects.
+    // Semantic-hash callers keep their original complete-value path.
+    if (!semanticHasher && definition.kind === "rows-object" && typeof inspectRowsObject === "function") {
+      const inspection = inspectRowsObject(definition.path);
+      if (definition.path === "odds-history.json") oddsRows = inspection.rows;
+      else if (definition.path === "prediction-snapshots.json") predictionRows = inspection.rows;
+      files += 1;
+      continue;
+    }
     if (
       definition.path === "matches-history.json"
       && typeof inspectMatchArray === "function"
@@ -612,6 +623,17 @@ const generationPayloadReader = (context) => {
       relativePath,
       options,
     ),
+    inspectRowsObject: (relativePath) => {
+      const entry = context.manifest.files.find((row) => row.path === relativePath);
+      if (!entry) fail("FILE_NOT_IN_MANIFEST", `file is not part of generation: ${relativePath}`);
+      const filePath = path.join(context.generationDir, ...relativePath.split("/"));
+      const inspection = require("./streamedJsonObjectArrays.cjs").streamJsonObjectArrays(filePath, {
+        keys: ["rows"], allowNonArrays: true, expectedBytes: entry.bytes, expectedSha256: entry.sha256,
+        onItem: () => {},
+      });
+      if (!inspection.fields.includes("rows")) fail("GENERATION_SEMANTIC_INVALID", `${relativePath} must be an object with rows[]`);
+      return { rows: inspection.counts.rows };
+    },
     reportedFiles: FILE_DEFINITIONS.filter((definition) => manifestPaths.has(definition.path)).length,
   };
 };

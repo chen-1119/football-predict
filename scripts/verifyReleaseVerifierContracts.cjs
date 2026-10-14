@@ -98,6 +98,13 @@ check('committed PostgreSQL reads survive multiple raw advances without weakenin
   assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# skipped 0$/m);
   for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+file+'"'));
 });
+check('cold generation validation streams complete signed rows within a bounded child heap',()=>{
+  const file='tests/generation-startup-streaming.test.cjs';
+  const child=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:90000,maxBuffer:1048576});
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 14$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
+    for(const required of ['server/streamedJsonObjectArrays.cjs',file])assert(read(entry).includes('"'+required+'"'));
+});
 check('independent read API and SSR preserve committed rows, auth and component ownership',()=>{
   const file='tests/service-separation-v1.test.cjs',history='tests/committed-combo-archive.test.cjs';
   const child=require('node:child_process').spawnSync(process.execPath,['--test',file,history],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});

@@ -598,6 +598,8 @@ const requiredReleaseEntries = [
   "scripts/verifyResearchArchivePostgres.cjs",
   "tests/code-data-release.test.cjs",
   "tests/postgres-committed-publication.test.cjs",
+  "tests/generation-startup-streaming.test.cjs",
+  "server/streamedJsonObjectArrays.cjs",
   "scripts/verifyCodeReleaseShell.cjs",
   "scripts/codeReleaseAcceptance.cjs",
   "scripts/verifyStagedCodeRelease.cjs",
