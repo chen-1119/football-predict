@@ -1,0 +1,38 @@
+[Unit]
+Description=Football fixed authenticated research release-lock broker
+After=football-predict.service
+Requires=football-predict.service
+
+[Service]
+Type=simple
+User=root
+Group=football
+WorkingDirectory=/opt/football-predict
+ExecStart=/usr/bin/python3.12 -I -S -B /usr/local/libexec/football-research-broker/researchSocketServer.py
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=10
+RuntimeDirectory=football-research-broker
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=no
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ReadWritePaths=/run/football-research-broker /var/lib/football-research-broker
+ReadWritePaths=/run/lock/football-release.lock
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+MemoryMax=512M
+TasksMax=16
+
+[Install]
+WantedBy=multi-user.target

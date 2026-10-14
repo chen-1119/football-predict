@@ -2,7 +2,7 @@
 const test = require('node:test'), a = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
 const { EventEmitter } = require('node:events'), { createHash } = require('node:crypto'), { createRequire } = require('node:module');
 const client = require('../server/researchBrokerClient.cjs');
-const { requestJournalIdentity } = require('../scripts/researchReleaseBroker.cjs');
+const { requestJournalIdentity, replayEnvelope } = require('../scripts/researchReleaseBroker.cjs');
 const sha = raw => createHash('sha256').update(raw).digest('hex');
 const input = { version: 'research-broker-request-v1', action: 'archive-read', businessDate: '2026-10-14',
   reportKind: 'weekday-2100-full', sha256: 'a'.repeat(64) };
@@ -115,4 +115,22 @@ for (const [name, change] of [
   ['receipt before generation', r => { r.receivedAt = '2026-10-14T01:59:59.000Z'; }],
 ]) test('report response refuses ' + name, () => {
   a.throws(() => client.decodeBrokerResponse(archivedEnvelope(change), reportRequest, { releaseSha }, Date.now() - 1000, Date.now() + 1000));
+});
+
+test('mutation replay preserves the original receipt clock and never launches another write', () => {
+  const mutation = Buffer.from(JSON.stringify({ version: input.version, action: 'archive', json: originalReport, sha256: sha(originalReport) }));
+  const saved = JSON.parse(archivedEnvelope());
+  saved.stdout = JSON.stringify({ ...JSON.parse(saved.stdout), commitAcknowledged: true });
+  saved.requestSha = sha(mutation); saved.finishedAt = '2026-10-14T02:00:02.000Z';
+  const original = Buffer.from(JSON.stringify(saved) + '\n'), now = new Date().toISOString();
+  const replay = replayEnvelope(original, sha(mutation), releaseSha, now);
+  a.equal(replay.originalReceiptBase64, original.toString('base64'));
+  const verified = client.decodeBrokerResponse(Buffer.from(JSON.stringify(replay)), mutation, { releaseSha }, Date.now()-1000, Date.now()+1000);
+  a.equal(verified.replayedReceipt, true); a.equal(verified.originalFinishedAt, saved.finishedAt);
+  for (const change of [r => { r.originalReceiptBase64 += ' '; }, r => { r.deliveredAt = saved.finishedAt; },
+    r => { r.requestSha = '0'.repeat(64); }, r => { r.automaticWriteRetry = true; }]) {
+    const bad = { ...replay }; change(bad);
+    a.throws(() => client.decodeBrokerResponse(Buffer.from(JSON.stringify(bad)), mutation, { releaseSha }, Date.now()-1000, Date.now()+1000));
+  }
+  a.throws(() => client.decodeBrokerResponse(Buffer.from(JSON.stringify({ ...replay, requestSha: sha(reportRequest) })), reportRequest, { releaseSha }, Date.now()-1000, Date.now()+1000));
 });

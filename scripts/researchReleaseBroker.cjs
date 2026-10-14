@@ -55,6 +55,9 @@ function verifyInstalledBinding() {
     for (const m of body.toString().matchAll(/require\(['"](\.[^'"]+)['"]\)/g)) visit(require.resolve(path.resolve(path.dirname(file), m[1])));
   }
   for (const file of ['scripts/researchReleaseBroker.cjs', 'scripts/researchBrokerWorker.cjs', 'deploy/light-server/collector-trust-registry.json']) visit(ROOT + '/' + file);
+  const dependencies = trustedFile('/usr/local/libexec/football-research-broker/dependencies.json', 1024*1024);
+  if (sha(dependencies) !== binding.dependenciesSha256) fail('RESEARCH_DEPENDENCY_BINDING');
+  require('../server/researchBrokerDependencies.cjs').verify(ROOT,JSON.parse(dependencies),file=>trustedFile(file,4*1024*1024));
   return binding;
 }
 function syncNew(file, bytes) {
@@ -70,6 +73,17 @@ function requestJournalIdentity(request) {
   // must never hide a later COMMIT. Mutation identities remain durable/exact.
   return { requestSha, readOnly, journalId: requestSha + (readOnly ? '-read-' + crypto.randomBytes(12).toString('hex') : '') };
 }
+function replayEnvelope(saved, requestSha, releaseSha, now = new Date().toISOString()) {
+  if (!Buffer.isBuffer(saved) || saved.length > 3*1024*1024-4096) fail('RESEARCH_RECEIPT_BOUND');
+  const result = JSON.parse(saved);
+  if (result.version !== 'research-broker-result-v1' || result.requestSha !== requestSha || result.releaseSha !== releaseSha
+    || result.automaticWriteRetry !== false || !Number.isFinite(Date.parse(result.finishedAt))
+    || new Date(result.finishedAt).toISOString() !== result.finishedAt || Date.parse(result.finishedAt) > Date.parse(now)) fail('RESEARCH_RECEIPT_BINDING');
+  // Preserve the original completion clock and bytes. deliveredAt is a new
+  // transport observation, never a new database commit or publication clock.
+  return { version: 'research-broker-replay-v1', requestSha, releaseSha, deliveredAt: now,
+    originalReceiptBase64: saved.toString('base64'), originalReceiptSha256: sha(saved), automaticWriteRetry: false };
+}
 async function main() {
   const lockFd = findHeldReleaseLock(), binding = verifyInstalledBinding();
   const directory = fs.lstatSync(JOURNAL);
@@ -81,10 +95,11 @@ async function main() {
   const intent = path.join(JOURNAL, journalId + '.intent.json'), receipt = path.join(JOURNAL, journalId + '.receipt.json');
   if (!readOnly && fs.existsSync(receipt)) {
     const saved = trustedFile(receipt, 3 * 1024 * 1024), result = JSON.parse(saved);
-    if (result.requestSha !== requestSha || result.releaseSha !== binding.releaseSha) fail('RESEARCH_RECEIPT_BINDING');
-    process.stdout.write(saved); if (result.code !== 0 || result.overflow) process.exitCode = 1; return;
+    process.stdout.write(JSON.stringify(replayEnvelope(saved, requestSha, binding.releaseSha)) + '\n');
+    if (result.code !== 0 || result.overflow) process.exitCode = 1; return;
   }
   if (!readOnly && fs.existsSync(intent)) fail('RESEARCH_PREVIOUS_REQUEST_UNCONFIRMED_READ_FIRST');
+  require('../server/researchBrokerJournal.cjs').journalBudget(JOURNAL, request.length + 4 * 1024 * 1024);
   syncNew(intent, JSON.stringify({ version: 'research-broker-intent-v1', requestSha, releaseSha: binding.releaseSha, admittedAt: new Date().toISOString(), automaticWriteRetry: false }));
   const beforePid = cp.execFileSync('/usr/bin/systemctl', ['show', 'football-predict.service', '--property=MainPID', '--value'], { encoding: 'utf8' }).trim();
   if (!/^[1-9][0-9]*$/.test(beforePid)) fail('RESEARCH_API_NOT_ACTIVE');
@@ -114,11 +129,13 @@ async function main() {
   if (cp.execFileSync('/usr/bin/systemctl', ['show', 'football-predict.service', '--property=MainPID', '--value'], { encoding: 'utf8' }).trim() !== beforePid) fail('RESEARCH_API_CHANGED');
   const stdout = Buffer.concat(output).toString(), stderr = Buffer.concat(errors).toString();
   const result = { version: 'research-broker-result-v1', requestSha, releaseSha: binding.releaseSha, finishedAt: new Date().toISOString(), code, overflow, stdout, stderr, automaticWriteRetry: false };
-  syncNew(receipt, JSON.stringify(result) + '\n'); process.stdout.write(JSON.stringify(result) + '\n');
+  const resultBytes = Buffer.from(JSON.stringify(result) + '\n');
+  if (resultBytes.length > 3*1024*1024-4096) fail('RESEARCH_RECEIPT_BOUND');
+  syncNew(receipt, resultBytes); process.stdout.write(resultBytes);
   if (code !== 0 || overflow) process.exitCode = 1;
 }
 if (require.main === module) main().catch(e => {
   process.stdin.destroy();
   process.stderr.write(JSON.stringify({ ok: false, error: /^[A-Z0-9_]+$/.test(e.code || '') ? e.code : 'RESEARCH_BROKER_UNCONFIRMED_READ_FIRST', retryWriteAutomatically: false }) + '\n'); process.exitCode = 1;
 });
-module.exports = { trustedFile, syncNew, requestJournalIdentity };
+module.exports = { trustedFile, syncNew, requestJournalIdentity, verifyInstalledBinding, replayEnvelope };

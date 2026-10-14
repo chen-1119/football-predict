@@ -11512,9 +11512,15 @@ const researchArchiveHandler = researchArchiveModule.createResearchArchiveHandle
     replay: require('../scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs').readPublication,
   }) : null,
 });
+const researchWriteHandler = postgresPool
+  ? require('./researchWriteHttp.cjs').createResearchWriteHandler({
+    accounts: accountSystem,
+    submit: require('./researchBrokerClient.cjs').submitResearchRequest,
+  }) : null;
 const handleApi = async (req, res, url) => {
   if (await accountSystem.handle(req, res, url)) return;
   if (await researchArchiveHandler(req, res, url)) return;
+  if (researchWriteHandler && await researchWriteHandler(req, res, url)) return;
   if (req.method === "OPTIONS") return send(res, 204, "");
 
   if (url.pathname === "/api/public/overview" || /^\/api\/public\/matches\/[^/]+$/.test(url.pathname)) {

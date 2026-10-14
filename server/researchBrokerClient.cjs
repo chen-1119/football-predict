@@ -1,6 +1,6 @@
 'use strict';
-// Fixed local transport candidate. No listener, sudo rule, service installation
-// or HTTP wiring is supplied here. The original API's NoNewPrivileges stays on.
+// Fixed local transport. The signed root socket must be installed separately;
+// this client cannot install/start it. API NoNewPrivileges stays on.
 const fs = require('node:fs'), path = require('node:path'), net = require('node:net');
 const { createHash } = require('node:crypto');
 const { decodeRequest, MAX_REQUEST_BYTES } = require('./researchWriteService.cjs');
@@ -51,12 +51,27 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
   if (!Buffer.isBuffer(bytes) || bytes.length < 2 || bytes.length > MAX_RESPONSE_BYTES
     || !Buffer.from(bytes.toString('utf8')).equals(bytes)) fail('RESEARCH_BROKER_RESPONSE_BOUND');
   let result; try { result = JSON.parse(bytes.toString('utf8')); } catch { fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED'); }
+  let replayed = false, receiptUpperBound = finishedBy;
+  if (result?.version === 'research-broker-replay-v1') {
+    if (Object.keys(result).sort().join(',') !== 'automaticWriteRetry,deliveredAt,originalReceiptBase64,originalReceiptSha256,releaseSha,requestSha,version'
+      || result.requestSha !== sha(raw) || result.releaseSha !== context.releaseSha || result.automaticWriteRetry !== false
+      || typeof result.originalReceiptBase64 !== 'string'
+      || typeof result.deliveredAt !== 'string' || !Number.isFinite(Date.parse(result.deliveredAt))
+      || new Date(result.deliveredAt).toISOString() !== result.deliveredAt || Date.parse(result.deliveredAt) < startedAt
+      || Date.parse(result.deliveredAt) > finishedBy || !['archive','publish'].includes(decodeRequest(raw).action)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+    const saved = Buffer.from(result.originalReceiptBase64,'base64');
+    if(saved.toString('base64')!==result.originalReceiptBase64||saved.length>3*1024*1024-4096
+      ||sha(saved)!==result.originalReceiptSha256||!Buffer.from(saved.toString()).equals(saved)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+    receiptUpperBound = Date.parse(result.deliveredAt);
+    try { result = JSON.parse(saved.toString()); } catch { fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED'); }
+    replayed = true;
+  }
   if (!result || Object.keys(result).sort().join(',') !== 'automaticWriteRetry,code,finishedAt,overflow,releaseSha,requestSha,stderr,stdout,version'
     || result.version !== 'research-broker-result-v1' || result.requestSha !== sha(raw) || result.releaseSha !== context.releaseSha
     || result.code !== 0 || result.overflow !== false || result.automaticWriteRetry !== false || result.stderr !== ''
     || typeof result.stdout !== 'string' || typeof result.finishedAt !== 'string' || !Number.isFinite(Date.parse(result.finishedAt))
-    || new Date(result.finishedAt).toISOString() !== result.finishedAt || Date.parse(result.finishedAt) < startedAt
-    || Date.parse(result.finishedAt) > finishedBy) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+    || new Date(result.finishedAt).toISOString() !== result.finishedAt || (!replayed && Date.parse(result.finishedAt) < startedAt)
+    || Date.parse(result.finishedAt) > receiptUpperBound) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
   let value; try { value = JSON.parse(result.stdout); } catch { fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED'); }
   if (!value || value.ok !== true || value.retryWriteAutomatically !== false) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
   const request = decodeRequest(raw);
@@ -84,7 +99,7 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
         || value.records.length < 1 || value.records.length > 32 || ['payloadSha256','ackSha256','recordHash'].some(k => !/^[a-f0-9]{64}$/.test(value[k] || ''))))
       || (value.state !== 'committed-and-acknowledged' && value.verified !== false)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
   }
-  return value;
+  return replayed ? { ...value, replayedReceipt: true, originalFinishedAt: result.finishedAt } : value;
 }
 async function submitResearchRequest(raw) {
   decodeRequest(raw);
