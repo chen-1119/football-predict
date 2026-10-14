@@ -394,6 +394,13 @@ check('incident-bound worker code repair retains failure and actual cutover gate
   const result=require('./verifyReleaseWorkerCodeRepair.cjs').verifyReleaseWorkerCodeRepair();
   assert.equal(result.ok,true);assert.ok(result.checks>=30);assert.equal(result.productionWrites,0);
 });
+check('reference index repair rejects unrelated faults, changed corpus and clipped journal before signing', () => {
+  const file='tests/reference-index-repair-boundary.test.cjs';
+  const child=require('node:child_process').spawnSync(process.execPath,['--test',file],
+    {cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/# tests 45\b/);assert.match(child.stdout,/# skipped 0\b/);
+  for(const source of [creator,validator])assert(source.includes('"'+file+'"'),'signed index repair verifier absent');
+});
 const collectorEntries = ['scripts/releaseWorkerCodeRepair.cjs','scripts/verifyReleaseWorkerCodeRepair.cjs',
   'src/services/apiFootballDiagnostics.cjs', 'src/services/apiFootballDiagnostics.d.cts',
   'scripts/productionFixtureIsolationContract.cjs', 'scripts/verifyProductionFixtureIsolationContract.cjs',
