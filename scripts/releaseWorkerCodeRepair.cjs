@@ -410,7 +410,13 @@ function collectWorkerCodeRepair(auth, worker) {
     journalTimestampUs=row.__REALTIME_TIMESTAMP;journalPid=row._PID;
   }
   const journalSecond=completeIncident?Math.floor(Number(journalTimestampUs)/1000000):null;
-  const journalArgs=completeIncident
+  // This fault is followed immediately by the worker's large status frame.
+  // Read the exact located microsecond for v7; keep the 64-row truncation
+  // rejection and complete-frame check instead of admitting a clipped window.
+  const epoch=us=>'@'+(us/1000000n).toString()+'.'+(us%1000000n).toString().padStart(6,'0');
+  const journalArgs=referenceIndex
+    ? ['--unit=football-sync-worker.service','--since='+epoch(BigInt(journalTimestampUs)),'--until='+epoch(BigInt(journalTimestampUs)+1n),'--lines=64','--output=json','--no-pager']
+    : completeIncident
     ? ['--unit=football-sync-worker.service','--since=@'+journalSecond,'--until=@'+(journalSecond+1),'--lines=64','--output=json','--no-pager']
     : ['--unit=football-sync-worker.service','--since='+cycle.startedAt, '--until='+cycle.finishedAt, '--grep=^'+message+'$','--lines=4','--output=json','--no-pager'];
   const lines = cp.execFileSync('/usr/bin/journalctl', journalArgs, {encoding:'utf8',timeout:8000,maxBuffer:128*1024});

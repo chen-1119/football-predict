@@ -98,6 +98,10 @@ test('actual serialized probe executes complete five-line locator, dependency an
       if(command==='/usr/sbin/runuser') {const c=variant==='pg-commit-drift'?f.observed.publication.rawCurrent:f.observed.publication.committed;
         return JSON.stringify({databaseOid:'42',readOnly:'on',meta:Object.fromEntries(['data_publication_mode','data_generation_id','manifest_hash','data_generation_source_cycle_id','committed_at'].map((key,i)=>[key,c[['mode','generationId','manifestHash','sourceCycleId','committedAt'][i]]]))});}
       a.equal(command,'/usr/bin/journalctl');a(args.includes('--lines=64'));
+      if(!args.some(s=>s.startsWith('--grep'))) {
+        const us=BigInt(rows[0].__REALTIME_TIMESTAMP),epoch=n=>'@'+(n/1000000n).toString()+'.'+(n%1000000n).toString().padStart(6,'0');
+        a(args.includes('--since='+epoch(us)));a(args.includes('--until='+epoch(us+1n)));
+      }
       const selected=args.some(s=>s.startsWith('--grep'))?(variant==='locator-duplicate'?[rows[2],rows[2]]:[rows[2]]):(variant==='journal-missing'?rows.slice(1):rows);
       return selected.map(r=>JSON.stringify(r)).join('\n');
     }};

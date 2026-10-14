@@ -22,6 +22,9 @@ start time, signed failed cycle, child PID, actual journal microsecond and the
 full five-line original reconciliation error frame. Only the same failure in
 that cycle, or a later non-overlapping cycle on the same worker incarnation,
 qualifies. Missing, duplicate, mixed or truncated journal records reject it.
+The v7 journal reader uses the actual located microsecond as a one-microsecond
+window. The large worker status printed immediately after the child error cannot
+truncate that frame. The original 64-row rejection bound remains unchanged.
 
 The read-only collector hashes and validates the entire snapshot JSON using the
 existing bounded streaming reader. It reattests every original decision,
