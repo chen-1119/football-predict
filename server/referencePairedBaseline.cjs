@@ -87,19 +87,33 @@ function buildReferencePerformanceFromSnapshotFile({matches,filePath,trustRegist
   if(!Array.isArray(matches)||!isFrozenPairClock(generatedAt))throw new Error('Explicit complete history and audit clock required');
   const summary=compactReferenceReviewPerformance(buildReferenceReviewPerformance({matches,generatedAt,startDate}));
   if(!summary)throw new Error('Complete reference history failed validation before pairing');
-  const records=new Map();let recordChars=0;
+  // Retain complete attested records losslessly, with only one inflated record
+  // alive at a time. Keep the 32 MiB index and 100000-record admission bounds;
+  // the complete ledger no longer has to fit in a 32 MiB JSON string cache.
+  const {deflateRawSync,inflateRawSync}=require('node:zlib');
+  const records=new Map();let indexBytes=0;
+  const readRecord=hash=>{
+    const row=records.get(hash);if(!row)return undefined;
+    const raw=inflateRawSync(row.compressed,{maxOutputLength:row.bytes});
+    if(raw.length!==row.bytes)throw new Error('REFERENCE_INDEX_RECORD_INVALID');
+    return JSON.parse(raw.toString('utf8'));
+  };
   const first=streamJsonObjectArrays(filePath,{keys:['publicReferenceDecisions'],allowNonArrays:true,onItem:(_key,record)=>{
     if(!record||typeof record.contentHash!=='string'||!/^[a-f0-9]{64}$/.test(record.contentHash)||records.has(record.contentHash)||!attestPublicReferenceDecision(record,record))throw new Error('REFERENCE_INDEX_RECORD_INVALID');
-    recordChars+=JSON.stringify(record).length;
-    if(recordChars>32*1024*1024||records.size>=100000)throw new Error('REFERENCE_DECISION_INDEX_LIMIT');
-    records.set(record.contentHash,record);
+    const raw=Buffer.from(JSON.stringify(record));
+    if(raw.length>32*1024*1024||records.size>=100000)throw new Error('REFERENCE_DECISION_INDEX_LIMIT');
+    const compressed=deflateRawSync(raw);
+    // Account for the hash, Map entry and bounded record metadata too.
+    indexBytes+=compressed.length+256;
+    if(indexBytes>32*1024*1024)throw new Error('REFERENCE_DECISION_INDEX_LIMIT');
+    records.set(record.contentHash,{compressed,bytes:raw.length,requiresEvidence:Boolean(record.evidenceBinding)});
   }});
   const byEvent=new Map(),byReference=new Map(),results=new Map();
   const referenceHash=match=>match?.postMatchReview?.predictionReview?.rows?.find(row=>row.marketType==='BEST'&&row.performanceTrack==='reference')?.frozenVersion?.referenceHash;
   for(const match of matches){const identity=matchIdentity(match);if(identity){const copies=byEvent.get(identity)||[];copies.push(match);byEvent.set(identity,copies);}const hash=referenceHash(match),copies=byReference.get(hash)||[];copies.push(match);byReference.set(hash,copies);}
   const seenEvidence=new Map();
   streamJsonObjectArrays(filePath,{keys:['publicReferenceEvidence'],allowNonArrays:true,expectedBytes:first.bytes,expectedSha256:first.sha256,onItem:(_key,entry)=>{
-    const record=records.get(entry?.referenceHash);if(!record)return; // Original retention ignores raw orphan entries.
+    const record=readRecord(entry?.referenceHash);if(!record)return; // Original retention ignores raw orphan entries.
     if(!verifyPublicReferenceEvidence(entry,record))throw new Error('PUBLIC_REFERENCE_EVIDENCE_BINDING_INVALID');
     const entryHash=digest(entry),previous=seenEvidence.get(entry.referenceHash);
     if(previous&&previous!==entryHash)throw new Error('PUBLIC_REFERENCE_EVIDENCE_BINDING_CONFLICT');
@@ -108,11 +122,11 @@ function buildReferencePerformanceFromSnapshotFile({matches,filePath,trustRegist
     for(const match of byReference.get(entry.referenceHash)||[])results.set(match,auditFrozenReferenceMarket({match,record,entry,trustRegistry,auditAt:generatedAt}));
   }});
   // Never publish partial totals if an unrelated bound record has lost evidence.
-  for(const record of records.values())if(record.evidenceBinding&&!seenEvidence.has(record.contentHash))throw new Error('PUBLIC_REFERENCE_EVIDENCE_BINDING_MISSING');
+  for(const [hash,record]of records)if(record.requiresEvidence&&!seenEvidence.has(hash))throw new Error('PUBLIC_REFERENCE_EVIDENCE_BINDING_MISSING');
   const rows=[];
   for(const copies of byEvent.values()){
     const cohort=buildReferenceReviewPerformance({matches:copies,generatedAt,startDate});if(!cohort.cumulative.settled)continue;
-    const audits=copies.map(match=>results.get(match)||auditFrozenReferenceMarket({match,record:records.get(referenceHash(match)),trustRegistry,auditAt:generatedAt}));
+    const audits=copies.map(match=>results.get(match)||auditFrozenReferenceMarket({match,record:readRecord(referenceHash(match)),trustRegistry,auditAt:generatedAt}));
     const eligible=audits.every(audit=>audit.eligible)&&new Set(audits.filter(audit=>audit.eligible).map(audit=>audit.contentHash)).size<=1;
     const market=['HAD','HHAD','UNKNOWN'].find(pool=>cohort.marketBreakdown[pool].cumulative.settled===1);
     const versionKey=cohort.versionBreakdown.groups.length===1?cohort.versionBreakdown.groups[0].key:'UNKNOWN';

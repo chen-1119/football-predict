@@ -7,6 +7,7 @@ const { buildPublicReferenceArchive, buildPublicReferenceIndex, SOURCE_ID, INDEX
 const { isFileJsonPayload, fileJsonPayloadChunks } = require("../scripts/postgresFileJsonPayload.cjs");
 const { spoolGenerationRows } = require("../scripts/postgresGenerationSource.cjs");
 const { fixture, trust, auditAt } = require("../scripts/verifyPublicReferencePairs.cjs");
+const { buildReferencePerformanceFromSnapshotFile, buildReferencePerformanceWithPairs } = require("../server/referencePairedBaseline.cjs");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "football-stream-reference-test-")); let sequence = 0;
 const sha = value => crypto.createHash("sha256").update(value).digest("hex");
 const payload = fixtures => ({ updatedAt: auditAt, retentionDays: 31, rows: [],
@@ -18,6 +19,24 @@ function context(value) {
   return { generationDir: directory, manifest: { files: [{ path: "prediction-snapshots.json", bytes: Buffer.byteLength(text), sha256: sha(text) }] } };
 }
 after(() => { trust.cleanup(); assert.equal(path.dirname(root), fs.realpathSync(os.tmpdir())); fs.rmSync(root, { recursive: true, force: true }); });
+test("complete paired history larger than the old 32 MiB JSON index preserves exact totals and rejects missing unrelated evidence", () => {
+  const fixtures=Array.from({length:33},(_,index)=>fixture({id:String(887000+index)}));
+  for(const value of fixtures)value.record.retainedDiagnosticPadding="x".repeat(1024*1024);
+  const input=payload(fixtures),matches=fixtures.map(value=>value.match),options={matches,trustRegistry:trust.registry,generatedAt:auditAt};
+  assert.ok(Buffer.byteLength(JSON.stringify(input.publicReferenceDecisions))>32*1024*1024);
+  const c=context(input),filePath=path.join(c.generationDir,"prediction-snapshots.json");
+  const expected=buildReferencePerformanceWithPairs({...options,snapshotPayload:input});
+  assert.deepEqual(buildReferencePerformanceFromSnapshotFile({...options,filePath}),expected);
+  const missing={...input,publicReferenceEvidence:input.publicReferenceEvidence.slice(1)};
+  fs.writeFileSync(filePath,JSON.stringify(missing));
+  assert.throws(()=>buildReferencePerformanceFromSnapshotFile({...options,matches:matches.slice(1),filePath}),/PUBLIC_REFERENCE_EVIDENCE_BINDING_MISSING/);
+});
+test("incompressible reference ledger still fails the unchanged bounded index admission", () => {
+  const fixtures=Array.from({length:34},(_,index)=>fixture({id:String(887100+index)}));
+  for(const value of fixtures)value.record.retainedDiagnosticPadding=crypto.randomBytes(1024*1024).toString("base64");
+  const c=context(payload(fixtures)),filePath=path.join(c.generationDir,"prediction-snapshots.json");
+  assert.throws(()=>buildReferencePerformanceFromSnapshotFile({matches:fixtures.map(value=>value.match),filePath,trustRegistry:trust.registry,generatedAt:auditAt}),/REFERENCE_DECISION_INDEX_LIMIT/);
+});
 test("streamed archive and every odd/even Merkle shard preserve old JSON bytes including evidence order and duplicate retention", async () => {
   for (const fixtures of [[], [fixture({ id: "888001" })], [fixture({ id: "888002" }), fixture({ id: "888003" }), fixture({ id: "888004" })]]) {
     const input = payload(fixtures); input.publicReferenceEvidence.reverse();
