@@ -32,7 +32,8 @@ LockPersonality=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
 MemoryMax=512M
-TasksMax=16
+# Listener, root Node and runuser/PG Node, including crypto/libuv threads.
+TasksMax=32
 
 [Install]
 WantedBy=multi-user.target

@@ -183,6 +183,7 @@ const verifySportteryFastResultLane = readText("scripts/verifySportteryFastResul
 const verifySportteryRelayDualFile = readText("scripts/verifySportteryRelayDualFile.cjs");
 const verifySportteryRelayDualLaneServer = readText("scripts/verifySportteryRelayDualLaneServer.cjs");
 const createReleaseBundle = readText("scripts/createReleaseBundle.cjs");
+const releaseModelEvaluationInput = readText("scripts/releaseModelEvaluationInput.cjs");
 const releaseWorkspaceFreshness = readText("scripts/releaseWorkspaceFreshness.cjs");
 const verifyReleaseBundleSafety = readText("scripts/verifyReleaseBundleSafety.cjs");
 const createOfflineReleaseKit = readText("scripts/createOfflineReleaseKit.cjs");
@@ -2620,11 +2621,22 @@ const readPlanSqliteStatus = async () => {
     "scripts/verifyCandidateProspectiveTemperatureNeutralizationSuite.cjs",
     "public/data/model-evaluation.json",
     "modelEvaluationArtifact",
+    'require("./releaseModelEvaluationInput.cjs")',
+    "inspectModelEvaluationFile(path.join(rootDir, MODEL_EVALUATION_ENTRY))",
+    "if (!admittedModelEvaluation.ok) throw",
+    "EXPECTED_MODEL_EVALUATION_VERSION",
+    "EXPECTED_WALK_FORWARD_VERSION",
+    "EXPECTED_WALK_FORWARD_PROTOCOL",
+    "scripts/compactPublicOddsHistory.cjs",
+    "deploy/light-server/release-from-bundle.sh"
+  ]) && hasAll(releaseModelEvaluationInput, [
+    "public/data/model-evaluation.json",
     "rolling-backtest-v19",
     "walk-forward-promotion-validation-v3",
     "nested-expanding-window-candidate-selection-v2",
-    "scripts/compactPublicOddsHistory.cjs",
-    "deploy/light-server/release-from-bundle.sh"
+    "parsed.version!==EXPECTED_MODEL_EVALUATION_VERSION",
+    "parsed.walkForwardValidation?.version!==EXPECTED_WALK_FORWARD_VERSION",
+    "parsed.walkForwardValidation?.protocolVersion!==EXPECTED_WALK_FORWARD_PROTOCOL"
   ]) && hasAll(releaseWorkspaceFreshness, [
     "function listReleaseRootEntries(root)",
     "name !== \"outputs\""

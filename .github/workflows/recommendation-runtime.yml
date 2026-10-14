@@ -211,7 +211,7 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - name: Normal code serving and signed repair boundaries
-        run: node --test tests/normal-code-serving.test.cjs tests/code-data-release.test.cjs tests/staged-code-release.test.cjs tests/committed-generation-recovery-continuation.test.cjs
+        run: node --test tests/release-model-evaluation-input.test.cjs tests/normal-code-serving.test.cjs tests/code-data-release.test.cjs tests/staged-code-release.test.cjs tests/committed-generation-recovery-continuation.test.cjs
       - name: Authenticated immutable research archive reads
         run: node --test tests/research-archive-read.test.cjs tests/reviewed-analysis.test.cjs
       - name: Native PostgreSQL immutable research archive reads
