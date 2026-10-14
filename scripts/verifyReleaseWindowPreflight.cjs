@@ -173,6 +173,13 @@ function runCreatePrefix(source, options = {}) {
         return { status: 0 };
       } };
       if (name === "./releaseSigning.cjs") return signing;
+      if (name === "./releaseModelEvaluationInput.cjs") return {
+        ...require("./releaseModelEvaluationInput.cjs"),
+        inspectModelEvaluationFile: file => {
+          assert.equal(file, "/fixture/public/data/model-evaluation.json");
+          return options.modelInputRejected ? {ok:false,error:"fixture model input missing"} : {ok:true,sha256:"a".repeat(64)};
+        },
+      };
       if (name === "./validateNativeReleasePolicy.cjs") return { readPolicy: file => {
         assert.equal(file, "/fixture/deploy/light-server/native-release-policy.json"); calls.push("native-policy");
         if (options.nativeRejected) throw new Error("fixture native bootstrap not accepted"); return { ok: true };
@@ -501,6 +508,13 @@ function verifyReleaseWindowPreflight() {
     assert.equal(rejected.ok, false);
     assert.deepEqual(rejected.calls, ["sequence-preflight", "worker", "window", "archive", "frontend-evidence"]);
     assert.match(rejected.error, /Frontend evidence semantics preflight failed/);
+  });
+  check("missing model input stops the real creator before verifier children, signing, sequence and build", () => {
+    const rejected=runCreatePrefix(create,{modelInputRejected:true});
+    assert.equal(rejected.ok,false);assert.deepEqual(rejected.calls,["sequence-preflight","worker","window","archive"]);
+    assert.match(rejected.error,/model evaluation input rejected before sequence reservation/);
+    const workerRejected=runCreatePrefix(create,{modelInputRejected:true,workerOpen:false});
+    assert.deepEqual(workerRejected.calls,["sequence-preflight","worker"]);assert.match(workerRejected.error,/worker-latest-official-cycle-failed/);
   });
   check("actual online create stops at a failed or unavailable worker before window and all build side effects", () => {
     for (const options of [{ workerOpen: false }, { workerThrows: true }]) {

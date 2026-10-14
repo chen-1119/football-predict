@@ -53,8 +53,6 @@ const { validateSignedArchiveSourceEvidence } = require("./releaseArchiveSourceI
 const rootDir = path.resolve(__dirname, "..");
 const { MODEL_EVALUATION_ENTRY, EXPECTED_MODEL_EVALUATION_VERSION, EXPECTED_WALK_FORWARD_VERSION,
   EXPECTED_WALK_FORWARD_PROTOCOL, inspectModelEvaluationFile } = require("./releaseModelEvaluationInput.cjs");
-const admittedModelEvaluation = inspectModelEvaluationFile(path.join(rootDir, MODEL_EVALUATION_ENTRY));
-if (!admittedModelEvaluation.ok) throw new Error(`required model evaluation input rejected before sequence reservation: ${admittedModelEvaluation.error}`);
 const nativePolicyPath = path.join(rootDir, "deploy/light-server/native-release-policy.json");
 const nativePreparation = fs.existsSync(nativePolicyPath);
 if (nativePreparation) require("./validateNativeReleasePolicy.cjs").readPolicy(nativePolicyPath);
@@ -83,6 +81,10 @@ if (process.env.RELEASE_DEPLOY_KEY) {
   console.error(JSON.stringify({ phase: "window-preflight-before-build", windowChecked: false,
     reason: "offline-bundle-creation", readyToCutover: false }));
 }
+// Existing live worker/window/archive refusals retain their original priority.
+// This local input gate still precedes verifier children, signing and sequence.
+const admittedModelEvaluation = inspectModelEvaluationFile(path.join(rootDir, MODEL_EVALUATION_ENTRY));
+if (!admittedModelEvaluation.ok) throw new Error(`required model evaluation input rejected before sequence reservation: ${admittedModelEvaluation.error}`);
 // This source-level production gate also runs on the server. Catch a failing
 // frontend evidence contract before reserving a sequence or uploading a bundle.
 const frontendEvidenceSemantics = spawnSync(process.execPath, ["scripts/verifyFrontendEvidenceSemantics.cjs"], {
