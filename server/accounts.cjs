@@ -143,6 +143,14 @@ function createAccounts({ pool, readMatch, readDecision, readLegacyCode, options
     if (!auth || (role && ![].concat(role).includes(auth.user.role)) || (entitlement && !auth.access.active)) return null;
     return auth;
   }
+  async function authorizeMutation(req, { role } = {}) {
+    checkOrigin(req);
+    const auth = await authenticate(req);
+    if (!auth) fail(401, 'authentication_required');
+    if (role && ![].concat(role).includes(auth.user.role)) fail(403, 'insufficient_role');
+    checkCsrf(req, true);
+    return auth;
+  }
   const anonymousCsrf = req => {
     const raw = cookies(req)[csrfName] || '', [nonce, signature] = raw.split('.');
     if (/^[a-zA-Z0-9_-]{43}$/.test(nonce || '') && safeEqual(signature, mac('anonymous:' + nonce))) return { token: nonce, setCookies: [] };
@@ -424,6 +432,6 @@ function createAccounts({ pool, readMatch, readDecision, readLegacyCode, options
     }
     return true;
   }
-  return { handle, authenticate, authorize, hasSessionCookie, authMethods, cookieNames: { session: sessionName, csrf: csrfName } };
+  return { handle, authenticate, authorize, authorizeMutation, hasSessionCookie, authMethods, cookieNames: { session: sessionName, csrf: csrfName } };
 }
 module.exports = { createAccounts, AccountError, normalizeUsername, validatePassword, hashPassword, verifyPassword };

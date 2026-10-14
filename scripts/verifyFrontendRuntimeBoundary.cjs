@@ -23,7 +23,7 @@ function verifyFrontendRuntimeBoundary() {
         if (["node_modules", ".git", ".codex-tmp", "outputs"].includes(name)) continue;
         copySource(path.join(from, name), path.join(to, name));
       }
-    } else if (stat.isFile() && /\.(cjs|js|mjs|ts|tsx|json|css|service|sh)$/.test(from) && stat.size <= 8 * 1024 * 1024) fs.copyFileSync(from, to);
+    } else if (stat.isFile() && /\.(cjs|js|mjs|ts|tsx|json|css|service|sh|py)$/.test(from) && stat.size <= 8 * 1024 * 1024) fs.copyFileSync(from, to);
   };
   const input = root => {
     const inventory = captureReleaseSourceInventory(root);
@@ -51,6 +51,8 @@ function verifyFrontendRuntimeBoundary() {
       assert.ok(observed.files.some(row => row.path === "scripts/syncTeamEvidence.cjs"));
       assert.ok(observed.files.some(row => row.path === "scripts/teamEvidenceStore.cjs"));
       assert.ok(observed.files.some(row => row.path === "scripts/teamEvidenceSources.cjs"));
+      for (const file of ["scripts/researchSocketServer.py", "scripts/researchSocketPeer.py", "scripts/researchReleaseBroker.cjs", "scripts/researchBrokerWorker.cjs", "server/researchReviewedRevision.cjs"])
+        assert.ok(observed.files.some(row => row.path === file), `missing research runtime closure: ${file}`);
       assert.ok(observed.files.some(row => row.path === "scripts/expandedLeagueHistoryParser.cjs"));
       assert.equal(observed.files.some(row => row.path === "scripts/collectExpandedLeagueHistory.cjs"), false);
       for (const file of ["scripts/syncDailyPrematchApi.cjs", "scripts/syncApiFootballData.cjs", "scripts/dailyFeaturedComboLedger.cjs", "scripts/runMarketCollector.cjs", "scripts/runRecommendationSettlement.cjs"])
@@ -67,6 +69,17 @@ function verifyFrontendRuntimeBoundary() {
       try { action(input(candidateRoot)); }
       finally { if (prior) fs.writeFileSync(target, prior); else fs.unlinkSync(target); }
     };
+    check("fixed research unit, Python peer and broker command cannot drift through the browser boundary", () => {
+      for (const file of ["deploy/light-server/football-research-broker.service", "scripts/researchSocketServer.py", "scripts/researchSocketPeer.py", "server/researchBrokerDependencies.cjs"])
+        changed(file, text => text + "\n# unreviewed change\n", candidate => {
+          const result = inspectFrontendRuntimeBoundary(candidate);
+          assert.equal(result.ok, false); assert.ok(result.blockers.some(x => x.includes("runtime-research-")));
+        });
+      changed("scripts/researchReleaseBroker.cjs", text => text.replace("'/usr/sbin/runuser'", "'/bin/sh'"), candidate => {
+        const result = inspectFrontendRuntimeBoundary(candidate);
+        assert.equal(result.ok, false); assert.ok(result.blockers.some(x => x.includes("unreviewed-process-command")));
+      });
+    });
     const rejected = candidate => {
       const result = compareFrontendRuntimeBoundary({ baseline, candidate });
       assert.equal(result.ok, false, JSON.stringify(result));

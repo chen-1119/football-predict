@@ -1,6 +1,7 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict'), crypto = require('node:crypto');
 const { createResearchArchiveRead, createResearchArchiveHandler, day, publicationKey } = require('../server/researchArchiveRead.cjs');
+const reportStore = require('../server/researchReportStore.cjs');
 const draft = { version: 3, businessDate: '2026-10-13', originalArchive: '球队资料' };
 const key = 'reviewed-analysis-2026-10-13-batch-' + require('../scripts/recommendationPlatform/reviewedAnalysis.cjs').hash(draft), at = '2026-10-13T14:00:00.000Z';
 const row = (k, payload) => {
@@ -8,15 +9,19 @@ const row = (k, payload) => {
   return { artifact_key: k, artifact_version: 'test-v1', generated_at: at, updated_at: at,
     payload_json: json, payload_sha256: crypto.createHash('sha256').update(json).digest('hex'), payload_bytes: Buffer.byteLength(json) };
 };
-function fixture({ ack = true, readonly = 'on', corrupt = false, bytes, actualBytes, replayError = false, readOfficial, trustRegistry, now = at } = {}) {
+function fixture({ ack = true, readonly = 'on', corrupt = false, bytes, actualBytes, replayError = false, readOfficial, trustRegistry, now = at, reports = [], reportMeta } = {}) {
   const records = new Map([[key, row(key, { version: 'reviewed-analysis-freeze-v1', draft, record: { businessDate: draft.businessDate } })]]);
   if (ack) records.set(key + '-ack', row(key + '-ack', { recordKey: key }));
+  for (const report of reports) records.set(report.artifact_key, report);
   if (corrupt) records.get(key).payload_json += ' ';
-  const queries = []; let released = 0, replayed = 0;
+  const queries = [], queryArgs = []; let released = 0, replayed = 0;
   const client = {
     async query(sql, args) {
-      queries.push(sql);
+      queries.push(sql); queryArgs.push(args);
       if (sql.startsWith('SELECT clock_timestamp')) return { rows: [{ now, readonly }] };
+      if (sql.includes('artifact_key=ANY($1::text[])')) return { rows: reportMeta || args[0].filter(k => records.has(k)).map(k => {
+        const r = records.get(k); return { ...r, actual_bytes: Buffer.byteLength(r.payload_json) };
+      }) };
       if (sql.startsWith('SELECT artifact_key,payload_sha256')) return { rows: [records.get(key)] };
       if (sql.startsWith('SELECT payload_bytes')) return { rows: records.has(args[0]) ? [{ payload_bytes: bytes ?? records.get(args[0]).payload_bytes, actual_bytes: actualBytes ?? Buffer.byteLength(records.get(args[0]).payload_json) }] : [] };
       if (sql.includes('payload::text')) return { rows: records.has(args[0]) ? [records.get(args[0])] : [] };
@@ -26,7 +31,7 @@ function fixture({ ack = true, readonly = 'on', corrupt = false, bytes, actualBy
   const reader = createResearchArchiveRead({ pool: { connect: async () => client }, readOfficial, trustRegistry, replay: async (c, k, clock) => {
     assert.equal(c, client); assert.equal(k, key); assert.equal(clock, at); replayed++; if (replayError) throw Error('signature mismatch');
   } });
-  return { reader, records, queries, released: () => released, replayed: () => replayed };
+  return { reader, records, queries, queryArgs, released: () => released, replayed: () => replayed };
 }
 test('invalid dates and arbitrary artifact keys are rejected', () => {
   for (const value of ['2026-02-30', '2026-1-1', '../secrets', '', null]) assert.throws(() => day(value));
@@ -56,6 +61,73 @@ test('day index explicitly requires further verification', async () => {
   const r = await fixture().reader.day('2026-10-13');
   assert.equal(r.existingBatchCount, 1); assert.equal(r.publications[0].verified, false);
   assert.equal(r.publications[0].state, 'record-and-ack-present-unverified');
+});
+
+function savedReport(kind = reportStore.KINDS[0], date = draft.businessDate) {
+  const k = reportStore.reportKey(date, kind);
+  return { ...row(k, { version: reportStore.VERSION, businessDate: date, reportKind: kind,
+    generatedAt: at, contents: { note: '独立报告；不是推荐采用证明' } }), artifact_version: reportStore.VERSION };
+}
+
+test('day index discovers the exact five scheduled slots without mixing publication counts', async () => {
+  const r = savedReport(), otherDay = savedReport(reportStore.KINDS[0], '2026-10-12');
+  const f = fixture({ reports: [r, otherDay] }), result = await f.reader.day(draft.businessDate);
+  assert.equal(result.existingBatchCount, 1); assert.equal(result.existingReportCount, 1);
+  assert.equal(result.reportSlots.length, 5); assert.equal(result.absenceDoesNotAuthorizeWriteRetry, true);
+  const first = result.reportSlots[0];
+  assert.equal(first.key, r.artifact_key); assert.equal(first.state, 'report-archived');
+  assert.equal(first.payloadSha256, r.payload_sha256); assert.equal(first.payloadBytes, r.payload_bytes);
+  assert.equal(first.generatedAt, at); assert.equal(first.receivedAt, at);
+  assert.equal(first.archiveIntegrityVerified, true); assert.equal(first.publicationVerified, false);
+  assert.equal(first.recommendationEligibilityVerified, false); assert.equal(first.verificationScope, 'archive-byte-integrity-only');
+  assert.equal(first.originalJson, undefined);
+  for (const missing of result.reportSlots.slice(1)) {
+    assert.equal(missing.state, 'not-observed'); assert.equal(missing.archiveIntegrityVerified, false);
+  }
+  const sql = f.queries.findIndex(q => q.includes('artifact_key=ANY($1::text[])'));
+  assert.match(f.queries[sql], /LIMIT 6/);
+  assert.deepEqual(f.queryArgs[sql], [reportStore.KINDS.map(k => reportStore.reportKey(draft.businessDate, k))]);
+  assert.equal(f.queries.at(-1), 'COMMIT'); assert.equal(result.productionWrites, 0);
+});
+
+test('all scheduled reports are independently hashed within the same readonly snapshot', async () => {
+  const reports = reportStore.KINDS.map(k => savedReport(k));
+  const f = fixture({ reports }), result = await f.reader.day(draft.businessDate);
+  assert.equal(result.existingReportCount, 5);
+  assert.ok(result.reportSlots.every(r => r.archiveIntegrityVerified && !r.publicationVerified));
+  const readKeys = f.queries.flatMap((q, i) => q.includes('AS payload_json') ? f.queryArgs[i] : []);
+  for (const r of reports) assert.equal(readKeys.filter(k => k === r.artifact_key).length, 1);
+});
+
+for (const [name, change, code, loadsPayload] of [
+  ['wrong version', r => { r.artifact_version = 'unreviewed-v1'; }, 'REPORT_INDEX_IDENTITY', false],
+  ['oversized bytes', r => { r.payload_bytes = reportStore.MAX_BYTES + 1; }, 'REPORT_INDEX_BYTE_BOUND', false],
+  ['byte mismatch', r => { r.payload_bytes++; }, 'REPORT_INDEX_BYTE_BOUND', false],
+  ['changed JSON', r => { r.payload_json = r.payload_json.replace('独立报告', '修改报告'); }, 'REPORT_HASH', true],
+  ['future receipt', r => { r.updated_at = '2026-10-13T14:00:01.000Z'; }, 'REPORT_INDEX_FUTURE_CLOCK', true],
+  ['receipt before generation', r => { r.updated_at = '2026-10-13T13:59:59.000Z'; }, 'REPORT_STORED_CLOCK', true],
+  ['transplanted date', r => { const k = r.artifact_key; Object.assign(r, savedReport(reportStore.KINDS[0], '2026-10-12'), { artifact_key: k }); }, 'REPORT_STORED_IDENTITY', true],
+]) {
+  test('report index refuses ' + name + ' instead of treating the slot as missing', async () => {
+    const r = savedReport(); change(r); const f = fixture({ reports: [r] });
+    await assert.rejects(f.reader.day(draft.businessDate), { code });
+    assert.equal(f.queries.at(-1), 'ROLLBACK'); assert.equal(f.released(), 1);
+    const readKeys = f.queries.flatMap((q, i) => q.includes('AS payload_json') ? f.queryArgs[i] : []);
+    assert.equal(readKeys.includes(r.artifact_key), loadsPayload);
+  });
+}
+
+test('report index rejects count overflow and unexpected or duplicate identities', async () => {
+  const r = savedReport(), meta = { ...r, actual_bytes: r.payload_bytes };
+  for (const [reportMeta, code] of [
+    [Array(6).fill(meta), 'REPORT_INDEX_COUNT_BOUND'],
+    [[{ ...meta, artifact_key: 'private-model-registry' }], 'REPORT_INDEX_IDENTITY'],
+    [[meta, meta], 'REPORT_INDEX_IDENTITY'],
+  ]) {
+    const f = fixture({ reports: [r], reportMeta });
+    await assert.rejects(f.reader.day(draft.businessDate), { code });
+    assert.equal(f.queries.at(-1), 'ROLLBACK');
+  }
 });
 test('copied valid archive under a different batch identity cannot be accepted', async () => {
   const f=fixture();

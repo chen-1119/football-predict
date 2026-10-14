@@ -6,6 +6,39 @@ on:
       - 'server/publicProduct.cjs'
       - 'server/index.cjs'
       - 'server/researchArchiveRead.cjs'
+      - 'server/researchReportStore.cjs'
+      - 'server/researchWriteService.cjs'
+      - 'server/researchWriteHttp.cjs'
+      - 'server/researchHttp.cjs'
+      - 'tests/research-http-routing.test.cjs'
+      - 'server/researchBrokerClient.cjs'
+      - 'server/researchBrokerJournal.cjs'
+      - 'server/researchBrokerDependencies.cjs'
+      - 'scripts/installResearchBroker.cjs'
+      - 'tests/research-broker-dependencies.test.cjs'
+      - 'tests/research-broker-installer.test.cjs'
+      - 'server/researchRevisionPolicy.cjs'
+      - 'server/researchReviewedRevision.cjs'
+      - 'tests/research-reviewed-revision.test.cjs'
+      - 'scripts/verifyResearchRevisionPostgres.cjs'
+      - 'tests/research-broker-journal.test.cjs'
+      - 'tests/research-revision-policy.test.cjs'
+      - 'scripts/researchSocketServer.py'
+      - 'scripts/researchBrokerPlatform.py'
+      - 'scripts/verifyResearchSocketServer.py'
+      - 'deploy/light-server/football-research-broker.service'
+      - 'scripts/researchSocketPeer.py'
+      - 'scripts/verifyResearchSocketPeer.py'
+      - 'tests/research-broker-client.test.cjs'
+      - 'server/researchRequestBody.cjs'
+      - 'tests/research-write-http.test.cjs'
+      - 'server/researchReleaseLock.cjs'
+      - 'scripts/researchBrokerWorker.cjs'
+      - 'scripts/researchReleaseBroker.cjs'
+      - 'scripts/verifyResearchReleaseLock.cjs'
+      - 'tests/research-write-service.test.cjs'
+      - 'tests/research-report-store.test.cjs'
+      - 'scripts/verifyResearchReportPostgres.cjs'
       - 'tests/research-archive-read.test.cjs'
       - 'scripts/verifyResearchArchivePostgres.cjs'
       - 'server/recommendationReviewPage.cjs'
@@ -185,6 +218,22 @@ jobs:
         run: node scripts/verifyResearchArchivePostgres.cjs
         env:
           RESEARCH_ARCHIVE_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
+      - name: Immutable report archive storage and unknown commit recovery
+        run: node --test tests/research-report-store.test.cjs tests/research-write-service.test.cjs tests/research-write-http.test.cjs tests/research-http-routing.test.cjs tests/research-broker-client.test.cjs tests/research-broker-journal.test.cjs tests/research-revision-policy.test.cjs tests/research-reviewed-revision.test.cjs tests/research-broker-dependencies.test.cjs tests/research-broker-installer.test.cjs
+      - name: Kernel Unix socket peer identity in isolated Linux fixtures
+        run: python3 scripts/verifyResearchSocketPeer.py
+      - name: Root socket bounded frames and process boundary fixtures
+        run: python3 scripts/verifyResearchSocketServer.py
+      - name: Real Linux release-lock contention and child lifetime
+        run: node scripts/verifyResearchReleaseLock.cjs
+      - name: Native PostgreSQL report archive concurrency
+        run: node scripts/verifyResearchReportPostgres.cjs
+        env:
+          RESEARCH_REPORT_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
+      - name: Native PostgreSQL signed review revision chain
+        run: node scripts/verifyResearchRevisionPostgres.cjs
+        env:
+          RESEARCH_REPORT_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Controlled native release and rollback contracts
         run: node scripts/verifyReleaseArchivePreflight.cjs && node scripts/verifyReleaseWindowPreflight.cjs && node scripts/verifyReleaseStoragePreflight.cjs && node scripts/verifyNativeReleasePipeline.cjs && node scripts/verifyNativeReleaseJournal.cjs && node scripts/verifyNativeReleaseRecovery.cjs && node scripts/verifyReleaseArchiveSuccessorContracts.cjs
       - run: node scripts/verifyProductionPlanSourceContracts.cjs

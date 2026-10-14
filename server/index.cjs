@@ -11505,16 +11505,17 @@ const buildPublicProduct = async () => {
   try{return await publicProductInflight;}finally{publicProductInflight=null;}
 };
 const researchArchiveModule = require('./researchArchiveRead.cjs');
-const researchArchiveHandler = researchArchiveModule.createResearchArchiveHandler({
-  authenticate: req => accountSystem.authenticate(req),
+const researchHttpHandler = require('./researchHttp.cjs').createResearchHttp({
+  accounts: accountSystem,
   reader: postgresPool ? researchArchiveModule.createResearchArchiveRead({
     pool: postgresPool,
     replay: require('../scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs').readPublication,
   }) : null,
+  submit: postgresPool ? require('./researchBrokerClient.cjs').submitResearchRequest : null,
 });
 const handleApi = async (req, res, url) => {
   if (await accountSystem.handle(req, res, url)) return;
-  if (await researchArchiveHandler(req, res, url)) return;
+  if (await researchHttpHandler(req, res, url)) return;
   if (req.method === "OPTIONS") return send(res, 204, "");
 
   if (url.pathname === "/api/public/overview" || /^\/api\/public\/matches\/[^/]+$/.test(url.pathname)) {

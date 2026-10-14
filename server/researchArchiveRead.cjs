@@ -4,6 +4,7 @@
 const { verifyRow } = require('../scripts/postgresPrivateModelArtifactStore.cjs');
 const { SELECT } = require('../scripts/leagueBaselineRegistry.cjs');
 const { hash } = require('../scripts/recommendationPlatform/reviewedAnalysis.cjs');
+const reports = require('./researchReportStore.cjs');
 const MAX = 8 * 1024 * 1024;
 const fail = code => { throw Object.assign(new Error(code), { code }); };
 function day(value) {
@@ -26,6 +27,37 @@ async function boundedRow(client, key) {
   const rows = (await client.query(SELECT, [key])).rows;
   if (rows.length !== 1) fail('ARCHIVE_IDENTITY_CONFLICT');
   return verifyRow(rows[0], key, MAX);
+}
+async function reportIndex(client, date, observedAt) {
+  const keys = reports.KINDS.map(kind => reports.reportKey(date, kind));
+  // Exact five slot keys only. A wrong version occupying a slot must refuse the
+  // read rather than look absent and invite a replacement write.
+  const rows = (await client.query(`SELECT artifact_key,artifact_version,payload_sha256,payload_bytes,
+    octet_length(payload::text) AS actual_bytes FROM football.private_model_artifacts
+    WHERE artifact_key=ANY($1::text[]) ORDER BY artifact_key LIMIT 6`, [keys])).rows;
+  if (rows.length > keys.length) fail('REPORT_INDEX_COUNT_BOUND');
+  const saved = new Map();
+  for (const meta of rows) {
+    const key = meta.artifact_key, bytes = Number(meta.payload_bytes);
+    if (!keys.includes(key) || saved.has(key) || meta.artifact_version !== reports.VERSION)
+      fail('REPORT_INDEX_IDENTITY');
+    if (!Number.isSafeInteger(bytes) || bytes < 2 || bytes > reports.MAX_BYTES
+      || Number(meta.actual_bytes) !== bytes) fail('REPORT_INDEX_BYTE_BOUND');
+    const full = (await client.query(SELECT, [key])).rows;
+    if (full.length !== 1) fail('REPORT_INDEX_IDENTITY');
+    const original = reports.verifyStored(full[0], key);
+    if (original.sha256 !== meta.payload_sha256 || original.bytes !== bytes)
+      fail('REPORT_INDEX_IDENTITY');
+    if (Date.parse(original.receivedAt) > Date.parse(observedAt)) fail('REPORT_INDEX_FUTURE_CLOCK');
+    saved.set(key, { state: 'report-archived', payloadSha256: original.sha256,
+      payloadBytes: original.bytes, generatedAt: original.generatedAt, receivedAt: original.receivedAt,
+      archiveIntegrityVerified: true, verificationScope: 'archive-byte-integrity-only',
+      recommendationEligibilityVerified: false, publicationVerified: false });
+  }
+  return { reportSlots: reports.KINDS.map(reportKind => {
+    const key = reports.reportKey(date, reportKind);
+    return { reportKind, key, ...(saved.get(key) || { state: 'not-observed', archiveIntegrityVerified: false }) };
+  }), existingReportCount: saved.size, absenceDoesNotAuthorizeWriteRetry: true };
 }
 function createResearchArchiveRead({ pool, replay, readOfficial, trustRegistry } = {}) {
   if (!pool?.connect || typeof replay !== 'function') throw new Error('Archive reader dependencies required');
@@ -73,7 +105,7 @@ function createResearchArchiveRead({ pool, replay, readOfficial, trustRegistry }
     },
     day(value) {
       const date = day(value);
-      return snapshot(async client => {
+      return snapshot(async (client, observedAt) => {
         const rows = (await client.query(`SELECT artifact_key,payload_sha256,payload_bytes FROM football.private_model_artifacts
           WHERE artifact_version=$1 AND (artifact_key=$2 OR artifact_key LIKE $3) ORDER BY artifact_key LIMIT 33`,
         ['reviewed-analysis-freeze-v1', 'reviewed-analysis-' + date + '-selected-two', 'reviewed-analysis-' + date + '-batch-%'])).rows;
@@ -87,7 +119,8 @@ function createResearchArchiveRead({ pool, replay, readOfficial, trustRegistry }
             state: ack ? 'record-and-ack-present-unverified' : 'record-present-ack-missing',
             verified: false, ackSha256: ack?.payloadSha256 || null });
         }
-        return { businessDate: date, publications, existingBatchCount: publications.length };
+        return { businessDate: date, publications, existingBatchCount: publications.length,
+          ...await reportIndex(client, date, observedAt) };
       });
     },
     artifact(value) {

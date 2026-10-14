@@ -34,10 +34,27 @@ const EXTERNAL_UNITS = deepFreeze({
     argv: ["/usr/bin/bash", "/usr/local/sbin/football-postgres-backup-v2"], source: "deploy/light-server/football-postgres-backup.sh" },
   "football-postgres-cos-upload.service": { executable: "/usr/local/sbin/football-postgres-cos-upload", source: "deploy/light-server/football-postgres-cos-upload.sh" },
 });
+// Separate signed research component. These exact Python source bytes are
+// opaque to the JS parser; its fixed Node children still enter the ordinary
+// complete module/command graph below. This grants no installer/write scope.
+const RESEARCH_COMPONENT = deepFreeze({
+  unit: "football-research-broker.service",
+  argv: "/usr/bin/python3.12 -I -S -B /usr/local/libexec/football-research-broker/researchSocketServer.py",
+  unitSha: "6c3b920c533cb97b03c93deee8ed5219885b8e1ec34bb4d76c38781e6f17092a",
+  sources: {
+    "scripts/researchSocketServer.py": "5e5203536eca56413bfab5cad5e9be319c66c04359db7df83ef1a8eff9be5d0c",
+    "scripts/researchSocketPeer.py": "9019356aa8a63c0683d7c82435210528d20e943630e3091fc483d65631138786",
+    "server/researchBrokerDependencies.cjs": "a258fccda1cebd44708c6dbb7516f8ea405a292ce5a81b8d057dc37bbe3d9552",
+  },
+  entries: ["scripts/researchReleaseBroker.cjs", "scripts/researchBrokerWorker.cjs", "deploy/light-server/collector-trust-registry.json"],
+  sourceResolve: "require.resolve(path.resolve(path.dirname(file), m[1]))",
+  resolveFunctionSha: "24fc119fc9a69c67ccaf259712603505ef1616af281ce8d952bdad53787c1980",
+});
 // These are existing operational command adapters, not permission to add a new
 // arbitrary command. Their enclosing function source must remain exact, and
 // baseline/candidate package and entire reachable-source bytes must also match.
 const COMMAND_FUNCTIONS = deepFreeze({
+  "scripts/researchReleaseBroker.cjs": ["1345959196fcb3a963f02396c8c11891bf5f6e82be0447ec33c507d7f2c558dc"],
   "scripts/syncDailyPrematchApi.cjs": ["91da78aabb2c925254c42abec031be710d4f9a5316a2ba059533b60189b3bedf"],
   "server/index.cjs": ["209dac00faf2eb81c7c6348cacd5c273dd31dfc8ef913d9f77e0cf2fd4a621b6"],
   "server/relayFastResultWatcher.cjs": ["dbea20508195f9cafdb058ff0e4242448cac19a914c163ef961cfa5d16243567"],
@@ -98,6 +115,7 @@ const UNIT_SOURCE_HASHES = Object.freeze({
   "football-sync-worker.service": "06249e71449df12b4609ba0a66497b74c2810653e805417153b57b6a4e33ffb2",
 });
 const POLICY_HASH = digest({ version: VERSION, parser: PARSER, entrypoints: ENTRYPOINTS, externalUnits: EXTERNAL_UNITS,
+  researchComponent: RESEARCH_COMPONENT,
   unitSourceHashes: UNIT_SOURCE_HASHES,
   commandFunctions: COMMAND_FUNCTIONS, commandCallers: COMMAND_CALLER_FUNCTIONS, commandParameterAlias: PROCESS_PARAMETER_ALIAS,
   dynamicImport: SPORTTERY_IMPORT, worker: PUBLICATION_WORKER, dailyPrematchChild: DAILY_PREMATCH_CHILD, uiPaths: FRONTEND_PATHS,
@@ -195,8 +213,15 @@ function inspectFrontendRuntimeBoundary(input) {
     const queue = [];
     for (const row of inventory.entries) if (/^deploy\/light-server\/[^/]+\.service$/.test(row.path)) {
       const name = path.posix.basename(row.path);
-      if (!Object.hasOwn(ENTRYPOINTS, name) && !Object.hasOwn(EXTERNAL_UNITS, name)) throw new Error(`unreviewed-systemd-entrypoint:${name}`);
+      if (!Object.hasOwn(ENTRYPOINTS, name) && !Object.hasOwn(EXTERNAL_UNITS, name) && name !== RESEARCH_COMPONENT.unit) throw new Error(`unreviewed-systemd-entrypoint:${name}`);
     }
+    const researchUnit = read(`deploy/light-server/${RESEARCH_COMPONENT.unit}`);
+    if (sha(normalizeSource(researchUnit)) !== RESEARCH_COMPONENT.unitSha
+      || [...researchUnit.matchAll(/^ExecStart=(.*)$/gm)].map(m => m[1].trim()).join() !== RESEARCH_COMPONENT.argv)
+      throw new Error("runtime-research-unit-policy-drift");
+    for (const [file, hash] of Object.entries(RESEARCH_COMPONENT.sources))
+      if (sha(normalizeSource(read(file))) !== hash) throw new Error(`runtime-research-source-policy-drift:${file}`);
+    queue.push(...RESEARCH_COMPONENT.entries);
     for (const [name, policy] of Object.entries({ ...ENTRYPOINTS, ...EXTERNAL_UNITS })) {
       const text = read(`deploy/light-server/${name}`);
       if (sha(normalizeSource(text)) !== UNIT_SOURCE_HASHES[name]) throw new Error(`runtime-entrypoint-policy-drift:${name}`);
@@ -230,7 +255,7 @@ function inspectFrontendRuntimeBoundary(input) {
         imports.push({ from, specifier, target, kind }); queue.push(target);
       } else {
         const bare = specifier.replace(/^node:/, "");
-        if (["module", "vm"].includes(bare) || bare === "worker_threads"
+        if (["module", "vm"].includes(bare) && !(bare === "module" && from === "server/researchBrokerDependencies.cjs") || bare === "worker_threads"
           && ![PUBLICATION_WORKER.file, PUBLICATION_WORKER.target].includes(from)) throw new Error(`unreviewed-runtime-loader-facility:${from}:${specifier}`);
         if (isBuiltin(specifier)) { externalImports.push({ from, specifier, kind: "node-builtin" }); return; }
         const name = specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier.split("/")[0];
@@ -334,6 +359,11 @@ function inspectFrontendRuntimeBoundary(input) {
             else if (isDynamicImport && file === SPORTTERY_IMPORT.file && node.getText(sf) === SPORTTERY_IMPORT.expression
               && enclosingFunctionHash(node, sf) === SPORTTERY_IMPORT.functionSha256) {
               dynamicImports.push(clone(SPORTTERY_IMPORT)); queue.push(SPORTTERY_IMPORT.target);
+            } else if (isRequireResolve && file === "scripts/researchReleaseBroker.cjs"
+              && node.getText(sf) === RESEARCH_COMPONENT.sourceResolve
+              && enclosingFunctionHash(node, sf) === RESEARCH_COMPONENT.resolveFunctionSha) {
+              // Exact installed signed-source verifier only. The fixed worker
+              // is queued above; ordinary imports retain normal resolution.
             } else throw new Error(`unreviewed-dynamic-runtime-loader:${file}`);
             if (specifier && ts.isStringLiteralLike(specifier) && childModule(specifier.text) && name === "require") {
               const parent = node.parent;

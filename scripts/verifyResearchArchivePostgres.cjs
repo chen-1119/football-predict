@@ -32,6 +32,52 @@ async function verify(pool){
   const result=await reader.artifact(key);
   a.equal(result.verified,true);a.equal(result.record.json,original);a.equal(result.record.sha256,digest);a.equal(result.productionWrites,0);
   const index=await reader.day('2026-09-17');a.equal(index.existingBatchCount,1);a.equal(index.publications[0].verified,false);
+  const reports=require('../server/researchReportStore.cjs');
+  // Isolated storage callback only; no claim that a production root broker is installed.
+  const reportStore=reports.createResearchReportStore({pool:mapped,runExclusive:action=>action()});
+  const reportBytes=kind=>Buffer.from(JSON.stringify({version:reports.VERSION,businessDate:draft.businessDate,
+   reportKind:kind,generatedAt:at,contents:{text:'Synthetic scheduled report; no recommendation adoption claim'}}));
+  const firstReport=reportBytes(reports.KINDS[0]);
+  await reportStore.archive(firstReport,p.sha(firstReport));
+  const reportIndex=await reader.day(draft.businessDate);
+  a.equal(reportIndex.existingBatchCount,1);a.equal(reportIndex.existingReportCount,1);a.equal(reportIndex.reportSlots.length,5);
+  a.equal(reportIndex.reportSlots[0].payloadSha256,p.sha(firstReport));a.equal(reportIndex.reportSlots[0].archiveIntegrityVerified,true);
+  a.equal(reportIndex.reportSlots[0].publicationVerified,false);a.equal(reportIndex.reportSlots[0].recommendationEligibilityVerified,false);
+  a.equal(reportIndex.absenceDoesNotAuthorizeWriteRetry,true);a.ok(reportIndex.reportSlots.slice(1).every(s=>s.state==='not-observed'));
+  let interleaved=false;
+  const secondReport=reportBytes(reports.KINDS[1]);
+  const snapshotPool={async connect(){const c=await mapped.connect();return {async query(sql,args){
+   const answer=await c.query(sql,args);
+   if(sql.includes('artifact_key=ANY($1::text[])')&&!interleaved){interleaved=true;await reportStore.archive(secondReport,p.sha(secondReport));}
+   return answer;
+  },release:e=>c.release(e)};}};
+  const snapshotReader=createResearchArchiveRead({pool:snapshotPool,replay:readPublication});
+  const stableIndex=await snapshotReader.day(draft.businessDate);a.equal(interleaved,true);a.equal(stableIndex.existingReportCount,1);
+  a.equal(stableIndex.reportSlots[1].state,'not-observed');a.equal((await reader.day(draft.businessDate)).existingReportCount,2);
+  const firstReportKey=reports.reportKey(draft.businessDate,reports.KINDS[0]);
+  await q("UPDATE football.private_model_artifacts SET artifact_version='wrong-version' WHERE artifact_key=$1",[firstReportKey]);
+  await a.rejects(reader.day(draft.businessDate),{code:'REPORT_INDEX_IDENTITY'});
+  await q('UPDATE football.private_model_artifacts SET artifact_version=$2 WHERE artifact_key=$1',[firstReportKey,reports.VERSION]);
+  await q("UPDATE football.private_model_artifacts SET payload_sha256=repeat('0',64) WHERE artifact_key=$1",[firstReportKey]);
+  await a.rejects(reader.day(draft.businessDate),{code:'REPORT_HASH'});
+  await q('UPDATE football.private_model_artifacts SET payload_sha256=$2 WHERE artifact_key=$1',[firstReportKey,p.sha(firstReport)]);
+  // Complete signed v3 freeze and original second ACK, disposable schema only.
+  const originalArchive=JSON.stringify({version:1,reportKind:'on-demand-prematch-supplement',predictionScope:'chat-only manual research',businessDate:draft.businessDate,frozenAt:draft.frozenAt,singles:draft.singles});
+  const v3={...draft,version:3,reportKind:'manual-prematch-batch',predictionScope:'reviewed-online-reference',originalArchive,originalArchiveSha256:p.sha(originalArchive)};
+  const record3=p.make(v3,{matches,snapshot,trustRegistry:registry,asOf:at});
+  const key3='reviewed-analysis-'+v3.businessDate+'-batch-'+p.hash(v3);
+  const freeze3=p.seal({version:'reviewed-analysis-freeze-v1',createdAt:at,record:record3,draft:v3,inputs:{matches,snapshot},storedAt});
+  const ack3=p.seal({version:'reviewed-analysis-ack-v1',createdAt:ackAt,recordKey:key3,storedSha256:p.sha(JSON.stringify(freeze3)),recordHash:record3.contentHash});
+  await insert(key3,freeze3);await insert(key3+'-ack',ack3);
+  let brokerHeld=false;
+  const service=require('../server/researchWriteService.cjs').createResearchWriteService({pool:mapped,runExclusive:async action=>{a.equal(brokerHeld,false);brokerHeld=true;try{return await action();}finally{brokerHeld=false;}}});
+  const request={version:'research-broker-request-v1',action:'publish',json:JSON.stringify(v3),sha256:p.sha(JSON.stringify(v3)),draftHash:p.hash(v3)};
+  const duplicate=await service.execute(Buffer.from(JSON.stringify(request)));
+  a.equal(duplicate.submitted,false);a.equal(duplicate.verified,true);a.equal(duplicate.records.length,3);a.equal(brokerHeld,false);
+  await q('DELETE FROM football.private_model_artifacts WHERE artifact_key=$1',[key3+'-ack']);
+  const missing=await service.execute(Buffer.from(JSON.stringify(request)));a.equal(missing.state,'record-present-ack-missing');a.equal(missing.submitted,false);
+  a.equal(Number((await q('SELECT count(*) AS n FROM football.private_model_artifacts WHERE artifact_key=$1',[key3])).rows[0].n),1);
+  await insert(key3+'-ack',ack3);
   const cannotWrite=createResearchArchiveRead({pool:mapped,replay:async c=>c.query('DELETE FROM football.private_model_artifacts')});
   await a.rejects(cannotWrite.artifact(key),{code:'25006'});
   a.equal((await reader.artifact(key)).verified,true);
@@ -40,7 +86,7 @@ async function verify(pool){
   await insert(key+'-ack',ack);
   await q("UPDATE football.private_model_artifacts SET payload_sha256=repeat('0',64) WHERE artifact_key=$1",[key]);
   await a.rejects(reader.artifact(key),/payload SHA-256 mismatch/);
-  return {ok:true,scope:'disposable-local-schema',signedReplay:true,originalBytes:true,readOnlyWriteRejected:true,missingAckRejected:true,tamperRejected:true,productionRowsWritten:0};
+  return {ok:true,scope:'disposable-local-schema',signedReplay:true,originalBytes:true,readOnlyWriteRejected:true,missingAckRejected:true,tamperRejected:true,brokerExistingPublicationReplay:true,brokerMissingAckNoRewrite:true,reportIndex:{exactSlots:5,archiveByteIntegrity:true,sameReadonlySnapshot:true,concurrentArchiveVisibleOnlyOnNextRead:true,corruptionRefusesInsteadOfMissing:true,productionBrokerInstalled:false},productionRowsWritten:0};
  }finally{try{await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);}finally{signed.cleanup();}}
 }
 if(require.main===module){const url=process.env.RESEARCH_ARCHIVE_TEST_DATABASE_URL;if(!url)throw Error('Explicit disposable database required');const u=new URL(url);if(!['localhost','127.0.0.1','[::1]'].includes(u.hostname)||u.pathname!=='/recommendation_test')throw Error('Local recommendation_test only');const pool=new(require('pg').Pool)({connectionString:url,ssl:false,max:2});verify(pool).then(x=>console.log(JSON.stringify(x))).catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>pool.end());}
