@@ -1,0 +1,177 @@
+{
+  "version": "worker-code-repair-v7",
+  "reason": "reference-decision-index-limit",
+  "bindingPolicy": "fresh-reference-index-limit-and-exact-corpus-before-lease-v1",
+  "createdAt": "2026-10-14T19:39:33.902Z",
+  "expiresAt": "2026-10-14T21:39:33.902Z",
+  "baseRuntimeSha256": "ede48e7b14a8a6561c651fbba4f1cdd5c0e701d39e9fab2912f37247a1ab364a",
+  "files": [
+    {
+      "path": "server/referencePairedBaseline.cjs",
+      "beforeSha256": "e0f2050904189f4040c4698e49b608b903cedfb0dde2f54c6176a14b42c6efa9",
+      "afterSha256": "e19b4039dd9fb33450119032705a75cfef5b356916132fd6587bd463eeb13c02"
+    },
+    {
+      "path": "scripts/releaseWorkerCodeRepair.cjs",
+      "beforeSha256": "f06b8b799a515c2a9fe260b9b0984ce0c13b933139ec6f91747fb6d13403620e",
+      "afterSha256": "3a2505c809bc418c6bdac1b80f402dae18984e1c0779d5f5c5ed0b6ca3aee774"
+    },
+    {
+      "path": "scripts/nativeCodeReleaseDataPlane.cjs",
+      "beforeSha256": "62a07dc3f67ae4b7ac0a758615786acd7f9ef969799f1fe66d739c5df634f240",
+      "afterSha256": "5b37e8e8762a1340929d0b1d832d1210f6dd00cfc791108da6037bfc6fd267d8"
+    },
+    {
+      "path": "scripts/verifyNativeCodeServing.cjs",
+      "beforeSha256": "405ad026af587d99ddb25592b1ea47539b7b983e3df28acbf55b408f6dffb811",
+      "afterSha256": "a51aeef9d54c1755f2b9012c8d72f6277c13d2069db4372d46c9373d9a79e726"
+    }
+  ],
+  "dataContract": [
+    {
+      "path": "deploy/light-server/candidate-revision-transition.json",
+      "sha256": "68b34c0332ab0ca2a7e2fa07b3b02bae343a285a1eea8dcfb644f5228eea974e"
+    },
+    {
+      "path": "deploy/light-server/native-release-policy.json",
+      "sha256": "36385439e68a5a96d70edc9103070cb44c50a9f4164f11e68bc5be5911aceee7"
+    },
+    {
+      "path": "deploy/light-server/recommendation-schema-bridge.cjs",
+      "sha256": "784669138b868cc9a28aef5f1118297b03a55c4c52bfc2b4ca9ba7084e06cfa5"
+    },
+    {
+      "path": "server/postgres/migrations/001_core.sql",
+      "sha256": "3580fecee8d500cb0851899c858cd1aaf90c321978cba1c8bbfc224c5f6e8b7c"
+    },
+    {
+      "path": "server/postgres/migrations/002_projection_runtime.sql",
+      "sha256": "519987f10bd74c4a6c89ec6c639cd65af3040d7ae0159ede9b20abad9e47849b"
+    },
+    {
+      "path": "server/postgres/migrations/003_order_preserving_payloads.sql",
+      "sha256": "bae14fe5304c7730629122070f737b61facda435ad5e31cfbc3961da30d319ec"
+    },
+    {
+      "path": "server/postgres/migrations/004_free_source_warehouse.sql",
+      "sha256": "1497ac6ef7fec4f4b291ce3c211375bbb9f08d9d905e1a3abdaf994a3f83a37f"
+    },
+    {
+      "path": "server/postgres/migrations/005_learning_ledger.sql",
+      "sha256": "17e3448836c3b86ef1d0578910d5cef35a63c82f295920046b007f8a5691d44b"
+    },
+    {
+      "path": "server/postgres/migrations/006_research_observations.sql",
+      "sha256": "b070288a5d4a16a36d6a2c33f6d62c4719359c5f5e5ecc3750398f58fc5395c2"
+    },
+    {
+      "path": "server/postgres/migrations/007_market_collector_runtime.sql",
+      "sha256": "8e3311b8d32f20906f31bdcd9f2eabc880420c19681f808de32bd07e9c80c372"
+    },
+    {
+      "path": "server/postgres/migrations/008_market_feature_latest.sql",
+      "sha256": "6cbf639beb03ba23aec732a3cb0828087d4d36d55adcbee8dd85dd3334e846f5"
+    },
+    {
+      "path": "server/postgres/migrations/009_daily_featured_combos.sql",
+      "sha256": "4129dc381f178625720c7efebf9e9d49dc6ccbb1b7d49c0f9c14190368807056"
+    },
+    {
+      "path": "server/postgres/migrations/010_published_forecasts.sql",
+      "sha256": "b84c42a790e87d7d8e3dc9dc3317d5690c7b3b9bd2c29ec3ed3c5c4a1a46da42"
+    },
+    {
+      "path": "server/postgres/migrations/011_unified_recommendation_runtime.sql",
+      "sha256": "477326052eb257746e9421088e9e51e097b266465df8db6e934c4b684544c0a0"
+    },
+    {
+      "path": "server/postgres/migrations/012_accounts_and_follows.sql",
+      "sha256": "cf60e71c5c30765d0ca9ef5432cefe50248b6922bd5fdfe139a9180c53ddec21"
+    },
+    {
+      "path": "server/postgres/migrations/013_dual_choice_research.sql",
+      "sha256": "00609a1927922fb24cd304907b6e1938ac91615043c12c88911bbc17c2139ff8"
+    },
+    {
+      "path": "server/postgres/migrations/014_dual_choice_market_neutral.sql",
+      "sha256": "12cd252a56f306dd541143e097105c0ba4b6e9b491fb3cebe2538a0313a0de16"
+    },
+    {
+      "path": "server/postgresStore.cjs",
+      "sha256": "562b38acc31c347d79d953672c59828a651bf9e8a77fd21af151c11cdfdbb222"
+    },
+    {
+      "path": "server/storageMode.cjs",
+      "sha256": "598f458d88b5d2315a077da10a5504eda0a01103a4fa5b00c3cbad714a0dc17c"
+    }
+  ],
+  "indexSources": [
+    {
+      "path": "server/streamedJsonObjectArrays.cjs",
+      "sha256": "ca3a5e3378ef30826ea41f7615f09f99ce79b67d22761d2939a8769c8a08344e"
+    },
+    {
+      "path": "src/services/publicReferenceDecision.cjs",
+      "sha256": "d2a4bb17472491116054f46ae95907eb9f8f908a37e2f7c370f9636dcf7adc5b"
+    },
+    {
+      "path": "src/services/publicReferenceEvidence.cjs",
+      "sha256": "0734cc562a0996884d639682053c10a42a2002dda7c543237f4a60588ec69a8f"
+    },
+    {
+      "path": "scripts/reconcileFastResultGeneration.cjs",
+      "sha256": "d1fc29288cb20fe964bc1290cd36e7b7b72231a99a8bff99d4e50e7f2c4df558"
+    }
+  ],
+  "incident": {
+    "workerMainPid": "713693",
+    "workerStartedAt": "2026-10-13T18:02:44.000Z",
+    "cycleStartedAt": "2026-10-14T19:18:42.826Z",
+    "cycleFinishedAt": "2026-10-14T19:27:12.725Z",
+    "journalPid": "1175573",
+    "journalTimestampUs": "1792006032645931",
+    "journalMessageSha256": "91365a850e32b1c52e3d0d7ec25494901ff586c25e4a37cbeb006ad04d077198",
+    "failure": {
+      "ok": false,
+      "error": "REFERENCE_DECISION_INDEX_LIMIT",
+      "errorCode": null
+    }
+  },
+  "referenceIndex": {
+    "sourceBytes": 1029802190,
+    "sourceSha256": "0182453271913d10198e4a24991aea7765bfe9b039b5432a92175b6826eb22ca",
+    "corpusSha256": "185dfc2d8162c8527ac3f63a37ef3bb18abac380fabf1cc4b68da4a4f39b42ce",
+    "records": 7964,
+    "serializedChars": 34963149,
+    "serializedBytes": 35495897,
+    "compressedIndexBytes": 17620517,
+    "maxRecordBytes": 4572,
+    "originalIndexBound": 33554432,
+    "originalCountBound": 100000,
+    "originalAttestationAll": true
+  },
+  "publication": {
+    "databaseOid": "28598409",
+    "committed": {
+      "mode": "active-generation",
+      "generationId": "g-edb58babcb05c300f9504f8f6fc327c122a7ee9c61ab20f218938e45f7b5b7d8",
+      "manifestHash": "edb58babcb05c300f9504f8f6fc327c122a7ee9c61ab20f218938e45f7b5b7d8",
+      "sourceCycleId": "sporttery-full-sync:2026-10-14T06:31:37.364Z",
+      "committedAt": "2026-10-14T06:40:29.151Z"
+    },
+    "rawCurrent": {
+      "mode": "active-generation",
+      "generationId": "g-edb58babcb05c300f9504f8f6fc327c122a7ee9c61ab20f218938e45f7b5b7d8",
+      "manifestHash": "edb58babcb05c300f9504f8f6fc327c122a7ee9c61ab20f218938e45f7b5b7d8",
+      "sourceCycleId": "sporttery-full-sync:2026-10-14T06:31:37.364Z",
+      "committedAt": "2026-10-14T06:40:29.151Z"
+    },
+    "rawPrevious": {
+      "mode": "active-generation",
+      "generationId": "g-91504efdfabbec54e2cb5ec797aff041c24e7d689d971bac29664ad7af85de7a",
+      "manifestHash": "91504efdfabbec54e2cb5ec797aff041c24e7d689d971bac29664ad7af85de7a",
+      "sourceCycleId": "sporttery-full-sync:2026-10-14T05:50:10.637Z",
+      "committedAt": "2026-10-14T05:59:04.976Z"
+    }
+  }
+}
