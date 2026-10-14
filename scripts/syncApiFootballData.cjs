@@ -722,9 +722,61 @@ const booleanOrNull = (value) => {
   return null;
 };
 
-const optionalNumber = (value) => {
-  if (value === undefined || value === null || String(value).trim() === "") return null;
-  return toNumber(value);
+const quotaCount = (value) => {
+  if (value === undefined || value === null || !/^\d+$/.test(String(value).trim())) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+};
+
+// Daily requests headers and minute rate-limit headers have different units.
+// An observed budget only decreases within a UTC day, including failed attempts.
+const observeDailyQuota = (cache, remaining, options = {}) => {
+  const count = quotaCount(remaining);
+  const now = options.now ?? Date.now();
+  const checkedAt = options.checkedAt || new Date(now).toISOString();
+  const observedTime = Date.parse(checkedAt);
+  if (count === null || !Number.isFinite(observedTime) || observedTime > now) return null;
+  const utcDate = new Date(now).toISOString().slice(0, 10);
+  if (checkedAt.slice(0, 10) !== utcDate) return null;
+  const previous = cache.apiAccess?.requestQuota;
+  const priorCount = previous?.utcDate === utcDate ? quotaCount(previous.remaining) : null;
+  const requestQuota = {
+    utcDate,
+    observedAt: checkedAt,
+    remaining: priorCount === null ? count : Math.min(priorCount, count),
+  };
+  cache.apiAccess = { ...(cache.apiAccess || {}), requestQuota };
+  return requestQuota;
+};
+
+const currentDailyQuota = (cache, now = Date.now()) => {
+  const utcDate = new Date(now).toISOString().slice(0, 10);
+  const existing = cache.apiAccess?.requestQuota;
+  if (existing?.utcDate === utcDate
+      && quotaCount(existing.remaining) !== null
+      && Number.isFinite(Date.parse(existing.observedAt))
+      && Date.parse(existing.observedAt) <= now) return existing;
+  const status = cache.apiAccess?.status;
+  if (typeof status?.checkedAt !== "string") return null;
+  return observeDailyQuota(cache, status?.quota?.remaining, { checkedAt: status?.checkedAt, now });
+};
+
+const requestIntervalFor = (cache, env = {}) => {
+  const configured = Number(env.API_FOOTBALL_MIN_REQUEST_INTERVAL_MS || 0);
+  const configuredInterval = Number.isFinite(configured) ? Math.max(0, Math.min(30000, configured)) : 0;
+  const status = cache.apiAccess?.status;
+  const headerLimit = quotaCount(status?.rateLimit?.limit);
+  const minuteLimit = headerLimit > 0 ? headerLimit : (/^free$/i.test(status?.plan || "") ? 10 : null);
+  return Math.max(configuredInterval, minuteLimit > 0 ? Math.ceil(60000 / minuteLimit) : 0);
+};
+
+const canReuseAccountStatus = (status, now = Date.now()) => {
+  const observedTime = Date.parse(status?.checkedAt);
+  if (!Number.isFinite(observedTime) || observedTime > now
+      || (now - observedTime) / 60000 >= statusRefreshMinutesFor(status)) return false;
+  const quotaNeedsCurrentDay = status?.eligible === true
+    || status?.blockers?.includes("provider-quota-unavailable");
+  return !quotaNeedsCurrentDay || status.checkedAt.slice(0, 10) === new Date(now).toISOString().slice(0, 10);
 };
 
 const normalizeAccountStatus = (payload, options = {}) => {
@@ -735,11 +787,12 @@ const normalizeAccountStatus = (payload, options = {}) => {
   const requests = response?.requests && typeof response.requests === "object" ? response.requests : {};
   const rateLimit = options.rateLimit && typeof options.rateLimit === "object" ? options.rateLimit : {};
   const active = booleanOrNull(subscription.active);
-  const current = optionalNumber(requests.current ?? requests.used);
-  const dailyLimit = optionalNumber(requests.limit_day ?? requests.limit);
-  const headerRemaining = optionalNumber(rateLimit.requestsRemaining ?? rateLimit.remaining);
+  const current = quotaCount(requests.current ?? requests.used);
+  const dailyLimit = quotaCount(requests.limit_day ?? requests.limit);
+  const headerRemaining = quotaCount(rateLimit.requestsRemaining);
   const computedRemaining = current !== null && dailyLimit !== null ? Math.max(0, dailyLimit - current) : null;
-  const remaining = headerRemaining !== null ? headerRemaining : computedRemaining;
+  const remaining = headerRemaining !== null && computedRemaining !== null
+    ? Math.min(headerRemaining, computedRemaining) : headerRemaining ?? computedRemaining;
   const statusMessages = [
     ...formatApiErrors(payload?.errors),
     compactText(payload?.message),
@@ -820,7 +873,10 @@ const accountAccessSkipReason = (cache) => {
 
 const preflightAccountStatus = async (cache, requestBudget) => {
   const cached = cache.apiAccess?.status;
-  if (cached && isFresh(cached.checkedAt, statusRefreshMinutesFor(cached))) return cached;
+  if (cached && canReuseAccountStatus(cached)) {
+    observeDailyQuota(cache, cached.quota?.remaining, { checkedAt: cached.checkedAt });
+    return cached;
+  }
   try {
     const checkedAt = nowIso();
     const { payload, rateLimit } = await apiGet(cache, "/status", {}, requestBudget);
@@ -829,6 +885,7 @@ const preflightAccountStatus = async (cache, requestBudget) => {
       ...(cache.apiAccess || {}),
       status
     };
+    observeDailyQuota(cache, status.quota?.remaining, { checkedAt: status.checkedAt });
     return status;
   } catch (error) {
     const checkedAt = nowIso();
@@ -872,6 +929,15 @@ const reserveRequestAttempt = (cache, requestBudget, endpoint) => {
   if (budget.attempts >= budget.limit) {
     throw new Error(`API_FOOTBALL_MAX_CALLS_PER_SYNC reached (${budget.limit})`);
   }
+  if (endpoint !== "/status") {
+    const quota = currentDailyQuota(cache);
+    if (!quota || quota.remaining <= 0) {
+      const error = new Error(`API_FOOTBALL_MAX_CALLS_PER_SYNC: daily quota ${quota ? "exhausted" : "unverified"}`);
+      error.code = quota ? "API_FOOTBALL_DAILY_QUOTA_EXHAUSTED" : "API_FOOTBALL_DAILY_QUOTA_UNVERIFIED";
+      throw error;
+    }
+    quota.remaining -= 1;
+  }
   budget.attempts += 1;
   budget.byEndpoint[endpoint] = Number(budget.byEndpoint[endpoint] || 0) + 1;
   cache.requestLedger.count += 1;
@@ -903,7 +969,7 @@ const apiGet = (cache, endpoint, params = {}, requestBudget = createRequestBudge
     return;
   }
 
-  const interval = Math.max(0, Math.min(30000, Number(process.env.API_FOOTBALL_MIN_REQUEST_INTERVAL_MS || 0)));
+  const interval = requestIntervalFor(cache, process.env);
   const delay = interval - (Date.now() - lastRequestStartedAt);
   if (delay > 0) sleepMs(delay);
   lastRequestStartedAt = Date.now();
@@ -964,9 +1030,12 @@ const apiGet = (cache, endpoint, params = {}, requestBudget = createRequestBudge
         requestsLimit: res.headers["x-ratelimit-requests-limit"] || null,
         requestsRemaining: res.headers["x-ratelimit-requests-remaining"] || null
       };
-      const requestsRemaining = optionalNumber(rateLimit.requestsRemaining ?? rateLimit.remaining);
+      const requestsRemaining = quotaCount(rateLimit.requestsRemaining);
+      observeDailyQuota(cache, requestsRemaining);
       if (endpoint !== "/status" && requestsRemaining !== null && requestsRemaining <= 0) {
         rememberGlobalAccountError(cache, new Error("API-Football provider quota unavailable after this response."), 429);
+      } else if (endpoint !== "/status" && quotaCount(rateLimit.remaining) === 0) {
+        rememberGlobalAccountError(cache, new Error("API-Football per-minute request limit reached after this response."), 429);
       }
       resolve({
         payload,
@@ -2359,8 +2428,10 @@ module.exports = {
   buildLineups,
   buildPieceMetadata,
   buildVerifiedMappingSet,
+  canReuseAccountStatus,
   createCache,
   createRequestBudget,
+  currentDailyQuota,
   credentialFingerprintFor,
   confidenceForFixture,
   isBulkIdsUnsupportedError,
@@ -2374,8 +2445,11 @@ module.exports = {
   mergeSignal,
   normalizeAccountStatus,
   normalizeCache,
+  observeDailyQuota,
   normalizeName,
   runtimePolicyFor,
+  requestIntervalFor,
+  reserveRequestAttempt,
   statusRefreshMinutesFor,
   synchronizeCredentialState,
   prematchCutoffFor,
