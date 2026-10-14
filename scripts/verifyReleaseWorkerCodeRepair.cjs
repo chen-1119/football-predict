@@ -301,6 +301,16 @@ function verifyReleaseWorkerCodeRepair() {
     const runCaptureFixture=(variant='repair')=>{
       const localAuth=structuredClone(freshAuth),identity=c=>({mode:'active-generation',...Object.fromEntries(
         ['generationId','manifestHash','sourceCycleId','committedAt'].map(k=>[k,c.pointer[k]]))});
+      const index=variant.startsWith('index-'),ordinary=variant==='ordinary'||variant==='index-ordinary';
+      if(index) {
+        Object.assign(localAuth,{version:'worker-code-repair-v7',reason:'reference-decision-index-limit',bindingPolicy:'fresh-reference-index-limit-and-exact-corpus-before-lease-v1',
+          files:p.REFERENCE_INDEX_TARGETS.map(name=>({path:name,beforeSha256:hex(2),afterSha256:hex(3)})),
+          indexSources:p.REFERENCE_INDEX_SOURCES.map(name=>({path:name,sha256:hex(4)})),
+          referenceIndex:{sourceBytes:1029795266,sourceSha256:hex(8),corpusSha256:hex(9),records:7964,serializedChars:34963149,
+            serializedBytes:35495897,compressedIndexBytes:17620517,maxRecordBytes:4572,originalIndexBound:33554432,originalCountBound:100000,originalAttestationAll:true}});
+        localAuth.incident.failure={ok:false,error:'REFERENCE_DECISION_INDEX_LIMIT',errorCode:null};
+        localAuth.incident.journalMessageSha256=crypto.createHash('sha256').update(JSON.stringify(localAuth.incident.failure,null,2)).digest('hex');
+      }
       localAuth.publication.committed=identity(contexts.committed);
       const publication={databaseOid:'42',committed:identity(contexts.committed),rawCurrent:identity(contexts.rawCurrent),rawPrevious:identity(contexts.rawPrevious)};
       const state={...structuredClone(stateForCapture()),sha:hex('a'),key:hex('b'),createdAt:new Date(now-60000).toISOString(),
@@ -339,17 +349,21 @@ function verifyReleaseWorkerCodeRepair() {
         new vm.Script('(function(require,module,exports,__dirname){'+source+'\n})',{filename:name}).runInContext(context)(fixtureRequire,module,module.exports,'/candidate/scripts');
         return module.exports;};
       const liveWorker=structuredClone(writerWorker);
-      if(variant==='ordinary'){liveWorker.status.lastCycle.ok=true;publication.committed=identity(contexts.rawCurrent);}
+      if(index)liveWorker.status.lastCycle.error='npm run reconcile:fast-results-generation exited with 1';
+      if(ordinary){liveWorker.status.lastCycle.ok=true;publication.committed=identity(contexts.rawCurrent);}
       fixtureWorker={evaluateWorkerPreflight:new vm.Script('('+worker.evaluateWorkerPreflight.toString()+')').runInContext(context),
         collectWorkerPreflight:()=>realm(liveWorker),buildReadOnlyWorkerProbe:()=>''};
       fixturePolicy=compile(policySource,'serialized-policy.cjs');
       fixturePolicy.candidateAuthorization=(_root,a)=>fixturePolicy.validateWorkerCodeRepairAuthorization(a,Date.now());
-      fixturePolicy.collectWorkerCodeRepair=()=>{collects++;assert.notEqual(variant,'ordinary','healthy capture must not collect stale incident');
-        return realm({...freshExtra,publication,files:localAuth.files.map(r=>({path:r.path,sha256:r.beforeSha256}))});};
+      fixturePolicy.collectWorkerCodeRepair=()=>{collects++;assert.equal(ordinary,false,'healthy capture must not collect stale incident');
+        const indexJournal=index?JSON.stringify(localAuth.incident.failure,null,2).split('\n').map(message=>({unit:'football-sync-worker.service',pid:'43',
+          timestampUs:String((now-2050)*1000),timestampMs:now-2050,message})):null;
+        return realm({...freshExtra,publication,files:localAuth.files.map(r=>({path:r.path,sha256:r.beforeSha256})),
+          ...(index?{indexSources:localAuth.indexSources,referenceIndex:localAuth.referenceIndex,journal:indexJournal}:{})});};
       fixtureDriver=compile("const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');"+rootFunctions+
         '\nmodule.exports={secureDirectory,read,write};','serialized-root-journal.cjs');
       const subject=compile(nativeSource,'serialized-native-code.cjs');
-      const session={identity:publication.committed,publication:{context:variant==='ordinary'?contexts.rawCurrent:contexts.committed,
+      const session={identity:publication.committed,publication:{context:ordinary?contexts.rawCurrent:contexts.committed,
         pairing:{reason:'exact-committed-postgres-generation'}}};
       session.publication.context=structuredClone(session.publication.context);
       if(variant==='already-captured')files.set(directory+'/code-repair-capture.json',Buffer.from('{}'));
@@ -359,9 +373,9 @@ function verifyReleaseWorkerCodeRepair() {
       return {subject,capture,state:realm(state),session:realm(session),authorization:realm(localAuth),events,files,metadata,directory,
         get collects(){return collects;},get held(){return held;},driver:fixtureDriver,realm,publication};
     };
-    for(const variant of ['repair','ordinary'])check(()=>{
-      const f=runCaptureFixture(variant),r=f.capture();assert.equal(f.held,false);assert.equal(r.capture.body.route,variant);
-      assert.equal(f.collects,variant==='ordinary'?0:1);assert.equal(r.capture.body.generationEvidence.rawCurrent.files,1);
+    for(const variant of ['repair','ordinary','index-repair','index-ordinary'])check(()=>{
+      const f=runCaptureFixture(variant),r=f.capture(),route=variant.endsWith('ordinary')?'ordinary':'repair';assert.equal(f.held,false);assert.equal(r.capture.body.route,route);
+      assert.equal(f.collects,route==='ordinary'?0:1);assert.equal(r.capture.body.generationEvidence.rawCurrent.files,1);
       assert.equal(r.capture.body.generationEvidence.rawCurrent.bytes,fs.statSync(path.join(contexts.rawCurrent.generationDir,'matches-current.json')).size);
       const proofFile=f.directory+'/code-repair-capture.json';
       assert(f.events.some(e=>e[0]==='wx'&&e[1]===proofFile));

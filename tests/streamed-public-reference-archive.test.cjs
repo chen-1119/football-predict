@@ -25,6 +25,15 @@ test("complete paired history larger than the old 32 MiB JSON index preserves ex
   const input=payload(fixtures),matches=fixtures.map(value=>value.match),options={matches,trustRegistry:trust.registry,generatedAt:auditAt};
   assert.ok(Buffer.byteLength(JSON.stringify(input.publicReferenceDecisions))>32*1024*1024);
   const c=context(input),filePath=path.join(c.generationDir,"prediction-snapshots.json");
+  const repair=require('../scripts/releaseWorkerCodeRepair.cjs');
+  const indexProof=repair.measureReferenceIndexProof(filePath,require('../server/streamedJsonObjectArrays.cjs').streamJsonObjectArrays,
+    require('../src/services/publicReferenceDecision.cjs').attestPublicReferenceDecision);
+  const digest=crypto.createHash('sha256');
+  for(const record of input.publicReferenceDecisions) {const raw=Buffer.from(JSON.stringify(record));digest.update(String(raw.length)+':');digest.update(raw);}
+  assert.equal(indexProof.corpusSha256,digest.digest('hex'));assert.equal(indexProof.sourceSha256,c.manifest.files[0].sha256);
+  assert.equal(indexProof.records,33);assert.equal(indexProof.originalIndexBound,32*1024*1024);
+  assert.equal(indexProof.originalCountBound,100000);assert.equal(indexProof.originalAttestationAll,true);
+  assert(indexProof.serializedChars>indexProof.originalIndexBound&&indexProof.compressedIndexBytes<=indexProof.originalIndexBound);
   const expected=buildReferencePerformanceWithPairs({...options,snapshotPayload:input});
   assert.deepEqual(buildReferencePerformanceFromSnapshotFile({...options,filePath}),expected);
   const missing={...input,publicReferenceEvidence:input.publicReferenceEvidence.slice(1)};
