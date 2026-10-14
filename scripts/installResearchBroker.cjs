@@ -21,9 +21,15 @@ function installRoot(wire){
  function unit(name){const names=['MainPID','ActiveState','SubState','ControlPID','Job','User','Group','ControlGroup','NoNewPrivileges','RestrictSUIDSGID','WorkingDirectory'];
   return Object.fromEntries(command('/usr/bin/systemctl',['show','--all','--property='+names.join(','),name]).trim().split('\n').map(s=>{const i=s.indexOf('=');return [s.slice(0,i),s.slice(i+1)];}));}
  if(process.platform!=='linux'||process.getuid()!==0||process.execPath!==NODE||process.version!=='v22.22.1'||process.execArgv.length||['NODE_OPTIONS','NODE_PATH','LD_PRELOAD','LD_LIBRARY_PATH'].some(k=>process.env[k]))fail('RESEARCH_INSTALL_FIXED_RUNTIME');
- const lock=fs.lstatSync('/run/lock/football-release.lock'),held=fs.fstatSync(9);
- if(!lock.isFile()||lock.isSymbolicLink()||lock.uid!==0||lock.nlink!==1||(lock.mode&0o022)||held.ino!==lock.ino||held.dev!==lock.dev)fail('RESEARCH_INSTALL_LOCK');
- const own=fs.readFileSync('/proc/self/fdinfo/9','utf8').split('\n').find(s=>/lock:\s+\d+:\s+FLOCK\s+ADVISORY\s+WRITE\s+/.test(s));
+ const lock=fs.lstatSync('/run/lock/football-release.lock');
+ if(!lock.isFile()||lock.isSymbolicLink()||lock.uid!==0||lock.nlink!==1||(lock.mode&0o022))fail('RESEARCH_INSTALL_LOCK');
+ // util-linux --no-fork opens its own descriptor. Accept only the matching
+ // kernel open-file lock owned by this exact process; never presume FD9.
+ let own;
+ for(const name of fs.readdirSync('/proc/self/fd')){if(!/^\d+$/.test(name))continue;let held,info;try{held=fs.fstatSync(Number(name));info=fs.readFileSync('/proc/self/fdinfo/'+name,'utf8');}catch{continue;}
+  if(held.ino!==lock.ino||held.dev!==lock.dev)continue;
+  const line=info.split('\n').find(s=>/lock:\s+\d+:\s+FLOCK\s+ADVISORY\s+WRITE\s+/.test(s));
+  if(line?.includes(' '+process.pid+' ')){own=line;break;}}
  if(!own||!own.includes(' '+process.pid+' ')||!fs.readFileSync('/proc/locks','utf8').includes(own.slice(own.indexOf('FLOCK'))))fail('RESEARCH_INSTALL_EXCLUSIVE_LOCK');
  const {body,signature,payloads}=wire;
  const fields='attemptId,dependenciesSha256,expiresAtMs,files,head,installerSha256,issuedAtMs,keyId,manifestSha256,platformSha256,releaseSha,signatureSha256,unitApiPid,unitWorkerPid,version';
@@ -43,6 +49,7 @@ function installRoot(wire){
  if(manifest.ok!==true||manifest.manifestVersion!==3||manifest.sha256!==body.releaseSha||!Number.isSafeInteger(manifest.releaseSequence)||!inventory.size
   ||manifest.archiveSourceEvidence.archiveSha256!==body.releaseSha||manifest.archiveSourceEvidence.inventorySha256!==hash(JSON.stringify(manifest.archiveSourceEvidence.inventory))
   ||manifest.signature?.keyId!==body.keyId||manifest.signature?.algorithm!=='rsa-sha256-pkcs1-v1_5')fail('RESEARCH_INSTALL_RELEASE');
+ if(inventory.get('scripts/installResearchBroker.cjs')!==hash(read(APP+'/scripts/installResearchBroker.cjs',1048576)))fail('RESEARCH_INSTALL_ENTRY_SOURCE');
  for(let i=0;i<3;i++)if(inventory.get(names[i])!==hash(bytes[i])||!read(APP+'/'+names[i],1048576).equals(bytes[i]))fail('RESEARCH_INSTALL_SOURCE');
  // All root broker/worker imports must come from this signed full source tree.
  const visited=new Set();function visit(p){if(!p.startsWith(APP+'/'))fail('RESEARCH_INSTALL_SOURCE_PATH');if(visited.has(p))return;visited.add(p);const b=read(p,8*1024*1024);if(inventory.get(path.relative(APP,p))!==hash(b))fail('RESEARCH_INSTALL_SOURCE');for(const r of b.toString().matchAll(/require\(['"](\.[^'"]+)['"]\)/g))visit(require.resolve(path.resolve(path.dirname(p),r[1])));}
@@ -91,3 +98,19 @@ function packageInstall({bundlePath,boundaryPath,dependenciesPath,platformPath})
 // Deployment orchestration supplies only freshly observed, exact paths. Root
 // never accepts caller-selected executable, user, environment or destination.
 module.exports={installRoot,packageInstall};
+function readInstallerBody(stream){
+ return new Promise((resolve,reject)=>{
+  const chunks=[];let bytes=0,done=false;
+  const end=error=>{if(done)return;done=true;clearTimeout(timer);stream.removeListener('data',data);stream.removeListener('end',finish);stream.removeListener('error',failure);if(error){stream.destroy();reject(Error(error));}else resolve(Buffer.concat(chunks));};
+  const data=b=>{if(!Buffer.isBuffer(b)||bytes+b.length>16*1024*1024)return end('RESEARCH_INSTALL_WIRE_BOUND');bytes+=b.length;chunks.push(b);};
+  const finish=()=>end(),failure=()=>end('RESEARCH_INSTALL_WIRE_UNAVAILABLE'),timer=setTimeout(()=>end('RESEARCH_INSTALL_WIRE_TIMEOUT'),8000);
+  stream.on('data',data);stream.once('end',finish);stream.once('error',failure);
+ });
+}
+module.exports.readInstallerBody=readInstallerBody;
+if(require.main===module){
+ if(process.argv.length!==3||process.argv[2]!=='--install-stdin')throw Error('RESEARCH_INSTALL_FIXED_ENTRY_REQUIRED');
+ readInstallerBody(process.stdin)
+  .then(raw=>{if(!Buffer.from(raw.toString('utf8')).equals(raw))throw Error('RESEARCH_INSTALL_WIRE_UTF8');installRoot(JSON.parse(raw.toString('utf8')));})
+  .catch(()=>{process.stdin.destroy();process.stderr.write('RESEARCH_INSTALL_UNCONFIRMED_READ_FIRST\n');process.exitCode=1;});
+}
