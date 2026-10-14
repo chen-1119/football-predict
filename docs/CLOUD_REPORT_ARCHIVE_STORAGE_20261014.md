@@ -110,3 +110,22 @@ The root CLI also bounds stdin delivery to 8 seconds and now includes its own
 entry module in the signed source-closure verification. On pre-child failure,
 stdin is closed. The existing release mutex and database-child lifetime
 remain unchanged. Full new-head CI and installed caller validation are required.
+
+## Scheduled report discovery candidate
+
+The existing authenticated GET day reader now includes the five exact scheduled
+report slots alongside the publication index. Publication counts retain their
+original meaning. Each present report is bounded to 512 KiB before its original
+JSON is loaded, hashed, and checked against its date, kind, version and generated/
+received clocks in the same read-only repeatable-read snapshot. At most five
+report bodies are read; the response returns only identity, hash, size, clocks
+and archive integrity status. This does not verify research quality, source
+truth, recommendation eligibility or publication.
+
+A missing slot is `not-observed` and does not authorize automatic mutation or
+retry. A wrong version, copied report, corrupt hash or invalid clock refuses the
+read instead of making the occupied slot appear empty. This candidate change
+is not installed; the fixed submit adapter, signed installer and complete cloud
+read/archive/publish/ACK validation remain required before schedule handover.
+The disposable PostgreSQL verifier checks that a report archived concurrently
+becomes visible only in the next day snapshot, with no production rows written.
