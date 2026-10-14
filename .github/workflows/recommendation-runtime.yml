@@ -68,6 +68,7 @@ on:
       - 'tests/postgres-file-json-payload.test.cjs'
       - 'tests/streamed-public-reference-archive.test.cjs'
       - 'tests/reference-index-repair-boundary.test.cjs'
+      - 'tests/reference-index-release-gate.test.cjs'
       - 'scripts/releaseWorkerCodeRepair.cjs'
       - 'scripts/verifyReleaseWorkerCodeRepair.cjs'
       - 'scripts/nativeCodeReleaseDataPlane.cjs'
@@ -247,7 +248,7 @@ jobs:
       - run: node --test tests/postgres-model-input-paging.test.cjs
       - run: node --test tests/reconcile-history-admission.test.cjs
       - run: node --test tests/postgres-reference-admission.test.cjs
-      - run: node --test tests/postgres-file-json-payload.test.cjs tests/streamed-public-reference-archive.test.cjs tests/reference-index-repair-boundary.test.cjs
+      - run: node --test tests/postgres-file-json-payload.test.cjs tests/streamed-public-reference-archive.test.cjs tests/reference-index-repair-boundary.test.cjs tests/reference-index-release-gate.test.cjs
       - run: node --test tests/postgres-reference-repair-policy.test.cjs tests/postgres-reference-repair-recovery.test.cjs
       - run: node scripts/verifyPublicReferencePairs.cjs && node scripts/verifyReferencePairedBaseline.cjs
       - run: node scripts/verifyFastResultGenerationReconciliation.cjs
