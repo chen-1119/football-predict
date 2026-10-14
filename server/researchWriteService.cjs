@@ -12,10 +12,10 @@ function decodeRequest(raw) {
   const text = raw.toString('utf8');
   if (!Buffer.from(text).equals(raw)) fail('RESEARCH_REQUEST_UTF8');
   let r; try { r = JSON.parse(text); } catch { fail('RESEARCH_REQUEST_JSON'); }
-  if (!r || r.version !== 'research-broker-request-v1' || !['archive', 'archive-read', 'publish', 'publication-read'].includes(r.action)) fail('RESEARCH_REQUEST_ACTION');
+  if (!r || r.version !== 'research-broker-request-v1' || !['archive', 'archive-read', 'publish', 'publication-read','revision-publish','revision-read'].includes(r.action)) fail('RESEARCH_REQUEST_ACTION');
   const fields = r.action === 'publication-read' ? 'action,draftHash,recordKey,version'
     : r.action === 'archive-read' ? 'action,businessDate,reportKind,sha256,version'
-      : r.action === 'archive' ? 'action,json,sha256,version' : 'action,draftHash,json,sha256,version';
+      : r.action === 'archive' || r.action.startsWith('revision-') ? 'action,json,sha256,version' : 'action,draftHash,json,sha256,version';
   if (Object.keys(r).sort().join(',') !== fields) fail('RESEARCH_REQUEST_FIELDS');
   if (r.action === 'archive-read') {
     reports.reportKey(r.businessDate,r.reportKind);
@@ -29,7 +29,10 @@ function decodeRequest(raw) {
     return r;
   }
   if (typeof r.json !== 'string' || !/^[a-f0-9]{64}$/.test(r.sha256 || '') || sha(r.json) !== r.sha256) fail('RESEARCH_REQUEST_HASH');
-  if (r.action === 'archive') reports.prepare(Buffer.from(r.json), r.sha256);
+  if (r.action.startsWith('revision-')) {
+    let request; try { request=JSON.parse(r.json); } catch { fail('RESEARCH_DRAFT_JSON'); }
+    require('./researchReviewedRevision.cjs').validate(request);
+  } else if (r.action === 'archive') reports.prepare(Buffer.from(r.json), r.sha256);
   else {
     let draft; try { draft = JSON.parse(r.json); } catch { fail('RESEARCH_DRAFT_JSON'); }
     if (draft?.version !== 3 || !/^[a-f0-9]{64}$/.test(r.draftHash || '') || policy.hash(draft) !== r.draftHash) fail('RESEARCH_DRAFT_HASH');
@@ -39,6 +42,7 @@ function decodeRequest(raw) {
 function createResearchWriteService({ pool, runExclusive } = {}) {
   if (!pool?.connect || typeof runExclusive !== 'function') fail('RESEARCH_BROKER_REQUIRED');
   const store = reports.createResearchReportStore({ pool, runExclusive });
+  const revisions = require('./researchReviewedRevision.cjs').createRevisionStore({ pool, runExclusive });
   async function observe(key, draftHash) {
     const c = await pool.connect(); let broken;
     try {
@@ -66,6 +70,8 @@ function createResearchWriteService({ pool, runExclusive } = {}) {
   }
   async function execute(raw) {
     const r = decodeRequest(raw);
+    if(r.action==='revision-publish')return revisions.publish(JSON.parse(r.json));
+    if(r.action==='revision-read')return runExclusive(()=>revisions.read(JSON.parse(r.json)));
     if (r.action === 'archive') return store.archive(Buffer.from(r.json), r.sha256);
     return runExclusive(async () => {
       if (r.action === 'archive-read') return store.read(r.businessDate,r.reportKind,r.sha256);

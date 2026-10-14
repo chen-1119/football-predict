@@ -20,7 +20,9 @@ The user selected append-only review versions that may adjust direction and refe
 
 After kickoff, singles can only append factual/live/postmatch material. Any combo containing a started, in-play or finished event freezes the entire existing group, legs and SP. A new combo version requires every leg verified unstarted and on sale.
 
-`researchRevisionPolicy.cjs` only computes that disposition. Durable revision storage, the revision publisher/second ACK, revision projection and UI are not implemented by this planning module. The old v3 publisher continues to reject an already frozen event. Do not relabel an original publication as a review or claim the review feature has been installed.
+`researchRevisionPolicy.cjs` computes that disposition. The separate `researchReviewedRevision.cjs` candidate stores up to 16 ordinal revisions per event/day, binding the exact original batch/payload and predecessor. It reconstructs the new selection from real signed official inputs, checks kickoff and sale deadlines through COMMIT, and writes a second-transaction ACK. Unknown COMMIT and missing ACK do not authorize rewriting. Exact same-slot requests read the existing result; conflicts refuse. Original daily projection/settlement remains unchanged. Its fixed authenticated routes are `single-review` and `single-review-read`.
+
+The original v3 publisher still rejects an already frozen event. Revision projection/UI and durable reviewed-combo storage remain to be connected. A planning predicate does not by itself prove that the website updates/freeze behavior is installed. Do not relabel the first publication or use later evidence as its original rationale.
 
 ## Cloud handover
 

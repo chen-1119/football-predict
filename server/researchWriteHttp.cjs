@@ -8,6 +8,8 @@ const paths = new Map([
   ['/api/operator/research/report-read', 'archive-read'],
   ['/api/operator/research/publish', 'publish'],
   ['/api/operator/research/publication-read', 'publication-read'],
+  ['/api/operator/research/single-review', 'revision-publish'],
+  ['/api/operator/research/single-review-read', 'revision-read'],
 ]);
 function createResearchWriteHandler({ accounts, submit, bodyTimeoutMs = 8000, now = Date.now } = {}) {
   if (typeof accounts?.authorizeMutation !== 'function') throw Error('RESEARCH_MUTATION_AUTH_REQUIRED');
@@ -52,7 +54,7 @@ function createResearchWriteHandler({ accounts, submit, bodyTimeoutMs = 8000, no
       if (!result || result.retryWriteAutomatically !== false) return send(res, 503, { ok: false, error: 'RESEARCH_BROKER_RESULT_UNVERIFIED' });
       return send(res, 200, { ok: true, ...result });
     } catch (error) {
-      const known = /^(RESEARCH|REPORT)_[A-Z0-9_]+$/.test(error.code || '');
+      const known = /^(RESEARCH|REPORT|REVIEW_REVISION)_[A-Z0-9_]+$/.test(error.code || '');
       const authError = ['authentication_required', 'insufficient_role', 'origin_rejected', 'csrf_rejected'].includes(error.code);
       const status = authError ? error.status || 403 : error.code === 'RESEARCH_BODY_TIMEOUT' ? 408
         : error.code === 'RESEARCH_REQUEST_BOUND' ? 413 : known && /REQUEST|BODY_ENCODING|DRAFT_|REPORT_(DATE|KIND|JSON|UTF8|HASH)/.test(error.code) ? 400 : 503;

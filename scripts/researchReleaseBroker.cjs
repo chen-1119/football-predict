@@ -67,8 +67,8 @@ function syncNew(file, bytes) {
 }
 function requestJournalIdentity(request) {
   let purpose; try { purpose = JSON.parse(request.toString('utf8')); } catch { fail('RESEARCH_REQUEST_JSON'); }
-  if (purpose?.version !== 'research-broker-request-v1' || !['archive','archive-read','publish','publication-read'].includes(purpose.action)) fail('RESEARCH_REQUEST_ACTION');
-  const requestSha = sha(request), readOnly = ['archive-read','publication-read'].includes(purpose.action);
+  if (purpose?.version !== 'research-broker-request-v1' || !['archive','archive-read','publish','publication-read','revision-publish','revision-read'].includes(purpose.action)) fail('RESEARCH_REQUEST_ACTION');
+  const requestSha = sha(request), readOnly = ['archive-read','publication-read','revision-read'].includes(purpose.action);
   // Read requests need a fresh database observation. A cached not-observed read
   // must never hide a later COMMIT. Mutation identities remain durable/exact.
   return { requestSha, readOnly, journalId: requestSha + (readOnly ? '-read-' + crypto.randomBytes(12).toString('hex') : '') };

@@ -58,7 +58,7 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
       || typeof result.originalReceiptBase64 !== 'string'
       || typeof result.deliveredAt !== 'string' || !Number.isFinite(Date.parse(result.deliveredAt))
       || new Date(result.deliveredAt).toISOString() !== result.deliveredAt || Date.parse(result.deliveredAt) < startedAt
-      || Date.parse(result.deliveredAt) > finishedBy || !['archive','publish'].includes(decodeRequest(raw).action)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+      || Date.parse(result.deliveredAt) > finishedBy || !['archive','publish','revision-publish'].includes(decodeRequest(raw).action)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
     const saved = Buffer.from(result.originalReceiptBase64,'base64');
     if(saved.toString('base64')!==result.originalReceiptBase64||saved.length>3*1024*1024-4096
       ||sha(saved)!==result.originalReceiptSha256||!Buffer.from(saved.toString()).equals(saved)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
@@ -91,6 +91,21 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
         || new Date(value.receivedAt).toISOString() !== value.receivedAt
         || Date.parse(value.receivedAt) < Date.parse(exact.generatedAt)
         || Date.parse(value.receivedAt) > Date.parse(result.finishedAt)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+    }
+  } else if(request.action.startsWith('revision-')) {
+    const r=JSON.parse(request.json),key=require('./researchReviewedRevision.cjs').validate(r);
+    if(value.key!==key||!['not-observed','record-present-ack-missing','committed-and-acknowledged'].includes(value.state)
+      ||(value.state==='committed-and-acknowledged'&&(value.verified!==true||value.revision!==r.revision||value.baseRecordKey!==r.baseRecordKey
+        ||value.basePayloadSha256!==r.basePayloadSha256||value.previousRevisionHash!==r.previousRevisionHash||value.originalSettlementPreserved!==true||value.independentEventIncrement!==0
+        ||['payloadSha256','ackSha256','originalDecisionHash'].some(k=>!/^[a-f0-9]{64}$/.test(value[k]||''))))
+      ||(value.state!=='committed-and-acknowledged'&&value.verified!==false))fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+    if(value.verified){
+      const policy=require('../scripts/recommendationPlatform/reviewedAnalysis.cjs'),pick=r.draft.singles[0],latest=value.latestDecision,first=value.originalDecision;
+      if(!latest||!first||policy.hash(first)!==value.originalDecisionHash||latest.eventId!==r.eventId||first.eventId!==r.eventId
+        ||latest.eventVersion!==first.eventVersion||latest.market!==pick.market||latest.selection!==pick.selection
+        ||(latest.handicap??null)!==pick.handicap||policy.hash(latest.scores)!==policy.hash(pick.scores)
+        ||latest.homeTeamName!==pick.teams[0]||latest.awayTeamName!==pick.teams[1]||latest.homeTeamId!==first.homeTeamId||latest.awayTeamId!==first.awayTeamId
+        ||latest.modelProbability!==null||latest.modelVersion!==null||latest.formalEligible!==false)fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
     }
   } else {
     const key = request.action === 'publish' ? 'reviewed-analysis-' + JSON.parse(request.json).businessDate + '-batch-' + request.draftHash : request.recordKey;
