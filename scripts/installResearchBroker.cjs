@@ -47,13 +47,18 @@ function installRoot(wire){
   ||!crypto.verify('sha256',bytes[3],{key,padding:crypto.constants.RSA_PKCS1_PADDING},bytes[4]))fail('RESEARCH_INSTALL_RELEASE_SIGNATURE');
  const manifest=JSON.parse(bytes[3]),inventory=new Map(manifest.archiveSourceEvidence?.inventory?.entries?.map(r=>[r.path,r.sha256]));
  if(manifest.ok!==true||manifest.manifestVersion!==3||manifest.sha256!==body.releaseSha||!Number.isSafeInteger(manifest.releaseSequence)||!inventory.size
-  ||manifest.archiveSourceEvidence.archiveSha256!==body.releaseSha||manifest.archiveSourceEvidence.inventorySha256!==hash(JSON.stringify(manifest.archiveSourceEvidence.inventory))
+  ||manifest.archiveSourceEvidence.archiveSha256!==body.releaseSha||manifest.archiveSourceEvidence.inventorySha256!==manifest.archiveSourceEvidence.inventory.treeHash
   ||manifest.signature?.keyId!==body.keyId||manifest.signature?.algorithm!=='rsa-sha256-pkcs1-v1_5')fail('RESEARCH_INSTALL_RELEASE');
  if(inventory.get('scripts/installResearchBroker.cjs')!==hash(read(APP+'/scripts/installResearchBroker.cjs',1048576)))fail('RESEARCH_INSTALL_ENTRY_SOURCE');
  for(let i=0;i<3;i++)if(inventory.get(names[i])!==hash(bytes[i])||!read(APP+'/'+names[i],1048576).equals(bytes[i]))fail('RESEARCH_INSTALL_SOURCE');
  // All root broker/worker imports must come from this signed full source tree.
  const visited=new Set();function visit(p){if(!p.startsWith(APP+'/'))fail('RESEARCH_INSTALL_SOURCE_PATH');if(visited.has(p))return;visited.add(p);const b=read(p,8*1024*1024);if(inventory.get(path.relative(APP,p))!==hash(b))fail('RESEARCH_INSTALL_SOURCE');for(const r of b.toString().matchAll(/require\(['"](\.[^'"]+)['"]\)/g))visit(require.resolve(path.resolve(path.dirname(p),r[1])));}
  visit(APP+'/scripts/researchReleaseBroker.cjs');visit(APP+'/scripts/researchBrokerWorker.cjs');visit(APP+'/deploy/light-server/collector-trust-registry.json');
+ // Use the normal archive producer's commitment: treeHash commits the inventory
+ // body, excluding the treeHash field itself. Verify its complete schema/counts
+ // and source closure before importing the shared validator.
+ visit(APP+'/scripts/releaseArchiveSourceInventory.cjs');
+ require(APP+'/scripts/releaseArchiveSourceInventory.cjs').validateSignedArchiveSourceEvidence(manifest);
  require(APP+'/server/researchBrokerDependencies.cjs').verify(APP,JSON.parse(bytes[5]),p=>read(p,4*1024*1024));
  const platform=JSON.parse(bytes[6]);if(platform.version!=='research-platform-runtime-v1'||!Array.isArray(platform.files)||platform.files.length<5||platform.files.length>512)fail('RESEARCH_INSTALL_PLATFORM');
  const fixed=['/usr/bin/python3.12','/usr/bin/flock','/usr/bin/systemctl','/usr/sbin/runuser',NODE];
