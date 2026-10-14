@@ -20,6 +20,9 @@ function verifyProductionPlanSourceContracts() {
     ["missing real root selector", "scripts/createReleaseBundle.cjs", "...listReleaseRootEntries(rootDir)", '"./"'],
     ["root QA exclusions removed", "scripts/releaseWorkspaceFreshness.cjs", 'name !== "outputs"', 'true'],
     ["manifest signing removed", "scripts/createReleaseBundle.cjs", "signManifestBytes", "REMOVED_SIGNING"],
+    ["model input admission removed", "scripts/createReleaseBundle.cjs", "if (!admittedModelEvaluation.ok) throw", "if (false) throw"],
+    ["model validation protocol changed", "scripts/releaseModelEvaluationInput.cjs", "nested-expanding-window-candidate-selection-v2", "REMOVED_PROTOCOL"],
+    ["model validation comparison removed", "scripts/releaseModelEvaluationInput.cjs", "parsed.walkForwardValidation?.protocolVersion!==EXPECTED_WALK_FORWARD_PROTOCOL", "false"],
     ["rollback contract removed", "deploy/light-server/release-from-bundle.sh", "restore_app_tree_after_rollback", "REMOVED_ROLLBACK"],
   ]) check(`${name} still fails the actual plan contract`, () => {
     const source = read(file); assert.ok(source.includes(from));
