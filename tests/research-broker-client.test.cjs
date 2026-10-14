@@ -93,3 +93,26 @@ test('fresh exact read journals can observe a later COMMIT while mutation reques
   a.throws(() => requestJournalIdentity(Buffer.from('{')), { code: 'RESEARCH_REQUEST_JSON' });
   a.throws(() => requestJournalIdentity(Buffer.from(JSON.stringify({ action: 'run-any-program' }))), { code: 'RESEARCH_REQUEST_ACTION' });
 });
+
+const originalReport = JSON.stringify({ version: 'cloud-research-report-v1', businessDate: input.businessDate,
+  reportKind: input.reportKind, generatedAt: '2026-10-14T02:00:00.000Z', contents: { text: 'Original immutable report' } });
+const reportRequest = Buffer.from(JSON.stringify({ ...input, sha256: sha(originalReport) }));
+function archivedEnvelope(change = () => {}) {
+  const value = { ok: true, key, state: 'report-archived', sha256: sha(originalReport), bytes: Buffer.byteLength(originalReport),
+    originalJson: originalReport, generatedAt: '2026-10-14T02:00:00.000Z', receivedAt: '2026-10-14T02:00:01.000Z',
+    readbackVerified: true, verificationScope: 'archive-byte-integrity-only', published: false,
+    recommendationEligibilityVerified: false, retryWriteAutomatically: false };
+  change(value); return envelope(r => { r.requestSha = sha(reportRequest); r.stdout = JSON.stringify(value); });
+}
+test('report response verifies original JSON bytes and metadata rather than accepting an echoed hash', () => {
+  const r = client.decodeBrokerResponse(archivedEnvelope(), reportRequest, { releaseSha }, Date.now() - 1000, Date.now() + 1000);
+  a.equal(r.originalJson, originalReport); a.equal(r.published, false);
+});
+for (const [name, change] of [
+  ['altered original bytes', r => { r.originalJson += ' '; }],
+  ['wrong size', r => { r.bytes++; }],
+  ['missing original', r => { delete r.originalJson; }],
+  ['receipt before generation', r => { r.receivedAt = '2026-10-14T01:59:59.000Z'; }],
+]) test('report response refuses ' + name, () => {
+  a.throws(() => client.decodeBrokerResponse(archivedEnvelope(change), reportRequest, { releaseSha }, Date.now() - 1000, Date.now() + 1000));
+});

@@ -4,7 +4,7 @@
 const fs = require('node:fs'), path = require('node:path'), net = require('node:net');
 const { createHash } = require('node:crypto');
 const { decodeRequest, MAX_REQUEST_BYTES } = require('./researchWriteService.cjs');
-const { reportKey } = require('./researchReportStore.cjs');
+const { reportKey, prepare } = require('./researchReportStore.cjs');
 const ROOT = '/opt/football-predict', NODE = '/opt/node-v22.22.1/bin/node';
 const CONFIG = '/usr/local/libexec/football-research-broker/runtime-binding.json';
 const SOCKET = '/run/football-research-broker/submit.sock';
@@ -68,6 +68,15 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
       || (value.state === 'report-archived' && (value.sha256 !== request.sha256 || value.readbackVerified !== true
         || value.verificationScope !== 'archive-byte-integrity-only' || value.published !== false
         || value.recommendationEligibilityVerified !== false))) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+    if (value.state === 'report-archived') {
+      if (typeof value.originalJson !== 'string') fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+      const exact = prepare(Buffer.from(value.originalJson), request.sha256);
+      if (exact.key !== key || exact.bytes !== value.bytes || exact.generatedAt !== value.generatedAt
+        || typeof value.receivedAt !== 'string' || !Number.isFinite(Date.parse(value.receivedAt))
+        || new Date(value.receivedAt).toISOString() !== value.receivedAt
+        || Date.parse(value.receivedAt) < Date.parse(exact.generatedAt)
+        || Date.parse(value.receivedAt) > Date.parse(result.finishedAt)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+    }
   } else {
     const key = request.action === 'publish' ? 'reviewed-analysis-' + JSON.parse(request.json).businessDate + '-batch-' + request.draftHash : request.recordKey;
     if (value.recordKey !== key || !['not-observed','orphan-ack-unverified','record-present-ack-missing','committed-and-acknowledged'].includes(value.state)
