@@ -129,3 +129,34 @@ is not installed; the fixed submit adapter, signed installer and complete cloud
 read/archive/publish/ACK validation remain required before schedule handover.
 The disposable PostgreSQL verifier checks that a report archived concurrently
 becomes visible only in the next day snapshot, with no production rows written.
+
+## Fixed local socket transport candidate
+
+The repository API unit retains `NoNewPrivileges=true` and `RestrictSUIDSGID=true`.
+The new client uses only `/run/football-research-broker/submit.sock`; it grants no
+sudo permission or alternative network destination. It requires root-owned
+installed binding, current release markers and exact API/client source hashes,
+the fixed API entry command, and the root-owned socket with the bound football
+UID/GID. Missing installation refuses the request. Framing is bounded, original
+bytes are owned before awaiting, and responses must match request hash, release,
+fresh result clock, exact report/publication identity and child outcome.
+
+The Linux peer module reads kernel `SO_PEERCRED`, current systemd MainPID and
+invocation, process start identity, exact command/executable/cgroup and IDs.
+The later signed root socket service must check the peer before and after the
+body, compare both observations and then invoke only the fixed release broker.
+It must retain complete signed unit/runtime/external dependency validation and
+control-group child cleanup. That root listener/launcher and installer are not
+implemented or installed by this candidate. The HTTP handler remains unwired.
+
+Read requests receive a new root journal identity for each observation, so a
+previous `not-observed` receipt cannot permanently hide a later commit. Mutation
+request identities remain stable and unfinished mutation intents still refuse
+automatic re-execution. Reused old mutation receipts require a separate fresh
+read rather than being presented as a current readback.
+
+Linux tests use disposable sockets and real kernel peer PID/UID/GID/process
+identity. Production command/cgroup comparisons use explicit fixtures; no
+actual installed API caller, runuser or signed socket service pass is claimed.
+References: [Linux unix(7)](https://man7.org/linux/man-pages/man7/unix.7.html) and
+[Python socket API](https://docs.python.org/3/library/socket.html).

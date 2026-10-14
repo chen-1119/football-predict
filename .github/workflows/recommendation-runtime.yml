@@ -9,6 +9,10 @@ on:
       - 'server/researchReportStore.cjs'
       - 'server/researchWriteService.cjs'
       - 'server/researchWriteHttp.cjs'
+      - 'server/researchBrokerClient.cjs'
+      - 'scripts/researchSocketPeer.py'
+      - 'scripts/verifyResearchSocketPeer.py'
+      - 'tests/research-broker-client.test.cjs'
       - 'server/researchRequestBody.cjs'
       - 'tests/research-write-http.test.cjs'
       - 'server/researchReleaseLock.cjs'
@@ -198,7 +202,9 @@ jobs:
         env:
           RESEARCH_ARCHIVE_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Immutable report archive storage and unknown commit recovery
-        run: node --test tests/research-report-store.test.cjs tests/research-write-service.test.cjs tests/research-write-http.test.cjs
+        run: node --test tests/research-report-store.test.cjs tests/research-write-service.test.cjs tests/research-write-http.test.cjs tests/research-broker-client.test.cjs
+      - name: Kernel Unix socket peer identity in isolated Linux fixtures
+        run: python3 scripts/verifyResearchSocketPeer.py
       - name: Real Linux release-lock contention and child lifetime
         run: node scripts/verifyResearchReleaseLock.cjs
       - name: Native PostgreSQL report archive concurrency

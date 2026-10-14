@@ -62,20 +62,29 @@ function syncNew(file, bytes) {
   try { fs.writeFileSync(fd, bytes); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
   const d = fs.openSync(path.dirname(file), fs.constants.O_RDONLY); try { fs.fsyncSync(d); } finally { fs.closeSync(d); }
 }
+function requestJournalIdentity(request) {
+  let purpose; try { purpose = JSON.parse(request.toString('utf8')); } catch { fail('RESEARCH_REQUEST_JSON'); }
+  if (purpose?.version !== 'research-broker-request-v1' || !['archive','archive-read','publish','publication-read'].includes(purpose.action)) fail('RESEARCH_REQUEST_ACTION');
+  const requestSha = sha(request), readOnly = ['archive-read','publication-read'].includes(purpose.action);
+  // Read requests need a fresh database observation. A cached not-observed read
+  // must never hide a later COMMIT. Mutation identities remain durable/exact.
+  return { requestSha, readOnly, journalId: requestSha + (readOnly ? '-read-' + crypto.randomBytes(12).toString('hex') : '') };
+}
 async function main() {
   const lockFd = findHeldReleaseLock(), binding = verifyInstalledBinding();
   const directory = fs.lstatSync(JOURNAL);
   if (!directory.isDirectory() || directory.isSymbolicLink() || directory.uid !== 0 || (directory.mode & 0o077)) fail('RESEARCH_JOURNAL_IDENTITY');
   const request = await readResearchRequestBody(process.stdin, { maxBytes: MAX_BYTES });
-  const requestSha = sha(request);
-  // Parse in the unprivileged child. Root accepts bounded bytes only.
-  const intent = path.join(JOURNAL, requestSha + '.intent.json'), receipt = path.join(JOURNAL, requestSha + '.receipt.json');
-  if (fs.existsSync(receipt)) {
+  const { requestSha, readOnly, journalId } = requestJournalIdentity(request);
+  // Full request/draft validation stays in the unprivileged child. Root only
+  // classifies the four fixed purposes and journals the original bounded bytes.
+  const intent = path.join(JOURNAL, journalId + '.intent.json'), receipt = path.join(JOURNAL, journalId + '.receipt.json');
+  if (!readOnly && fs.existsSync(receipt)) {
     const saved = trustedFile(receipt, 3 * 1024 * 1024), result = JSON.parse(saved);
     if (result.requestSha !== requestSha || result.releaseSha !== binding.releaseSha) fail('RESEARCH_RECEIPT_BINDING');
     process.stdout.write(saved); if (result.code !== 0 || result.overflow) process.exitCode = 1; return;
   }
-  if (fs.existsSync(intent)) fail('RESEARCH_PREVIOUS_REQUEST_UNCONFIRMED_READ_FIRST');
+  if (!readOnly && fs.existsSync(intent)) fail('RESEARCH_PREVIOUS_REQUEST_UNCONFIRMED_READ_FIRST');
   syncNew(intent, JSON.stringify({ version: 'research-broker-intent-v1', requestSha, releaseSha: binding.releaseSha, admittedAt: new Date().toISOString(), automaticWriteRetry: false }));
   const beforePid = cp.execFileSync('/usr/bin/systemctl', ['show', 'football-predict.service', '--property=MainPID', '--value'], { encoding: 'utf8' }).trim();
   if (!/^[1-9][0-9]*$/.test(beforePid)) fail('RESEARCH_API_NOT_ACTIVE');
@@ -112,4 +121,4 @@ if (require.main === module) main().catch(e => {
   process.stdin.destroy();
   process.stderr.write(JSON.stringify({ ok: false, error: /^[A-Z0-9_]+$/.test(e.code || '') ? e.code : 'RESEARCH_BROKER_UNCONFIRMED_READ_FIRST', retryWriteAutomatically: false }) + '\n'); process.exitCode = 1;
 });
-module.exports = { trustedFile, syncNew };
+module.exports = { trustedFile, syncNew, requestJournalIdentity };
