@@ -88,3 +88,25 @@ The signed installer, independent source review, actual runuser and installed
 binding verification, authenticated caller admission, model API configuration
 and budget, scheduled report generation and real offline acceptance remain
 required. Keep local schedules active meanwhile.
+
+## HTTP admission candidate
+
+`researchWriteHttp.cjs` adds four exact POST route contracts for report archive,
+report readback, exact-draft publication and publication readback. It is not
+wired into `server/index.cjs`. The fixed submit adapter and signed root broker
+installation remain absent; missing submit dependency returns unavailable.
+There is no direct SQL fallback, new account role, credential export or timer.
+
+Admission reuses the existing account session, exact Origin and session-bound
+CSRF checks. Role and session are rechecked after the body arrives. Requests
+are JSON UTF-8 only, uncompressed, at most 1 MiB and delivered within 8 seconds;
+one operation can be active and each account has a bounded request window.
+The original request bytes and action-to-route binding are preserved. Unknown
+outcomes do not trigger an automatic write retry. Tests exercise the actual
+account authorization helper with a synthetic read-only database fixture;
+that is not independent production login or PostgreSQL integration proof.
+
+The root CLI also bounds stdin delivery to 8 seconds and now includes its own
+entry module in the signed source-closure verification. On pre-child failure,
+stdin is closed. The existing release mutex and database-child lifetime
+remain unchanged. Full new-head CI and installed caller validation are required.

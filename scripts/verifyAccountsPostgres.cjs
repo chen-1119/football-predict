@@ -3,6 +3,7 @@
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const { Readable } = require('node:stream');
 const { createAccounts } = require('../server/accounts.cjs');
+const { createResearchWriteHandler } = require('../server/researchWriteHttp.cjs');
 const { bootstrap } = require('./bootstrapAccountAdmin.cjs');
 const { makeDecision } = require('./recommendationPlatform/decision.cjs');
 const { match, NOW, publication } = require('../tests/recommendationFixture.cjs');
@@ -44,6 +45,20 @@ async function verify(pool) {
     return client;
   }
   const password = 'test accounts password 2026';
+  let researchSubmissions = 0;
+  const research = createResearchWriteHandler({ accounts: service, submit: async () => {
+    researchSubmissions++;
+    return { state: 'not-observed', verified: false, retryWriteAutomatically: false };
+  } });
+  async function researchAdmission(b, override = {}) {
+    const raw = Buffer.from(JSON.stringify({ version: 'research-broker-request-v1', action: 'archive-read',
+      businessDate: '2026-10-14', reportKind: 'weekday-2100-full', sha256: 'a'.repeat(64) }));
+    const req = Readable.from([raw]); req.method = 'POST';
+    req.headers = { origin: options.origin, cookie: b.cookie, 'x-csrf-token': b.csrf, 'content-type': 'application/json', ...override };
+    const response = { writeHead(status) { this.status = status; }, end(bytes) { this.body = JSON.parse(bytes); } };
+    assert.equal(await research(req, response, new URL('/api/operator/research/report-read', options.origin)), true);
+    return response;
+  }
   async function register(name) {
     const b = browser(); await b.call('GET', '/me');
     const response = await b.call('POST', '/register', { username: name, password, displayName: name, role: 'admin', userId: 'attacker-supplied' });
@@ -127,6 +142,13 @@ async function verify(pool) {
     const makeOperator = await admin.b.call('POST', `/admin/users/${operator.user.id}/role`, { role: 'operator', currentPassword: password, reason: 'test operator role' });
     check(() => assert.equal(makeOperator.status, 200));
     await operator.b.call('GET', '/me'); await operator.b.call('POST', '/login', { username: operator.user.username, password });
+    const adminAdmission = await researchAdmission(admin.b), operatorAdmission = await researchAdmission(operator.b);
+    check(() => assert.equal(adminAdmission.status, 200)); check(() => assert.equal(operatorAdmission.status, 200));
+    check(() => assert.equal(adminAdmission.body.verified, false)); check(() => assert.equal(researchSubmissions, 2));
+    const ordinaryAdmission = await researchAdmission(bob.b), csrfAdmission = await researchAdmission(operator.b, { 'x-csrf-token': admin.b.csrf });
+    check(() => assert.equal(ordinaryAdmission.status, 403)); check(() => assert.equal(csrfAdmission.status, 403));
+    const originAdmission = await researchAdmission(operator.b, { origin: 'https://attacker.example' });
+    check(() => assert.equal(originAdmission.status, 403)); check(() => assert.equal(researchSubmissions, 2));
     const deniedRole = await operator.b.call('POST', `/admin/users/${bob.user.id}/role`, { role: 'admin', currentPassword: password, reason: 'test' }); check(() => assert.equal(deniedRole.status, 403));
     const deniedPassword = await admin.b.call('POST', `/admin/users/${bob.user.id}/status`, { status: 'blocked', currentPassword: 'wrong', reason: 'test' }); check(() => assert.equal(deniedPassword.status, 403));
     const grant = await operator.b.call('POST', `/admin/users/${bob.user.id}/grant`, { days: 2, currentPassword: password, reason: 'test grant' }); check(() => assert.equal(grant.status, 200));
@@ -139,6 +161,8 @@ async function verify(pool) {
     const expiredSession = await recovery.call('GET', '/follows'); check(() => assert.equal(expiredSession.status, 401));
     const logout = await operator.b.call('POST', '/logout'); check(() => assert.equal(logout.status, 200));
     const loggedOut = await operator.b.call('GET', '/sessions'); check(() => assert.equal(loggedOut.status, 401));
+    const revokedAdmission = await researchAdmission(operator.b);
+    check(() => assert.equal(revokedAdmission.status, 401)); check(() => assert.equal(researchSubmissions, 2));
     const auditRows = (await q('SELECT action,detail FROM football.account_audit_events')).rows;
     check(() => assert(auditRows.some(row => row.action === 'account.status_changed')));
     check(() => assert(!JSON.stringify(auditRows).includes(password) && !JSON.stringify(auditRows).includes(alice.recoveryCode)));
@@ -146,7 +170,9 @@ async function verify(pool) {
     const secrets = (await q('SELECT password_hash,recovery_hash FROM football.account_users WHERE id=$1', [alice.user.id])).rows[0];
     check(() => assert.notEqual(secrets.recovery_hash, alice.recoveryCode)); check(() => assert.match(secrets.recovery_hash, /^[a-f0-9]{64}$/));
     check(() => assert.equal(errors.length, 0));
-    return { ok: true, checks, engine: 'native-postgresql', isolatedSchema: true };
+    return { ok: true, checks, engine: 'native-postgresql', isolatedSchema: true,
+      researchAdmission: { actualSessionAndRole: true, crossOriginAndTransplantedCsrfRejected: true,
+        revokedSessionRejected: true, fixedSubmitTestStub: true, submittedReads: researchSubmissions, productionBrokerInstalled: false } };
   } finally { await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`); }
 }
 function awaitlessHasNoSecret(value) { return !('recoveryCode' in value) && !JSON.stringify(value).includes('password_hash'); }

@@ -6,6 +6,7 @@ const path = require('node:path');
 const cp = require('node:child_process');
 const crypto = require('node:crypto');
 const { findHeldReleaseLock, releaseBoundary } = require('../server/researchReleaseLock.cjs');
+const { readResearchRequestBody } = require('../server/researchRequestBody.cjs');
 const ROOT = '/opt/football-predict';
 const CONFIG = '/usr/local/libexec/football-research-broker/runtime-binding.json';
 const JOURNAL = '/var/lib/football-research-broker';
@@ -53,7 +54,7 @@ function verifyInstalledBinding() {
     if (inventory.get(relative) !== sha(body)) fail('RESEARCH_SOURCE_HASH');
     for (const m of body.toString().matchAll(/require\(['"](\.[^'"]+)['"]\)/g)) visit(require.resolve(path.resolve(path.dirname(file), m[1])));
   }
-  for (const file of ['scripts/researchBrokerWorker.cjs', 'deploy/light-server/collector-trust-registry.json']) visit(ROOT + '/' + file);
+  for (const file of ['scripts/researchReleaseBroker.cjs', 'scripts/researchBrokerWorker.cjs', 'deploy/light-server/collector-trust-registry.json']) visit(ROOT + '/' + file);
   return binding;
 }
 function syncNew(file, bytes) {
@@ -65,9 +66,8 @@ async function main() {
   const lockFd = findHeldReleaseLock(), binding = verifyInstalledBinding();
   const directory = fs.lstatSync(JOURNAL);
   if (!directory.isDirectory() || directory.isSymbolicLink() || directory.uid !== 0 || (directory.mode & 0o077)) fail('RESEARCH_JOURNAL_IDENTITY');
-  const chunks = []; let count = 0;
-  for await (const b of process.stdin) { count += b.length; if (count > MAX_BYTES) fail('RESEARCH_REQUEST_BOUND'); chunks.push(b); }
-  const request = Buffer.concat(chunks), requestSha = sha(request);
+  const request = await readResearchRequestBody(process.stdin, { maxBytes: MAX_BYTES });
+  const requestSha = sha(request);
   // Parse in the unprivileged child. Root accepts bounded bytes only.
   const intent = path.join(JOURNAL, requestSha + '.intent.json'), receipt = path.join(JOURNAL, requestSha + '.receipt.json');
   if (fs.existsSync(receipt)) {
@@ -109,6 +109,7 @@ async function main() {
   if (code !== 0 || overflow) process.exitCode = 1;
 }
 if (require.main === module) main().catch(e => {
+  process.stdin.destroy();
   process.stderr.write(JSON.stringify({ ok: false, error: /^[A-Z0-9_]+$/.test(e.code || '') ? e.code : 'RESEARCH_BROKER_UNCONFIRMED_READ_FIRST', retryWriteAutomatically: false }) + '\n'); process.exitCode = 1;
 });
 module.exports = { trustedFile, syncNew };
