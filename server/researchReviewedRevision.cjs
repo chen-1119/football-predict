@@ -3,7 +3,8 @@
 // projection/settlement remain unchanged. Requires the installed root broker.
 const p=require('../scripts/recommendationPlatform/reviewedAnalysis.cjs');
 const original=require('../scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs');
-const {SELECT,verifyRow}=require('../scripts/postgresPrivateModelArtifactStore.cjs');
+const {verifyRow}=require('../scripts/postgresPrivateModelArtifactStore.cjs');
+const {SELECT}=require('../scripts/leagueBaselineRegistry.cjs');
 const {loadCollectorTrustRegistry}=require('../src/services/collectorAttestation.cjs');
 const {readLiveOfficialSnapshot}=require('../scripts/recommendationPlatform/liveOfficialHandicap.cjs');
 const {epochNanoseconds:ns}=require('../src/services/prematchV3Clock.cjs');
