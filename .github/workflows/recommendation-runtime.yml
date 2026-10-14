@@ -7,6 +7,12 @@ on:
       - 'server/index.cjs'
       - 'server/researchArchiveRead.cjs'
       - 'server/researchReportStore.cjs'
+      - 'server/researchWriteService.cjs'
+      - 'server/researchReleaseLock.cjs'
+      - 'scripts/researchBrokerWorker.cjs'
+      - 'scripts/researchReleaseBroker.cjs'
+      - 'scripts/verifyResearchReleaseLock.cjs'
+      - 'tests/research-write-service.test.cjs'
       - 'tests/research-report-store.test.cjs'
       - 'scripts/verifyResearchReportPostgres.cjs'
       - 'tests/research-archive-read.test.cjs'
@@ -189,7 +195,9 @@ jobs:
         env:
           RESEARCH_ARCHIVE_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Immutable report archive storage and unknown commit recovery
-        run: node --test tests/research-report-store.test.cjs
+        run: node --test tests/research-report-store.test.cjs tests/research-write-service.test.cjs
+      - name: Real Linux release-lock contention and child lifetime
+        run: node scripts/verifyResearchReleaseLock.cjs
       - name: Native PostgreSQL report archive concurrency
         run: node scripts/verifyResearchReportPostgres.cjs
         env:

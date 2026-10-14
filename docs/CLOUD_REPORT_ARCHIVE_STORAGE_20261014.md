@@ -26,8 +26,8 @@ readback is also explicitly unverified.
 
 ## Production integration remains disabled
 
-No HTTP route, account permission, CLI, server process or production wiring is
-added. The write method refuses to run without a supplied `runExclusive` broker.
+No HTTP route, account permission, scheduled process or production wiring is
+installed. The write method refuses to run without a supplied `runExclusive` broker.
 That dependency is not itself a security proof: the later reviewed broker must
 hold the actual `/run/lock/football-release.lock`, verify current release identity
 and absence of pending recovery, and keep the lock through committed readback.
@@ -59,3 +59,32 @@ handover. Keep the two original dot tasks paused and local tasks active until
 the full cloud read/archive/publish/ACK path is verified. Only then pause local
 tasks, drain prior executions, enable the original cloud schedules and conduct
 an actual workstation-offline acceptance interval.
+
+## Root broker candidate
+
+`researchReleaseBroker.cjs` is a fixed CLI candidate. It requires Linux root,
+an already-held actual release lock acquired with util-linux `flock --no-fork`,
+a root-owned binding, a verified RSA release manifest, exact source closure,
+root-owned source bytes, accepted release markers and no pending recovery.
+The binding and journal directories have no production installer yet; absence
+is a refusal. The CLI does not reuse an old incident authorization.
+
+It starts the fixed worker as `football` using only the current API's allowlisted
+database and signed-snapshot settings. It passes the actual lock FD as FD3, so
+a killed parent cannot release the mutex while the database child is running.
+The Linux verifier exercises real contention and the parent-crash case with
+isolated temporary files, without accessing the production lock.
+
+Requests contain bounded original JSON and exact hashes, with four fixed actions:
+archive, archive-read, publish and publication-read. Requests cannot select an
+executable, key, database, file path or user. Publication calls the existing v3
+publisher and replays the original record and second ACK. A present record
+without ACK returns unverified and is never rewritten. The root journal fsyncs
+an intent before execution and preserves its outcome. An unfinished prior
+intent refuses automatic re-execution; a separate read request checks the result.
+
+This is a candidate, not an installed publisher or scheduled research agent.
+The signed installer, independent source review, actual runuser and installed
+binding verification, authenticated caller admission, model API configuration
+and budget, scheduled report generation and real offline acceptance remain
+required. Keep local schedules active meanwhile.
