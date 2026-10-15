@@ -23,7 +23,16 @@ function read(file,max){const s=fs.lstatSync(file);a(s.isFile()&&!s.isSymbolicLi
 function heldAncestorLock(ownerPid,lockPath='/run/lock/football-release.lock'){
  const t=fs.lstatSync(lockPath);a(t.isFile()&&!t.isSymbolicLink()&&t.uid===0&&t.nlink===1);const ancestors=new Set([process.pid]);let pid=process.ppid;
  for(let i=0;i<16&&pid>1&&!ancestors.has(ownerPid);i++){const s=fs.readFileSync('/proc/'+pid+'/status','utf8');a.equal(/^Uid:\s+(\d+)/m.exec(s)?.[1],'0');ancestors.add(pid);pid=Number(/^PPid:\s+(\d+)/m.exec(s)?.[1]);}a(ancestors.has(ownerPid));
- for(const name of fs.readdirSync('/proc/self/fd')){if(!/^\d+$/.test(name))continue;try{const st=fs.fstatSync(Number(name));if(st.dev!==t.dev||st.ino!==t.ino)continue;const m=/lock:\s+\d+:\s+FLOCK\s+ADVISORY\s+WRITE\s+(\d+)\s+/m.exec(fs.readFileSync('/proc/self/fdinfo/'+name,'utf8'));if(m&&ancestors.has(Number(m[1])))return{ownerPid:Number(m[1]),device:String(t.dev),inode:String(t.ino)};}catch{/* disappearing unrelated descriptor */}}
+ const lockEntry=info=>/lock:\s+\d+:\s+(FLOCK\s+ADVISORY\s+WRITE\s+(-?\d+)\s+[^\n]+)/m.exec(info);
+ for(const name of fs.readdirSync('/proc/self/fd')){if(!/^\d+$/.test(name))continue;try{
+  const st=fs.fstatSync(Number(name));if(st.dev!==t.dev||st.ino!==t.ino)continue;const m=lockEntry(fs.readFileSync('/proc/self/fdinfo/'+name,'utf8'));if(!m)continue;
+  if(ancestors.has(Number(m[2])))return{ownerPid:Number(m[2]),device:String(t.dev),inode:String(t.ino)};
+  // The installed shell uses exec 9>lock; flock -n 9. The acquiring child exits
+  // while the locked open-file description remains inherited. Verify the same
+  // exclusive kernel entry on our descriptor and fixed FD 9 of the root caller.
+  const anchor=fs.statSync('/proc/'+ownerPid+'/fd/9'),held=lockEntry(fs.readFileSync('/proc/'+ownerPid+'/fdinfo/9','utf8'));
+  if(anchor.dev===t.dev&&anchor.ino===t.ino&&held&&held[1].trim().replace(/\s+/g,' ')===m[1].trim().replace(/\s+/g,' '))return{ownerPid,device:String(t.dev),inode:String(t.ino)};
+ }catch{/* disappearing unrelated descriptor or absent fixed parent descriptor */}}
  throw Error('baseline preparation requires inherited exclusive root flock');
 }
 async function verify(stage,candidateSha,ownerPid,previous){

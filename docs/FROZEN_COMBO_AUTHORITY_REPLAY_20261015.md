@@ -61,3 +61,9 @@ clocks within 900 seconds, and requires the old worker to be stopped. All new
 candidate service health, schema, data bytes, frozen originals, archives,
 capacity, publication identity, fresh final lease and post swap gates remain.
 
+The actual installed controller acquires its lock with `exec 9>lock; flock -n 9`, then calls the signed shell and command substitution. The acquiring child has already exited, while the locked open-file description remains inherited. The preparation proof also compares the descriptor actual exclusive kernel entry with fixed FD 9 of its verified root controller ancestor. A same-inode independent open, unheld descriptor, shared lock or unrelated ancestor cannot substitute for it. The isolated Linux fixture executes that exact shell pattern and negative case. The independent research broker own-PID no-fork lock policy is unchanged.
+
+After actual new candidate health and its complete core verifier have passed,
+the final old-service checkpoint repeats the same bounded read only paused
+baseline proof. This covers all three old baseline service checkpoints while
+retaining actual new candidate health and both post swap health checkpoints.
