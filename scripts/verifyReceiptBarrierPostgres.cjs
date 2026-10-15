@@ -24,7 +24,16 @@ async function verify(){
   a.equal(state.held,true);a.equal(nextGranted,false);a.equal((await reader.query('SHOW lock_timeout')).rows[0].lock_timeout,'7s');
   await reader.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');a.equal((await reader.query('SELECT value FROM '+schema+'.marker')).rows[0].value,1);await reader.query('ROLLBACK');
   a.equal(nextGranted,false);a.equal((await reader.query('SELECT pg_advisory_unlock_shared(hashtext($1)) AS released',[KEY])).rows[0].released,true);await nextLock;a.equal(nextGranted,true);await next.query('SELECT pg_advisory_unlock(hashtext($1))',[KEY]);
-  return{ok:true,checks:5,actualPostgresLocks:true,queuedReaderPrecedesLaterWriter:true,repeatableReadStartsAfterWriterCommit:true,timeoutRestoresOriginalSetting:true,timeoutLeavesNoQueuedOrGrantedLock:true,ordinaryDefaultStillNonblocking:true,productionWrites:0,fixtureOnly:true};
+  // Reproduce the production scheduling issue: a legitimate view transaction
+  // lasts longer than the former 2s queue slice and another writer follows it.
+  await writer.query('SELECT pg_advisory_lock(hashtext($1))',[KEY]);await writer.query('BEGIN');await writer.query('UPDATE '+schema+'.marker SET value=2');
+  const longState=receiptBarrierState(),began=Date.now(),longAcquire=acquireReceiptReadBarrier(reader,longState,60000);longAcquire.catch(e=>{acquisitionError=e;});
+  await waitFor(readerPid,'ShareLock');nextGranted=false;const afterReader=next.query('SELECT pg_advisory_lock(hashtext($1))',[KEY]).then(()=>{nextGranted=true;});afterReader.catch(()=>{});await waitFor(nextPid,'ExclusiveLock');
+  await new Promise(r=>setTimeout(r,2200));a.equal(nextGranted,false);a.equal(longState.held,false);
+  await writer.query('COMMIT');await writer.query('SELECT pg_advisory_unlock(hashtext($1))',[KEY]);await longAcquire;a(Date.now()-began>2000);a.equal(nextGranted,false);
+  await reader.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');a.equal((await reader.query('SELECT value FROM '+schema+'.marker')).rows[0].value,2);await reader.query('ROLLBACK');
+  a.equal((await reader.query('SHOW lock_timeout')).rows[0].lock_timeout,'7s');a.equal((await reader.query('SELECT pg_advisory_unlock_shared(hashtext($1)) AS released',[KEY])).rows[0].released,true);await afterReader;await next.query('SELECT pg_advisory_unlock(hashtext($1))',[KEY]);
+  return{ok:true,checks:6,actualPostgresLocks:true,queuedReaderPrecedesLaterWriter:true,retainsFifoBeyondFormerTwoSecondSlice:true,repeatableReadStartsAfterWriterCommit:true,timeoutRestoresOriginalSetting:true,timeoutLeavesNoQueuedOrGrantedLock:true,ordinaryDefaultStillNonblocking:true,productionWrites:0,fixtureOnly:true};
  }finally{
   for(const c of clients){try{await c.query('ROLLBACK');await c.query('SELECT pg_advisory_unlock_all()');}catch{/* only disposable fixture sessions */}}
   try { if(made&&clients[3])await clients[3].query('DROP SCHEMA '+schema+' CASCADE'); }

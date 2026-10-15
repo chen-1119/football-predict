@@ -314,12 +314,13 @@ async function retryLeaseRead(operation, delay = ms => new Promise(resolve => se
   };
   assert(Number.isFinite(started));
   for (let attempt = 1; attempt <= 61; attempt++) {
-    if (elapsed() >= 600_000) {
+    const operationRemainingMs = 600_000 - elapsed();
+    if (operationRemainingMs <= 0) {
       const error = new Error('lease preparation contention deadline exceeded' + (lastReason ? ': ' + lastReason : ''), { cause: lastError });
       error.code = 'NATIVE_LEASE_PREPARATION_TIMEOUT';
       throw error;
     }
-    try { return await operation(); }
+    try { return await operation({ remainingMs: operationRemainingMs }); }
     catch (error) {
       const busy = error?.code === 'POINTER_LOCK_TIMEOUT'
         || error?.code === 'NATIVE_RESULT_ARCHIVE_PENDING'
@@ -335,7 +336,11 @@ async function retryLeaseRead(operation, delay = ms => new Promise(resolve => se
         remainingMs: Math.max(0, remaining), reason: lastReason,
         pendingRows: lastReason === 'result-archive-pending' && Number.isInteger(error.pendingRows)
           && error.pendingRows >= 1 && error.pendingRows <= 512 ? error.pendingRows : null });
-      if (remaining <= 0) throw error;
+      if (remaining <= 0) {
+        const timeout = new Error('lease preparation contention deadline exceeded: ' + lastReason, { cause: error });
+        timeout.code = 'NATIVE_LEASE_PREPARATION_TIMEOUT';
+        throw timeout;
+      }
       await delay(Math.min(10_000, remaining));
     }
   }
@@ -425,7 +430,8 @@ function verifyCodeCutoverCompletionClock(state, directory) {
     emergencyAuthorization: emergency?.authorization || null, dataPlane: state.dataPlane });
 }
 async function captureLeaseInput(state, directory) {
-  return retryLeaseRead(() => captureLeaseInputOnce(state, directory), undefined, undefined,
+  return retryLeaseRead(({ remainingMs }) => captureLeaseInputOnce(state, directory,
+    { receiptWaitMs: Math.min(60_000, Math.floor(remainingMs)) }), undefined, undefined,
     diagnostic => process.stderr.write(JSON.stringify(diagnostic) + '\n'));
 }
 async function readCodeCutoverArchiveAuthority(client, rows, nowMs) {
@@ -436,7 +442,7 @@ async function readCodeCutoverArchiveAuthority(client, rows, nowMs) {
     publicationAuthority: authority.summarizeAuthority(verified),
     retiredLegacyArchiveMissingRows: projected.filter(row => row?.recommendationAuthority?.legacyArchiveState === 'missing').length };
 }
-async function captureLeaseInputOnce(state, directory) {
+async function captureLeaseInputOnce(state, directory, { receiptWaitMs = 2000 } = {}) {
   assert.equal(state.dataPlane, 'code-only');
   if(state.repairCapturePolicy) assertFreshCaptureAbsent(directory);
   if (state.emergencyActivationAuthorizationHash) {
@@ -450,7 +456,7 @@ async function captureLeaseInputOnce(state, directory) {
   const source = pool(state, 'football', state.oldDatabaseOid); let session;
   try {
     session = await require('./postgresRuntimeReadSession.cjs').openPostgresRuntimeReadSession({ pool: source,
-      storeDir: STORE, publicDataDir: LIVE + '/public/data', protectReceipt: true, receiptWaitMs: 2000 });
+      storeDir: STORE, publicDataDir: LIVE + '/public/data', protectReceipt: true, receiptWaitMs });
     await session.guardedFinals();
     const current = leaseCurrent(session);
     await session.client.query("SET LOCAL statement_timeout = '8000ms'");

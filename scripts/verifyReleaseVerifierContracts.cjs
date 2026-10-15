@@ -86,7 +86,7 @@ check('daily bulletin scheduling, source proof and immutable cohort pass before 
 });
 check('code releases separate PG migration and model work before signing',()=>{
   const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/code-data-release.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
-  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 64$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 65$/m);assert.match(child.stdout,/^# skipped 0$/m);
   const shell=require('node:child_process').spawnSync(process.execPath,['scripts/verifyCodeReleaseShell.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
   assert.equal(shell.status,0,shell.stderr);const proof=JSON.parse(shell.stdout);assert.equal(proof.ok,true);assert.equal(proof.checks.length,11);assert(proof.checks.some(row=>row.name==='closed-code-lease'&&row.ok));assert.equal(proof.actualBashBranchExecution,true);
   for(const file of ['scripts/releaseDataPlanePolicy.cjs','scripts/nativeCodeReleaseDataPlane.cjs','tests/code-data-release.test.cjs','scripts/verifyCodeReleaseShell.cjs','scripts/verifyCodeReleasePostgresIsolation.cjs'])
@@ -108,7 +108,7 @@ check('cold generation validation streams complete signed rows within a bounded 
 check('receipt reader queue keeps bounded waits, connection disposal and before-BEGIN admission',()=>{
   const file='tests/postgres-receipt-barrier.test.cjs';
   const child=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
-  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 12$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 13$/m);assert.match(child.stdout,/^# skipped 0$/m);
   for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
     for(const required of ['scripts/postgresReceiptBarrier.cjs','scripts/verifyReceiptBarrierPostgres.cjs',file])assert(read(entry).includes('"'+required+'"'));
   assert(read('.github/workflows/recommendation-runtime.yml').includes('run: node scripts/verifyReceiptBarrierPostgres.cjs'));
