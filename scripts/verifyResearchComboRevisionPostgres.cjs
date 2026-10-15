@@ -53,11 +53,11 @@ async function verify(pool){
   try{await reader.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
    const replay=await require('./recommendationPlatform/reviewedAnalysisRuntime.cjs').projection(reader,first.businessDate,updatedAt);
    originalView=await frozen.freezeOriginalGroups(reader,replay,updatedAt);a.equal(originalView.comboFreezePolicy,'persisted-original-groups-v1');await reader.query('ROLLBACK');
-  }finally{reader.release();}
+  }finally{try{await reader.query('ROLLBACK');}finally{reader.release();}}
   const center={version:'recommendation-center-v1',businessDate:first.businessDate,updatedAt,current:[],previews:[],todayCombos:[],todayDualResearch:[],
    strategySwitch:{version:'trained-strategy-switch-v1',activeReferenceStrategy:'league-trained-baseline-v1',legacyPublicationEnabled:false,legacyFallbackEnabled:false,formalEligible:false,modelAdoptionCount:0},reviewedAnalysis:originalView};
   await q('INSERT INTO football.daily_featured_combo_state VALUES(1,$1::json)',[JSON.stringify({recommendationCenter:center})]);
-  async function readAuthority(){const c=await mapped.connect();try{await c.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');const v=await authority.readPublicationAuthority(c,{policy:authority.TRAINED_ONLY_POLICY,asOf:f.stamp(clock+300)});await c.query('ROLLBACK');return v;}finally{c.release();}}
+  async function readAuthority(){const c=await mapped.connect();try{await c.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');const v=await authority.readPublicationAuthority(c,{policy:authority.TRAINED_ONLY_POLICY,asOf:f.stamp(clock+300)});await c.query('ROLLBACK');return v;}finally{try{await c.query('ROLLBACK');}finally{c.release();}}}
   a.equal((await readAuthority()).activeValidation.ok,true);
   await q("UPDATE football.match_snapshots SET payload=$1::json WHERE payload->>'sourceMatchId'=$2",[JSON.stringify({...matches[0],status:'LIVE'}),String(matches[0].sourceMatchId)]);
   a.equal((await readAuthority()).activeValidation.ok,true);
