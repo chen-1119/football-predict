@@ -14,7 +14,12 @@ function verify(){
   pg('initdb',['-D',data,'--auth-local=peer','--auth-host=reject','--no-locale','--encoding=UTF8']);
   pg('pg_ctl',['-D',data,'-l',path.join(data,'server.log'),'-o',"-c listen_addresses='' -c unix_socket_directories='"+socket+"' -p 5432 -c shared_buffers=16MB -c max_connections=10",'-w','start']);started=true;
   pg('psql',['-h',socket,'-d','postgres','-v','ON_ERROR_STOP=1','-c','CREATE ROLE nobody LOGIN; CREATE TABLE peer_probe(v integer); GRANT SELECT ON peer_probe TO nobody;']);
-  const store=path.resolve(__dirname,'../server/postgresStore.cjs'),uid=Number(run('/usr/bin/id',['-u','nobody']).trim()),gid=Number(run('/usr/bin/id',['-g','nobody']).trim());
+  // The runner checkout may be private to its owner. Copy only the exact pg
+  // source/dependency closure into this disposable, traversable fixture tree.
+  const repository=path.resolve(__dirname,'..'),dependencies=require('../server/researchBrokerDependencies.cjs').collect(repository),hash=b=>require('node:crypto').createHash('sha256').update(b).digest('hex');
+  const store=path.join(dir,'server/postgresStore.cjs');fs.mkdirSync(path.dirname(store),{mode:0o755});fs.copyFileSync(path.join(repository,'server/postgresStore.cjs'),store);fs.chmodSync(store,0o644);
+  for(const e of dependencies.entries){const from=path.join(repository,e.path),to=path.join(dir,e.path),raw=fs.readFileSync(from);a.equal(raw.length,e.bytes);a.equal(hash(raw),e.sha256);fs.mkdirSync(path.dirname(to),{recursive:true,mode:0o755});fs.writeFileSync(to,raw,{mode:0o644});a.equal(hash(fs.readFileSync(to)),e.sha256);}
+  const uid=Number(run('/usr/bin/id',['-u','nobody']).trim()),gid=Number(run('/usr/bin/id',['-g','nobody']).trim());
   // Three named fixture substitutions; production retains its fixed football
   // account, installed source path, and Node executable without override flags.
   const original=fs.readFileSync(path.join(__dirname,'baselineReadonlyPeer.cjs'),'utf8');let source=original;const substitutions=[["'-u','football'","'-u','nobody'"],['/opt/football-predict/server/postgresStore.cjs',store],['/opt/node-v22.22.1/bin/node',process.execPath]];
