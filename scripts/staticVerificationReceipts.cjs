@@ -16,10 +16,11 @@ const PROFILES = Object.freeze({
     trees: [],
   }),
   "scripts/verifyFrontendEvidenceSemantics.cjs": Object.freeze({
-    // Re-audited 2026-10-13: retired World Cup UI absence and route checks.
+    // Re-audited 2026-10-16: selected-day endpoint and isolated-store checks
+    // only inspect the already covered hook source. No new executing imports.
     // Executed dependency remains the pinned status helper; all src membership
     // (including the absence of retired files and App.tsx) stays covered.
-    auditedSha256: "1b5ab1807ca36a4e2917cc7489cb7047dd62335036716816e7a4fb59deac57a3",
+    auditedSha256: "1c87a263849456b360a24c6d7963f009cad9fb40853f4d2093eb390e2e1fa5cf",
     files: ["server/index.cjs", "src/services/publishedRecommendationStatus.cjs"],
     // Entire src tree, including membership, nested paths, CSS and TS/TSX.
     // TS/TSX is only scanned. The no-import status helper is the sole executed
