@@ -565,6 +565,7 @@ const requiredReleaseEntries = [
   "scripts/verifyProductionPlanSourceContracts.cjs",
   "scripts/data/production-plan-source-contracts.json",
   "scripts/verifyReleaseWorkerPreflight.cjs",
+  "tests/fixtures/worker-skipped-after-official-failure-20261015.json",
   "scripts/verifyFastResultProductionClone.cjs",
   "scripts/reconcileFastResultGeneration.cjs",
   "scripts/verifyFastResultGenerationReconciliation.cjs",

@@ -27,6 +27,22 @@ function verifyReleaseWorkerPreflight() {
   check('a genuinely later official publication clears the preparation blocker only',()=>{
     const r=run({status:recovered});assert.equal(r.ok,true);assert.equal(r.readyToCutover,false);
   });
+  const actualSkipped=require('../tests/fixtures/worker-skipped-after-official-failure-20261015.json').observation;
+  check('actual r876 skipped loop cannot erase the newer official failure',()=>{
+    const r=evaluateWorkerPreflight(actualSkipped);assert.equal(r.ok,false);assert(r.blockers.includes('worker-skipped-cycle-is-not-official-recovery'));assert(r.blockers.includes('worker-official-recovery-unproven'));assert.equal(r.productionWrites,0);
+  });
+  for(const phase of ['sleeping','official-result'])check('skipped '+phase+' remains unproven even after fast-only success',()=>{
+    const o=structuredClone(actualSkipped);o.status.phase=phase;o.status.eventCycle={ok:true,phase:'official-result-fast-published',startedAt:o.status.lastCycle.startedAt,finishedAt:o.status.lastCycle.finishedAt};
+    assert(evaluateWorkerPreflight(o).blockers.includes('worker-skipped-cycle-is-not-official-recovery'));
+  });
+  const genuinelyComplete=structuredClone(actualSkipped);
+  genuinelyComplete.checkedAt='2026-10-15T14:30:00.000Z';genuinelyComplete.status.checkedAt='2026-10-15T14:29:00.000Z';
+  const completed={ok:true,skipped:false,degraded:false,startedAt:'2026-10-15T14:00:00.000Z',finishedAt:'2026-10-15T14:28:00.000Z',officialPhase:{ok:true,phase:'official-result-published',startedAt:'2026-10-15T14:01:00.000Z',finishedAt:'2026-10-15T14:27:00.000Z'}};
+  genuinelyComplete.status.lastCycle=completed;genuinelyComplete.status.lastCompleteCycle=completed;
+  check('a real later complete official cycle clears the historical failed event',()=>assert.equal(evaluateWorkerPreflight(genuinelyComplete).ok,true));
+  for(const patch of [{startedAt:'2026-10-15T13:20:00.000Z'},{finishedAt:'2026-10-15T14:40:00.000Z'},{skipped:true},{degraded:true}])check('invalid complete-cycle substitute rejected '+JSON.stringify(patch),()=>{
+    const o=structuredClone(genuinelyComplete);Object.assign(o.status.lastCompleteCycle,patch);assert.equal(evaluateWorkerPreflight(o).ok,false);
+  });
   for(const patch of [{startedAt:'2026-09-08T02:00:00Z'}, {finishedAt:'2026-09-08T03:10:00Z'},
     {finishedAt:null}, {ok:false}, {phase:'running'}])
     check('invalid or old recovery publication rejected '+JSON.stringify(patch),()=>
@@ -46,7 +62,7 @@ function verifyReleaseWorkerPreflight() {
   check('invalid probe clock',()=>assert.equal(run({checkedAt:'bad'}).ok,false));
   check('raw errors never exposed',()=>{const r=run({status:{...failed,error:'secret-value',errorCode:'https://secret-value'}});assert.ok(!JSON.stringify(r).includes('secret-value'));});
   check('serialized SSH probe executes identical policy and only approved reads',()=>{
-    for(const status of [base.status,failed,{...failed,ok:true,phase:'official-result'},recovered]) {
+    for(const status of [base.status,failed,{...failed,ok:true,phase:'official-result'},recovered,{...base.status,lastCycle:{ok:true,skipped:true,reason:'sync lock held'}}]) {
       const output=[];let serviceReads=0,closed=0;
       const info={isFile:()=>true,nlink:1,size:100,mtimeMs:1};
       const filesystem={constants:{O_RDONLY:0,O_NOFOLLOW:1},openSync:(p)=>{assert.equal(p,'/var/lib/football-predict/sync-worker-status.json');return 9;},
