@@ -4,6 +4,12 @@
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),crypto=require('node:crypto'),a=require('node:assert/strict');
 const ROOT=path.resolve(__dirname,'..'),APP='/opt/football-predict',sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 const POLICY=Object.freeze({version:'r876-authority-replay-preparation-v1',baselineSha:'0862f893a8af673c67910cbb1a17d51f23e973b6f2e55433ccaa6e6243c586d5',manifestSha:'161fc726ae4ae8af9633af274f5ba412994e6e3a5e6e2bc6449c465c003d702f',apiPid:1534542,apiInvocation:'cb49592cfe5f45fa9d90d2fa6ea3d769',workerPid:1543498,workerInvocation:'91258f67e78d4509918b2b231b87b43a',oid:'28598409',recordKey:'reviewed-analysis-2026-10-15-batch-29416d784d40104730914178b69201325bf638ff9e87efd1e3265cc6ee5c3be9',payloadSha:'10cd450e1c6d6f237519ad05ad4518e845b1648cb9cffe88684a1a4a9e4ff491',ackSha:'be682ff91b1c75ea8c7692a59e21f521f0db1fd655bc50338def16b172142a1b'});
+function authorityRoute(authority,errorCode,stage){
+ a(['initial','paused'].includes(stage));
+ if(errorCode!==undefined){a.equal(errorCode,'RECOMMENDATION_AUTHORITY_REVIEWED_VIEW_REPLAY');return'repair';}
+ a.equal(stage,'initial');a.equal(authority?.mode,'reviewed-and-trained');a.equal(authority?.activeValidation?.ok,true);
+ a.equal(authority.availableForCurrentDay,true);a.equal(authority.businessDate,authority.currentBusinessDate);return'normal-health-required';
+}
 function validate(s,stage,previous=null){
  a.equal(Object.keys(s).sort().join(','),'ackSha,api,baselineSha,bootId,candidateSha,candidateVerified,dataPlane,flock,monotonicNs,oid,oldError,originalRecords,ownerPid,payloadSha,publication,readonly,wallMs,worker');
  a(Number.isSafeInteger(s.wallMs)&&Number.isSafeInteger(s.ownerPid)&&s.ownerPid>1);a.match(s.monotonicNs,/^\d+$/);a.match(s.bootId,/^[a-f0-9-]{36}$/);
@@ -58,7 +64,11 @@ async function verify(stage,candidateSha,ownerPid,previous){
  try{client=await pool.connect();await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');await client.query("SET LOCAL statement_timeout='10000ms'");const identity=(await client.query("SELECT current_database() AS name,current_user AS role,(SELECT oid::text FROM pg_database WHERE datname=current_database()) AS oid,current_setting('transaction_read_only') AS readonly")).rows[0];a.equal(identity.name,'football');a.equal(identity.role,'football');a.equal(identity.oid,POLICY.oid);a.equal(identity.readonly,'on');
   const guard={query(sql,args){a(/^SELECT\b/i.test(sql.trim())&&!/\b(?:INSERT|UPDATE|DELETE|MERGE|CREATE|ALTER|DROP|TRUNCATE|COPY|CALL|DO)\b/i.test(sql),'SELECT-only baseline proof');return client.query(sql,args);}};
   const artifacts=(await guard.query('SELECT artifact_key,payload::text AS json,payload_sha256,payload_bytes FROM football.private_model_artifacts WHERE artifact_key=ANY($1::text[])',[ [POLICY.recordKey,POLICY.recordKey+'-ack'] ])).rows;a.equal(artifacts.length,2);for(const r of artifacts){a.equal(Buffer.byteLength(r.json),Number(r.payload_bytes));a.equal(sha(r.json),r.payload_sha256);a.equal(r.payload_sha256,r.artifact_key.endsWith('-ack')?POLICY.ackSha:POLICY.payloadSha);}
-  const old=require(APP+'/server/recommendationAuthority.cjs'),next=require(ROOT+'/server/recommendationAuthority.cjs');let oldError;try{await old.readPublicationAuthority(guard,{policy:old.TRAINED_ONLY_POLICY,asOf:new Date().toISOString()});}catch(e){oldError=e.code;}
+  const old=require(APP+'/server/recommendationAuthority.cjs'),next=require(ROOT+'/server/recommendationAuthority.cjs');let oldError,oldAuthority;try{oldAuthority=await old.readPublicationAuthority(guard,{policy:old.TRAINED_ONLY_POLICY,asOf:new Date().toISOString()});}catch(e){if(typeof e.code!=='string')throw e;oldError=e.code;}
+  if(authorityRoute(oldAuthority,oldError,stage)==='normal-health-required'){
+   a.deepEqual(units(),before);boundary();a.deepEqual(heldAncestorLock(ownerPid),flock);
+   throw Object.assign(Error('BASELINE_REPAIR_NOT_APPLICABLE'),{code:'BASELINE_REPAIR_NOT_APPLICABLE'});
+  }
   const proof=await next.readPublicationAuthority(guard,{policy:next.TRAINED_ONLY_POLICY,asOf:new Date().toISOString()}),center=next.getAuthorityCenterPayload(proof)?.recommendationCenter;
   const metadata=Object.fromEntries((await guard.query('SELECT key,value FROM football.projection_meta WHERE key=ANY($1::text[])',[['data_publication_mode','data_generation_id','manifest_hash','data_generation_source_cycle_id','committed_at']])).rows.map(r=>[r.key,{value:r.value}]));
   const publication=require(APP+'/server/postgresProjectionStore.cjs').publicationIdentityFromMeta(metadata,{strictGenerationSource:true});
@@ -73,6 +83,6 @@ function readProof(stream){return new Promise((resolve,reject)=>{const chunks=[]
  const data=b=>{if(!Buffer.isBuffer(b)||size+b.length>8192)return finish('BASELINE_PROOF_BOUND');size+=b.length;chunks.push(b);},end=()=>finish(),failure=()=>finish('BASELINE_PROOF_INPUT');
  const timer=setTimeout(()=>finish('BASELINE_PROOF_TIMEOUT'),8000);stream.on('data',data);stream.once('end',end);stream.once('error',failure);
  });}
-module.exports={POLICY,validate,verify,heldAncestorLock,ancestorLockDescriptor,readProof};
+module.exports={POLICY,validate,verify,heldAncestorLock,ancestorLockDescriptor,readProof,authorityRoute};
 if(require.main===module){const[stage,sha,owner,...rest]=process.argv.slice(2);a.equal(rest.length,0);
- (async()=>verify(stage,sha,Number(owner),stage==='paused'?await readProof(process.stdin):null))().then(v=>console.log(JSON.stringify(v))).catch(e=>{console.error(JSON.stringify({ok:false,scope:POLICY.version,error:String(e.message).slice(0,500),productionDataWrites:0}));process.exitCode=1;});}
+ (async()=>verify(stage,sha,Number(owner),stage==='paused'?await readProof(process.stdin):null))().then(v=>console.log(JSON.stringify(v))).catch(e=>{const normal=stage==='initial'&&e.code==='BASELINE_REPAIR_NOT_APPLICABLE';console.error(JSON.stringify({ok:false,scope:POLICY.version,error:String(e.message).slice(0,500),productionDataWrites:0,...(normal?{normalHealthRequired:true}: {})}));process.exitCode=normal?3:1;});}
