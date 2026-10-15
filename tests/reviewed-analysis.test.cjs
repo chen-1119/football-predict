@@ -138,6 +138,16 @@ test('read-only recent history recovers exact frozen singles at the real clock w
  await a.rejects(runtime.readLatestHistory(db.client,'2026-09-20',now),/HISTORY_CLOCK/);
 });
 
+test('exact selected archived day never substitutes a different published day or creates records',async()=>{
+ const v=setup(),runtime=controlledRuntime(v),db=controlledPool(v),saved=await runtime.publish(v.draft,{pool:db.pool,expectedDraftHash:p.hash(v.draft)});
+ const before=[...db.rows()].map(([k,r])=>[k,r.payload_json]),start=db.log.length,now=fixture.stamp(fixture.NOW+48*3600e3);
+ const view=await runtime.readHistory(db.client,v.draft.businessDate,'2026-09-19',now);a.equal(view.businessDate,v.draft.businessDate);a.equal(view.records.length,3);
+ a.equal(await runtime.readHistory(db.client,'2026-09-18','2026-09-19',now),null,'a missing selected day must not fall back to the latest other day');
+ for(const day of ['2026-09-19','2026-09-20','2026-02-30','2026-9-17'])await a.rejects(runtime.readHistory(db.client,day,'2026-09-19',now),/HISTORY_CLOCK/);
+ a.ok(db.log.slice(start).every(sql=>sql.trim().startsWith('SELECT')));a.deepEqual([...db.rows()].map(([k,r])=>[k,r.payload_json]),before);
+ db.rows().delete(saved.key+'-ack');await a.rejects(runtime.readHistory(db.client,v.draft.businessDate,'2026-09-19',now),/ACK_MISSING/);
+});
+
 for(const [name,change] of [
  ['missing ACK',(db,key)=>db.rows().delete(key+'-ack')],
  ['changed original bytes',(db,key)=>{db.rows().get(key).payload_json+=' ';}],

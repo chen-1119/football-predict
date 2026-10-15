@@ -43,7 +43,7 @@ const center = () => ({
 
 // Execute the actual reader with only its clock and storage-mode environment
 // pinned. Authority validation and both publication replay modules stay real.
-function projectionReader(storageMode = 'postgres-only') {
+function projectionReader(storageMode = 'postgres-only', overrides = {}) {
   const filename = require.resolve('../server/postgresProjectionStore.cjs');
   const module = { exports: {} };
   class FixedDate extends Date {
@@ -51,7 +51,7 @@ function projectionReader(storageMode = 'postgres-only') {
     static now() { return NOW; }
   }
   vm.runInNewContext(fs.readFileSync(filename, 'utf8'), {
-    module, exports: module.exports, require: createRequire(filename), Date: FixedDate,
+    module, exports: module.exports, require: id => overrides[id] || createRequire(filename)(id), Date: FixedDate,
     process: { env: { ...process.env, FOOTBALL_STORAGE_MODE: storageMode } },
   }, { filename });
   return module.exports;
@@ -77,6 +77,8 @@ function database({ current = [match()], history = [], publishedCenter = center(
       assert.doesNotMatch(text, /\b(?:INSERT|UPDATE|DELETE|TRUNCATE)\b/, 'public authority reads cannot write');
       if (failAt && text.includes(failAt)) throw new Error('injected authority storage failure');
       if (text.startsWith('SET LOCAL')) return { rows: [] };
+      if (/^(SAVEPOINT |RELEASE SAVEPOINT |ROLLBACK TO SAVEPOINT )/.test(text)) return { rows: [] };
+      if (text.includes('football.recommendation_result_heads')) return { rows: [] };
       if (text.includes('football.projection_meta')) return { rows: Object.entries({
         data_publication_mode: publication.mode, data_generation_id: publication.generationId,
         manifest_hash: publication.manifestHash, data_generation_source_cycle_id: publication.sourceCycleId,
@@ -309,6 +311,32 @@ test('the existing center endpoint can read a bounded prior reviewed day in its 
   const route = source.slice(source.indexOf('if (url.pathname === "/api/v1/daily-featured-combos")'), source.indexOf('if (url.pathname === "/api/v1/model/evaluation")'));
   assert.match(route, /includeReviewedHistory: true/);
   assert.match(route, /hasRecommendationAccess\(req, url\)/);
+});
+
+test('an explicitly selected earlier day uses the same RR client and keeps its revision lane separate', async () => {
+  const history = { businessDate: '2026-10-08', updatedAt: new Date(NOW).toISOString(), publicationHash: 'f'.repeat(64),
+    records: [{ eventId: '2041800', eventVersion: '2026-10-08T13:30:00Z', businessDate: '2026-10-08' }] };
+  for (const failVersions of [false, true]) {
+    const db = database(), seen = [];
+    const reader = projectionReader('postgres-only', {
+      '../scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs': {
+        async readHistory(client, target, beforeDay, asOf) { seen.push(client); assert.equal(target, '2026-10-08'); assert.equal(beforeDay, '2026-10-10'); assert.equal(asOf, new Date(NOW).toISOString()); return history; },
+        readLatestHistory() { throw Error('must not substitute latest history for a selected day'); },
+      },
+      './researchReviewProjection.cjs': { async projection(client, original, asOf, heads) {
+        assert.equal(client, seen[0]); assert.equal(original, history); assert.equal(asOf, history.updatedAt); assert.deepEqual(clone(heads), []);
+        if (failVersions) throw Error('corrupt optional archived revision');
+        return { version: 'reviewed-revisions-view-v1', state: 'verified', businessDate: history.businessDate, updatedAt: asOf, singles: [], combos: [] };
+      } },
+    });
+    const value = await reader.readPostgresRecommendationCenter(db.pool, { ...options, includeReviewedHistory: true, reviewedBusinessDate: '2026-10-08' });
+    assert.deepEqual(clone(value.recommendationCenter.reviewedAnalysisHistory), history);
+    assert.equal(value.recommendationCenter.reviewedRevisionsHistory.state, failVersions ? 'unavailable' : 'verified');
+    assert.deepEqual(clone(value.recommendationCenter.reviewedAnalysis), center().reviewedAnalysis);
+    assert.equal(db.connections, 1); assert.equal(db.releases, 1); assert.equal(db.calls.at(-1).text, 'COMMIT');
+    assert.equal(db.calls.some(c => c.text === 'ROLLBACK TO SAVEPOINT historical_review_versions'), failVersions);
+    assert.ok(db.calls.every(c => !/\b(?:INSERT|UPDATE|DELETE|TRUNCATE)\b/.test(c.text)));
+  }
 });
 
 function coverageReader(read, parityOk = true) {

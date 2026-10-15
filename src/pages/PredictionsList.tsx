@@ -493,7 +493,6 @@ const getOnSaleDisplayRecommendation = (
 
 export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch, viewMode, capturedDataByMatchId }) => {
   const { language, matches, dataSync } = useApp();
-  const published = useRecommendationCenter();
   const isAnalysisView = viewMode === 'analysis';
   const [clockNow, setClockNow] = useState(() => Date.now());
   React.useEffect(() => {
@@ -520,6 +519,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   const [selectedDate, setSelectedDate] = useState<string>(() => (
     restoreReturnView ? restoredViewState?.selectedDate || getDateStringOffset(0) : getDateStringOffset(0)
   ));
+  const published = useRecommendationCenter(selectedDate < todayStr ? selectedDate : undefined);
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>(() => (
     restoreReturnView ? restoredViewState?.selectedLeagues || [] : []
   ));
@@ -827,7 +827,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       : liveScore?.hasScore ? liveScore.scoreText : '';
     const unifiedRow = publishedMatchRecommendation(published.data, match);
     const reviewedRow = reviewedMatchRecommendation(published.data, match);
-    const useUnified = published.loading || published.failed || usesPublishedRecommendation(match, unifiedRow, nowMs);
+    const useUnified = Boolean(reviewedRow) || published.loading || published.failed || usesPublishedRecommendation(match, unifiedRow, nowMs);
     const unifiedResult = useUnified ? publishedResultProjection(unifiedRow) : null;
     const displayedResultState = useUnified ? unifiedResult?.primary.settlement?.state : settledStatus;
     const hasPick = !isVoid && (useUnified ? Boolean(reviewedRow || unifiedRow) : Boolean(pickedPrediction && directionLabel));

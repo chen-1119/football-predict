@@ -184,6 +184,7 @@ export interface RecommendationCenterData {
   reviewedAnalysis?:ReviewedAnalysis;
   reviewedRevisions?:ReviewedRevisions;
   reviewedAnalysisHistory?:ReviewedAnalysis;
+  reviewedRevisionsHistory?:ReviewedRevisions;
   dailyBulletin?:DailyBulletin;
   publishedCoverage?:PublishedReviewCoverage;
 }
@@ -1054,6 +1055,10 @@ export function parseRecommendationCenter(response:unknown):RecommendationCenter
     result.reviewedRevisions=parseReviewedRevisions(x.reviewedRevisions,x.reviewedAnalysis,result.reviewedAnalysis,result.updatedAt);
   }
   if(Object.hasOwn(x,'reviewedAnalysisHistory'))result.reviewedAnalysisHistory=parseReviewedAnalysisHistory(x.reviewedAnalysisHistory,result.businessDate,result.updatedAt);
+  if(Object.hasOwn(x,'reviewedRevisionsHistory')){
+    if(!result.reviewedAnalysisHistory)throw Error('Historical review versions missing originals');
+    result.reviewedRevisionsHistory=parseReviewedRevisions(x.reviewedRevisionsHistory,x.reviewedAnalysisHistory,result.reviewedAnalysisHistory,result.reviewedAnalysisHistory.updatedAt);
+  }
   if(Object.hasOwn(x,'strategySwitch')){
     const s=object(x.strategySwitch);
     if(s.version!=='trained-strategy-switch-v1'||s.activeReferenceStrategy!=='league-trained-baseline-v1'||s.legacyPublicationEnabled!==false||s.legacyFallbackEnabled!==false||s.formalEligible!==false||result.current.length||result.previews.length||result.todayCombos.length||result.todayDualResearch?.length)throw new Error('Invalid trained strategy switch');

@@ -249,10 +249,28 @@ const readPostgresRecommendationCenter = async (pool, options = {}) => {
         policy: options.recommendationAuthorityPolicy, asOf: new Date().toISOString(),
       });
       const payload = authority.getAuthorityCenterPayload(verified);
-      if (options.includeReviewedHistory === true && !payload.recommendationCenter.reviewedAnalysis?.records?.length) {
-        const history = await require('../scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs')
-          .readLatestHistory(client, payload.recommendationCenter.businessDate, new Date().toISOString());
-        if (history) return { ...payload, recommendationCenter: { ...payload.recommendationCenter, reviewedAnalysisHistory: history } };
+      if (options.includeReviewedHistory === true && (options.reviewedBusinessDate !== undefined
+        || !payload.recommendationCenter.reviewedAnalysis?.records?.length)) {
+        const runtime = require('../scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs');
+        const history = options.reviewedBusinessDate !== undefined
+          ? await runtime.readHistory(client, options.reviewedBusinessDate, payload.recommendationCenter.businessDate, new Date().toISOString())
+          : await runtime.readLatestHistory(client, payload.recommendationCenter.businessDate, new Date().toISOString());
+        if (history) {
+          let revisions;
+          await client.query('SAVEPOINT historical_review_versions');
+          try {
+            const keys = history.records.map(r => require('../scripts/recommendationPlatform/results.cjs').key({ ...r, sourceMatchId: r.eventId }));
+            const heads = (await client.query("SELECT e.payload FROM football.recommendation_result_heads h JOIN football.recommendation_result_events e ON e.id=h.event_id WHERE e.payload->>'eventKey'=ANY($1::text[]) LIMIT 33", [keys])).rows;
+            if (heads.length > keys.length || heads.reduce((bytes, r) => bytes + Buffer.byteLength(JSON.stringify(r.payload)), 0) > 2 * 1024 * 1024) throw Error('Historical result bound');
+            revisions = await require('./researchReviewProjection.cjs').projection(client, history, history.updatedAt, heads.map(r => r.payload));
+            await client.query('RELEASE SAVEPOINT historical_review_versions');
+          } catch {
+            await client.query('ROLLBACK TO SAVEPOINT historical_review_versions');
+            await client.query('RELEASE SAVEPOINT historical_review_versions');
+            revisions = { version: 'reviewed-revisions-view-v1', state: 'unavailable', businessDate: history.businessDate, updatedAt: history.updatedAt };
+          }
+          return { ...payload, recommendationCenter: { ...payload.recommendationCenter, reviewedAnalysisHistory: history, reviewedRevisionsHistory: revisions } };
+        }
       }
       return payload;
     }

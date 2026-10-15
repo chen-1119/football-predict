@@ -978,6 +978,7 @@ const requiredEntries = [
   "tests/research-review-frontend.test.cjs",
   "server/researchComboRevision.cjs",
   "server/researchReviewProjection.cjs",
+  "server/reviewedHistoryQuery.cjs",
   "server/researchFrozenCombos.cjs",
   "tests/research-frozen-combos.test.cjs",
   "scripts/verifyResearchRunuser.cjs",
