@@ -266,7 +266,7 @@ jobs:
         run: |
           node scripts/verifyReleaseWorkerPreflight.cjs
           node --test tests/baseline-authority-replay-repair.test.cjs
-          node scripts/verifyReleaseVerifierContracts.cjs
+          sudo "$(command -v node)" scripts/verifyReleaseVerifierContracts.cjs
           sudo "$(command -v node)" scripts/verifyBaselineAuthorityReplayLock.cjs
           sudo env CI=true BASELINE_PEER_FIXTURE=isolated "$(command -v node)" scripts/verifyBaselineReadonlyPeer.cjs
       - name: Root socket bounded frames and process boundary fixtures
