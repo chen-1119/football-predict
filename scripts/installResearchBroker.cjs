@@ -79,8 +79,21 @@ function installRoot(wire){
   transport:{version:'research-unix-socket-v1',apiSourceSha:inventory.get('server/index.cjs'),clientSourceSha:inventory.get('server/researchBrokerClient.cjs'),peerSourceSha:hash(bytes[1]),footballUid:uid,footballGid:gid},
   socketService:{version:'research-root-socket-service-v1',listenerSha:hash(bytes[0]),brokerSourceSha:inventory.get('scripts/researchReleaseBroker.cjs'),platformSha256:body.platformSha256}};
  create(BASE+'/runtime-binding.json',Buffer.from(JSON.stringify(binding)+'\n'),0o444);create(UNITFILE,bytes[2],0o444);boundary();
- try{command('/usr/bin/systemctl',['daemon-reload']);command('/usr/bin/systemctl',['enable',UNIT]);command('/usr/bin/systemctl',['start',UNIT]);
-  const s=unit(UNIT);if(s.ActiveState!=='active'||s.SubState!=='running'||s.User!=='root'||s.Group!=='football'||s.ControlPID!=='0'||s.Job)fail('RESEARCH_INSTALL_SERVICE_UNVERIFIED');
+ try{
+  const verified=JSON.parse(command('/usr/bin/python3.12',['-I','-S','-B',BASE+'/researchSocketServer.py','--verify-binding']));
+  if(verified.verified!==true||verified.releaseSha!==body.releaseSha||verified.listenerStarted!==false||verified.productionWrites!==0
+   ||verified.bindingSha256!==hash(read(BASE+'/runtime-binding.json',16384)))fail('RESEARCH_INSTALL_LISTENER_SOURCE_UNVERIFIED');
+  command('/usr/bin/systemctl',['daemon-reload']);command('/usr/bin/systemctl',['enable',UNIT]);command('/usr/bin/systemctl',['start',UNIT]);
+  let s,stablePid=null,consecutive=0;const started=process.hrtime.bigint();
+  while(Number(process.hrtime.bigint()-started)<20e9){
+   boundary();s=unit(UNIT);
+   if(s.ActiveState!=='active'||s.SubState!=='running'||s.User!=='root'||s.Group!=='football'||s.ControlPID!=='0'||s.Job||Number(s.MainPID)<2)fail('RESEARCH_INSTALL_SERVICE_UNVERIFIED');
+   const socket='/run/football-research-broker/submit.sock';
+   if(fs.existsSync(socket)){const st=fs.lstatSync(socket);if(!st.isSocket()||st.uid!==0||st.gid!==gid||(st.mode&0o777)!==0o660)fail('RESEARCH_INSTALL_SOCKET_IDENTITY');
+    consecutive=s.MainPID===stablePid?consecutive+1:1;stablePid=s.MainPID;if(consecutive>=3)break;}
+   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,1000);
+  }
+  if(consecutive<3)fail('RESEARCH_INSTALL_SERVICE_UNVERIFIED');
   boundary();create(receipt+'.completed.json',Buffer.from(JSON.stringify({version:'research-broker-installed-v1',releaseSha:body.releaseSha,head:body.head,bindingSha256:hash(read(BASE+'/runtime-binding.json',16384)),unit:s,completedAt:new Date().toISOString(),productionDataWrites:0,cloudHandoverVerified:false})+'\n'),0o600);
   console.log(JSON.stringify({installed:true,receipt:receipt+'.completed.json',releaseSha:body.releaseSha,productionDataWrites:0,cloudHandoverVerified:false}));
  }catch(e){try{command('/usr/bin/systemctl',['stop',UNIT]);command('/usr/bin/systemctl',['disable',UNIT]);}catch{/* keep failed material and report original failure */}throw e;}
