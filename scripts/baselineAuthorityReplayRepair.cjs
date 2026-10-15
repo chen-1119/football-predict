@@ -20,21 +20,22 @@ function validate(s,stage,previous=null){
  return{...s,version:POLICY.version,baselineHealthy:false,preparationOnly:true,productionDataWrites:0,workerBlockersBypassed:false,candidateHealthStillRequired:true};
 }
 function read(file,max){const s=fs.lstatSync(file);a(s.isFile()&&!s.isSymbolicLink()&&s.uid===0&&s.nlink===1&&!(s.mode&0o022)&&s.size<=max);const fd=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);try{const b=fs.readFileSync(fd),end=fs.fstatSync(fd);a.equal(b.length,s.size);a.equal(end.ino,s.ino);a.equal(end.mtimeMs,s.mtimeMs);return b;}finally{fs.closeSync(fd);}}
-function heldAncestorLock(ownerPid,lockPath='/run/lock/football-release.lock'){
+function ancestorLockDescriptor(ownerPid,lockPath='/run/lock/football-release.lock'){
  const t=fs.lstatSync(lockPath);a(t.isFile()&&!t.isSymbolicLink()&&t.uid===0&&t.nlink===1);const ancestors=new Set([process.pid]);let pid=process.ppid;
  for(let i=0;i<16&&pid>1&&!ancestors.has(ownerPid);i++){const s=fs.readFileSync('/proc/'+pid+'/status','utf8');a.equal(/^Uid:\s+(\d+)/m.exec(s)?.[1],'0');ancestors.add(pid);pid=Number(/^PPid:\s+(\d+)/m.exec(s)?.[1]);}a(ancestors.has(ownerPid));
  const lockEntry=info=>/lock:\s+\d+:\s+(FLOCK\s+ADVISORY\s+WRITE\s+(-?\d+)\s+[^\n]+)/m.exec(info);
  for(const name of fs.readdirSync('/proc/self/fd')){if(!/^\d+$/.test(name))continue;try{
   const st=fs.fstatSync(Number(name));if(st.dev!==t.dev||st.ino!==t.ino)continue;const m=lockEntry(fs.readFileSync('/proc/self/fdinfo/'+name,'utf8'));if(!m)continue;
-  if(ancestors.has(Number(m[2])))return{ownerPid:Number(m[2]),device:String(t.dev),inode:String(t.ino)};
+  if(ancestors.has(Number(m[2])))return{fd:Number(name),proof:{ownerPid:Number(m[2]),device:String(t.dev),inode:String(t.ino)}};
   // The installed shell uses exec 9>lock; flock -n 9. The acquiring child exits
   // while the locked open-file description remains inherited. Verify the same
   // exclusive kernel entry on our descriptor and fixed FD 9 of the root caller.
   const anchor=fs.statSync('/proc/'+ownerPid+'/fd/9'),held=lockEntry(fs.readFileSync('/proc/'+ownerPid+'/fdinfo/9','utf8'));
-  if(anchor.dev===t.dev&&anchor.ino===t.ino&&held&&held[1].trim().replace(/\s+/g,' ')===m[1].trim().replace(/\s+/g,' '))return{ownerPid,device:String(t.dev),inode:String(t.ino)};
+  if(anchor.dev===t.dev&&anchor.ino===t.ino&&held&&held[1].trim().replace(/\s+/g,' ')===m[1].trim().replace(/\s+/g,' '))return{fd:Number(name),proof:{ownerPid,device:String(t.dev),inode:String(t.ino)}};
  }catch{/* disappearing unrelated descriptor or absent fixed parent descriptor */}}
  throw Error('baseline preparation requires inherited exclusive root flock');
 }
+function heldAncestorLock(ownerPid,lockPath){return ancestorLockDescriptor(ownerPid,lockPath).proof;}
 async function verify(stage,candidateSha,ownerPid,previous){
  a(['initial','paused'].includes(stage));
  a.equal(process.platform,'linux');a.equal(process.getuid(),0);a.equal(process.version,'v22.22.1');a.match(candidateSha,/^[a-f0-9]{64}$/);a(Number.isSafeInteger(ownerPid)&&ownerPid>1);
@@ -51,7 +52,9 @@ async function verify(stage,candidateSha,ownerPid,previous){
  // Transport stability is checked without calling a false business result true.
  let before;for(let i=0,stable=0;i<120;i++){before=units();const u=before['football-predict.service'];try{const r=await fetch('http://127.0.0.1:8788/api/health',{signal:AbortSignal.timeout(2000)}),v=await r.json();stable=r.status===200&&v.ok===true&&v.service==='football-predict-server'&&u.ActiveState==='active'?stable+1:0;if(stable>=2)break;}catch{stable=0;}if(i===119)throw Error('baseline transport unavailable');await new Promise(r=>setTimeout(r,1000));}
  const api=before['football-predict.service'],worker=before['football-sync-worker.service'],pid=Number(api.MainPID);a(pid>0);const env=Object.fromEntries(fs.readFileSync('/proc/'+pid+'/environ','utf8').split('\0').filter(Boolean).map(s=>{const i=s.indexOf('=');return[s.slice(0,i),s.slice(i+1)];}));const url=env.FOOTBALL_POSTGRES_URL||env.DATABASE_URL;a(url);a.equal(env.FOOTBALL_STORAGE_MODE,'postgres-only');
- const pool=require(APP+'/server/postgresStore.cjs').createPostgresPool({connectionString:url,ssl:env.FOOTBALL_POSTGRES_SSL_MODE==='disable'?false:undefined,max:1,min:0});let client,result;
+ const uid=Number(cp.execFileSync('/usr/bin/id',['-u','football'],{encoding:'utf8',timeout:3000}).trim()),gid=Number(cp.execFileSync('/usr/bin/id',['-g','football'],{encoding:'utf8',timeout:3000}).trim());
+ const inherited=ancestorLockDescriptor(ownerPid);a.deepEqual(inherited.proof,flock);
+ const pool=require('./baselineReadonlyPeer.cjs').createReadonlyPeerPool({connectionString:url,sslMode:env.FOOTBALL_POSTGRES_SSL_MODE,uid,gid,fd:inherited.fd,lock:flock});let client,result;
  try{client=await pool.connect();await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');await client.query("SET LOCAL statement_timeout='10000ms'");const identity=(await client.query("SELECT current_database() AS name,current_user AS role,(SELECT oid::text FROM pg_database WHERE datname=current_database()) AS oid,current_setting('transaction_read_only') AS readonly")).rows[0];a.equal(identity.name,'football');a.equal(identity.role,'football');a.equal(identity.oid,POLICY.oid);a.equal(identity.readonly,'on');
   const guard={query(sql,args){a(/^SELECT\b/i.test(sql.trim())&&!/\b(?:INSERT|UPDATE|DELETE|MERGE|CREATE|ALTER|DROP|TRUNCATE|COPY|CALL|DO)\b/i.test(sql),'SELECT-only baseline proof');return client.query(sql,args);}};
   const artifacts=(await guard.query('SELECT artifact_key,payload::text AS json,payload_sha256,payload_bytes FROM football.private_model_artifacts WHERE artifact_key=ANY($1::text[])',[ [POLICY.recordKey,POLICY.recordKey+'-ack'] ])).rows;a.equal(artifacts.length,2);for(const r of artifacts){a.equal(Buffer.byteLength(r.json),Number(r.payload_bytes));a.equal(sha(r.json),r.payload_sha256);a.equal(r.payload_sha256,r.artifact_key.endsWith('-ack')?POLICY.ackSha:POLICY.payloadSha);}
@@ -70,6 +73,6 @@ function readProof(stream){return new Promise((resolve,reject)=>{const chunks=[]
  const data=b=>{if(!Buffer.isBuffer(b)||size+b.length>8192)return finish('BASELINE_PROOF_BOUND');size+=b.length;chunks.push(b);},end=()=>finish(),failure=()=>finish('BASELINE_PROOF_INPUT');
  const timer=setTimeout(()=>finish('BASELINE_PROOF_TIMEOUT'),8000);stream.on('data',data);stream.once('end',end);stream.once('error',failure);
  });}
-module.exports={POLICY,validate,verify,heldAncestorLock,readProof};
+module.exports={POLICY,validate,verify,heldAncestorLock,ancestorLockDescriptor,readProof};
 if(require.main===module){const[stage,sha,owner,...rest]=process.argv.slice(2);a.equal(rest.length,0);
  (async()=>verify(stage,sha,Number(owner),stage==='paused'?await readProof(process.stdin):null))().then(v=>console.log(JSON.stringify(v))).catch(e=>{console.error(JSON.stringify({ok:false,scope:POLICY.version,error:String(e.message).slice(0,500),productionDataWrites:0}));process.exitCode=1;});}

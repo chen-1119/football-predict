@@ -982,6 +982,8 @@ const requiredEntries = [
   "tests/research-frozen-combos.test.cjs",
   "scripts/verifyResearchRunuser.cjs",
   "scripts/baselineAuthorityReplayRepair.cjs",
+  "scripts/baselineReadonlyPeer.cjs",
+  "scripts/verifyBaselineReadonlyPeer.cjs",
   "scripts/verifyBaselineAuthorityReplayLock.cjs",
   "tests/baseline-authority-replay-repair.test.cjs",
   "src/services/reviewedPresentation.ts",
