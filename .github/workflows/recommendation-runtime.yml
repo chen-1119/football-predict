@@ -25,6 +25,9 @@ on:
       - 'server/researchFrozenCombos.cjs'
       - 'tests/research-frozen-combos.test.cjs'
       - 'scripts/verifyResearchRunuser.cjs'
+      - 'scripts/baselineAuthorityReplayRepair.cjs'
+      - 'scripts/verifyBaselineAuthorityReplayLock.cjs'
+      - 'tests/baseline-authority-replay-repair.test.cjs'
       - 'tests/research-combo-revision.test.cjs'
       - 'tests/research-review-projection.test.cjs'
       - 'tests/research-review-frontend.test.cjs'
@@ -253,6 +256,10 @@ jobs:
         run: node --test tests/research-combo-revision.test.cjs tests/research-frozen-combos.test.cjs tests/research-review-projection.test.cjs tests/research-review-frontend.test.cjs tests/research-refresh-boundary.test.cjs
       - name: Frozen combo authority replay and original archive identity
         run: node --test tests/recommendation-authority.test.cjs tests/recommendation-authority-integration.test.cjs tests/research-frozen-combos.test.cjs
+      - name: Exact r876 readonly baseline preparation and actual ancestor lock
+        run: |
+          node --test tests/baseline-authority-replay-repair.test.cjs
+          sudo "$(command -v node)" scripts/verifyBaselineAuthorityReplayLock.cjs
       - name: Root socket bounded frames and process boundary fixtures
         run: python3 scripts/verifyResearchSocketServer.py
       - name: Actual isolated installed-path Python binding and unsigned dependencies

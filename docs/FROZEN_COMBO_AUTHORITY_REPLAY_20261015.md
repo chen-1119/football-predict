@@ -37,3 +37,27 @@ The source is not a production acceptance receipt. A new reviewed HEAD, complete
 CI, a unique normal signed package and actual installed health and publication
 acceptance remain required. Failed packages and used component grants are not
 reused. Dot network permission and workstation-offline acceptance remain open.
+# Exact r876 preparation boundary
+
+The installed r876 reader rejects the new frozen group metadata with
+`RECOMMENDATION_AUTHORITY_REVIEWED_VIEW_REPLAY`. A read only capture reproduced
+that failure locally; the corrected reader verified the same original bytes.
+
+The signed normal code release may prepare from this particular broken baseline
+only after `baselineAuthorityReplayRepair.cjs` proves both r876 markers, its
+installed signed manifest and complete reader source closure, the exact API and
+worker incarnations, PostgreSQL database/role/OID in a real read only repeatable
+read transaction, the original thirteen records and exact second ACK, and the
+committed immutable generation identity. It must reproduce precisely that old
+error and verify the corrected candidate against the same database snapshot.
+The proof runs under the controller's inherited exclusive root kernel flock.
+
+This is a preparation proof, with baseline health explicitly false. The old
+worker admission failures remain failures. It grants no publication or database
+mutation, migration, fallback data, additional process permission or cutover
+lease. Other release identities keep the ordinary baseline service gate. The
+controlled watcher pause rechecks the same proof, boot, parent lock and both
+clocks within 900 seconds, and requires the old worker to be stopped. All new
+candidate service health, schema, data bytes, frozen originals, archives,
+capacity, publication identity, fresh final lease and post swap gates remain.
+
