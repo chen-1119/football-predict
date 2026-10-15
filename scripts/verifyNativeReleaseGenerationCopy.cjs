@@ -4,6 +4,12 @@ const { commitDataGeneration, resolveCurrentGeneration, readGenerationFile, stor
 const { copyNativeReleaseGeneration, createNativeCopyDeadline, nativeCopyBudget, COPY_BUDGET_MS, LOCK_WAIT_MAX_MS, COPY_MIN_AFTER_LOCK_MS } = require("./nativeReleaseGenerationCopy.cjs");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "football-native-generation-copy-")), source = path.join(root, "source");
 const checks = [];
+// A newly booted CI kernel can have less uptime than the deliberately aged
+// 240-second fixture. Translate the monotonic epoch equally in parent and
+// child; all real elapsed time and wall/monotonic differences are unchanged.
+// This process-local fixture translation never enters a production deadline.
+const realFixtureMonotonic = process.hrtime.bigint, fixtureMonotonicOffsetNs = 600000000000n;
+process.hrtime.bigint = () => realFixtureMonotonic() + fixtureMonotonicOffsetNs;
 try {
   const raw = Buffer.from(JSON.stringify({ rows: [{ tipCode: "X", note: "原始冻结推荐\n保留空格", padding: "a".repeat(2 * 1024 * 1024) }] }) + "\n");
   const original = commitDataGeneration({ storeDir: source, sourceCycleId: "native-copy-original", files: { "original.json": { bytes: raw, rows: 1 },
@@ -82,7 +88,7 @@ try {
   const crossLeasesBefore = crossLeases();
   function copyInActualChild(targetStoreDir, deadline) {
     const args = { sourceStoreDir: crossSource, targetStoreDir, identity: crossIdentity, deadline };
-    const childSource = "const {copyNativeReleaseGeneration}=require(" + JSON.stringify(require.resolve("./nativeReleaseGenerationCopy.cjs"))
+    const childSource = "const realFixtureMonotonic=process.hrtime.bigint;process.hrtime.bigint=()=>realFixtureMonotonic()+" + fixtureMonotonicOffsetNs + "n;const {copyNativeReleaseGeneration}=require(" + JSON.stringify(require.resolve("./nativeReleaseGenerationCopy.cjs"))
       + ");try{console.log(JSON.stringify(copyNativeReleaseGeneration(" + JSON.stringify(args)
       + ")));}catch(error){console.log(JSON.stringify({ok:false,code:error.code,details:error.details}));process.exitCode=1;}";
     const child = require("node:child_process").spawnSync(process.execPath, ["-e", childSource], {
@@ -197,10 +203,11 @@ try {
   assert.equal(fs.existsSync(path.join(root, "tampered")), false);
   checks.push("same-size changed generation bytes are refused before candidate creation");
   console.log(JSON.stringify({ ok: true, checks: checks.length, cases: checks, productionWrites: 0, sqliteExports: 0,
-    runtime: { platform: process.platform, node: process.version },
+    runtime: { platform: process.platform, node: process.version }, fixtureMonotonicEpochOffsetNs: String(fixtureMonotonicOffsetNs),
     timingSamples: { ordinarySmallGeneration: copied.timing, naturalLiveWriter: waitedCopy.timing, actualChildSmallGeneration: crossSuccess.result.timing },
     timingScope: "Real local small immutable files and an 11-second naturally released writer; not a production copy-duration baseline or proof that 60 seconds is sufficient." }));
 } finally {
+  process.hrtime.bigint = realFixtureMonotonic;
   const resolved = fs.realpathSync(root); assert.equal(path.dirname(resolved).toLowerCase(), fs.realpathSync(os.tmpdir()).toLowerCase());
   assert.ok(path.basename(resolved).startsWith("football-native-generation-copy-")); fs.rmSync(resolved, { recursive: true });
 }
