@@ -41,6 +41,10 @@ test('historical replay cannot perform archival and issues only SELECT statement
 });
 for(const [name,change]of [['archive hash',v=>v[0].sourceArchiveSha256='0'.repeat(64)],['group hash',v=>v[0].originalComboHash='0'.repeat(64)],['extra field',v=>v[0].permission=true],['nonboolean flag',v=>v[0].frozen=0],['missing group',v=>v.pop()]])
  test('historical replay rejects changed '+name,async()=>{const f=fixture(),at=f.day+'T11:00:00.000Z',saved=await freezeOriginalGroups(f.c,f.view,at),meta=structuredClone(saved.comboFreeze);change(meta);await a.rejects(freezeOriginalGroups(f.c,f.view,at,{replayFrozen:meta}),/REPLAY_/);});
+function futureArchive(f){const saved=archive.prepare(f.view,{generationId:'g-'+'a'.repeat(64),committedAt:f.day+'T08:00:00.000Z'},f.day+'T12:00:00.000Z'),json=JSON.stringify(saved.archive);
+ Object.assign(f.row,{generated_at:saved.archive.createdAt,updated_at:saved.archive.createdAt,payload_json:json,payload_sha256:p.sha(json),payload_bytes:Buffer.byteLength(json)});}
+test('a later valid archive cannot add groups to an earlier as-of view',async()=>{const f=fixture();futureArchive(f);const actual=await freezeOriginalGroups(f.c,f.view,f.day+'T11:00:00.000Z');a.deepEqual(actual,f.view);a.equal(actual.comboFreeze,undefined);});
+test('a later corrupt archive is rejected before the as-of filter',async()=>{const f=fixture();futureArchive(f);f.row.payload_sha256='0'.repeat(64);await a.rejects(freezeOriginalGroups(f.c,f.view,f.day+'T11:00:00.000Z'));});
 test('after cutoff, persisted original groups remain available without selecting replacement legs',async()=>{
  const f=fixture(),at=f.day+'T19:30:00.000Z',input=p.seal({...f.view,updatedAt:at,combos:[],threeCombos:[]});
  const actual=await freezeOriginalGroups(f.c,input,at);a.deepEqual(actual.combos,f.view.combos);a(actual.comboFreeze.every(v=>v.frozen));
