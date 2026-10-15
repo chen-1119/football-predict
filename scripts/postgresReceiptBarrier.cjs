@@ -1,6 +1,9 @@
 "use strict";
 const KEY = "football-postgres-projection-sync-v1";
-const MAX_WAIT_MS = 2000;
+// Preparation owns a pre-existing 600s contention budget. Keep one bounded
+// FIFO position through ordinary 20s+ view transactions, without starting a
+// snapshot or changing the default nonblocking worker admission.
+const MAX_WAIT_MS = 60000;
 function receiptBarrierState() { return { held: false, acquisitionUncertain: false, configurationUncertain: false }; }
 function validateReceiptWait(waitMs) {
   if (!Number.isSafeInteger(waitMs) || waitMs < 0 || waitMs > MAX_WAIT_MS) throw new Error("invalid bounded receipt read wait");

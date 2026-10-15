@@ -108,7 +108,7 @@ check('cold generation validation streams complete signed rows within a bounded 
 check('receipt reader queue keeps bounded waits, connection disposal and before-BEGIN admission',()=>{
   const file='tests/postgres-receipt-barrier.test.cjs';
   const child=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
-  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 12$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 13$/m);assert.match(child.stdout,/^# skipped 0$/m);
   for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
     for(const required of ['scripts/postgresReceiptBarrier.cjs','scripts/verifyReceiptBarrierPostgres.cjs',file])assert(read(entry).includes('"'+required+'"'));
   assert(read('.github/workflows/recommendation-runtime.yml').includes('run: node scripts/verifyReceiptBarrierPostgres.cjs'));

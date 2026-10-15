@@ -83,7 +83,7 @@ test('lease integrity, cleanup and uncertain write errors never retry', async ()
 });
 test('lease retry wraps only pre-stop preparation and starts cutover clock after fresh capture', () => {
   const source = fs.readFileSync(path.join(root, 'scripts/nativeCodeReleaseDataPlane.cjs'), 'utf8');
-  a.match(source, /return retryLeaseRead\(\(\) => captureLeaseInputOnce\(state, directory\), undefined, undefined,/);
+  a.match(source, /return retryLeaseRead\(\(\{ remainingMs \}\) => captureLeaseInputOnce\(state, directory,\s*\{ receiptWaitMs: Math\.min\(60_000, Math\.floor\(remainingMs\)\) \}\), undefined, undefined,/);
   const once = source.slice(source.indexOf('async function captureLeaseInputOnce'), source.indexOf('async function seed'));
   a(once.includes('readOldRuntimeIdentity()')); a(once.includes('openPostgresRuntimeReadSession'));
   a(once.includes('finally { if (session) await session.close(); await source.end(); }'));
@@ -109,6 +109,11 @@ test('lease preparation respects elapsed deadline and rejects a backward clock',
   a.equal(now, 600000); a.equal(calls, 60);
   now = 5;
   await a.rejects(retryLeaseRead(busy, async () => { now = 4; }, () => now), /clock invalid/);
+});
+test('each queued preparation attempt receives only the unspent original contention budget',async()=>{
+ const {retryLeaseRead}=require('../scripts/nativeCodeReleaseDataPlane.cjs');let now=0;const budgets=[];
+ await a.rejects(retryLeaseRead(async({remainingMs})=>{budgets.push(remainingMs);a(remainingMs>0&&remainingMs<=600000);now+=Math.min(60000,Math.floor(remainingMs));throw new Error('native receipt read barrier busy; retry after projection completes');},async ms=>{now+=ms;},()=>now),/contention deadline/);
+ a.equal(now,600000);a.equal(budgets[0],600000);a.equal(budgets.at(-1),40000);a.equal(budgets.length,9);
 });
 test('deadline keeps its last classified cause without extending the budget',async()=>{
   const {retryLeaseRead}=require('../scripts/nativeCodeReleaseDataPlane.cjs');let now=0,calls=0;const error=Object.assign(new Error('private diagnostic must not be emitted'),{code:'NATIVE_RESULT_ARCHIVE_PENDING',pendingRows:2}),reports=[];
