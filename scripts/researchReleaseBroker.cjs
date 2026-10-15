@@ -67,8 +67,8 @@ function syncNew(file, bytes) {
 }
 function requestJournalIdentity(request) {
   let purpose; try { purpose = JSON.parse(request.toString('utf8')); } catch { fail('RESEARCH_REQUEST_JSON'); }
-  if (purpose?.version !== 'research-broker-request-v1' || !['archive','archive-read','publish','publication-read','revision-publish','revision-read'].includes(purpose.action)) fail('RESEARCH_REQUEST_ACTION');
-  const requestSha = sha(request), readOnly = ['archive-read','publication-read','revision-read'].includes(purpose.action);
+  if (purpose?.version !== 'research-broker-request-v1' || !['archive','archive-read','publish','publication-read','revision-publish','revision-read','combo-revision-publish','combo-revision-read'].includes(purpose.action)) fail('RESEARCH_REQUEST_ACTION');
+  const requestSha = sha(request), readOnly = ['archive-read','publication-read','revision-read','combo-revision-read'].includes(purpose.action);
   // Read requests need a fresh database observation. A cached not-observed read
   // must never hide a later COMMIT. Mutation identities remain durable/exact.
   return { requestSha, readOnly, journalId: requestSha + (readOnly ? '-read-' + crypto.randomBytes(12).toString('hex') : '') };
@@ -109,6 +109,8 @@ async function main() {
   const env = { PATH: '/usr/bin:/bin', NODE_ENV: 'production' };
   for (const key of ['FOOTBALL_POSTGRES_URL', 'DATABASE_URL', 'FOOTBALL_POSTGRES_SSL_MODE', 'SPORTTERY_RELAY_FAST_LANE_SNAPSHOT', 'SPORTTERY_RELAY_FAST_LANE_SNAPSHOT_PATH', 'SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH', 'SERVER_STORE_DIR', 'DATA_STORE_DIR']) if (source[key]) env[key] = source[key];
   if (!(env.FOOTBALL_POSTGRES_URL || env.DATABASE_URL) || env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH !== ROOT + '/deploy/light-server/collector-trust-registry.json') fail('RESEARCH_ENV_IDENTITY');
+  const capabilities=/^CapEff:\s+([a-f0-9]+)$/mi.exec(fs.readFileSync('/proc/self/status','utf8'));
+  if(!capabilities||(BigInt('0x'+capabilities[1])&0xc0n)!==0xc0n)fail('RESEARCH_FIXED_UID_TRANSITION_UNAVAILABLE');
   const child = cp.spawn('/usr/sbin/runuser', ['-u', 'football', '--', NODE, ROOT + '/scripts/researchBrokerWorker.cjs'], {
     env, stdio: ['pipe', 'pipe', 'pipe', lockFd], cwd: ROOT,
   });

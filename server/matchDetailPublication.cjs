@@ -55,7 +55,17 @@ async function readMatchDetailPublication(client,match){
   const asOf=(await client.query("SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS observed_at")).rows[0]?.observed_at;
   const loaded=await loadVerifiedPublicationForIdentity(client,{asOf,targetIdentity:identity,
    trustRegistry:process.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH||path.resolve(__dirname,'../deploy/light-server/collector-trust-registry.json')});
-  return projectVerifiedPublication(match,loaded);
+  const value=projectVerifiedPublication(match,loaded);
+  if(value.reviewed){
+   // Isolate optional revision corruption within the caller's same read-only
+   // snapshot; a failed version lane cannot erase the verified first record.
+   await client.query('SAVEPOINT detail_review_versions');
+   try{value.reviewedRevisions=await require('./researchReviewProjection.cjs').projection(client,value.reviewed,asOf,loaded.resultHeads||[],{eventId:identity.sourceMatchId});
+    await client.query('RELEASE SAVEPOINT detail_review_versions');
+   }catch{await client.query('ROLLBACK TO SAVEPOINT detail_review_versions');await client.query('RELEASE SAVEPOINT detail_review_versions');
+    value.reviewedRevisions={version:'reviewed-revisions-view-v1',state:'unavailable',businessDate:identity.businessDate,updatedAt:asOf};}
+  }
+  return value;
  }catch{return {version:'match-detail-publication-v1',status:'unavailable',reviewed:null,trained:null};}
 }
 module.exports={identityFor,sameIdentity,projectVerifiedPublication,readMatchDetailPublication};

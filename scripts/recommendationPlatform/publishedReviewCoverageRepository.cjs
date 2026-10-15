@@ -173,6 +173,6 @@ async function loadVerifiedPublicationForIdentity(client,options={}){
    resultEventId:settled?e.eventId:null,revision:settled?e.revision:null,
    resultObservedAt:settled?e.observedAt:null,source:settled?e.source:null};
  });
- return {version:'verified-published-event-v1',identity:target,asOf:options.asOf,publications:loaded.publications,postMatch,audit:loaded.audit};
+ return {version:'verified-published-event-v1',identity:target,asOf:options.asOf,publications:loaded.publications,postMatch,resultHeads:loaded.resultHeads,audit:loaded.audit};
 }
 module.exports={loadVerifiedCoverage,loadVerifiedPublicationForIdentity,publicCoverage,createVerificationCache,bounds,targetOf,matchesIdentity};

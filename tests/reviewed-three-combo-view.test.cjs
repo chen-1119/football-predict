@@ -9,7 +9,7 @@ function loadView(){
 }
 const view=loadView();
 function compile(file,requireFn,date=Date){const m={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module:m,exports:m.exports,Date:date,Intl,require:requireFn});return m.exports;}
-const ui=compile('src/components/recommendations/ReviewedAnalysis.tsx',require);
+const ui=require('../scripts/lib/loadReviewTsForVerification.cjs')(ts,path.resolve('src/components/recommendations/ReviewedAnalysis.tsx'));
 function record(index,override={}){
  return {eventId:String(100+index),eventVersion:'2030-01-01T14:00:00.000Z',businessDate,matchNum:`周二00${index+1}`,homeTeamId:`home-${index}`,awayTeamId:`away-${index}`,homeTeamName:`Home ${index}`,awayTeamName:`Away ${index}`,market:'HAD',selection:'h',sp:1.85,originalSp:1.81,scores:[[2,0],[2,1]],confidence:'高',reason:'Synthetic reviewed evidence',analysisUrl:'https://example.com/reviewed-preview',limitations:['首发未核实'],cutoffAt:'2030-01-01T12:00:00.000Z',quoteObservedAt:'2030-01-01T07:59:00.000Z',publicationMethod:'reviewed-editorial',formalEligible:false,modelProbability:null,modelVersion:null,...override};
 }
@@ -180,6 +180,7 @@ function center(data,now,tab){
   if(id==='react')return {useEffect:()=>{},useState:initial=>[typeof initial==='function'?initial():initial,()=>{}]};
   if(id==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
   if(id==='./ReviewedAnalysis')return ui;
+  if(id==='../../services/reviewedPresentation')return compile('src/services/reviewedPresentation.ts',require);
   if(id==='./PublishedReviewCoverage')return {PublishedReviewCoveragePanel:stub};
   if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
   if(id==='../../hooks/useRecommendationReviewPage')return {useRecommendationReviewPage:()=>({data:null,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};

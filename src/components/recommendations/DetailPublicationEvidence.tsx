@@ -1,6 +1,6 @@
 import type { DetailPublication } from '../../services/matchDetailPublication';
 export function DetailPublicationEvidence({data,language}:{data:DetailPublication;language:'zh'|'en'}){
- const zh=language==='zh',r=data.reviewed,model=data.trained;
+ const zh=language==='zh',r=data.reviewed?.review?.original??data.reviewed,model=data.trained;
  const stamp=(s:string)=>new Date(s).toLocaleString(zh?'zh-CN':'en-GB',{timeZone:'Asia/Shanghai'});
  return <section data-testid="detail-original-publication" data-business-date={data.businessDate}>
   <h4>{zh?'原赛前发布记录与依据':'Original pre-match publication and evidence'}</h4>

@@ -58,7 +58,7 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
       || typeof result.originalReceiptBase64 !== 'string'
       || typeof result.deliveredAt !== 'string' || !Number.isFinite(Date.parse(result.deliveredAt))
       || new Date(result.deliveredAt).toISOString() !== result.deliveredAt || Date.parse(result.deliveredAt) < startedAt
-      || Date.parse(result.deliveredAt) > finishedBy || !['archive','publish','revision-publish'].includes(decodeRequest(raw).action)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+      || Date.parse(result.deliveredAt) > finishedBy || !['archive','publish','revision-publish','combo-revision-publish'].includes(decodeRequest(raw).action)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
     const saved = Buffer.from(result.originalReceiptBase64,'base64');
     if(saved.toString('base64')!==result.originalReceiptBase64||saved.length>3*1024*1024-4096
       ||sha(saved)!==result.originalReceiptSha256||!Buffer.from(saved.toString()).equals(saved)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
@@ -91,6 +91,27 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
         || new Date(value.receivedAt).toISOString() !== value.receivedAt
         || Date.parse(value.receivedAt) < Date.parse(exact.generatedAt)
         || Date.parse(value.receivedAt) > Date.parse(result.finishedAt)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+    }
+  } else if(request.action.startsWith('combo-revision-')) {
+    const r=JSON.parse(request.json),key=require('./researchComboRevision.cjs').validate(r);
+    if(value.key!==key||!['not-observed','record-present-ack-missing','committed-and-acknowledged'].includes(value.state)
+      ||(value.state==='committed-and-acknowledged'&&(value.verified!==true||value.revision!==r.revision
+        ||value.baseArchiveKey!==r.baseArchiveKey||value.baseArchiveSha256!==r.baseArchiveSha256||value.previousRevisionHash!==r.previousRevisionHash
+        ||value.originalSettlementPreserved!==true||value.independentEventIncrement!==0
+        ||['payloadSha256','ackSha256','baseIdentity'].some(k=>!/^[a-f0-9]{64}$/.test(value[k]||''))))
+      ||(value.state!=='committed-and-acknowledged'&&value.verified!==false)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+    if(value.verified){
+      const policy=require('../scripts/recommendationPlatform/reviewedAnalysis.cjs'),ds=value.latestDecisions,first=value.originalDecisions,c=value.combo;
+      if(!Array.isArray(ds)||!Array.isArray(first)||ds.length!==r.size||first.length!==r.size||!c||c.band!==r.band
+        ||!Array.isArray(c.legs)||c.legs.length!==r.size||value.baseIdentity!==policy.hash({baseArchiveKey:r.baseArchiveKey,baseArchiveSha256:r.baseArchiveSha256,bases:r.bases,size:r.size,band:r.band}))fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+      for(let i=0;i<r.size;i++){
+        const d=ds[i],o=first[i],pick=r.draft.singles[i],leg=c.legs[i];
+        if(!d||!o||d.eventId!==r.bases[i].eventId||o.eventId!==d.eventId||d.eventVersion!==o.eventVersion||d.market!==pick.market||d.selection!==pick.selection
+          ||(d.handicap??null)!==pick.handicap||policy.hash(d.scores)!==policy.hash(pick.scores)||d.homeTeamName!==pick.teams[0]||d.awayTeamName!==pick.teams[1]
+          ||d.homeTeamId!==o.homeTeamId||d.awayTeamId!==o.awayTeamId||d.modelProbability!==null||d.modelVersion!==null||d.formalEligible!==false
+          ||['eventId','matchNum','market','selection','sp'].some(k=>leg[k]!==d[k])||(leg.handicap??null)!==(d.handicap??null))fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+      }
+      if(c.product!==require('../scripts/recommendationPlatform/reviewedComboHistory.cjs').exactProduct(c.legs)||c.product<r.band)fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
     }
   } else if(request.action.startsWith('revision-')) {
     const r=JSON.parse(request.json),key=require('./researchReviewedRevision.cjs').validate(r);

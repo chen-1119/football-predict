@@ -1,6 +1,7 @@
 import { PublishedReviewCoveragePanel } from './PublishedReviewCoverage';
 import { useEffect, useState } from 'react';
-import { ReviewedAnalysisPanel, reviewedLabel } from './ReviewedAnalysis';
+import { ReviewedAnalysisPanel } from './ReviewedAnalysis';
+import { reviewedLabel } from '../../services/reviewedPresentation';
 import type { ReviewedAnalysis, ReviewedAnalysisCombo, RecommendationCenterData } from '../../services/recommendationCenterView';
 import { LeagueBaselineDirections } from './LeagueBaselineDirections';
 import { DailyBulletinPanel } from './DailyBulletinPanel';
@@ -318,7 +319,7 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
   return <section className="recommendation-center" aria-labelledby="rc-title">
     <header className="rc-heading"><div><span className="rc-eyebrow">{zh?'比赛日 '+(reviewedHistory?reviewedData!.businessDate:data?.businessDate||'—'):'MATCH DAY '+(reviewedHistory?reviewedData!.businessDate:data?.businessDate||'—')}</span><h1 id="rc-title">{review?(zh?'赛后复盘':'Result Review'):reviewedHistory?(zh?'历史推荐':'Published History'):(zh?'今日推荐':'Today’s Recommendations')}</h1><p>{review?(zh?'查看真实赛果，复盘每一次选择。':'Review every selection against actual results.'):reviewedHistory?(zh?'查看原竞彩日已冻结记录；不作为今日新推荐。':'Frozen records from their original match day; not new recommendations for today.'):(zh?'先看比赛与方向，再看选择依据。':'Start with the match and pick, then explore the evidence.')}</p></div><button type="button" className="rc-refresh" onClick={()=>{refresh();if(review)reviewPage.refresh();}} disabled={loading||reviewPage.loading} aria-label={zh?'刷新推荐与复盘':'Refresh recommendations and review'}><RefreshCw size={16} aria-hidden="true"/>{loading||reviewPage.loading?(zh?'更新中':'Updating'):(zh?'刷新':'Refresh')}</button></header>
     {(!data?.strategySwitch||review)&&<DailyBulletinPanel data={data?.dailyBulletin} now={now} failed={failed||authorizationRequired||review&&reviewPage.failed} review={review} publishedCoverage={authorizationRequired||reviewPage.authorizationRequired?undefined:publishedCoverage}/>}
-    {!review&&<ReviewedAnalysisPanel data={reviewedDisplay} tab={tab} now={now} failed={failed||authorizationRequired}/>}
+    {!review&&<ReviewedAnalysisPanel data={reviewedDisplay} revisions={reviewedHistory?undefined:data?.reviewedRevisions} tab={tab} now={now} failed={failed||authorizationRequired}/>}
     {maximumTwo&&<section className="rc-paper" aria-label="最高可用2串1" data-reviewed-display-only="highest-available-two"><h2>最高可用2串1（目标10倍）</h2><article className="rc-paper__record"><strong>实际 {maximumTwo.product} 倍</strong><p>{maximumTwo.legs.map(l=>`${l.matchNum} ${reviewedLabel(l)} ${l.sp}`).join(' × ')} = {maximumTwo.product}</p><p>按已发布单场组合的当前展示参考，未达到10倍；保留原方向与发布SP。组合赔率不等于命中概率。</p></article></section>}
     {!review&&tab==='single'&&<LeagueBaselineDirections data={data?.leagueBaseline} language={language} now={now} failed={failed||authorizationRequired}/>}
     {!review&&tab==='single'&&<PrdPaperDirections data={data?.prdPaper} language={language} now={now} loading={loading} failed={failed||authorizationRequired}/>}

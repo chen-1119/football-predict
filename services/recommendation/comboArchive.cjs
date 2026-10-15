@@ -44,6 +44,11 @@ function prepare(view, publication, observedAt) {
   return { key, archive: sealed };
 }
 async function retain(client, view, publication, observedAt) {
+  if(view?.comboFreezePolicy==='persisted-original-groups-v1'){
+    const restored=await require('../../server/researchFrozenCombos.cjs').freezeOriginalGroups(client,view,observedAt);
+    check(p.hash(restored.combos)===p.hash(view.combos)&&p.hash(restored.threeCombos)===p.hash(view.threeCombos),'FROZEN_GROUP_CHANGED');
+    return {retained:false,reason:'original-groups-already-archived'};
+  }
   const { key, archive } = prepare(view, publication, observedAt);
   const prior = (await client.query(SELECT, [key])).rows;
   if (prior.length) { const row = verifyRow(prior[0], key, 524288); check(row.artifactVersion === VERSION && p.hash(row.payload.view.records) === p.hash(view.records), 'IMMUTABLE_CONFLICT'); return { key, retained: false }; }

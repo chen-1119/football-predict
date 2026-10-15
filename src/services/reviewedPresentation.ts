@@ -1,0 +1,1 @@
+export const reviewedLabel=(r:{market:'HAD'|'HHAD';handicap?:number;selection:'h'|'d'|'a'})=>r.market==='HHAD'?`${{h:'让胜',d:'让平',a:'让负'}[r.selection]}(${r.handicap!>0?'+':''}${r.handicap})`:{h:'主胜',d:'平局',a:'客胜'}[r.selection];

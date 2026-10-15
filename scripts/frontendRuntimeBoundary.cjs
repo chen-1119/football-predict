@@ -40,7 +40,7 @@ const EXTERNAL_UNITS = deepFreeze({
 const RESEARCH_COMPONENT = deepFreeze({
   unit: "football-research-broker.service",
   argv: "/usr/bin/python3.12 -I -S -B /usr/local/libexec/football-research-broker/researchSocketServer.py",
-  unitSha: "2743dac26bb53747962f19ad965499e86bd7329cc625730e24bf9f1e5d414d61",
+  unitSha: "ca817f394550958bf79a84f3e011103d573cab48212e1a1f005fb5b66c46cca3",
   sources: {
     "scripts/researchSocketServer.py": "e7c37bbf6f1e878517b8fe54aa4346c0044aec1f87bdf480591b45cdf4594c00",
     "scripts/researchSocketPeer.py": "9019356aa8a63c0683d7c82435210528d20e943630e3091fc483d65631138786",
@@ -54,7 +54,7 @@ const RESEARCH_COMPONENT = deepFreeze({
 // arbitrary command. Their enclosing function source must remain exact, and
 // baseline/candidate package and entire reachable-source bytes must also match.
 const COMMAND_FUNCTIONS = deepFreeze({
-  "scripts/researchReleaseBroker.cjs": ["1345959196fcb3a963f02396c8c11891bf5f6e82be0447ec33c507d7f2c558dc"],
+  "scripts/researchReleaseBroker.cjs": ["65c05b4386cb41ded4293b9d95146639d73f321101d87c936e5b76230f50fbff"],
   "scripts/syncDailyPrematchApi.cjs": ["91da78aabb2c925254c42abec031be710d4f9a5316a2ba059533b60189b3bedf"],
   "server/index.cjs": ["209dac00faf2eb81c7c6348cacd5c273dd31dfc8ef913d9f77e0cf2fd4a621b6"],
   "server/relayFastResultWatcher.cjs": ["dbea20508195f9cafdb058ff0e4242448cac19a914c163ef961cfa5d16243567"],

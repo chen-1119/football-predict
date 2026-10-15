@@ -20,6 +20,16 @@ on:
       - 'tests/research-installer-archive-contract.test.cjs'
       - 'server/researchRevisionPolicy.cjs'
       - 'server/researchReviewedRevision.cjs'
+      - 'server/researchComboRevision.cjs'
+      - 'server/researchReviewProjection.cjs'
+      - 'server/researchFrozenCombos.cjs'
+      - 'tests/research-frozen-combos.test.cjs'
+      - 'scripts/verifyResearchRunuser.cjs'
+      - 'tests/research-combo-revision.test.cjs'
+      - 'tests/research-review-projection.test.cjs'
+      - 'tests/research-review-frontend.test.cjs'
+      - 'tests/research-refresh-boundary.test.cjs'
+      - 'scripts/verifyResearchComboRevisionPostgres.cjs'
       - 'tests/research-reviewed-revision.test.cjs'
       - 'scripts/verifyResearchRevisionPostgres.cjs'
       - 'tests/research-broker-journal.test.cjs'
@@ -239,6 +249,8 @@ jobs:
         run: node --test tests/research-report-store.test.cjs tests/research-write-service.test.cjs tests/research-write-http.test.cjs tests/research-http-routing.test.cjs tests/research-broker-client.test.cjs tests/research-broker-journal.test.cjs tests/research-revision-policy.test.cjs tests/research-reviewed-revision.test.cjs tests/research-broker-dependencies.test.cjs tests/research-broker-installer.test.cjs tests/research-installer-archive-contract.test.cjs
       - name: Kernel Unix socket peer identity in isolated Linux fixtures
         run: python3 scripts/verifyResearchSocketPeer.py
+      - name: Independent review versions, frozen combo legs and refresh authority
+        run: node --test tests/research-combo-revision.test.cjs tests/research-frozen-combos.test.cjs tests/research-review-projection.test.cjs tests/research-review-frontend.test.cjs tests/research-refresh-boundary.test.cjs
       - name: Root socket bounded frames and process boundary fixtures
         run: python3 scripts/verifyResearchSocketServer.py
       - name: Actual isolated installed-path Python binding and unsigned dependencies
@@ -249,12 +261,18 @@ jobs:
           RECEIPT_BARRIER_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Real Linux release-lock contention and child lifetime
         run: node scripts/verifyResearchReleaseLock.cjs
+      - name: Real systemd privilege drop, zero child capabilities and inherited lock
+        run: sudo env RESEARCH_ISOLATED_SYSTEMD_TEST=1 "$(command -v node)" scripts/verifyResearchRunuser.cjs
       - name: Native PostgreSQL report archive concurrency
         run: node scripts/verifyResearchReportPostgres.cjs
         env:
           RESEARCH_REPORT_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Native PostgreSQL signed review revision chain
         run: node scripts/verifyResearchRevisionPostgres.cjs
+        env:
+          RESEARCH_REPORT_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
+      - name: Native PostgreSQL immutable two and three leg review chains
+        run: node scripts/verifyResearchComboRevisionPostgres.cjs
         env:
           RESEARCH_REPORT_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Controlled native release and rollback contracts

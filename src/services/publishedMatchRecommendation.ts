@@ -1,5 +1,5 @@
 import type { Match, OutcomeProbability } from './mockData';
-import type { RecommendationCenterData, SingleRow, Outcome, Decision, Settlement } from './recommendationCenterView';
+import type { RecommendationCenterData, SingleRow, Outcome, Decision, Settlement, ReviewedAnalysisRecord, ReviewedRevisions } from './recommendationCenterView';
 
 const sourceId = (value: unknown) => String(value || '').replace(/^sporttery_/, '');
 const name = (value: unknown) => String(value || '').normalize('NFKC').trim().toLocaleLowerCase();
@@ -43,7 +43,12 @@ export function reviewedMatchRecommendation(data:RecommendationCenterData|null,m
   &&Date.parse(r.eventVersion)===Date.parse(match.kickoffTime)&&r.businessDate===data.businessDate
   &&r.homeTeamId===match.homeTeamId&&r.awayTeamId===match.awayTeamId
   &&r.homeTeamName===match.homeTeamName&&r.awayTeamName===match.awayTeamName)??[];
- return records.length===1?records[0]:null;
+ return records.length===1?reviewedLatestRecord(records[0],data?.reviewedRevisions):null;
+}
+export function reviewedLatestRecord(original:ReviewedAnalysisRecord,revisions?:ReviewedRevisions):ReviewedAnalysisRecord{
+ const versions=revisions?.state==='verified'?revisions.singles.filter(r=>r.eventId===original.eventId):[];
+ const latest=[...versions].sort((a,b)=>b.revision-a.revision)[0];
+ return latest?{...latest.decision,review:{revision:latest.revision,publishedAt:latest.publishedAt,original,settlement:latest.settlement}}:original;
 }
 
 function uniquePosteriorLeader(probabilities: OutcomeProbability | null | undefined): Outcome | null {

@@ -10,6 +10,8 @@ const paths = new Map([
   ['/api/operator/research/publication-read', 'publication-read'],
   ['/api/operator/research/single-review', 'revision-publish'],
   ['/api/operator/research/single-review-read', 'revision-read'],
+  ['/api/operator/research/combo-review', 'combo-revision-publish'],
+  ['/api/operator/research/combo-review-read', 'combo-revision-read'],
 ]);
 function createResearchWriteHandler({ accounts, submit, bodyTimeoutMs = 8000, now = Date.now } = {}) {
   if (typeof accounts?.authorizeMutation !== 'function') throw Error('RESEARCH_MUTATION_AUTH_REQUIRED');

@@ -31,7 +31,7 @@ function verifyFrontendRuntimeBoundary() {
   };
   const check = (name, run) => { run(); checks.push({ name, ok: true }); };
   try {
-    for (const directory of ["server", "scripts", "src", "collectors", "deploy/light-server", "cloudflare/sync-trigger/src"]) {
+    for (const directory of ["server", "scripts", "src", "collectors", "services/recommendation", "deploy/light-server", "cloudflare/sync-trigger/src"]) {
       copySource(path.join(originalRoot, directory), path.join(baselineRoot, directory));
     }
     for (const file of ["package.json", "package-lock.json"]) fs.copyFileSync(path.join(originalRoot, file), path.join(baselineRoot, file));

@@ -335,7 +335,17 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     if(repo.client){
       const attempted=await repo.savepoint(()=>require('./reviewedAnalysisRuntime.cjs').projection(repo.client,day(now),new Date(now).toISOString()));
       if(attempted.error)await repo.issue('reviewed-analysis',{reason:'reviewed-analysis-projection-unavailable'});
-      else reviewedAnalysis=attempted.value;
+      else if(attempted.value?.records.length){
+        reviewedAnalysis=await require('../../server/researchFrozenCombos.cjs').freezeOriginalGroups(repo.client,attempted.value,new Date(now).toISOString(),{anchor:true});
+      }else reviewedAnalysis=attempted.value;
+    }
+    let reviewedRevisions;
+    if(repo.client&&reviewedAnalysis?.records.length){
+      const at=new Date(now).toISOString();
+      const attempted=await repo.savepoint(()=>require('../../server/researchReviewProjection.cjs').projection(repo.client,reviewedAnalysis,at,rawHeads));
+      if(attempted.error){await repo.issue('reviewed-revisions',{reason:'reviewed-revisions-unavailable'});
+        reviewedRevisions={version:'reviewed-revisions-view-v1',state:'unavailable',businessDate:day(now),updatedAt:at};}
+      else reviewedRevisions=attempted.value;
     }
     let dailyBulletin;
     if(repo.client){
@@ -359,7 +369,7 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
       inputAsOf:[lanes.publish?.inputAsOf,lanes.combos?.inputAsOf].filter(v=>Number.isFinite(time(v))).sort((a,b)=>time(b)-time(a))[0]||null,resultAsOf:lanes.settlement?.lastSuccessAt||null,lanes,
       current:selected,previews,todayCombos:today,todayDualResearch,overlapDecisionIds:overlap,coverage,...(dailyBulletin?{dailyBulletin}:{}),
       ...(publishedCoverage?{publishedCoverage}:{}),
-      ...(prdPaperView?{prdPaper:prdPaperView}:{}),...(leagueBaselineView?{leagueBaseline:leagueBaselineView}:{}),...(reviewedAnalysis?{reviewedAnalysis}:{}),
+      ...(prdPaperView?{prdPaper:prdPaperView}:{}),...(leagueBaselineView?{leagueBaseline:leagueBaselineView}:{}),...(reviewedAnalysis?{reviewedAnalysis}:{}),...(reviewedRevisions?{reviewedRevisions}:{}),
       review:{singles:singles.slice(0,100),combos:combos.slice(0,100),limit:100,qualityReport:buildQualityReport(singles,{asOf:now}),
         statistics:{single:summary(singles,true),supplementary:supplementarySummary(singles),qualifiedSingle:summary(singles.filter(r=>r.selectionQuality.qualified),true),handicap:handicapSummary(singles),handicapBreakdown:handicapBreakdown(singles),marketBaseline:marketBaseline(singles),daily:dailySummary(singles,combos),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},handicapCalibration,
         definition:'latest-published-decision-before-cutoff-per-event; combos-use-exact-bound-versions'},
