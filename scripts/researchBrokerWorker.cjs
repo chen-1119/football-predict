@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const { createResearchWriteService, MAX_REQUEST_BYTES } = require('../server/researchWriteService.cjs');
 async function main() {
   if (process.platform !== 'linux' || process.getuid() === 0) throw Error('RESEARCH_UNPRIVILEGED_WORKER_REQUIRED');
+  const identity=fs.readFileSync('/proc/self/status','utf8');
+  if(!/^NoNewPrivs:\s+1$/m.test(identity)||!/^CapEff:\s+0+$/m.test(identity)||!/^CapAmb:\s+0+$/m.test(identity))throw Error('RESEARCH_WORKER_PRIVILEGE_DROP_REQUIRED');
   // FD3 preserves the real flock if the root broker exits unexpectedly.
   const lock = fs.fstatSync(3), target = fs.lstatSync('/run/lock/football-release.lock');
   const info = fs.readFileSync('/proc/self/fdinfo/3', 'utf8');

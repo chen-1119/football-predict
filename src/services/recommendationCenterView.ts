@@ -182,6 +182,7 @@ export interface RecommendationCenterData {
   prdPaper?:PrdPaperDirectionsData;
   leagueBaseline?:LeagueBaselineDirections;
   reviewedAnalysis?:ReviewedAnalysis;
+  reviewedRevisions?:ReviewedRevisions;
   reviewedAnalysisHistory?:ReviewedAnalysis;
   dailyBulletin?:DailyBulletin;
   publishedCoverage?:PublishedReviewCoverage;
@@ -197,11 +198,15 @@ export interface ReviewedAnalysisRecord {
  homeTeamName:string;awayTeamName:string;market:'HAD'|'HHAD';handicap?:number;selection:'h'|'d'|'a';sp:number;originalSp:number;
  scores:number[][];confidence:'高'|'中'|'低';reason:string;analysisUrl:string;limitations:string[];cutoffAt:string;quoteObservedAt:string;
  evidence?:{hashes:string[];observedAt:string;missing:string[];verification:'official-single-source'};
+ review?:{revision:number;publishedAt:string;original:ReviewedAnalysisRecord;settlement:Settlement};
 }
+export interface ReviewedSingleRevision {key:string;revision:number;payloadSha256:string;previousRevisionHash:string|null;eventId:string;publishedAt:string;commitObservedAt:string;decision:ReviewedAnalysisRecord;settlement:Settlement}
+export interface ReviewedComboRevision {key:string;revision:number;payloadSha256:string;previousRevisionHash:string|null;publishedAt:string;commitObservedAt:string;combo:ReviewedAnalysisCombo;decisions:ReviewedAnalysisRecord[];frozen:boolean;settlement:Settlement}
+export interface ReviewedRevisions {state:'verified'|'unavailable';singles:ReviewedSingleRevision[];combos:ReviewedComboRevision[];pending:number}
 export interface ReviewedAnalysisCombo {band:number;product:number|null;confidence:'高'|'中'|'低'|null;
  legs:Array<{eventId:string;matchNum:string;market:'HAD'|'HHAD';handicap?:number;selection:'h'|'d'|'a';sp:number}>}
 export interface ReviewedAnalysis {businessDate:string;updatedAt:string;createdAt?:string;publicationHash?:string;records:ReviewedAnalysisRecord[];
- combos:ReviewedAnalysisCombo[];threeCombos:ReviewedAnalysisCombo[];comboArchive?:{observedAt:string;view:ReviewedAnalysis;firstVersion?:{suppliedAt:string;combos:ReviewedAnalysisCombo[]}}}
+ combos:ReviewedAnalysisCombo[];threeCombos:ReviewedAnalysisCombo[];comboFreeze?:Array<{size:number;band:number;frozen:boolean}>;comboArchive?:{observedAt:string;view:ReviewedAnalysis;firstVersion?:{suppliedAt:string;combos:ReviewedAnalysisCombo[]}}}
 function reviewedPriceProduct(prices:number[]):number{
  let coefficient=1n,scale=0;
  for(const price of prices){
@@ -210,6 +215,61 @@ function reviewedPriceProduct(prices:number[]):number{
  }
  return Number(`${coefficient}e${-scale}`);
 }
+export function parseReviewedRevisions(value:unknown,rawAnalysis:unknown,original:ReviewedAnalysis,updatedAt:string):ReviewedRevisions{
+ const v=object(value),day=original.businessDate,raw=list(object(rawAnalysis).records);
+ if(v.version!=='reviewed-revisions-view-v1'||v.businessDate!==day||v.updatedAt!==updatedAt)throw Error('Review versions identity');
+ if(v.state==='unavailable')return {state:'unavailable',singles:[],combos:[],pending:0};
+ const {contentHash,...body}=v;
+ if(v.state!=='verified'||paperHex(contentHash)!==boundedPublicHash(body,35*1024,512*1024)||v.originalPublicationHash!==original.publicationHash
+  ||v.originalSettlementPreserved!==true||v.independentEventIncrement!==0||v.formalEligible!==false||v.modelAdoption!==false)throw Error('Review versions seal');
+ const pending=list(v.pending);if(pending.length>608||list(v.singles).length>512||list(v.combos).length>96)throw Error('Review versions bound');
+ const meta=(x:Obj)=>{
+  const revision=number(x.revision),publishedAt=paperClock(x.publishedAt),ack=paperClock(x.commitObservedAt);
+  if(!Number.isSafeInteger(revision)||revision<1||revision>16||publishedAt.ns>=ack.ns||ack.ns>paperClock(updatedAt).ns
+   ||x.originalSettlementPreserved!==true||x.independentEventIncrement!==0)throw Error('Review version clock');
+  const previousRevisionHash=x.previousRevisionHash===null?null:paperHex(x.previousRevisionHash);
+  if((revision===1)!==(previousRevisionHash===null))throw Error('Review predecessor');
+  paperHex(x.ackSha256);
+  return {key:paperText(x.key,160),revision,payloadSha256:paperHex(x.payloadSha256),previousRevisionHash,publishedAt:publishedAt.text,commitObservedAt:ack.text};
+ };
+ const decision=(rawDecision:unknown,m:ReturnType<typeof meta>)=>{
+  const r=object(rawDecision),first=original.records.find(d=>d.eventId===r.eventId);
+  if(!first||['eventVersion','businessDate','homeTeamId','awayTeamId','homeTeamName','awayTeamName','matchNum'].some(k=>r[k]!==first[k as keyof ReviewedAnalysisRecord]))throw Error('Review event changed');
+  const envelope={version:'reviewed-analysis-view-v1',businessDate:day,createdAt:m.publishedAt,commitObservedAt:m.commitObservedAt,updatedAt,
+   publicationHash:m.payloadSha256,records:[r],combos:[],threeCombos:[],formalEligible:false};
+  return parseReviewedAnalysis({...envelope,contentHash:reviewedAnalysisPublicHash(envelope)},day,updatedAt).records[0];
+ };
+ const singles=list(v.singles).map(x=>{
+  const s=object(x),m=meta(s),d=decision(s.decision,m),first=object(raw.find(x=>object(x).eventId===d.eventId));
+  const {publicationCreatedAt,publicationCommitObservedAt,...core}=first;void publicationCreatedAt;void publicationCommitObservedAt;
+  if(s.eventId!==d.eventId||paperHex(s.originalDecisionHash)!==prdPaperPublicHash(core)
+   ||m.key!==`reviewed-single-${day}-${d.eventId}-v${String(m.revision).padStart(2,'0')}`)throw Error('Review original binding');
+  return {...m,eventId:d.eventId,decision:d,settlement:settlement(s.settlement)};
+ });
+ const combos=list(v.combos).map(x=>{
+  const s=object(x),m=meta(s),ds=list(s.decisions).map(d=>decision(d,m)),c=object(s.combo),old=object(s.originalCombo),band=number(c.band);
+  if(![2,3].includes(ds.length)||new Set(ds.map(d=>d.eventId)).size!==ds.length||![2.5,5,10].includes(band)||band!==old.band)throw Error('Review combo size');
+  const bind=(value:Obj,records:ReviewedAnalysisRecord[])=>{
+   const legs=list(value.legs);if(legs.length!==records.length)throw Error('Review combo legs');
+   return legs.map((l,i)=>{const leg=object(l),d=records[i];
+    if(leg.eventId!==d.eventId||leg.matchNum!==d.matchNum||leg.market!==d.market||leg.selection!==d.selection||leg.sp!==d.sp||(leg.handicap??null)!==(d.handicap??null))throw Error('Review combo leg changed');
+    return {eventId:d.eventId,matchNum:d.matchNum,market:d.market,...(d.market==='HHAD'?{handicap:d.handicap}:{}),selection:d.selection,sp:d.sp};});
+  };
+  const legs=bind(c,ds),originals=ds.map(d=>original.records.find(r=>r.eventId===d.eventId)!);bind(old,originals);
+  if(number(c.product)!==reviewedPriceProduct(ds.map(d=>d.sp))||number(c.product)<band||number(old.product)!==reviewedPriceProduct(originals.map(d=>d.sp)))throw Error('Review combo product');
+  if(typeof s.frozen!=='boolean'||originals.some(d=>paperClock(updatedAt).ns>=paperClock(d.eventVersion).ns)&&s.frozen!==true
+   ||m.key!==`reviewed-combo-${day}-${prdPaperPublicHash({size:ds.length,band,eventIds:ds.map(d=>d.eventId).sort()})}-v${String(m.revision).padStart(2,'0')}`)throw Error('Review combo identity');
+  paperHex(s.baseArchiveSha256);if(!/^reviewed-combo-view-\d{4}-\d{2}-\d{2}-[a-f0-9]{64}$/.test(String(s.baseArchiveKey)))throw Error('Review combo source');
+  return {...m,decisions:ds,combo:{band,legs,product:number(c.product),confidence:c.confidence as '高'|'中'|'低'},frozen:s.frozen,settlement:settlement(s.settlement)};
+ });
+ for(const rows of [singles,combos] as Array<Array<ReturnType<typeof meta>>>){
+  const groups=new Map<string,Array<ReturnType<typeof meta>>>();
+  for(const row of rows){const key=row.key.replace(/-v\d\d$/,'');const group=groups.get(key)??[];group.push(row);groups.set(key,group);}
+  for(const group of groups.values()){group.sort((a,b)=>a.revision-b.revision);for(let i=0;i<group.length;i++)if(group[i].revision!==i+1
+   ||i>0&&(group[i].previousRevisionHash!==group[i-1].payloadSha256||paperClock(group[i].publishedAt).ns<=paperClock(group[i-1].commitObservedAt).ns))throw Error('Review version chain');}
+ }
+ return {state:'verified',singles,combos,pending:pending.length};
+}
 export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedAt:string,allowComboArchive=false):ReviewedAnalysis{
  const v=object(value),rows=list(v.records),combos=list(v.combos),threeCombos=Object.hasOwn(v,'threeCombos')?list(v.threeCombos):[];
  if(Object.hasOwn(v,'comboArchive')&&!allowComboArchive)throw Error('Reviewed combo archive scope');
@@ -217,6 +277,12 @@ export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedA
  if(!rows.length){if(combos.length||threeCombos.length)throw Error('Reviewed analysis empty');return {businessDate,updatedAt,records:[],combos:[],threeCombos:[]};}
  const {contentHash,...body}=v;
  if(paperHex(contentHash)!==reviewedAnalysisPublicHash(body)||paperClock(v.createdAt).ns>=paperClock(v.commitObservedAt).ns||paperClock(v.commitObservedAt).ns>paperClock(updatedAt).ns)throw Error('Reviewed analysis seal');
+ const freezes=Object.hasOwn(v,'comboFreeze')?list(v.comboFreeze).map(object):[];
+ if(freezes.length>6||Object.hasOwn(v,'comboFreeze')!==(v.comboFreezePolicy==='persisted-original-groups-v1')||new Set(freezes.map(f=>f.size+'/'+f.band)).size!==freezes.length)throw Error('Reviewed frozen groups');
+ for(const f of freezes){paperKeys(f,['size','band','sourceArchiveKey','sourceArchiveSha256','observedAt','originalComboHash','frozen']);
+  if(![2,3].includes(number(f.size))||![2.5,5,10].includes(number(f.band))||typeof f.frozen!=='boolean'
+   ||!new RegExp('^reviewed-combo-view-'+businessDate+'-[a-f0-9]{64}$').test(String(f.sourceArchiveKey))
+   ||paperClock(f.observedAt).ns>paperClock(updatedAt).ns)throw Error('Reviewed frozen source');paperHex(f.sourceArchiveSha256);paperHex(f.originalComboHash);}
  const ids=new Set<string>();
  const records=rows.map(x=>{
   const r=object(x),eventId=paperText(r.eventId,20),selection=r.selection;
@@ -251,11 +317,17 @@ export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedA
    if(legs.length!==size||new Set(legs.map(l=>l.eventId)).size!==size||groups.has(group)||product<band||product!==reviewedPriceProduct(legs.map(l=>l.sp)))throw Error('Reviewed combo product');groups.add(group);
    const confidence=bound.some(r=>r.confidence==='低')?'低':bound.some(r=>r.confidence==='中')?'中':'高';
    if(c.confidence!==confidence)throw Error('Reviewed combo confidence');
-   if(bound.some(r=>paperClock(r.cutoffAt).ns<=asOf))throw Error('Reviewed combo cutoff');
+   const frozen=freezes.find(f=>f.size===size&&f.band===band);
+   if(frozen&&(paperHex(frozen.originalComboHash)!==prdPaperPublicHash(c)||bound.some(r=>paperClock(frozen.observedAt).ns>=paperClock(r.cutoffAt).ns)
+    ||paperClock(frozen.observedAt).ns<paperClock(v.commitObservedAt).ns))throw Error('Reviewed frozen combo binding');
+   if(bound.some(r=>paperClock(r.cutoffAt).ns<=asOf)&&(!frozen||frozen.frozen!==true))throw Error('Reviewed combo cutoff');
    return {band,legs,product,confidence};
   });
  };
- return {businessDate,updatedAt,createdAt:paperClock(v.createdAt).text,publicationHash:paperHex(v.publicationHash),records,combos:parseCombos(combos,2),threeCombos:parseCombos(threeCombos,3)};
+ const parsedCombos=parseCombos(combos,2),parsedThree=parseCombos(threeCombos,3);
+ if(freezes.some(f=>!(f.size===2?parsedCombos:parsedThree).some(c=>c.band===f.band&&c.legs.length)))throw Error('Reviewed frozen group missing');
+ return {businessDate,updatedAt,createdAt:paperClock(v.createdAt).text,publicationHash:paperHex(v.publicationHash),records,combos:parsedCombos,threeCombos:parsedThree,
+  ...(freezes.length?{comboFreeze:freezes.map(f=>({size:number(f.size),band:number(f.band),frozen:f.frozen as boolean}))}:{})};
 }
 export function parseReviewedAnalysisHistory(value:unknown,currentBusinessDate:string,centerUpdatedAt:string):ReviewedAnalysis{
  const v=object(value),businessDate=date(v.businessDate),updatedAt=paperClock(v.updatedAt);
@@ -977,6 +1049,10 @@ export function parseRecommendationCenter(response:unknown):RecommendationCenter
   if(Object.hasOwn(x,'prdPaper'))result.prdPaper=parsePrdPaperDirections(x.prdPaper,result.businessDate,result.updatedAt);
   if(Object.hasOwn(x,'leagueBaseline'))result.leagueBaseline=parseLeagueBaseline(x.leagueBaseline,result.businessDate,result.updatedAt);
   if(Object.hasOwn(x,'reviewedAnalysis'))result.reviewedAnalysis=parseReviewedAnalysis(x.reviewedAnalysis,result.businessDate,result.updatedAt);
+  if(Object.hasOwn(x,'reviewedRevisions')){
+    if(!result.reviewedAnalysis)throw Error('Review versions missing originals');
+    result.reviewedRevisions=parseReviewedRevisions(x.reviewedRevisions,x.reviewedAnalysis,result.reviewedAnalysis,result.updatedAt);
+  }
   if(Object.hasOwn(x,'reviewedAnalysisHistory'))result.reviewedAnalysisHistory=parseReviewedAnalysisHistory(x.reviewedAnalysisHistory,result.businessDate,result.updatedAt);
   if(Object.hasOwn(x,'strategySwitch')){
     const s=object(x.strategySwitch);

@@ -116,10 +116,17 @@ check('receipt reader queue keeps bounded waits, connection disposal and before-
 check('root broker installer consumes the actual normal archive inventory commitment',()=>{
   const files=['tests/research-broker-installer.test.cjs','tests/research-installer-archive-contract.test.cjs'];
   const child=require('node:child_process').spawnSync(process.execPath,['--test',...files],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
-  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 17$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 18$/m);assert.match(child.stdout,/^# skipped 0$/m);
   for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
     for(const file of ['scripts/installResearchBroker.cjs','scripts/verifyResearchSocketBinding.py',...files])assert(read(entry).includes('"'+file+'"'));
   assert(read('.github/workflows/recommendation-runtime.yml').includes('sudo /usr/bin/python3.12 -I -S -B scripts/verifyResearchSocketBinding.py'));
+});
+check('review versions preserve original settlements and freeze groups with any started leg',()=>{
+  const files=['tests/research-combo-revision.test.cjs','tests/research-frozen-combos.test.cjs','tests/research-review-projection.test.cjs','tests/research-review-frontend.test.cjs','tests/research-refresh-boundary.test.cjs'];
+  const child=require('node:child_process').spawnSync(process.execPath,['--test',...files],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# fail 0$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const file of [...files,'server/researchComboRevision.cjs','server/researchReviewProjection.cjs','server/researchFrozenCombos.cjs','scripts/verifyResearchRunuser.cjs','src/services/reviewedPresentation.ts','scripts/verifyResearchComboRevisionPostgres.cjs'])assert(read(entry).includes('"'+file+'"'));
+  assert(read('.github/workflows/recommendation-runtime.yml').includes('run: node scripts/verifyResearchComboRevisionPostgres.cjs'));
 });
 check('file source assembly separates backend memory phases and preserves verified no-ops',()=>{
   const file='tests/postgres-file-json-payload.test.cjs';

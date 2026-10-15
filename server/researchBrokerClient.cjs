@@ -58,7 +58,7 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
       || typeof result.originalReceiptBase64 !== 'string'
       || typeof result.deliveredAt !== 'string' || !Number.isFinite(Date.parse(result.deliveredAt))
       || new Date(result.deliveredAt).toISOString() !== result.deliveredAt || Date.parse(result.deliveredAt) < startedAt
-      || Date.parse(result.deliveredAt) > finishedBy || !['archive','publish','revision-publish'].includes(decodeRequest(raw).action)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+      || Date.parse(result.deliveredAt) > finishedBy || !['archive','publish','revision-publish','combo-revision-publish'].includes(decodeRequest(raw).action)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
     const saved = Buffer.from(result.originalReceiptBase64,'base64');
     if(saved.toString('base64')!==result.originalReceiptBase64||saved.length>3*1024*1024-4096
       ||sha(saved)!==result.originalReceiptSha256||!Buffer.from(saved.toString()).equals(saved)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
@@ -92,6 +92,13 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
         || Date.parse(value.receivedAt) < Date.parse(exact.generatedAt)
         || Date.parse(value.receivedAt) > Date.parse(result.finishedAt)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
     }
+  } else if(request.action.startsWith('combo-revision-')) {
+    const r=JSON.parse(request.json),key=require('./researchComboRevision.cjs').validate(r);
+    if(value.key!==key||!['not-observed','record-present-ack-missing','committed-and-acknowledged'].includes(value.state)
+      ||(value.state==='committed-and-acknowledged'&&(value.verified!==true||value.revision!==r.revision
+        ||value.baseArchiveKey!==r.baseArchiveKey||value.baseArchiveSha256!==r.baseArchiveSha256||value.previousRevisionHash!==r.previousRevisionHash
+        ||value.originalSettlementPreserved!==true||value.independentEventIncrement!==0
+        ||['payloadSha256','ackSha256','baseIdentity'].some(k=>!/^[a-f0-9]{64}$/.test(value[k]||''))))) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
   } else if(request.action.startsWith('revision-')) {
     const r=JSON.parse(request.json),key=require('./researchReviewedRevision.cjs').validate(r);
     if(value.key!==key||!['not-observed','record-present-ack-missing','committed-and-acknowledged'].includes(value.state)

@@ -7,7 +7,7 @@ const keys=crypto.generateKeyPairSync('rsa',{modulusLength:2048});
 function fixture(change=()=>{},badLock=false){
  const body={version:'research-broker-install-v1',attemptId:'a'.repeat(24),head:'b'.repeat(40),installerSha256:sha(installRoot.toString()),releaseSha:'c'.repeat(64),manifestSha256:'d'.repeat(64),signatureSha256:'e'.repeat(64),dependenciesSha256:'f'.repeat(64),platformSha256:'1'.repeat(64),unitApiPid:123,unitWorkerPid:124,issuedAtMs:Date.now()-1000,expiresAtMs:Date.now()+600000,keyId:sha(keys.publicKey.export({type:'spki',format:'der'})),files:[]};
  change(body);
- const signature=crypto.sign('RSA-SHA256',Buffer.concat([Buffer.from('football-research-broker-install-v1\0'),Buffer.from(JSON.stringify(body))]),{key:keys.privateKey,padding:crypto.constants.RSA_PKCS1_PADDING}).toString('base64');
+ const signature=crypto.sign('RSA-SHA256',Buffer.concat([Buffer.from('football-'+body.version+'\0'),Buffer.from(JSON.stringify(body))]),{key:keys.privateKey,padding:crypto.constants.RSA_PKCS1_PADDING}).toString('base64');
  let writes=0;
  const raw={ '/proc/self/fdinfo/9':'lock:\t1: FLOCK  ADVISORY  WRITE 777 00:01:123 0 EOF\n', '/proc/locks':'1: FLOCK  ADVISORY  WRITE 777 00:01:123 0 EOF\n', '/etc/football-release/signing-public.pem':keys.publicKey.export({type:'spki',format:'pem'}) };
  const stat=()=>({isDirectory:()=>true,isFile:()=>true,isSymbolicLink:()=>false,uid:0,mode:0o444,nlink:1,dev:1,ino:123,size:450,mtimeMs:1,ctimeMs:1});
@@ -27,4 +27,11 @@ test('installer stdin supports the signed manifest envelope without widening API
  const raw=Buffer.alloc(2*1024*1024,32);a.deepEqual(await readInstallerBody(Readable.from([raw])),raw);
  a.equal(require('../server/researchRequestBody.cjs').MAX_BYTES,1024*1024);
  await a.rejects(readInstallerBody(Readable.from([Buffer.alloc(16*1024*1024+1)])),/RESEARCH_INSTALL_WIRE_BOUND/);
+});
+test('refresh has a distinct signed scope and requires its exact previous boundary',()=>{
+ const f=fixture(b=>{b.version='research-broker-refresh-v1';b.previous={};});
+ a.throws(()=>f.invoke(),/RESEARCH_INSTALL_PAYLOAD/);a.equal(f.writes(),0);
+ const crossDomain=crypto.sign('RSA-SHA256',Buffer.concat([Buffer.from('football-research-broker-install-v1\0'),Buffer.from(JSON.stringify(f.body))]),{key:keys.privateKey,padding:crypto.constants.RSA_PKCS1_PADDING}).toString('base64');
+ a.throws(()=>f.invoke(crossDomain),/RESEARCH_INSTALL_SIGNATURE/);a.equal(f.writes(),0);
+ const missing=fixture(b=>{b.version='research-broker-refresh-v1';});a.throws(()=>missing.invoke(),/RESEARCH_INSTALL_AUTHORITY/);
 });

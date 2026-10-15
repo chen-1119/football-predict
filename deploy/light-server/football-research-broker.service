@@ -18,6 +18,10 @@ RuntimeDirectoryMode=0750
 RuntimeDirectoryPreserve=no
 UMask=0077
 NoNewPrivileges=true
+# The fixed root broker must drop to football for the DB child. Seed only
+# these explicit transition capabilities; the public API keeps no capabilities.
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_KILL CAP_SETGID CAP_SETUID CAP_SYS_PTRACE
+AmbientCapabilities=CAP_SETUID CAP_SETGID
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true

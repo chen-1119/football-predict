@@ -18,7 +18,7 @@ function installRoot(wire){
  function sync(p){const fd=fs.openSync(p,fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW);try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}}
  function create(p,raw,mode){directory(path.dirname(p));const fd=fs.openSync(p,fs.constants.O_WRONLY|fs.constants.O_CREAT|fs.constants.O_EXCL|fs.constants.O_NOFOLLOW,mode);try{fs.writeFileSync(fd,raw);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}sync(path.dirname(p));}
  function command(program,args){return cp.execFileSync(program,args,{env,encoding:'utf8',timeout:15000,maxBuffer:65536});}
- function unit(name){const names=['MainPID','ActiveState','SubState','ControlPID','Job','User','Group','ControlGroup','NoNewPrivileges','RestrictSUIDSGID','WorkingDirectory'];
+ function unit(name){const names=['MainPID','ActiveState','SubState','ControlPID','Job','User','Group','ControlGroup','NoNewPrivileges','RestrictSUIDSGID','WorkingDirectory','CapabilityBoundingSet','AmbientCapabilities','MemoryMax','TasksMax','KillMode'];
   return Object.fromEntries(command('/usr/bin/systemctl',['show','--all','--property='+names.join(','),name]).trim().split('\n').map(s=>{const i=s.indexOf('=');return [s.slice(0,i),s.slice(i+1)];}));}
  if(process.platform!=='linux'||process.getuid()!==0||process.execPath!==NODE||process.version!=='v22.22.1'||process.execArgv.length||['NODE_OPTIONS','NODE_PATH','LD_PRELOAD','LD_LIBRARY_PATH'].some(k=>process.env[k]))fail('RESEARCH_INSTALL_FIXED_RUNTIME');
  const lock=fs.lstatSync('/run/lock/football-release.lock');
@@ -32,14 +32,15 @@ function installRoot(wire){
   if(line?.includes(' '+process.pid+' ')){own=line;break;}}
  if(!own||!own.includes(' '+process.pid+' ')||!fs.readFileSync('/proc/locks','utf8').includes(own.slice(own.indexOf('FLOCK'))))fail('RESEARCH_INSTALL_EXCLUSIVE_LOCK');
  const {body,signature,payloads}=wire;
- const fields='attemptId,dependenciesSha256,expiresAtMs,files,head,installerSha256,issuedAtMs,keyId,manifestSha256,platformSha256,releaseSha,signatureSha256,unitApiPid,unitWorkerPid,version';
- if(!body||Object.keys(body).sort().join(',')!==fields||body.version!=='research-broker-install-v1'||!/^[a-f0-9]{24}$/.test(body.attemptId||'')||!/^[a-f0-9]{40}$/.test(body.head||'')
+ const refresh=body?.version==='research-broker-refresh-v1';
+ const fields=['attemptId','dependenciesSha256','expiresAtMs','files','head','installerSha256','issuedAtMs','keyId','manifestSha256','platformSha256','releaseSha','signatureSha256','unitApiPid','unitWorkerPid','version',...(refresh?['previous']:[])].sort().join(',');
+ if(!body||Object.keys(body).sort().join(',')!==fields||!['research-broker-install-v1','research-broker-refresh-v1'].includes(body.version)||!/^[a-f0-9]{24}$/.test(body.attemptId||'')||!/^[a-f0-9]{40}$/.test(body.head||'')
   ||['installerSha256','manifestSha256','releaseSha','keyId','dependenciesSha256','platformSha256','signatureSha256'].some(k=>!/^[a-f0-9]{64}$/.test(body[k]||''))
   ||['unitApiPid','unitWorkerPid'].some(k=>!Number.isSafeInteger(body[k])||body[k]<2)||body.installerSha256!==hash(installRoot.toString())
   ||!Number.isSafeInteger(body.issuedAtMs)||!Number.isSafeInteger(body.expiresAtMs)||body.issuedAtMs>Date.now()||body.expiresAtMs<=Date.now()||body.expiresAtMs-body.issuedAtMs>900000||body.expiresAtMs<=body.issuedAtMs)fail('RESEARCH_INSTALL_AUTHORITY');
  const keyRaw=read('/etc/football-release/signing-public.pem',16384),key=crypto.createPublicKey(keyRaw);
  if(key.asymmetricKeyType!=='rsa'||key.asymmetricKeyDetails.modulusLength<2048||hash(key.export({type:'spki',format:'der'}))!==body.keyId
-  ||!crypto.verify('RSA-SHA256',Buffer.concat([Buffer.from('football-research-broker-install-v1\0'),Buffer.from(JSON.stringify(body))]),{key,padding:crypto.constants.RSA_PKCS1_PADDING},Buffer.from(signature,'base64')))fail('RESEARCH_INSTALL_SIGNATURE');
+  ||!crypto.verify('RSA-SHA256',Buffer.concat([Buffer.from('football-'+body.version+'\0'),Buffer.from(JSON.stringify(body))]),{key,padding:crypto.constants.RSA_PKCS1_PADDING},Buffer.from(signature,'base64')))fail('RESEARCH_INSTALL_SIGNATURE');
  const names=['scripts/researchSocketServer.py','scripts/researchSocketPeer.py','deploy/light-server/football-research-broker.service','manifest.json','manifest.sig','dependencies.json','platform.json'];
  if(!Array.isArray(body.files)||body.files.length!==names.length||!Array.isArray(payloads)||payloads.length!==names.length)fail('RESEARCH_INSTALL_PAYLOAD');
  const bytes=body.files.map((r,i)=>{if(Object.keys(r).sort().join(',')!=='bytes,path,sha256'||r.path!==names[i]||!Number.isSafeInteger(r.bytes)||r.bytes<1||r.bytes>16*1024*1024||!/^[a-f0-9]{64}$/.test(r.sha256)||typeof payloads[i]!=='string'||payloads[i].length>24*1024*1024)fail('RESEARCH_INSTALL_PAYLOAD');const b=Buffer.from(payloads[i],'base64');if(b.length!==r.bytes||hash(b)!==r.sha256)fail('RESEARCH_INSTALL_PAYLOAD');return b;});
@@ -67,13 +68,52 @@ function installRoot(wire){
  function boundary(){if(Date.now()>=body.expiresAtMs)fail('RESEARCH_INSTALL_EXPIRED');for(const n of ['.release-bundle-sha256','.release-live-complete'])if(read(APP+'/'+n,128).toString().trim()!==body.releaseSha)fail('RESEARCH_INSTALL_RELEASE_CHANGED');
   if(fs.existsSync('/var/lib/football-release/recovery/current')||fs.existsSync('/var/lib/football-release/reference-repairs/current'))fail('RESEARCH_INSTALL_RECOVERY_PENDING');
   for(const [n,pid]of [['football-predict.service',body.unitApiPid],['football-sync-worker.service',body.unitWorkerPid]]){const s=unit(n);if(s.MainPID!==String(pid)||s.ActiveState!=='active'||s.SubState!=='running'||s.ControlPID!=='0'||s.Job||s.User!=='football'||s.Group!=='football'||s.NoNewPrivileges!=='yes'||s.RestrictSUIDSGID!=='yes'||s.WorkingDirectory!==APP||s.ControlGroup!=='/system.slice/'+n)fail('RESEARCH_INSTALL_UNIT_CHANGED');}}
- boundary();for(const p of [BASE,JOURNAL,UNITFILE])if(fs.existsSync(p))fail('RESEARCH_INSTALL_ALREADY_PRESENT_READ_FIRST');
- if(unit(UNIT).MainPID!=='0'||unit(UNIT).ActiveState!=='inactive')fail('RESEARCH_INSTALL_EXISTING_UNIT');
+ boundary();
+ const previousFiles=['researchSocketServer.py','researchSocketPeer.py','manifest.json','manifest.sig','dependencies.json','platform.json','runtime-binding.json'];
+ if(refresh){
+  const old=body.previous,s=unit(UNIT);
+  if(!old||Object.keys(old).sort().join(',')!=='brokerPid,files,invocationId,releaseSha'||!/^[a-f0-9]{64}$/.test(old.releaseSha||'')||old.releaseSha===body.releaseSha
+   ||!Number.isSafeInteger(old.brokerPid)||old.brokerPid<0||typeof old.invocationId!=='string'||!(/^[a-f0-9]{32}$/.test(old.invocationId)||old.brokerPid===0&&old.invocationId==='')
+   ||!Array.isArray(old.files)||old.files.length!==8||fs.readdirSync(BASE).sort().join(',')!==[...previousFiles].sort().join(','))fail('RESEARCH_REFRESH_PREVIOUS');
+  const oldNames=[...previousFiles.map(n=>BASE+'/'+n),UNITFILE];
+  const oldBytes=oldNames.map((name,i)=>{const r=old.files[i],b=read(name,16*1024*1024);
+   if(!r||Object.keys(r).sort().join(',')!=='bytes,path,sha256'||r.path!==name||r.bytes!==b.length||r.sha256!==hash(b))fail('RESEARCH_REFRESH_PREVIOUS_CHANGED');return b;});
+  const binding=JSON.parse(oldBytes[6]),oldManifest=JSON.parse(oldBytes[2]),oldInventory=new Map(oldManifest.archiveSourceEvidence?.inventory?.entries?.map(r=>[r.path,r.sha256]));
+  if(!crypto.verify('sha256',oldBytes[2],{key,padding:crypto.constants.RSA_PKCS1_PADDING},oldBytes[3])||oldManifest.ok!==true||oldManifest.sha256!==old.releaseSha
+   ||!Number.isSafeInteger(oldManifest.releaseSequence)||oldManifest.releaseSequence>=manifest.releaseSequence
+   ||binding.version!=='research-broker-binding-v1'||binding.releaseSha!==old.releaseSha||binding.manifestSha!==hash(oldBytes[2])||binding.manifestPath!==BASE+'/manifest.json'
+   ||binding.signaturePath!==BASE+'/manifest.sig'||binding.publicKeyPath!=='/etc/football-release/signing-public.pem'
+   ||binding.transport?.peerSourceSha!==hash(oldBytes[1])||binding.socketService?.listenerSha!==hash(oldBytes[0])
+   ||binding.dependenciesSha256!==hash(oldBytes[4])||binding.socketService?.platformSha256!==hash(oldBytes[5])
+   ||oldInventory.get(names[0])!==hash(oldBytes[0])||oldInventory.get(names[1])!==hash(oldBytes[1])||oldInventory.get(names[2])!==hash(oldBytes[7]))fail('RESEARCH_REFRESH_PREVIOUS_SIGNATURE');
+  require(APP+'/scripts/releaseArchiveSourceInventory.cjs').validateSignedArchiveSourceEvidence(oldManifest);
+  const invocation=command('/usr/bin/systemctl',['show',UNIT,'--property=InvocationID','--value']).trim();
+  if(s.MainPID!==String(old.brokerPid)||invocation!==old.invocationId||s.ControlPID!=='0'||s.Job||s.User!=='root'||s.Group!=='football'||s.NoNewPrivileges!=='yes'||s.RestrictSUIDSGID!=='yes'
+   ||s.WorkingDirectory!==APP||(old.brokerPid>0?s.ControlGroup!=='/system.slice/'+UNIT:!['','/system.slice/'+UNIT].includes(s.ControlGroup))
+   ||(old.brokerPid===0?s.ActiveState!=='inactive'||s.SubState!=='dead':s.ActiveState!=='active'||s.SubState!=='running'))fail('RESEARCH_REFRESH_UNIT_CHANGED');
+  if(old.brokerPid>0){const cmd=fs.readFileSync('/proc/'+old.brokerPid+'/cmdline').toString().split('\0').filter(Boolean);
+   if(JSON.stringify(cmd)!==JSON.stringify(['/usr/bin/python3.12','-I','-S','-B',BASE+'/researchSocketServer.py'])||fs.realpathSync('/proc/'+old.brokerPid+'/exe')!=='/usr/bin/python3.12'
+    ||!fs.readFileSync('/proc/'+old.brokerPid+'/cgroup','utf8').split('\n').includes('0::/system.slice/'+UNIT))fail('RESEARCH_REFRESH_CALLER_CHANGED');}
+  const journal=fs.lstatSync(JOURNAL);if(!journal.isDirectory()||journal.isSymbolicLink()||journal.uid!==0||(journal.mode&0o777)!==0o700)fail('RESEARCH_REFRESH_JOURNAL');
+  for(const target of [BASE+'.retired-'+body.attemptId,UNITFILE+'.retired-'+body.attemptId])if(fs.existsSync(target))fail('RESEARCH_REFRESH_PREVIOUS_ATTEMPT_READ_FIRST');
+ }else{
+  for(const p of [BASE,JOURNAL,UNITFILE])if(fs.existsSync(p))fail('RESEARCH_INSTALL_ALREADY_PRESENT_READ_FIRST');
+  if(unit(UNIT).MainPID!=='0'||unit(UNIT).ActiveState!=='inactive')fail('RESEARCH_INSTALL_EXISTING_UNIT');
+ }
  for(const p of ['/usr/local/libexec','/var/lib','/etc/systemd/system']){directory(p);const s=fs.statfsSync(p);if(s.bavail*s.bsize<64*1024*1024)fail('RESEARCH_INSTALL_CAPACITY');}
- const receipt='/var/lib/football-release/research-install-'+body.attemptId+'.json';
+ const receipt='/var/lib/football-release/research-'+(refresh?'refresh-':'install-')+body.attemptId+'.json';
  create(receipt,Buffer.from(JSON.stringify({body,signature,startedAt:new Date().toISOString(),scope:'fixed-authenticated-api-root-lock-broker-no-data-write'})+'\n'),0o600);
  const uid=Number(command('/usr/bin/id',['-u','football']).trim()),gid=Number(command('/usr/bin/id',['-g','football']).trim());if(!Number.isSafeInteger(uid)||uid<1||!Number.isSafeInteger(gid)||gid<1)fail('RESEARCH_INSTALL_USER');
- fs.mkdirSync(BASE,{mode:0o755});sync(path.dirname(BASE));fs.mkdirSync(JOURNAL,{mode:0o700});sync(path.dirname(JOURNAL));
+ if(refresh){
+  boundary();command('/usr/bin/systemctl',['stop',UNIT]);const stopped=unit(UNIT);
+  if(stopped.MainPID!=='0'||stopped.ControlPID!=='0'||stopped.Job||stopped.ActiveState!=='inactive'||stopped.SubState!=='dead')fail('RESEARCH_REFRESH_STOP_UNVERIFIED');
+  // KillMode=control-group and the exclusive inherited lock exclude live jobs.
+  // Preserve every prior file and the durable request journal without rewriting.
+  boundary();fs.renameSync(BASE,BASE+'.retired-'+body.attemptId);sync(path.dirname(BASE));
+  fs.renameSync(UNITFILE,UNITFILE+'.retired-'+body.attemptId);sync(path.dirname(UNITFILE));
+ }
+ fs.mkdirSync(BASE,{mode:0o755});sync(path.dirname(BASE));
+ if(!refresh){fs.mkdirSync(JOURNAL,{mode:0o700});sync(path.dirname(JOURNAL));}
  for(const [name,index]of [['researchSocketServer.py',0],['researchSocketPeer.py',1],['manifest.json',3],['manifest.sig',4],['dependencies.json',5],['platform.json',6]])create(BASE+'/'+name,bytes[index],0o444);
  const binding={version:'research-broker-binding-v1',releaseSha:body.releaseSha,manifestSha:body.manifestSha256,manifestPath:BASE+'/manifest.json',signaturePath:BASE+'/manifest.sig',publicKeyPath:'/etc/football-release/signing-public.pem',nodeSha:platform.files.find(r=>r.path===NODE).sha256,dependenciesSha256:body.dependenciesSha256,
   transport:{version:'research-unix-socket-v1',apiSourceSha:inventory.get('server/index.cjs'),clientSourceSha:inventory.get('server/researchBrokerClient.cjs'),peerSourceSha:hash(bytes[1]),footballUid:uid,footballGid:gid},
@@ -88,17 +128,23 @@ function installRoot(wire){
   while(Number(process.hrtime.bigint()-started)<20e9){
    boundary();s=unit(UNIT);
    if(s.ActiveState!=='active'||s.SubState!=='running'||s.User!=='root'||s.Group!=='football'||s.ControlPID!=='0'||s.Job||Number(s.MainPID)<2)fail('RESEARCH_INSTALL_SERVICE_UNVERIFIED');
+   const expectedCapabilities=['cap_chown','cap_dac_override','cap_fowner','cap_kill','cap_setgid','cap_setuid','cap_sys_ptrace'].sort();
+   if(s.NoNewPrivileges!=='yes'||s.RestrictSUIDSGID!=='yes'||s.MemoryMax!=='536870912'||s.TasksMax!=='32'||s.KillMode!=='control-group'
+    ||s.AmbientCapabilities.split(' ').filter(Boolean).sort().join(',')!=='cap_setgid,cap_setuid'
+    ||s.CapabilityBoundingSet.split(' ').filter(Boolean).sort().join(',')!==expectedCapabilities.join(','))fail('RESEARCH_INSTALL_CAPABILITY_SCOPE');
+   const effective=/^CapEff:\s+([a-f0-9]+)$/mi.exec(fs.readFileSync('/proc/'+s.MainPID+'/status','utf8'));
+   if(!effective||(BigInt('0x'+effective[1])&0xc0n)!==0xc0n)fail('RESEARCH_INSTALL_UID_TRANSITION_UNAVAILABLE');
    const socket='/run/football-research-broker/submit.sock';
    if(fs.existsSync(socket)){const st=fs.lstatSync(socket);if(!st.isSocket()||st.uid!==0||st.gid!==gid||(st.mode&0o777)!==0o660)fail('RESEARCH_INSTALL_SOCKET_IDENTITY');
     consecutive=s.MainPID===stablePid?consecutive+1:1;stablePid=s.MainPID;if(consecutive>=3)break;}
    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,1000);
   }
   if(consecutive<3)fail('RESEARCH_INSTALL_SERVICE_UNVERIFIED');
-  boundary();create(receipt+'.completed.json',Buffer.from(JSON.stringify({version:'research-broker-installed-v1',releaseSha:body.releaseSha,head:body.head,bindingSha256:hash(read(BASE+'/runtime-binding.json',16384)),unit:s,completedAt:new Date().toISOString(),productionDataWrites:0,cloudHandoverVerified:false})+'\n'),0o600);
+  boundary();create(receipt+'.completed.json',Buffer.from(JSON.stringify({version:'research-broker-installed-v1',releaseSha:body.releaseSha,head:body.head,bindingSha256:hash(read(BASE+'/runtime-binding.json',16384)),unit:s,completedAt:new Date().toISOString(),...(refresh?{previousReleaseSha:body.previous.releaseSha,previousFilesRetainedAt:BASE+'.retired-'+body.attemptId,requestJournalPreserved:true}:{}),productionDataWrites:0,cloudHandoverVerified:false})+'\n'),0o600);
   console.log(JSON.stringify({installed:true,receipt:receipt+'.completed.json',releaseSha:body.releaseSha,productionDataWrites:0,cloudHandoverVerified:false}));
  }catch(e){try{command('/usr/bin/systemctl',['stop',UNIT]);command('/usr/bin/systemctl',['disable',UNIT]);}catch{/* keep failed material and report original failure */}throw e;}
 }
-function packageInstall({bundlePath,boundaryPath,dependenciesPath,platformPath}){
+function packageInstall({bundlePath,boundaryPath,dependenciesPath,platformPath,refresh=false}){
  const state=JSON.parse(fs.readFileSync(boundaryPath)),boundary=state.stdout?JSON.parse(state.stdout):state;
  if(state.status!==undefined&&state.status!==0)throw Error('RESEARCH_INSTALL_BOUNDARY');
  const manifest=fs.readFileSync(bundlePath+'.manifest.json'),signature=fs.readFileSync(bundlePath+'.manifest.sig'),m=JSON.parse(manifest);
@@ -110,8 +156,9 @@ function packageInstall({bundlePath,boundaryPath,dependenciesPath,platformPath})
  const names=['scripts/researchSocketServer.py','scripts/researchSocketPeer.py','deploy/light-server/football-research-broker.service','manifest.json','manifest.sig','dependencies.json','platform.json'];
  const payload=[...names.slice(0,3).map(p=>fs.readFileSync(path.join(root,p))),manifest,signature,fs.readFileSync(dependenciesPath),fs.readFileSync(platformPath)];
  const signing=require('./releaseSigning.cjs').loadReleasePrivateKey(),issuedAtMs=Date.now();
- const body={version:'research-broker-install-v1',attemptId:crypto.randomBytes(12).toString('hex'),head,installerSha256:sha(installRoot.toString()),releaseSha:m.sha256,manifestSha256:sha(manifest),signatureSha256:sha(signature),dependenciesSha256:sha(payload[5]),platformSha256:sha(payload[6]),unitApiPid:Number(units['football-predict.service'].MainPID),unitWorkerPid:Number(units['football-sync-worker.service'].MainPID),issuedAtMs,expiresAtMs:issuedAtMs+900000,keyId:signing.keyId,files:names.map((p,i)=>({path:p,bytes:payload[i].length,sha256:sha(payload[i])}))};
- return {body,signature:crypto.sign('RSA-SHA256',Buffer.concat([DOMAIN,Buffer.from(JSON.stringify(body))]),{key:signing.key,padding:crypto.constants.RSA_PKCS1_PADDING}).toString('base64'),payloads:payload.map(b=>b.toString('base64'))};
+ if(typeof refresh!=='boolean'||refresh&&!boundary.brokerPrevious)throw Error('RESEARCH_REFRESH_BOUNDARY_REQUIRED');
+ const body={version:refresh?'research-broker-refresh-v1':'research-broker-install-v1',attemptId:crypto.randomBytes(12).toString('hex'),head,installerSha256:sha(installRoot.toString()),releaseSha:m.sha256,manifestSha256:sha(manifest),signatureSha256:sha(signature),dependenciesSha256:sha(payload[5]),platformSha256:sha(payload[6]),unitApiPid:Number(units['football-predict.service'].MainPID),unitWorkerPid:Number(units['football-sync-worker.service'].MainPID),issuedAtMs,expiresAtMs:issuedAtMs+900000,keyId:signing.keyId,files:names.map((p,i)=>({path:p,bytes:payload[i].length,sha256:sha(payload[i])})),...(refresh?{previous:boundary.brokerPrevious}:{})};
+ return {body,signature:crypto.sign('RSA-SHA256',Buffer.concat([refresh?Buffer.from('football-'+body.version+'\0'):DOMAIN,Buffer.from(JSON.stringify(body))]),{key:signing.key,padding:crypto.constants.RSA_PKCS1_PADDING}).toString('base64'),payloads:payload.map(b=>b.toString('base64'))};
 }
 // Deployment orchestration supplies only freshly observed, exact paths. Root
 // never accepts caller-selected executable, user, environment or destination.
