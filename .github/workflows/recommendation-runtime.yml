@@ -61,6 +61,10 @@ on:
       - 'server/referencePairedBaseline.cjs'
       - 'server/streamedJsonObjectArrays.cjs'
       - 'scripts/postgresGenerationSource.cjs'
+      - 'scripts/postgresReceiptBarrier.cjs'
+      - 'scripts/postgresRuntimeReadSession.cjs'
+      - 'scripts/verifyReceiptBarrierPostgres.cjs'
+      - 'tests/postgres-receipt-barrier.test.cjs'
       - 'scripts/postgresProjectionSync.cjs'
       - 'scripts/postgresFileJsonPayload.cjs'
       - 'server/streamedPublicReferenceArchive.cjs'
@@ -239,6 +243,10 @@ jobs:
         run: python3 scripts/verifyResearchSocketServer.py
       - name: Actual isolated installed-path Python binding and unsigned dependencies
         run: sudo /usr/bin/python3.12 -I -S -B scripts/verifyResearchSocketBinding.py
+      - name: Native PostgreSQL bounded receipt reader queue and fresh snapshot
+        run: node scripts/verifyReceiptBarrierPostgres.cjs
+        env:
+          RECEIPT_BARRIER_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Real Linux release-lock contention and child lifetime
         run: node scripts/verifyResearchReleaseLock.cjs
       - name: Native PostgreSQL report archive concurrency
