@@ -184,6 +184,7 @@ export interface RecommendationCenterData {
   reviewedAnalysis?:ReviewedAnalysis;
   reviewedRevisions?:ReviewedRevisions;
   reviewedAnalysisHistory?:ReviewedAnalysis;
+  reviewedRevisionsHistory?:ReviewedRevisions;
   dailyBulletin?:DailyBulletin;
   publishedCoverage?:PublishedReviewCoverage;
 }
@@ -335,7 +336,9 @@ export function parseReviewedAnalysisHistory(value:unknown,currentBusinessDate:s
  const history=parseReviewedAnalysis(v,businessDate,updatedAt.text,true);
  // The history endpoint replays original single freezes at the actual read
  // clock. It does not reconstruct unpersisted combinations from past prices.
- if(!history.records.length||history.combos.length||history.threeCombos.length)throw Error('Reviewed history records');
+ const frozenHistory=v.comboFreezePolicy==='persisted-original-groups-v1';
+ if(!history.records.length||((history.combos.length||history.threeCombos.length)&&!frozenHistory)
+  ||frozenHistory&&(!history.comboFreeze?.length||history.comboFreeze.some(f=>f.frozen!==true)))throw Error('Reviewed history records');
  if(Object.hasOwn(v,'comboArchive')){
   const archive=object(v.comboArchive),source=object(archive.source),original=object(archive.view);
   const committed=archive.version==='reviewed-committed-combo-archive-v1';
@@ -1054,6 +1057,10 @@ export function parseRecommendationCenter(response:unknown):RecommendationCenter
     result.reviewedRevisions=parseReviewedRevisions(x.reviewedRevisions,x.reviewedAnalysis,result.reviewedAnalysis,result.updatedAt);
   }
   if(Object.hasOwn(x,'reviewedAnalysisHistory'))result.reviewedAnalysisHistory=parseReviewedAnalysisHistory(x.reviewedAnalysisHistory,result.businessDate,result.updatedAt);
+  if(Object.hasOwn(x,'reviewedRevisionsHistory')){
+    if(!result.reviewedAnalysisHistory)throw Error('Historical review versions missing originals');
+    result.reviewedRevisionsHistory=parseReviewedRevisions(x.reviewedRevisionsHistory,x.reviewedAnalysisHistory,result.reviewedAnalysisHistory,result.reviewedAnalysisHistory.updatedAt);
+  }
   if(Object.hasOwn(x,'strategySwitch')){
     const s=object(x.strategySwitch);
     if(s.version!=='trained-strategy-switch-v1'||s.activeReferenceStrategy!=='league-trained-baseline-v1'||s.legacyPublicationEnabled!==false||s.legacyFallbackEnabled!==false||s.formalEligible!==false||result.current.length||result.previews.length||result.todayCombos.length||result.todayDualResearch?.length)throw new Error('Invalid trained strategy switch');

@@ -20,6 +20,19 @@ function body(){
  const records=[record(0),record(1,{market:'HHAD',handicap:-1,selection:'a',sp:2.45,scores:[[1,1],[0,1]],confidence:'低'}),record(2,{market:'HHAD',handicap:2,selection:'h',sp:1.65,scores:[[0,1],[1,2]],confidence:'中'}),record(3,{selection:'d',sp:3.2,scores:[[1,1],[2,2]],confidence:'中'})];
  return {version:'reviewed-analysis-view-v1',businessDate,createdAt,commitObservedAt,updatedAt,formalEligible:false,publicationHash:'a'.repeat(64),records,combos:[combo(records.slice(0,2),2.5)],threeCombos:[combo(records.slice(0,3),5)]};
 }
+test('verified persisted original pairs and triples survive historical parsing without creating or repricing groups',async()=>{
+ const original=reviewed.seal({...body(),draftHash:'c'.repeat(64)}),at='2030-01-02T08:00:00.000Z';
+ const archive=require('../services/recommendation/comboArchive.cjs'),saved=archive.prepare(original,{generationId:'g-'+'a'.repeat(64),committedAt:original.commitObservedAt},original.updatedAt),json=JSON.stringify(saved.archive);
+ const row={artifact_key:saved.key,artifact_version:archive.VERSION,generated_at:saved.archive.createdAt,updated_at:saved.archive.createdAt,payload_json:json,payload_sha256:reviewed.sha(json),payload_bytes:Buffer.byteLength(json)},calls=[];
+ const client={async query(sql,args){calls.push(sql);if(sql.startsWith('SELECT artifact_key,payload_bytes'))return{rows:[{artifact_key:saved.key,payload_bytes:row.payload_bytes,bytes:row.payload_bytes}]};if(sql.includes("dataset='current'"))return{rows:[]};assert.equal(args[0],saved.key);return{rows:[row]};}};
+ const {contentHash,...before}=original;void contentHash;
+ const historical=await require('../server/researchFrozenCombos.cjs').freezeOriginalGroups(client,reviewed.seal({...before,updatedAt:at,combos:[],threeCombos:[]}),at,{anchor:false});
+ const parsed=view.parseReviewedAnalysisHistory(historical,'2030-01-02',at);assert.deepEqual(parsed.combos.filter(c=>c.legs.length),original.combos);assert.deepEqual(parsed.threeCombos.filter(c=>c.legs.length),original.threeCombos);assert.ok(parsed.comboFreeze.every(f=>f.frozen));
+ for(const tab of ['two','three']){const html=render(parsed,tab,Date.parse(at));assert.match(html,/历史记录，非今日新荐/);assert.match(html,/整组冻结/);assert.doesNotMatch(html,/未找到该竞彩日已保存/);}
+ assert.ok(calls.every(s=>s.startsWith('SELECT')));
+ const open=structuredClone(historical);open.comboFreeze[0].frozen=false;delete open.contentHash;assert.throws(()=>view.parseReviewedAnalysisHistory(reviewed.seal(open),'2030-01-02',at));
+ const unbound=structuredClone(historical);delete unbound.comboFreeze;delete unbound.comboFreezePolicy;delete unbound.contentHash;assert.throws(()=>view.parseReviewedAnalysisHistory(reviewed.seal(unbound),'2030-01-02',at));
+});
 const parse=b=>view.parseReviewedAnalysis(reviewed.seal(b),b.businessDate,b.updatedAt);
 const render=(data,tab,now=Date.parse(updatedAt),failed=false)=>renderToStaticMarkup(React.createElement(ui.ReviewedAnalysisPanel,{data,tab,now,failed}));
 

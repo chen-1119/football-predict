@@ -91,6 +91,7 @@ function controlledPool(v,{failCommit=false}={}){
   if(sql.includes('clock_timestamp'))return {rows:[{now:fixture.stamp(++clock)}]};
   if(sql.includes('match_snapshots')){a.match(sql,/LIMIT 513/);return {rows:v.matches.map(payload=>({payload}))};}
   const active=pending||rows;
+  if(sql.startsWith('SELECT artifact_key,payload_bytes,octet_length(payload::text) AS bytes'))return {rows:[...active.values()].filter(r=>r.artifact_version===args[0]&&r.artifact_key.startsWith(args[1].slice(0,-1))).map(r=>({artifact_key:r.artifact_key,payload_bytes:r.payload_bytes,bytes:r.payload_bytes}))};
   if(sql.includes('artifact_key < $3'))return {rows:[...active.values()].filter(row=>row.artifact_version===args[0]
    &&row.artifact_key.startsWith(args[1].slice(0,-1))&&row.artifact_key<args[2]).sort((a,b)=>b.artifact_key.localeCompare(a.artifact_key))
    .slice(0,1).map(row=>({artifact_key:row.artifact_key}))};
@@ -136,6 +137,16 @@ test('read-only recent history recovers exact frozen singles at the real clock w
  a.equal(parsed.reviewedAnalysisHistory.records.length,3);a.equal(parsed.reviewedAnalysisHistory.combos.length,0);
  a.equal(await runtime.readLatestHistory(db.client,'2026-09-17',now),null,'today is never relabeled as prior history');
  await a.rejects(runtime.readLatestHistory(db.client,'2026-09-20',now),/HISTORY_CLOCK/);
+});
+
+test('exact selected archived day never substitutes a different published day or creates records',async()=>{
+ const v=setup(),runtime=controlledRuntime(v),db=controlledPool(v),saved=await runtime.publish(v.draft,{pool:db.pool,expectedDraftHash:p.hash(v.draft)});
+ const before=[...db.rows()].map(([k,r])=>[k,r.payload_json]),start=db.log.length,now=fixture.stamp(fixture.NOW+48*3600e3);
+ const view=await runtime.readHistory(db.client,v.draft.businessDate,'2026-09-19',now);a.equal(view.businessDate,v.draft.businessDate);a.equal(view.records.length,3);
+ a.equal(await runtime.readHistory(db.client,'2026-09-18','2026-09-19',now),null,'a missing selected day must not fall back to the latest other day');
+ for(const day of ['2026-09-19','2026-09-20','2026-02-30','2026-9-17'])await a.rejects(runtime.readHistory(db.client,day,'2026-09-19',now),/HISTORY_CLOCK/);
+ a.ok(db.log.slice(start).every(sql=>sql.trim().startsWith('SELECT')));a.deepEqual([...db.rows()].map(([k,r])=>[k,r.payload_json]),before);
+ db.rows().delete(saved.key+'-ack');await a.rejects(runtime.readHistory(db.client,v.draft.businessDate,'2026-09-19',now),/ACK_MISSING/);
 });
 
 for(const [name,change] of [

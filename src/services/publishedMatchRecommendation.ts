@@ -39,11 +39,16 @@ export function trainedMatchRecommendation(data:RecommendationCenterData|null,ma
 }
 
 export function reviewedMatchRecommendation(data:RecommendationCenterData|null,match:Match){
- const records=data?.reviewedAnalysis?.records.filter(r=>r.eventId===sourceId(match.sourceMatchId||match.id)
-  &&Date.parse(r.eventVersion)===Date.parse(match.kickoffTime)&&r.businessDate===data.businessDate
+ if(!data)return null;
+ const current=data.reviewedAnalysis?.businessDate===match.businessDate?data.reviewedAnalysis:undefined;
+ const history=data.reviewedAnalysisHistory?.businessDate===match.businessDate?data.reviewedAnalysisHistory:undefined;
+ const view=current??history;
+ const records=view?.records.filter(r=>r.eventId===sourceId(match.sourceMatchId||match.id)
+  &&Date.parse(r.eventVersion)===Date.parse(match.kickoffTime)&&r.businessDate===view.businessDate
   &&r.homeTeamId===match.homeTeamId&&r.awayTeamId===match.awayTeamId
   &&r.homeTeamName===match.homeTeamName&&r.awayTeamName===match.awayTeamName)??[];
- return records.length===1?reviewedLatestRecord(records[0],data?.reviewedRevisions):null;
+ // A prior day's verified original cannot inherit the current day's reviews.
+ return records.length===1?reviewedLatestRecord(records[0],current?data.reviewedRevisions:data.reviewedRevisionsHistory):null;
 }
 export function reviewedLatestRecord(original:ReviewedAnalysisRecord,revisions?:ReviewedRevisions):ReviewedAnalysisRecord{
  const versions=revisions?.state==='verified'?revisions.singles.filter(r=>r.eventId===original.eventId):[];

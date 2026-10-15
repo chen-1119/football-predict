@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { getAccessAuthHeaders } from '../services/accessControl';
 import { buildApiUrl } from '../services/runtimeUrls';
 import { createPollingController } from '../services/pollingController';
@@ -6,6 +6,7 @@ import { parseRecommendationCenter, type RecommendationCenterData } from '../ser
 
 interface Snapshot {data:RecommendationCenterData|null;loading:boolean;failed:boolean;authorizationRequired:boolean}
 const empty:Snapshot=Object.freeze({data:null,loading:true,failed:false,authorizationRequired:false});
+export function createRecommendationCenterStore(reviewedBusinessDate?:string){
 let snapshot=empty;
 const listeners=new Set<()=>void>();
 let dispose:(()=>void)|undefined;
@@ -16,9 +17,12 @@ function start(){
   const controller=createPollingController<RecommendationCenterData>({
     intervalMs:15000,timeoutMs:10000,maxRetryMs:120000,
     request:async signal=>{
-      const response=await fetch(buildApiUrl('/api/v1/daily-featured-combos'),{headers:getAccessAuthHeaders(),cache:'no-store',credentials:'include',signal});
+      const query=reviewedBusinessDate===undefined?'':'?reviewedBusinessDate='+encodeURIComponent(reviewedBusinessDate);
+      const response=await fetch(buildApiUrl('/api/v1/daily-featured-combos'+query),{headers:getAccessAuthHeaders(),cache:'no-store',credentials:'include',signal});
       if(!response.ok)throw Object.assign(new Error('Recommendation request failed'),{status:response.status});
-      return parseRecommendationCenter(await response.json());
+      const data=parseRecommendationCenter(await response.json());
+      if(reviewedBusinessDate!==undefined&&data.reviewedAnalysisHistory&&data.reviewedAnalysisHistory.businessDate!==reviewedBusinessDate)throw new Error('Historical business day mismatch');
+      return data;
     },
     onData:data=>{const stamp=Date.parse(data.updatedAt);if(stamp<newest||stamp>Date.now()+300000)throw new Error('Regressed product snapshot');newest=stamp;emit({data,loading:false,failed:false,authorizationRequired:false});},
     onError:error=>{const status=typeof error==='object'&&error!==null&&'status' in error?error.status:null;const authorizationRequired=status===401||status===403;emit({...snapshot,data:authorizationRequired?null:snapshot.data,loading:false,failed:true,authorizationRequired});},
@@ -32,4 +36,11 @@ function start(){
 function subscribe(listener:()=>void){listeners.add(listener);if(listeners.size===1)start();return ()=>{listeners.delete(listener);if(!listeners.size){dispose?.();dispose=undefined;snapshot=empty;}};}
 const getSnapshot=()=>snapshot;
 const getServerSnapshot=()=>empty;
-export function useRecommendationCenter(){const value=useSyncExternalStore(subscribe,getSnapshot,getServerSnapshot);return {...value,refresh:()=>refreshRequest()};}
+return {subscribe,getSnapshot,getServerSnapshot,refresh:()=>refreshRequest()};
+}
+const currentStore=createRecommendationCenterStore();
+export function useRecommendationCenter(reviewedBusinessDate?:string){
+ const store=useMemo(()=>reviewedBusinessDate===undefined?currentStore:createRecommendationCenterStore(reviewedBusinessDate),[reviewedBusinessDate]);
+ const value=useSyncExternalStore(store.subscribe,store.getSnapshot,store.getServerSnapshot);
+ return {...value,refresh:store.refresh};
+}

@@ -11709,10 +11709,14 @@ const handleApi = async (req, res, url) => {
     if (req.method !== "GET") return sendJson(res, { ok: false, error: "method not allowed" }, 405);
     if (!(await hasRecommendationAccess(req, url))) return sendJson(res, { ok: false, error: "access code required" }, 401);
     if (!shouldPreferPostgresRead()) return sendJson(res, { ok: false, error: "PostgreSQL unavailable" }, 503);
+    let reviewedBusinessDate;
+    try { reviewedBusinessDate = require('./reviewedHistoryQuery.cjs').parseReviewedHistoryQuery(url.searchParams); }
+    catch { return sendJson(res, { ok: false, error: "invalid reviewed business date" }, 400); }
     const payload = await readPostgresRecommendationCenter(postgresPool, {
       publicationIdentity: resolveBasePublication().identity,
       recommendationAuthorityPolicy: currentRecommendationPolicy,
       includeReviewedHistory: true,
+      ...(reviewedBusinessDate !== undefined ? { reviewedBusinessDate } : {}),
     });
     if (!payload) return sendJson(res, { ok: false, error: "combo update pending" }, 503);
     return sendJson(res, { ok: true, ...payload });
