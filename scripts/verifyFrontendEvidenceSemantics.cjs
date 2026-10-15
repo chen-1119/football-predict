@@ -247,10 +247,17 @@ check('new published surfaces are reference only and old formal actions retain t
   && recommendationCenter.includes('参考推荐 · 模型验证中')
   && publishedMatchPick.includes('selectionReferenceLabel(row.selectionQuality,language)')
   && referenceLabelContract
-  && recommendationCenterHook.includes("buildApiUrl('/api/v1/daily-featured-combos')")
+  && recommendationCenterHook.includes("buildApiUrl('/api/v1/daily-featured-combos'+query)")
   && recommendationCenterHook.includes("cache:'no-store'")
   && recommendationCenterHook.includes('data:authorizationRequired?null:snapshot.data')
   && !recommendationCenter.includes('isFormalPresentationAllowed('));
+check('selected historical days keep authenticated polling and isolated stores',
+  recommendationCenterHook.includes("reviewedBusinessDate===undefined?'':'?reviewedBusinessDate='+encodeURIComponent(reviewedBusinessDate)")
+  && recommendationCenterHook.includes('headers:getAccessAuthHeaders()')
+  && recommendationCenterHook.includes("credentials:'include',signal")
+  && recommendationCenterHook.includes('data.reviewedAnalysisHistory.businessDate!==reviewedBusinessDate')
+  && recommendationCenterHook.includes('reviewedBusinessDate===undefined?currentStore:createRecommendationCenterStore(reviewedBusinessDate)')
+  && recommendationCenterHook.includes('data:authorizationRequired?null:snapshot.data'));
 check('reference cards override positive green treatments', [
   '.decision-card.is-reference.is-steady',
   '.decision-card.is-reference.is-lean',
