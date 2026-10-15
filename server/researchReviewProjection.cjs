@@ -22,16 +22,18 @@ function groupSettlement(legs){
  const states=legs.map(s=>s.state);
  return {state:states.includes('DISPUTED')?'DISPUTED':states.includes('VOID')?'VOID':states.includes('LOST')?'LOST':states.every(s=>s==='WON')?'WON':'PENDING'};
 }
-async function projection(c,original,at,heads=[]){
+async function projection(c,original,at,heads=[],{eventId=null}={}){
  if(!original?.records?.length||ns(at)===null||!Array.isArray(heads))fail('REVIEW_REVISION_VIEW_IDENTITY');
- const day=original.businessDate,rows=(await c.query(`SELECT artifact_key,artifact_version,payload_bytes,octet_length(payload::text) AS actual_bytes
- FROM football.private_model_artifacts WHERE artifact_key LIKE $1 OR artifact_key LIKE $2 ORDER BY artifact_key LIMIT ${MAX_ROWS+1}`,
- ['reviewed-single-'+day+'-%','reviewed-combo-'+day+'-%'])).rows;
+ if(eventId!==null&&(!/^[1-9]\d{0,19}$/.test(eventId)||original.records.length!==1||original.records[0].eventId!==eventId))fail('REVIEW_REVISION_VIEW_IDENTITY');
+ const day=original.businessDate,limit=eventId===null?MAX_ROWS:32,rows=(await c.query(`SELECT artifact_key,artifact_version,payload_bytes,octet_length(payload::text) AS actual_bytes
+ FROM football.private_model_artifacts WHERE ${eventId===null?'artifact_key LIKE $1 OR artifact_key LIKE $2':'artifact_key LIKE $1'} ORDER BY artifact_key LIMIT ${limit+1}`,
+ eventId===null?['reviewed-single-'+day+'-%','reviewed-combo-'+day+'-%']:['reviewed-single-'+day+'-'+eventId+'-v%'])).rows;
  let total=0;
- if(rows.length>MAX_ROWS)fail('REVIEW_REVISION_VIEW_BOUND');
+ if(rows.length>limit)fail('REVIEW_REVISION_VIEW_BOUND');
  const all=new Set(rows.map(r=>r.artifact_key));
  for(const r of rows){
   const type=r.artifact_key.startsWith('reviewed-single-')?single:combo,ack=r.artifact_key.endsWith('-ack'),bytes=Number(r.payload_bytes);
+  if(eventId!==null&&!r.artifact_key.startsWith('reviewed-single-'+day+'-'+eventId+'-v'))fail('REVIEW_REVISION_VIEW_IDENTITY');
   if(!Number.isSafeInteger(bytes)||bytes<2||bytes>8*1024*1024||Number(r.actual_bytes)!==bytes||(total+=bytes)>MAX_BYTES
    ||r.artifact_version!==(ack?type.ACK_VERSION:type.VERSION)||!new RegExp('^reviewed-(?:single|combo)-'+day+'-(?:[1-9]\\d{0,19}|[a-f0-9]{64})-v(?:0[1-9]|1[0-6])(?:-ack)?$').test(r.artifact_key))fail('REVIEW_REVISION_VIEW_BOUND');
   if(ack&&!all.has(r.artifact_key.slice(0,-4)))fail('REVIEW_REVISION_VIEW_ORPHAN_ACK');

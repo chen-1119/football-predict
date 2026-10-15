@@ -53,6 +53,12 @@ async function verify(pool){
   dropCommit=true;await a.rejects(store.publish(third),{code:'REVIEW_REVISION_COMMIT_UNKNOWN_READ_FIRST'});
   a.equal((await store.read(third)).state,'record-present-ack-missing');a.equal((await store.publish(third)).submitted,false);
   a.equal(Number((await q('SELECT count(*) AS n FROM football.private_model_artifacts')).rows[0].n),7);
+  const view=p.seal({version:'reviewed-analysis-view-v1',businessDate:first.businessDate,createdAt:record.createdAt,commitObservedAt:ack.createdAt,updatedAt:f.stamp(clock+100),publicationHash:record.contentHash,records:record.records,combos:[],threeCombos:[],formalEligible:false});
+  const c=await mapped.connect();try{
+   const projected=await require('../server/researchReviewProjection.cjs').projection(c,view,view.updatedAt,[],{eventId:single.eventId});
+   a.equal(projected.singles.length,2);a.equal(projected.singles[0].decision.selection,'a');a.equal(projected.singles[1].decision.selection,'h');a.equal(projected.pending.length,1);a.equal(projected.combos.length,0);
+   a.equal(projected.originalPublicationHash,record.contentHash);a.equal(projected.independentEventIncrement,0);
+  }finally{c.release();}
   await q("UPDATE football.private_model_artifacts SET payload_sha256=repeat('0',64) WHERE artifact_key=$1",[revisionKey(single.businessDate,single.eventId,1)]);
   await a.rejects(store.read(two),/payload SHA-256 mismatch/);
   return {ok:true,scope:'disposable-postgres-synthetic-clock',originalBytesPreserved:true,changedDirectionAndScores:true,exactPredecessor:true,liveUpdateRefused:true,unknownCommitReadOnlyRecovery:true,tamperedPredecessorRefused:true,independentEventIncrement:0,productionWrites:0,productionRootBrokerVerified:false};

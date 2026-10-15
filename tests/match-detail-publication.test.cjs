@@ -74,6 +74,8 @@ test('real detail PG route attaches replayed history inside its existing snapsho
   if(sql.startsWith('BEGIN')){a.match(sql,/REPEATABLE READ READ ONLY/);active=true;return {rows:[]};}a.equal(active,true);
   if(sql==='COMMIT'||sql==='ROLLBACK'){active=false;return {rows:[]};}
   if(sql.startsWith('SET LOCAL'))return {rows:[]};
+  if(/^(?:SAVEPOINT|RELEASE SAVEPOINT|ROLLBACK TO SAVEPOINT) detail_review_versions$/.test(sql))return {rows:[]};
+  if(sql.includes('artifact_key LIKE $1')&&args[0]===`reviewed-single-${match.businessDate}-${match.sourceMatchId}-v%`)return {rows:[]};
   if(sql.includes('projection_meta'))return {rows:Object.entries({data_publication_mode:publication.mode,data_generation_id:publication.generationId,manifest_hash:publication.manifestHash,data_generation_source_cycle_id:publication.sourceCycleId,committed_at:publication.committedAt}).map(([key,value])=>({key,value}))};
   if(sql.includes('match_snapshots'))return {rows:[{payload:match,dataset:'history',match_id:match.id,source_match_id:match.sourceMatchId,kickoff_time:match.kickoffTime}]};
   if(sql.includes('clock_timestamp'))return {rows:[{observed_at:v.asOf}]};
@@ -87,4 +89,14 @@ test('real detail PG route attaches replayed history inside its existing snapsho
   const parsed=view.detailPublishedRecommendation(actual.publishedDetail,actual,Date.parse(v.asOf));a.ok(parsed);a.equal(parsed.reviewed.sp,v.record.records[0].sp);
   a.equal(log.filter(s=>s.startsWith('BEGIN')).length,1);a.equal(log.filter(s=>s==='COMMIT').length,1);a.equal(log.some(s=>/INSERT|UPDATE|DELETE/.test(s)),false);
  }finally{if(prior===undefined)delete process.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH;else process.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH=prior;fs.unlinkSync(file);fs.rmdirSync(dir);}
+});
+test('detail uses the acknowledged review direction while its original evidence and settlement stay frozen',async()=>{
+ const {wire,match,v}=await setup(),p=f.p,first=wire.reviewed.records[0],publishedAt=f.stamp(f.NOW+1000),commitObservedAt=f.stamp(f.NOW+1001);
+ const decision={...first,selection:'a',sp:4.5,originalSp:4.5,scores:[[0,1],[1,2]],reason:'New independently retained review'};
+ wire.reviewedRevisions=p.seal({version:'reviewed-revisions-view-v1',state:'verified',businessDate:first.businessDate,updatedAt:wire.observedAt,originalPublicationHash:wire.reviewed.publicationHash,
+  singles:[{key:`reviewed-single-${first.businessDate}-${first.eventId}-v01`,revision:1,eventId:first.eventId,originalDecisionHash:p.hash(first),payloadSha256:'a'.repeat(64),ackSha256:'b'.repeat(64),previousRevisionHash:null,publishedAt,commitObservedAt,decision,settlement:{state:'PENDING'},originalSettlementPreserved:true,independentEventIncrement:0}],combos:[],pending:[],originalSettlementPreserved:true,independentEventIncrement:0,formalEligible:false,modelAdoption:false});
+ const parsed=view.detailPublishedRecommendation(wire,match,Date.parse(v.asOf));a.ok(parsed);a.equal(parsed.reviewed.selection,'a');a.deepEqual(JSON.parse(JSON.stringify(parsed.reviewed.scores)),[[0,1],[1,2]]);a.equal(parsed.reviewed.review.original.selection,'h');
+ const text=words(Evidence({data:parsed,language:'zh'}));a.match(text,/Synthetic fixture/);a.doesNotMatch(text,/New independently retained review/);a.equal(parsed.receipts[0].recordHash,wire.reviewed.publicationHash);
+ const corrupt=structuredClone(wire);corrupt.reviewedRevisions.singles[0].originalDecisionHash='0'.repeat(64);delete corrupt.reviewedRevisions.contentHash;corrupt.reviewedRevisions=p.seal(corrupt.reviewedRevisions);
+ a.equal(view.detailPublishedRecommendation(corrupt,match,Date.parse(v.asOf)).reviewed.selection,'h');
 });

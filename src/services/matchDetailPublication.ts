@@ -1,5 +1,6 @@
 import type { Match } from './mockData';
-import { parseReviewedAnalysis, parseLeagueBaseline } from './recommendationCenterView';
+import { parseReviewedAnalysis, parseLeagueBaseline, parseReviewedRevisions } from './recommendationCenterView';
+import { reviewedLatestRecord } from './publishedMatchRecommendation';
 import type { ReviewedAnalysisRecord, LeagueBaselineDirection } from './recommendationCenterView';
 import { exactDetailClock } from './matchDetailIdentity.js';
 
@@ -26,7 +27,7 @@ export function detailPublishedRecommendation(value:unknown,match:Match,now=Date
     ||clock(p.createdAt)>=clock(p.storedAt)||clock(p.storedAt)>clock(p.ackAt)||clock(p.ackAt)>clock(v.observedAt))throw Error('Detail publication receipt');
    tracks.add(track);hex(p.payloadSha256);hex(p.recordHash);hex(p.ackPayloadSha256);return p as unknown as Receipt;
   });
-  const businessDate=String(i.businessDate),reviewed=v.reviewed===null?null:parseReviewedAnalysis(v.reviewed,businessDate,v.observedAt).records;
+  const businessDate=String(i.businessDate),original=v.reviewed===null?null:parseReviewedAnalysis(v.reviewed,businessDate,v.observedAt),reviewed=original?.records??null;
   const trained=v.trained===null?null:parseLeagueBaseline(v.trained,businessDate,v.observedAt).records;
   if(Boolean(reviewed)!==tracks.has('manual')||Boolean(trained)!==tracks.has('trained')||reviewed&&reviewed.length!==1||trained&&trained.length!==1)throw Error('Detail publication tracks');
   const manual=reviewed?.[0]??null,model=trained?.[0]??null;
@@ -55,7 +56,12 @@ export function detailPublishedRecommendation(value:unknown,match:Match,now=Date
     postMatch.push(e as unknown as PostMatch);
    }
   }
-  return {reviewed:manual,trained:model,receipts,observedAt:v.observedAt,businessDate,postMatch};
+  let latest=manual;
+  if(manual&&original&&v.reviewedRevisions!==undefined){
+   try{latest=reviewedLatestRecord(manual,parseReviewedRevisions(v.reviewedRevisions,v.reviewed,original,v.observedAt));}
+   catch{latest=manual;}
+  }
+  return {reviewed:latest,trained:model,receipts,observedAt:v.observedAt,businessDate,postMatch};
  }catch{return null;}
 }
 

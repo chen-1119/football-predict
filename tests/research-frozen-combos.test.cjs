@@ -35,3 +35,14 @@ test('a reused event with changed ordered teams cannot acquire an old group',asy
 test('a busy global writer defers passive archival and makes no write or second worker',async()=>{
  let calls=0;await anchorCommitted({query:async sql=>{calls++;a.match(sql,/pg_try_advisory_xact_lock/);return {rows:[{locked:false}]};}},fixture().view,'2030-01-01T11:00:00.000Z');a.equal(calls,1);
 });
+test('an early live status cannot be recorded as a fresh pre-match combo archive',async()=>{
+ const f=fixture();f.matches[0].status='LIVE';const seen=[];
+ await anchorCommitted({query:async sql=>{seen.push(sql);
+  if(sql.includes('pg_try_advisory'))return {rows:[{locked:true}]};
+  if(sql.includes('AS bytes'))return {rows:[{bytes:Buffer.byteLength(JSON.stringify(f.view))}]};
+  if(sql.includes(' AS view'))return {rows:[{view:f.view}]};
+  if(sql.includes("dataset='current'"))return {rows:f.matches.map(payload=>({payload}))};
+  throw Error('No archival or metadata mutation permitted after a live leg');
+ }},f.view,f.day+'T11:00:00.000Z');
+ a.equal(seen.length,4);a(!seen.some(s=>/INSERT|UPDATE|DELETE/.test(s)));
+});

@@ -98,7 +98,21 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
       ||(value.state==='committed-and-acknowledged'&&(value.verified!==true||value.revision!==r.revision
         ||value.baseArchiveKey!==r.baseArchiveKey||value.baseArchiveSha256!==r.baseArchiveSha256||value.previousRevisionHash!==r.previousRevisionHash
         ||value.originalSettlementPreserved!==true||value.independentEventIncrement!==0
-        ||['payloadSha256','ackSha256','baseIdentity'].some(k=>!/^[a-f0-9]{64}$/.test(value[k]||''))))) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+        ||['payloadSha256','ackSha256','baseIdentity'].some(k=>!/^[a-f0-9]{64}$/.test(value[k]||''))))
+      ||(value.state!=='committed-and-acknowledged'&&value.verified!==false)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+    if(value.verified){
+      const policy=require('../scripts/recommendationPlatform/reviewedAnalysis.cjs'),ds=value.latestDecisions,first=value.originalDecisions,c=value.combo;
+      if(!Array.isArray(ds)||!Array.isArray(first)||ds.length!==r.size||first.length!==r.size||!c||c.band!==r.band
+        ||!Array.isArray(c.legs)||c.legs.length!==r.size||value.baseIdentity!==policy.hash({baseArchiveKey:r.baseArchiveKey,baseArchiveSha256:r.baseArchiveSha256,bases:r.bases,size:r.size,band:r.band}))fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+      for(let i=0;i<r.size;i++){
+        const d=ds[i],o=first[i],pick=r.draft.singles[i],leg=c.legs[i];
+        if(!d||!o||d.eventId!==r.bases[i].eventId||o.eventId!==d.eventId||d.eventVersion!==o.eventVersion||d.market!==pick.market||d.selection!==pick.selection
+          ||(d.handicap??null)!==pick.handicap||policy.hash(d.scores)!==policy.hash(pick.scores)||d.homeTeamName!==pick.teams[0]||d.awayTeamName!==pick.teams[1]
+          ||d.homeTeamId!==o.homeTeamId||d.awayTeamId!==o.awayTeamId||d.modelProbability!==null||d.modelVersion!==null||d.formalEligible!==false
+          ||['eventId','matchNum','market','selection','sp'].some(k=>leg[k]!==d[k])||(leg.handicap??null)!==(d.handicap??null))fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+      }
+      if(c.product!==require('../scripts/recommendationPlatform/reviewedComboHistory.cjs').exactProduct(c.legs)||c.product<r.band)fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+    }
   } else if(request.action.startsWith('revision-')) {
     const r=JSON.parse(request.json),key=require('./researchReviewedRevision.cjs').validate(r);
     if(value.key!==key||!['not-observed','record-present-ack-missing','committed-and-acknowledged'].includes(value.state)

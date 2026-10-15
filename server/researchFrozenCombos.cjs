@@ -19,6 +19,10 @@ async function anchorCommitted(c,view,at){
  if(!candidate||candidate.businessDate!==view.businessDate||candidate.comboFreeze||candidate.publicationHash!==view.publicationHash||p.hash(candidate.records)!==p.hash(view.records))return;
  const populated=[...(candidate.combos||[]),...(candidate.threeCombos||[])].filter(g=>g.legs.length);
  if(!populated.length||populated.some(g=>g.legs.some(l=>{const d=candidate.records.find(d=>d.eventId===l.eventId);return !d||ns(at)>=ns(d.cutoffAt)||ns(at)>=ns(d.eventVersion);})))return;
+ const matches=(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(r=>r.payload);
+ if(matches.length>512)fail('REVIEW_REVISION_MATCH_BOUND');
+ if(populated.some(g=>g.legs.some(l=>{const d=candidate.records.find(d=>d.eventId===l.eventId),found=matches.filter(m=>String(m.sourceMatchId||'').replace(/^sporttery_/,'')===d.eventId&&ns(m.eventVersion||m.kickoffTime)===ns(d.eventVersion));
+  return found.length!==1||found[0].status!=='SCHEDULED'||['homeTeamId','awayTeamId','homeTeamName','awayTeamName'].some(k=>found[0][k]!==d[k]);})))return;
  const meta=(await c.query('SELECT key,value FROM football.projection_meta WHERE key=ANY($1::text[])',[['data_publication_mode','data_generation_id','manifest_hash','data_generation_source_cycle_id','committed_at']])).rows;
  const publication=require('./postgresProjectionStore.cjs').publicationIdentityFromMeta(Object.fromEntries(meta.map(r=>[r.key,{value:r.value}])),{strictGenerationSource:true});
  if(publication.mode!=='active-generation'||!/^g-[a-f0-9]{64}$/.test(publication.generationId||'')||publication.generationId!=='g-'+publication.manifestHash

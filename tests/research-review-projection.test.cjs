@@ -22,3 +22,9 @@ test('unknown match result is pending, ambiguous or unverified result is exclude
  a.equal(projection.groupSettlement([{state:'WON'},{state:'PENDING'}]).state,'PENDING');
  a.equal(projection.groupSettlement([{state:'WON'},{state:'DISPUTED'}]).state,'DISPUTED');
 });
+test('detail version discovery stays within the exact event and never loads another event or combos',async()=>{
+ let query,args;
+ const c={query:async(s,a)=>{query=s;args=a;return {rows:[]};}};
+ await projection.projection(c,original,at,[],{eventId:'100'});a.deepEqual(args,['reviewed-single-2030-01-01-100-v%']);a.match(query,/LIMIT 33/);a.doesNotMatch(query,/OR artifact_key/);
+ await a.rejects(projection.projection(c,original,at,[],{eventId:'101'}),/VIEW_IDENTITY/);
+});

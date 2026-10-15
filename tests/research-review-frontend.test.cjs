@@ -34,3 +34,11 @@ test('rendered single shows review and original, while combo keeps independent o
  const combos=render(React.createElement(ui.ReviewedAnalysisPanel,{data:f.original,revisions,tab:'two',now:Date.parse(f.updatedAt),failed:false}));
  a.match(combos,/3.24/);a.match(combos,/20.25/);a.match(combos,/复核版 1/);
 });
+test('a persisted original group remains valid after another batch advances the global publication ACK',()=>{
+ const f=fixture(),raw=structuredClone(f.raw),originalCreated=raw.createdAt,originalAck=raw.commitObservedAt;
+ raw.records=raw.records.map(r=>({...r,publicationCreatedAt:originalCreated,publicationCommitObservedAt:originalAck}));
+ raw.createdAt=f.updatedAt;raw.commitObservedAt=new Date(Date.parse(f.updatedAt)+1).toISOString();raw.updatedAt=new Date(Date.parse(f.updatedAt)+2000).toISOString();
+ raw.comboFreezePolicy='persisted-original-groups-v1';raw.comboFreeze=[];
+ for(const [groups,size]of [[raw.combos,2],[raw.threeCombos,3]])for(const c of groups.filter(c=>c.legs.length))raw.comboFreeze.push({size,band:c.band,sourceArchiveKey:'reviewed-combo-view-'+f.day+'-'+'c'.repeat(64),sourceArchiveSha256:'d'.repeat(64),observedAt:f.updatedAt,originalComboHash:p.hash(c),frozen:false});
+ delete raw.contentHash;const parsed=front.parseReviewedAnalysis(p.seal(raw),f.day,raw.updatedAt);a.equal(parsed.combos[0].product,f.original.combos[0].product);
+});

@@ -319,7 +319,7 @@ export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedA
    if(c.confidence!==confidence)throw Error('Reviewed combo confidence');
    const frozen=freezes.find(f=>f.size===size&&f.band===band);
    if(frozen&&(paperHex(frozen.originalComboHash)!==prdPaperPublicHash(c)||bound.some(r=>paperClock(frozen.observedAt).ns>=paperClock(r.cutoffAt).ns)
-    ||paperClock(frozen.observedAt).ns<paperClock(v.commitObservedAt).ns))throw Error('Reviewed frozen combo binding');
+    ||bound.some(r=>{const raw=object(rows.find(x=>object(x).eventId===r.eventId));return paperClock(frozen.observedAt).ns<paperClock(raw.publicationCommitObservedAt??v.commitObservedAt).ns;})))throw Error('Reviewed frozen combo binding');
    if(bound.some(r=>paperClock(r.cutoffAt).ns<=asOf)&&(!frozen||frozen.frozen!==true))throw Error('Reviewed combo cutoff');
    return {band,legs,product,confidence};
   });
