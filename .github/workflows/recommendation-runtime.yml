@@ -90,6 +90,9 @@ on:
       - 'tests/reference-index-release-gate.test.cjs'
       - 'tests/generation-startup-streaming.test.cjs'
       - 'scripts/releaseWorkerCodeRepair.cjs'
+      - 'scripts/releaseWorkerPreflight.cjs'
+      - 'scripts/verifyReleaseWorkerPreflight.cjs'
+      - 'tests/fixtures/worker-skipped-after-official-failure-20261015.json'
       - 'scripts/verifyReleaseWorkerCodeRepair.cjs'
       - 'scripts/nativeCodeReleaseDataPlane.cjs'
       - 'tests/postgres-reference-repair*.test.cjs'
@@ -258,6 +261,7 @@ jobs:
         run: node --test tests/recommendation-authority.test.cjs tests/recommendation-authority-integration.test.cjs tests/research-frozen-combos.test.cjs
       - name: Exact r876 readonly baseline preparation and actual ancestor lock
         run: |
+          node scripts/verifyReleaseWorkerPreflight.cjs
           node --test tests/baseline-authority-replay-repair.test.cjs
           sudo "$(command -v node)" scripts/verifyBaselineAuthorityReplayLock.cjs
       - name: Root socket bounded frames and process boundary fixtures

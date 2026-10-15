@@ -931,6 +931,7 @@ const requiredEntries = [
   "scripts/verifyProductionPlanSourceContracts.cjs",
   "scripts/data/production-plan-source-contracts.json",
   "scripts/verifyReleaseWorkerPreflight.cjs",
+  "tests/fixtures/worker-skipped-after-official-failure-20261015.json",
   "scripts/verifyReleaseRecovery.cjs",
   "scripts/verifyReleaseSidecarRecovery.cjs",
   "scripts/verifyNativeSidecarLifecycle.cjs",

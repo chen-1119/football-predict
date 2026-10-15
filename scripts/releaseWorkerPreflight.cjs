@@ -25,6 +25,21 @@ function evaluateWorkerPreflight(observation) {
       && status.eventCycle?.ok === true) warnings.push('worker-slow-enrichment-failed-official-phase-published');
     else blockers.push('worker-latest-official-cycle-failed');
   } else if (status?.ok !== true) blockers.push('worker-status-not-understood');
+  // A skipped loop can overwrite lastCycle without publishing anything. In
+  // particular, a background lane holding the sync lock must not erase the
+  // earlier official failure merely by producing an ok:true skipped result.
+  if (status?.lastCycle?.skipped === true) blockers.push('worker-skipped-cycle-is-not-official-recovery');
+  if (status?.eventCycle?.ok === false && status.eventCycle.phase === 'official-result-failed') {
+    const failedAt = Date.parse(status.eventCycle.finishedAt || '');
+    const complete = status.lastCompleteCycle, official = complete?.officialPhase;
+    const begin = Date.parse(official?.startedAt || ''), end = Date.parse(official?.finishedAt || '');
+    const completeBegin = Date.parse(complete?.startedAt || ''), completeEnd = Date.parse(complete?.finishedAt || '');
+    if (!(complete?.ok === true && complete.skipped === false && complete.degraded === false
+      && official?.ok === true && official.phase === 'official-result-published'
+      && Number.isFinite(failedAt) && failedAt >= startedAt && completeBegin >= failedAt && completeBegin <= begin && begin >= failedAt
+      && end >= begin && completeEnd >= end && completeEnd <= statusAt))
+      if (!blockers.includes('worker-official-recovery-unproven')) blockers.push('worker-official-recovery-unproven');
+  }
   // A retry changes phase/ok before it has fixed anything. Do not spend an
   // upload and candidate build merely because the probe landed in that window.
   if (status?.ok === true && status.lastCycle?.ok === false
@@ -36,7 +51,7 @@ function evaluateWorkerPreflight(observation) {
     if (!(published?.ok === true && published.phase === 'official-result-published'
       && Number.isFinite(failedAt) && failedAt >= startedAt
       && publishStart >= failedAt && publishEnd >= publishStart && publishEnd <= statusAt))
-      blockers.push('worker-official-recovery-unproven');
+      if (!blockers.includes('worker-official-recovery-unproven')) blockers.push('worker-official-recovery-unproven');
   }
   return {
     version: 'release-worker-preflight-v1', checkedAt, ok: blockers.length === 0,
