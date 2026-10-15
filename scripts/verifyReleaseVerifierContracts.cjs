@@ -842,7 +842,12 @@ for (const [entry, script, minimum] of [
   ['verifyStaticFileResponseIdentity.cjs', 'static-file-response-identity', 19],
 ]) check(`release execution contract passes before signing: ${entry}`, () => {
   const systemdOnly = entry === 'verifyFrontendInstalledRuntime.cjs' && process.platform === 'win32';
-  const run = require('node:child_process').spawnSync(process.execPath, [`scripts/${entry}`, ...(systemdOnly ? ['--systemd-contracts-only'] : [])],
+  // The installed-runtime fixture exercises root-only POSIX ownership cases.
+  // Other verifiers keep the checkout owner's identity and source ownership.
+  const rootFixture = entry === 'verifyFrontendInstalledRuntime.cjs' && process.platform === 'linux' && process.getuid() !== 0;
+  const verifierArgs = [`scripts/${entry}`, ...(systemdOnly ? ['--systemd-contracts-only'] : [])];
+  const run = require('node:child_process').spawnSync(rootFixture ? '/usr/bin/sudo' : process.execPath,
+    rootFixture ? ['-n', process.execPath, ...verifierArgs] : verifierArgs,
     { cwd: root, encoding: 'utf8', windowsHide: true,
       timeout: entry === 'verifyFrontendRuntimeBoundary.cjs' ? 300000 : 30000, maxBuffer: 2 * 1024 * 1024 });
   assert.equal(run.status, 0, run.stderr || run.stdout);
