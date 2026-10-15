@@ -973,7 +973,12 @@ pause_current_fast_watcher_for_live_prebuild() {
   systemctl is-active --quiet "$SERVICE_NAME" && return 1
   wait_for_current_service_cgroup_reclaimed "$old_control_group" || return 1
   systemctl start "$SERVICE_NAME" || return 1
-  wait_for_health "http://${HOST}:${PORT}" "release-fast-watcher-paused" "$FAST_WATCHER_RESTART_HEALTH_SECONDS" 2 service || return 1
+  if [ -n "${NATIVE_BASELINE_AUTHORITY_REPAIR_PROOF:-}" ]; then
+    assert_release_fast_watcher_pause_guard || return 1
+    printf '%s' "$NATIVE_BASELINE_AUTHORITY_REPAIR_PROOF" | "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/baselineAuthorityReplayRepair.cjs" paused "$BUNDLE_SHA256" "$$" || return 1
+  else
+    wait_for_health "http://${HOST}:${PORT}" "release-fast-watcher-paused" "$FAST_WATCHER_RESTART_HEALTH_SECONDS" 2 service || return 1
+  fi
   assert_release_fast_watcher_pause_guard || return 1
   # Keep the root-owned override installed for the whole live-prebuild window.
   # Restart=always may replace the old process at any point; every replacement

@@ -113,7 +113,13 @@ run_native_release() {
   install_fixed_qa_access_operator
   trap native_exit EXIT
   release_stage_observe init "$TRUSTED_SOURCE_DIR"
-  wait_for_health "http://${HOST}:${PORT}" native-preflight 90 2 service
+  NATIVE_BASELINE_AUTHORITY_REPAIR_PROOF=""
+  if [ "$NATIVE_PLANNED_CODE" = 1 ] && [ "$(cat "$APP_DIR/.release-bundle-sha256")" = 0862f893a8af673c67910cbb1a17d51f23e973b6f2e55433ccaa6e6243c586d5 ]; then
+    NATIVE_BASELINE_AUTHORITY_REPAIR_PROOF="$("$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/baselineAuthorityReplayRepair.cjs" initial "$BUNDLE_SHA256" "$$")" || return 1
+    log "exact r876 authority replay failure verified against the corrected signed candidate in READ ONLY; baseline business health remains false"
+  else
+    wait_for_health "http://${HOST}:${PORT}" native-preflight 90 2 service
+  fi
   prepare_managed_tree_topology_for_transaction
   NATIVE_STATE_DIR="/var/lib/football-release/native/$BUNDLE_SHA256"
   native_data allocate

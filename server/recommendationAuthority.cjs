@@ -116,7 +116,11 @@ async function replayPublications(client, context, validate) {
       return result;
     } };
     const publicationClient = publicationClientAsOf(recordingClient, context);
-    const reviewed = await reviewedRuntime.projection(publicationClient, center.businessDate, center.updatedAt);
+    let reviewed = await reviewedRuntime.projection(publicationClient, center.businessDate, center.updatedAt);
+    if(center.reviewedAnalysis?.comboFreezePolicy==='persisted-original-groups-v1'){
+      reviewed=await require('./researchFrozenCombos.cjs').freezeOriginalGroups(recordingClient,reviewed,center.updatedAt,
+        {replayFrozen:center.reviewedAnalysis.comboFreeze});
+    }
     const trained = await trainedRuntime.projection(publicationClient, center.businessDate, center.updatedAt, trustRegistry);
     validate(reviewed, trained);
     const entry = { reviewed, trained, recipes: [...recipes.values()], verifiedAt: now };

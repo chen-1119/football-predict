@@ -29,8 +29,14 @@ async function anchorCommitted(c,view,at){
   ||typeof publication.sourceCycleId!=='string'||!publication.sourceCycleId||publication.sourceCycleId.length>256||ns(publication.committedAt)===null||ns(publication.committedAt)>ns(at))fail('REVIEW_REVISION_COMMITTED_PUBLICATION');
  await archive.retain(c,candidate,publication,at);
 }
-async function freezeOriginalGroups(c,view,at,{anchor=false}={}){
+async function freezeOriginalGroups(c,view,at,{anchor=false,replayFrozen=null}={}){
  if(!view?.records?.length||ns(at)===null)return view;
+ if(replayFrozen!==null){
+  // A saved view describes its publication clock. Later LIVE observations
+  // cannot reconstruct that historical flag. Its only effect is to freeze;
+  // every offer and mutation still checks the actual current leg states.
+  if(anchor||!Array.isArray(replayFrozen)||replayFrozen.length<1||replayFrozen.length>6)fail('REVIEW_REVISION_COMBO_REPLAY_READ_ONLY');
+ }
  if(anchor)await anchorCommitted(c,view,at);
  const keys=(await c.query(`SELECT artifact_key,payload_bytes,octet_length(payload::text) AS bytes FROM football.private_model_artifacts
  WHERE artifact_version=$1 AND artifact_key LIKE $2 ORDER BY generated_at,artifact_key LIMIT 65`,[archive.VERSION,'reviewed-combo-view-'+view.businessDate+'-%'])).rows;
@@ -40,8 +46,10 @@ async function freezeOriginalGroups(c,view,at,{anchor=false}={}){
   const n=Number(row.payload_bytes);if(!Number.isSafeInteger(n)||n<2||n>512*1024||Number(row.bytes)!==n)fail('REVIEW_REVISION_COMBO_ARCHIVE_BOUND');
   const full=(await c.query(SELECT,[row.artifact_key])).rows;if(full.length!==1)fail('REVIEW_REVISION_COMBO_ARCHIVE');
   const saved=verifyRow(full[0],row.artifact_key,512*1024),v=saved.payload,{contentHash,...body}=v;
-  if(saved.artifactVersion!==archive.VERSION||p.hash(body)!==contentHash||v.source?.artifactKey!==row.artifact_key||ns(v.createdAt)===null||ns(v.createdAt)>ns(at)
+  if(saved.artifactVersion!==archive.VERSION||p.hash(body)!==contentHash||v.source?.artifactKey!==row.artifact_key||ns(v.createdAt)===null
    ||p.hash(archive.prepare(v.view,{generationId:v.source.generationId,committedAt:v.source.committedAt},v.source.observedAt).archive)!==p.hash(v))fail('REVIEW_REVISION_COMBO_ARCHIVE');
+  // Validate later originals, but do not let them alter an earlier view.
+  if(ns(v.createdAt)>ns(at))continue;
   for(const [name,size]of [['combos',2],['threeCombos',3]])for(const combo of v.view[name]||[]){
    const key=size+'/'+combo.band;if(chosen.has(key)||!combo.legs.length)continue;
    const compatible=combo.legs.every(l=>{const original=v.view.records.find(r=>r.eventId===l.eventId),current=view.records.find(r=>r.eventId===l.eventId);
@@ -50,11 +58,24 @@ async function freezeOriginalGroups(c,view,at,{anchor=false}={}){
   }
  }
  if(!chosen.size)return view;
- const matches=(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(r=>r.payload);
+ const matches=replayFrozen===null?(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(r=>r.payload):[];
  if(matches.length>512)fail('REVIEW_REVISION_MATCH_BOUND');
  const comboFreeze=[...chosen.values()].map(v=>({size:v.size,band:v.combo.band,sourceArchiveKey:v.sourceArchiveKey,sourceArchiveSha256:v.sourceArchiveSha256,observedAt:v.observedAt,originalComboHash:p.hash(v.combo),
   frozen:v.combo.legs.some(l=>{const d=view.records.find(r=>r.eventId===l.eventId),observed=matches.filter(m=>String(m.sourceMatchId||'').replace(/^sporttery_/,'')===l.eventId&&ns(m.eventVersion||m.kickoffTime)===ns(d.eventVersion));
    return ns(at)>=ns(d.eventVersion)||ns(at)>=ns(d.cutoffAt)||observed.length!==1||observed[0].status!=='SCHEDULED';})}));
+ if(replayFrozen!==null){
+  if(replayFrozen.length!==comboFreeze.length)fail('REVIEW_REVISION_COMBO_REPLAY_BOUND');
+  for(let i=0;i<comboFreeze.length;i++){
+   const actual=replayFrozen[i],expected=comboFreeze[i];
+   if(!actual||Object.keys(actual).sort().join(',')!=='band,frozen,observedAt,originalComboHash,size,sourceArchiveKey,sourceArchiveSha256'
+    ||typeof actual.frozen!=='boolean')fail('REVIEW_REVISION_COMBO_REPLAY_METADATA');
+   const {frozen:ignored,...metadata}=expected,{frozen,...published}=actual;void ignored;
+   if(p.hash(metadata)!==p.hash(published))fail('REVIEW_REVISION_COMBO_REPLAY_METADATA');
+   const group=chosen.get(expected.size+'/'+expected.band).combo;
+   if(!frozen&&group.legs.some(l=>{const d=view.records.find(r=>r.eventId===l.eventId);return ns(at)>=ns(d.eventVersion)||ns(at)>=ns(d.cutoffAt);}))fail('REVIEW_REVISION_COMBO_REPLAY_OPEN_AFTER_START');
+   expected.frozen=frozen;
+  }
+ }
  const groups=size=>[2.5,5,10].map(band=>chosen.get(size+'/'+band)?.combo||{band,legs:[],product:null,confidence:null});
  const {contentHash,...body}=view;void contentHash;
  return p.seal({...body,combos:groups(2),threeCombos:groups(3),comboFreezePolicy:'persisted-original-groups-v1',comboFreeze});

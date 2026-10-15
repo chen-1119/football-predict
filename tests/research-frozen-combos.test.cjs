@@ -22,6 +22,29 @@ test('a started leg freezes the exact archived pair and triple; changed live pri
  a.deepEqual(actual.combos,f.view.combos);a.deepEqual(actual.threeCombos,f.view.threeCombos);a.equal(actual.comboFreeze[0].frozen,true);
  a.equal(JSON.stringify(f.view),before);a(!f.calls.some(s=>/INSERT|UPDATE|DELETE/.test(s)));
 });
+test('historical read-only replay verifies the frozen archive after a live status changes',async()=>{
+ const f=fixture(),at=f.day+'T11:00:00.000Z',saved=await freezeOriginalGroups(f.c,f.view,at);
+ f.matches[0].status='LIVE';f.matches[0].sp=99;f.calls.length=0;
+ const replay=await freezeOriginalGroups(f.c,f.view,at,{replayFrozen:saved.comboFreeze});
+ a.deepEqual(replay,saved);a(!f.calls.some(s=>s.includes("dataset='current'")||/INSERT|UPDATE|DELETE/.test(s)));
+ const now=await freezeOriginalGroups(f.c,f.view,at);a(now.comboFreeze.some(v=>v.frozen));
+});
+test('historical metadata cannot claim open groups at or after their sale cutoff',async()=>{
+ const f=fixture(),saved=await freezeOriginalGroups(f.c,f.view,f.day+'T11:00:00.000Z');
+ await a.rejects(freezeOriginalGroups(f.c,f.view,f.day+'T19:00:00.000Z',{replayFrozen:saved.comboFreeze}),/REPLAY_OPEN_AFTER_START/);
+});
+test('historical replay cannot perform archival and issues only SELECT statements',async()=>{
+ const f=fixture(),saved=await freezeOriginalGroups(f.c,f.view,f.day+'T11:00:00.000Z');
+ await a.rejects(freezeOriginalGroups(f.c,f.view,f.day+'T11:00:00.000Z',{anchor:true,replayFrozen:saved.comboFreeze}),/REPLAY_READ_ONLY/);
+ f.calls.length=0;await freezeOriginalGroups(f.c,f.view,f.day+'T11:00:00.000Z',{replayFrozen:saved.comboFreeze});
+ a(f.calls.length>0&&f.calls.every(sql=>sql.trim().startsWith('SELECT')));
+});
+for(const [name,change]of [['archive hash',v=>v[0].sourceArchiveSha256='0'.repeat(64)],['group hash',v=>v[0].originalComboHash='0'.repeat(64)],['extra field',v=>v[0].permission=true],['nonboolean flag',v=>v[0].frozen=0],['missing group',v=>v.pop()]])
+ test('historical replay rejects changed '+name,async()=>{const f=fixture(),at=f.day+'T11:00:00.000Z',saved=await freezeOriginalGroups(f.c,f.view,at),meta=structuredClone(saved.comboFreeze);change(meta);await a.rejects(freezeOriginalGroups(f.c,f.view,at,{replayFrozen:meta}),/REPLAY_/);});
+function futureArchive(f){const saved=archive.prepare(f.view,{generationId:'g-'+'a'.repeat(64),committedAt:f.day+'T08:00:00.000Z'},f.day+'T12:00:00.000Z'),json=JSON.stringify(saved.archive);
+ Object.assign(f.row,{generated_at:saved.archive.createdAt,updated_at:saved.archive.createdAt,payload_json:json,payload_sha256:p.sha(json),payload_bytes:Buffer.byteLength(json)});}
+test('a later valid archive cannot add groups to an earlier as-of view',async()=>{const f=fixture();futureArchive(f);const actual=await freezeOriginalGroups(f.c,f.view,f.day+'T11:00:00.000Z');a.deepEqual(actual,f.view);a.equal(actual.comboFreeze,undefined);});
+test('a later corrupt archive is rejected before the as-of filter',async()=>{const f=fixture();futureArchive(f);f.row.payload_sha256='0'.repeat(64);await a.rejects(freezeOriginalGroups(f.c,f.view,f.day+'T11:00:00.000Z'));});
 test('after cutoff, persisted original groups remain available without selecting replacement legs',async()=>{
  const f=fixture(),at=f.day+'T19:30:00.000Z',input=p.seal({...f.view,updatedAt:at,combos:[],threeCombos:[]});
  const actual=await freezeOriginalGroups(f.c,input,at);a.deepEqual(actual.combos,f.view.combos);a(actual.comboFreeze.every(v=>v.frozen));

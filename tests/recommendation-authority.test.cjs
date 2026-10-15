@@ -57,6 +57,10 @@ async function setup({ withReviewed = true, withTrained = true, activeFields = t
   };
   const client = { async query(sql, args = []) {
     queries.push(sql);
+    if(sql.startsWith('SELECT artifact_key,payload_bytes'))return {rows:[...artifacts.values()]
+      .filter(row=>row.artifact_version===args[0]&&row.artifact_key.startsWith(args[1].slice(0,-1)))
+      .map(row=>({artifact_key:row.artifact_key,payload_bytes:row.payload_bytes,bytes:row.payload_bytes}))};
+    if(sql.includes("dataset='current'"))return {rows:matches.map(payload=>({payload}))};
     if (sql.includes('daily_featured_combo_state')) return { rows: [{ payload: { recommendationCenter: center } }] };
     if (sql.startsWith('SELECT artifact_key FROM football.private_model_artifacts')) return { rows: [...artifacts.values()]
       .filter(row => row.artifact_key === args[0] || (row.artifact_key.startsWith(args[1].slice(0, -1)) && row.artifact_version === args[2]))
@@ -110,6 +114,30 @@ async function setup({ withReviewed = true, withTrained = true, activeFields = t
   const read = () => authority.readPublicationAuthority(client, { policy: authority.TRAINED_ONLY_POLICY, asOf: at(3000) });
   return { authority, client, center, artifacts, matches, queries, store, read, replayCalls, registry };
 }
+
+async function frozenAuthorityFixture(){
+ const f=await setup({withTrained:false}),archive=require('../services/recommendation/comboArchive.cjs'),freeze=require('../server/researchFrozenCombos.cjs');
+ const source=archive.prepare(f.center.reviewedAnalysis,{generationId:'g-'+'a'.repeat(64),committedAt:at(-1000)},f.center.updatedAt);
+ f.store(source.key,source.archive);f.center.reviewedAnalysis=await freeze.freezeOriginalGroups(f.client,f.center.reviewedAnalysis,f.center.updatedAt);
+ assert.equal(f.center.reviewedAnalysis.comboFreezePolicy,'persisted-original-groups-v1');return{...f,archiveKey:source.key};
+}
+test('real authority replays saved original combo metadata in its readonly snapshot',async()=>{
+ const f=await frozenAuthorityFixture(),proof=await f.read();assert.equal(proof.activeValidation.ok,true);
+ f.matches[0].status='LIVE';assert.equal((await f.read()).activeValidation.ok,true);
+ assert(!f.queries.some(sql=>/INSERT|UPDATE|DELETE/.test(sql)));
+});
+test('a re-sealed changed frozen price cannot enter authority from a saved view',async()=>{
+ const f=await frozenAuthorityFixture();f.center.reviewedAnalysis.combos.find(c=>c.legs.length).legs[0].sp=99;
+ f.center.reviewedAnalysis=reseal(f.center.reviewedAnalysis);await assert.rejects(f.read(),/REVIEWED_VIEW_REPLAY/);
+});
+test('a re-sealed changed archive identity cannot enter frozen authority',async()=>{
+ const f=await frozenAuthorityFixture();f.center.reviewedAnalysis.comboFreeze[0].sourceArchiveSha256='0'.repeat(64);
+ f.center.reviewedAnalysis=reseal(f.center.reviewedAnalysis);await assert.rejects(f.read(),/REPLAY_METADATA/);
+});
+test('warm frozen authority verifies the original raw archive bytes again',async()=>{
+ const f=await frozenAuthorityFixture();await f.read();f.artifacts.get(f.archiveKey).payload_json+=' ';
+ await assert.rejects(f.read(),/payload byte count mismatch/);
+});
 
 test('warm replay rereads fresh bytes and mints a new authority without repeating model projection', async () => {
   const f = await setup(), first = await f.read();

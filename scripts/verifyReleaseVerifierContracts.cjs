@@ -7,6 +7,18 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('exact r876 baseline preparation retains false health and all candidate admission gates',()=>{
+ const files=['scripts/baselineAuthorityReplayRepair.cjs','scripts/verifyBaselineAuthorityReplayLock.cjs','tests/baseline-authority-replay-repair.test.cjs'];
+ const r=require('node:child_process').spawnSync(process.execPath,['--test',files[2]],{cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1048576});
+ assert.equal(r.status,0,r.stderr||r.stdout);assert.match(r.stdout,/^# tests 26$/m);assert.match(r.stdout,/^# skipped 0$/m);
+ for(const file of files)for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+file+'"'));
+ const native=read('deploy/light-server/release-native.sh'),common=read('deploy/light-server/release-from-bundle.sh');
+ assert(native.includes('NATIVE_PLANNED_CODE" = 1 ] && [ "$(cat "$APP_DIR/.release-bundle-sha256")" = 0862f893a8af673c67910cbb1a17d51f23e973b6f2e55433ccaa6e6243c586d5'));
+ assert(native.includes('baselineAuthorityReplayRepair.cjs" initial "$BUNDLE_SHA256" "$$"'));
+ assert(common.includes('baselineAuthorityReplayRepair.cjs" paused "$BUNDLE_SHA256" "$$"'));
+ assert(native.includes('wait_for_health "http://${HOST}:${PORT}" native-preflight 90 2 service'));
+ assert(read('.github/workflows/recommendation-runtime.yml').includes('scripts/verifyBaselineAuthorityReplayLock.cjs'));
+});
 check('cloud archive readers preserve authorization, readonly transactions, raw bytes and unknown ACK states',()=>{
  const file='tests/research-archive-read.test.cjs';
  const child=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
