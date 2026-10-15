@@ -121,7 +121,12 @@ async function verifyReleaseStageEvidence() {
       const opts = options({ args: ["-e", "setInterval(()=>{},1000)"] });
       const worker = fixtureProcess("require(process.argv[1]).runStage(JSON.parse(process.argv[2])).catch(()=>process.exit(2))", [__dirname + "/releaseStageEvidence.cjs", JSON.stringify(opts)]);
       cleanupPids.add(worker.child.pid);
-      await until(() => { try { return stage.readJournal(opts).events.length === 2; } catch { return false; } });
+      // Target a recorder crash after its child-start append has released the
+      // lock. Killing merely when the second file appears can instead land
+      // inside append's finally block; that separate crash boundary is covered
+      // by the interrupted-append test below.
+      await until(() => { try { const journal = stage.readJournal(opts); return journal.events.length === 2
+        && !fs.existsSync(path.join(journal.directory, ".append-lock")); } catch { return false; } });
       const childPid = stage.readJournal(opts).events[1].child.pid; cleanupPids.add(childPid);
       worker.child.kill("SIGKILL"); await worker.closed; cleanupPids.delete(worker.child.pid);
       const report = stage.reportStages(opts);

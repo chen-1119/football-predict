@@ -32,3 +32,10 @@ adapters: status 3 plus healthy service can continue normally, status 3 plus
 failed health cannot continue, known repair status 0 preserves its proof, and
 all other exit statuses reject. These fixture results are not installation,
 production health or cloud publication acceptance.
+
+The first complete CI run passed the new route cases, then exposed an existing
+crash-fixture race: the recorder was sometimes killed after its second journal
+file appeared but before its append lock was released. That test now waits for
+the intended boundary outside the append critical section before killing the
+recorder. Its unresolved-command assertion and the separate interrupted-append
+lock test remain strict; the production journal implementation is unchanged.
