@@ -115,8 +115,17 @@ run_native_release() {
   release_stage_observe init "$TRUSTED_SOURCE_DIR"
   NATIVE_BASELINE_AUTHORITY_REPAIR_PROOF=""
   if [ "$NATIVE_PLANNED_CODE" = 1 ] && [ "$(cat "$APP_DIR/.release-bundle-sha256")" = 0862f893a8af673c67910cbb1a17d51f23e973b6f2e55433ccaa6e6243c586d5 ]; then
-    NATIVE_BASELINE_AUTHORITY_REPAIR_PROOF="$("$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/baselineAuthorityReplayRepair.cjs" initial "$BUNDLE_SHA256" "$$")" || return 1
-    log "exact r876 authority replay failure verified against the corrected signed candidate in READ ONLY; baseline business health remains false"
+    local baseline_authority_status=0
+    NATIVE_BASELINE_AUTHORITY_REPAIR_PROOF="$("$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/baselineAuthorityReplayRepair.cjs" initial "$BUNDLE_SHA256" "$$")" || baseline_authority_status="$?"
+    if [ "$baseline_authority_status" = 3 ]; then
+      NATIVE_BASELINE_AUTHORITY_REPAIR_PROOF=""
+      log "known r876 failure is absent; the original normal health gate is required"
+      wait_for_health "http://${HOST}:${PORT}" native-preflight 90 2 service || return 1
+    elif [ "$baseline_authority_status" = 0 ]; then
+      log "exact r876 authority replay failure verified against the corrected signed candidate in READ ONLY; baseline business health remains false"
+    else
+      return 1
+    fi
   else
     wait_for_health "http://${HOST}:${PORT}" native-preflight 90 2 service
   fi
