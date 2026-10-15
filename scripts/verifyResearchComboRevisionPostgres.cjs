@@ -18,6 +18,7 @@ async function verify(pool){
   await pool.query('CREATE SCHEMA '+schema);
   await q('CREATE TABLE football.private_model_artifacts(artifact_key text PRIMARY KEY,artifact_version text NOT NULL,generated_at timestamptz NOT NULL,updated_at timestamptz NOT NULL,payload json NOT NULL,payload_sha256 text NOT NULL,payload_bytes integer NOT NULL)');
   await q('CREATE TABLE football.match_snapshots(dataset text,payload json)');
+  await q('CREATE TABLE football.daily_featured_combo_state(id integer PRIMARY KEY,payload json NOT NULL)');
   const matches=[f.source(1),f.source(2),f.source(3)],source=f.snapshot(matches,{pair:signed.keyPair,mutate:e=>e.payload.value.matchInfoList[0].subMatchList.forEach((r,i)=>{r.homeTeamId=10+i*2;r.awayTeamId=11+i*2;})});
   fs.writeFileSync(snapshotPath,JSON.stringify(source.snapshot));
   for(const m of matches)await q("INSERT INTO football.match_snapshots VALUES('current',$1::json)",[JSON.stringify(m)]);
@@ -47,7 +48,24 @@ async function verify(pool){
   const c=await mapped.connect();try{const projected=await require('../server/researchReviewProjection.cjs').projection(c,view,f.stamp(clock+100));a.equal(projected.combos.length,2);a.equal(projected.pending.length,1);a.equal(projected.independentEventIncrement,0);}finally{c.release();}
   a.equal((await q('SELECT payload::text AS json FROM football.private_model_artifacts WHERE artifact_key=$1',[baseKey])).rows[0].json,original.json);
   a.equal((await q('SELECT payload::text AS json FROM football.private_model_artifacts WHERE artifact_key=$1',[archived.key])).rows[0].json,archived.json);
-  return {ok:true,scope:'disposable-postgres-synthetic-clock',twoAndThreeVersioned:true,startedLegFreezesEntireGroup:true,unknownCommitReadFirst:true,originalBytesPreserved:true,projectionVerified:true,productionWrites:0,actualProductionBrokerVerified:false};
+  const frozen=require('../server/researchFrozenCombos.cjs'),authority=require('../server/recommendationAuthority.cjs'),updatedAt=f.stamp(clock+200);
+  const reader=await mapped.connect();let originalView;
+  try{await reader.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+   const replay=await require('./recommendationPlatform/reviewedAnalysisRuntime.cjs').projection(reader,first.businessDate,updatedAt);
+   originalView=await frozen.freezeOriginalGroups(reader,replay,updatedAt);a.equal(originalView.comboFreezePolicy,'persisted-original-groups-v1');await reader.query('ROLLBACK');
+  }finally{reader.release();}
+  const center={version:'recommendation-center-v1',businessDate:first.businessDate,updatedAt,current:[],previews:[],todayCombos:[],todayDualResearch:[],
+   strategySwitch:{version:'trained-strategy-switch-v1',activeReferenceStrategy:'league-trained-baseline-v1',legacyPublicationEnabled:false,legacyFallbackEnabled:false,formalEligible:false,modelAdoptionCount:0},reviewedAnalysis:originalView};
+  await q('INSERT INTO football.daily_featured_combo_state VALUES(1,$1::json)',[JSON.stringify({recommendationCenter:center})]);
+  async function readAuthority(){const c=await mapped.connect();try{await c.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');const v=await authority.readPublicationAuthority(c,{policy:authority.TRAINED_ONLY_POLICY,asOf:f.stamp(clock+300)});await c.query('ROLLBACK');return v;}finally{c.release();}}
+  a.equal((await readAuthority()).activeValidation.ok,true);
+  await q("UPDATE football.match_snapshots SET payload=$1::json WHERE payload->>'sourceMatchId'=$2",[JSON.stringify({...matches[0],status:'LIVE'}),String(matches[0].sourceMatchId)]);
+  a.equal((await readAuthority()).activeValidation.ok,true);
+  const changedView=JSON.parse(JSON.stringify(originalView));changedView.combos.find(g=>g.legs.length).legs[0].sp=99;
+  const {contentHash:ignored,...body}=changedView;void ignored;center.reviewedAnalysis=p.seal(body);
+  await q('UPDATE football.daily_featured_combo_state SET payload=$1::json WHERE id=1',[JSON.stringify({recommendationCenter:center})]);
+  await a.rejects(readAuthority(),/REVIEWED_VIEW_REPLAY/);
+  return {ok:true,scope:'disposable-postgres-synthetic-clock',twoAndThreeVersioned:true,startedLegFreezesEntireGroup:true,unknownCommitReadFirst:true,originalBytesPreserved:true,projectionVerified:true,frozenAuthorityReadVerified:true,historicalViewSurvivesLaterLiveLeg:true,changedFrozenPriceRejected:true,productionWrites:0,actualProductionBrokerVerified:false};
  }finally{if(previous===undefined)delete process.env.SPORTTERY_RELAY_FAST_LANE_SNAPSHOT;else process.env.SPORTTERY_RELAY_FAST_LANE_SNAPSHOT=previous;try{await pool.query('DROP SCHEMA IF EXISTS '+schema+' CASCADE');}finally{signed.cleanup();}}
 }
 if(require.main===module){const u=new URL(process.env.RESEARCH_REPORT_TEST_DATABASE_URL||'invalid:');if(!['postgres:','postgresql:'].includes(u.protocol)||!['127.0.0.1','localhost','[::1]'].includes(u.hostname)||u.pathname!=='/recommendation_test')throw Error('Explicit disposable local database required');const pool=new(require('pg').Pool)({connectionString:u.href,ssl:false,max:4});verify(pool).then(v=>console.log(JSON.stringify(v))).catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>pool.end());}
