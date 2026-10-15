@@ -9,7 +9,7 @@ const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.j
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
 check('exact r876 baseline preparation retains false health and all candidate admission gates',()=>{
  const files=['scripts/baselineAuthorityReplayRepair.cjs','scripts/baselineReadonlyPeer.cjs','scripts/verifyBaselineReadonlyPeer.cjs','scripts/verifyBaselineAuthorityReplayLock.cjs','tests/baseline-authority-replay-repair.test.cjs'];
- const r=require('node:child_process').spawnSync(process.execPath,['--test',files[2]],{cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1048576});
+ const r=require('node:child_process').spawnSync(process.execPath,['--test','tests/baseline-authority-replay-repair.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1048576});
  assert.equal(r.status,0,r.stderr||r.stdout);assert.match(r.stdout,/^# tests 26$/m);assert.match(r.stdout,/^# skipped 0$/m);
  for(const file of files)for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+file+'"'));
  const native=read('deploy/light-server/release-native.sh'),common=read('deploy/light-server/release-from-bundle.sh');
@@ -842,7 +842,12 @@ for (const [entry, script, minimum] of [
   ['verifyStaticFileResponseIdentity.cjs', 'static-file-response-identity', 19],
 ]) check(`release execution contract passes before signing: ${entry}`, () => {
   const systemdOnly = entry === 'verifyFrontendInstalledRuntime.cjs' && process.platform === 'win32';
-  const run = require('node:child_process').spawnSync(process.execPath, [`scripts/${entry}`, ...(systemdOnly ? ['--systemd-contracts-only'] : [])],
+  // The installed-runtime fixture exercises root-only POSIX ownership cases.
+  // Other verifiers keep the checkout owner's identity and source ownership.
+  const rootFixture = entry === 'verifyFrontendInstalledRuntime.cjs' && process.platform === 'linux' && process.getuid() !== 0;
+  const verifierArgs = [`scripts/${entry}`, ...(systemdOnly ? ['--systemd-contracts-only'] : [])];
+  const run = require('node:child_process').spawnSync(rootFixture ? '/usr/bin/sudo' : process.execPath,
+    rootFixture ? ['-n', process.execPath, ...verifierArgs] : verifierArgs,
     { cwd: root, encoding: 'utf8', windowsHide: true,
       timeout: entry === 'verifyFrontendRuntimeBoundary.cjs' ? 300000 : 30000, maxBuffer: 2 * 1024 * 1024 });
   assert.equal(run.status, 0, run.stderr || run.stdout);

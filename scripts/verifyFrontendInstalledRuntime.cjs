@@ -159,7 +159,7 @@ function verifyFrontendInstalledRuntime() {
   const copy = (from, to) => {
     const stat = fs.lstatSync(from); if (stat.isSymbolicLink()) throw new Error("fixture-source-is-linked");
     if (stat.isDirectory()) { mkdir(to); for (const name of fs.readdirSync(from)) if (!["node_modules", "outputs", ".git"].includes(name)) copy(path.join(from, name), path.join(to, name)); }
-    else if (stat.isFile() && /\.(cjs|js|mjs|ts|tsx|json|css|service|sh)$/.test(from) && stat.size <= 8 * 1024 * 1024) write(to, fs.readFileSync(from));
+    else if (stat.isFile() && /\.(cjs|js|mjs|ts|tsx|json|css|service|sh|py)$/.test(from) && stat.size <= 8 * 1024 * 1024) write(to, fs.readFileSync(from));
   };
   const check = (name, fn) => { fn(); checks.push({ name, ok: true }); };
   const states = new Map();
@@ -175,11 +175,13 @@ function verifyFrontendInstalledRuntime() {
   };
   try {
     mkdir(baselineRoot);
-    for (const directory of ["server", "scripts", "src", "collectors", "deploy/light-server", "cloudflare/sync-trigger/src"])
+    for (const directory of ["server", "scripts", "src", "collectors", "services/recommendation", "deploy/light-server", "cloudflare/sync-trigger/src"])
       copy(path.join(repository, directory), path.join(baselineRoot, directory));
     for (const file of ["package.json", "package-lock.json"]) write(path.join(baselineRoot, file), fs.readFileSync(path.join(repository, file)));
     fs.cpSync(baselineRoot, fixture.at(runtime.APP), { recursive: true });
     const baselineInventory = captureReleaseSourceInventory(baselineRoot), input = { baselineRoot, baselineInventory };
+    const reviewed = boundary.inspectFrontendRuntimeBoundary({ root: baselineRoot, inventory: baselineInventory, authenticatedInventoryHash: baselineInventory.treeHash });
+    assert.equal(reviewed.ok, true, JSON.stringify(reviewed.blockers));
     for (const entry of Object.values(boundary.EXTERNAL_UNITS)) logicalWrite(entry.scriptPath || entry.executable,
       fs.readFileSync(path.join(baselineRoot, entry.source)), entry.scriptPath ? 0o644 : 0o755);
     for (const name of runtime.COMMANDS) if (!["node", "npm"].includes(name)) logicalWrite("/usr/bin/" + name, "fixture-binary-" + name, 0o755);
