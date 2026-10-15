@@ -336,7 +336,9 @@ export function parseReviewedAnalysisHistory(value:unknown,currentBusinessDate:s
  const history=parseReviewedAnalysis(v,businessDate,updatedAt.text,true);
  // The history endpoint replays original single freezes at the actual read
  // clock. It does not reconstruct unpersisted combinations from past prices.
- if(!history.records.length||history.combos.length||history.threeCombos.length)throw Error('Reviewed history records');
+ const frozenHistory=v.comboFreezePolicy==='persisted-original-groups-v1';
+ if(!history.records.length||((history.combos.length||history.threeCombos.length)&&!frozenHistory)
+  ||frozenHistory&&(!history.comboFreeze?.length||history.comboFreeze.some(f=>f.frozen!==true)))throw Error('Reviewed history records');
  if(Object.hasOwn(v,'comboArchive')){
   const archive=object(v.comboArchive),source=object(archive.source),original=object(archive.view);
   const committed=archive.version==='reviewed-committed-combo-archive-v1';

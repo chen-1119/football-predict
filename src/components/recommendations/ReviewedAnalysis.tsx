@@ -37,8 +37,8 @@ export function ReviewedAnalysisPanel({data,revisions,tab,now,failed}:{data?:Dat
   {archived&&tab==='two'&&(firstVersion?<p>首版组合存档 · 按原截图恢复，保留各场原方向与发布报价。</p>:<p>原线上存档：{new Date(archived.observedAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})}；展示当时已保存的组合。</p>)}
   {revisions?.state==='unavailable'&&<p role="status">复核版暂时无法核验，当前显示原发布记录。</p>}
   {revisions?.pending!==undefined&&revisions.pending>0&&<p role="status">有复核记录尚缺完整确认回执，未作为新推荐展示。</p>}
-  {tab==='single'?<div className="rc-paper__records">{data.records.map(r=><article className="rc-paper__record" key={r.eventId}><strong>{r.matchNum} {r.homeTeamName} vs {r.awayTeamName}</strong><ReviewedMatchPick record={reviewedLatestRecord(r,historical?undefined:revisions)} now={now}/>
-   {!historical&&revisions?.singles.some(v=>v.eventId===r.eventId)&&<details><summary>复核历史</summary>{revisions.singles.filter(v=>v.eventId===r.eventId).map(v=><p key={v.key}>复核版 {v.revision}：{reviewedLabel(v.decision)} · SP {reviewedSp(v.decision.sp)} · {v.decision.scores.map(s=>s.join('-')).join(' / ')} · {settlementResultLabel(v.settlement,'zh')}</p>)}</details>}</article>)}</div>:<div data-reviewed-combo-size={size}>
+  {tab==='single'?<div className="rc-paper__records">{data.records.map(r=><article className="rc-paper__record" key={r.eventId}><strong>{r.matchNum} {r.homeTeamName} vs {r.awayTeamName}</strong><ReviewedMatchPick record={reviewedLatestRecord(r,revisions)} now={now}/>
+   {revisions?.singles.some(v=>v.eventId===r.eventId)&&<details><summary>复核历史</summary>{revisions.singles.filter(v=>v.eventId===r.eventId).map(v=><p key={v.key}>复核版 {v.revision}：{reviewedLabel(v.decision)} · SP {reviewedSp(v.decision.sp)} · {v.decision.scores.map(s=>s.join('-')).join(' / ')} · {settlementResultLabel(v.settlement,'zh')}</p>)}</details>}</article>)}</div>:<div data-reviewed-combo-size={size}>
    <p>按已发布的单场方向组合；使用发布时官方 SP，非即时价。没有模型命中概率或收益验证。</p>
    {saved.map(c=><article key={c.band} className="rc-paper__record" data-reviewed-combo-band={c.band} data-reviewed-combo-state={historical?'historical':closed(c)?'closed':'open'}>
     <strong>≥{c.band} 档</strong>
@@ -47,7 +47,7 @@ export function ReviewedAnalysisPanel({data,revisions,tab,now,failed}:{data?:Dat
    </article>)}
    {!saved.length&&<p data-reviewed-combo-empty={size}>{historical?`未找到该竞彩日已保存的原${size}串1组合；不追溯生成新组合。`:`暂无已保存的${size}串1组合；不会改选方向凑赔率。`}</p>}
    {saved.length>0&&combos.filter(c=>!c.legs.length).map(c=><p key={c.band}>≥{c.band} 档：无合适组合。</p>)}
-   {!historical&&revisions?.state==='verified'&&revisions.combos.filter(v=>v.decisions.length===size).map(v=><article key={v.key} className="rc-paper__record" data-reviewed-combo-revision={v.revision}>
+   {revisions?.state==='verified'&&revisions.combos.filter(v=>v.decisions.length===size).map(v=><article key={v.key} className="rc-paper__record" data-reviewed-combo-revision={v.revision}>
     <strong>≥{v.combo.band} 档 · 复核版 {v.revision}</strong><p>{v.combo.legs.map(l=>`${l.matchNum} ${reviewedLabel(l)} ${reviewedSp(l.sp)}`).join(' × ')} = {v.combo.product}</p>
     <p>{v.frozen||v.decisions.some(d=>now>=Date.parse(d.eventVersion))?'已有场次开赛或停售 · 整组冻结，保留本版方向与SP。':'本版已单独封存；全组未开赛且在售时可追加复核版。'} {settlementResultLabel(v.settlement,'zh')}</p>
    </article>)}

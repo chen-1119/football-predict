@@ -64,6 +64,8 @@ test('archived day has its own verified revision chain and does not replace firs
  const before=JSON.stringify(first),r=pick.reviewedMatchRecommendation(data,match);a.equal(r.selection,'a');a.deepEqual(r.scores,[[0,1],[1,2]]);a.equal(r.review.original.selection,'h');a.equal(JSON.stringify(first),before);
  const React=require('react'),render=require('react-dom/server').renderToStaticMarkup,ui=require('../scripts/lib/loadReviewTsForVerification.cjs')(ts,path.resolve(__dirname,'../src/components/recommendations/ReviewedAnalysis.tsx'));
  const html=render(React.createElement(ui.ReviewedMatchPick,{record:r,now:Date.parse(now)}));a.match(html,/复核版 1/);a.match(html,/首版/);a.match(html,/客胜/);
+ const panel=render(React.createElement(ui.ReviewedAnalysisPanel,{data:original,revisions,tab:'single',now:Date.parse(now),failed:false}));
+ a.match(panel,/历史记录，非今日新荐/);a.match(panel,/复核版 1/);a.match(panel,/首版保留/);a.match(panel,/复核历史/);
 });
 
 test('archived day query admits one real calendar day and rejects duplicate or malformed selectors',()=>{

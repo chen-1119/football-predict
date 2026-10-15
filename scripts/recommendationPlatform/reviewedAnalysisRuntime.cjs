@@ -114,6 +114,8 @@ async function readHistory(c,businessDate,beforeDay,asOf){
   &&day(Date.parse(businessDate+'T00:00:00+08:00'))===businessDate,'HISTORY_CLOCK');
  const history=await projection(c,businessDate,asOf,{historical:true});
  if(!history.records.length)return null;
- return require('./reviewedComboHistory.cjs').restoreArchivedCombos(history,asOf);
+ const retained=require('./reviewedComboHistory.cjs').restoreArchivedCombos(history,asOf);
+ if(retained.comboArchive)return retained;
+ return require('../../server/researchFrozenCombos.cjs').freezeOriginalGroups(c,retained,asOf,{anchor:false});
 }
 module.exports={publish,projection,deadline,readLatestHistory,readHistory,readPublication};

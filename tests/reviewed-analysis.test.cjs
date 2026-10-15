@@ -91,6 +91,7 @@ function controlledPool(v,{failCommit=false}={}){
   if(sql.includes('clock_timestamp'))return {rows:[{now:fixture.stamp(++clock)}]};
   if(sql.includes('match_snapshots')){a.match(sql,/LIMIT 513/);return {rows:v.matches.map(payload=>({payload}))};}
   const active=pending||rows;
+  if(sql.startsWith('SELECT artifact_key,payload_bytes,octet_length(payload::text) AS bytes'))return {rows:[...active.values()].filter(r=>r.artifact_version===args[0]&&r.artifact_key.startsWith(args[1].slice(0,-1))).map(r=>({artifact_key:r.artifact_key,payload_bytes:r.payload_bytes,bytes:r.payload_bytes}))};
   if(sql.includes('artifact_key < $3'))return {rows:[...active.values()].filter(row=>row.artifact_version===args[0]
    &&row.artifact_key.startsWith(args[1].slice(0,-1))&&row.artifact_key<args[2]).sort((a,b)=>b.artifact_key.localeCompare(a.artifact_key))
    .slice(0,1).map(row=>({artifact_key:row.artifact_key}))};
