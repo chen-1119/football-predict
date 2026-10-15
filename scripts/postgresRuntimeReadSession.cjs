@@ -4,20 +4,25 @@ const { createPostgresPool } = require("../server/postgresStore.cjs");
 const { publicationIdentityFromMeta } = require("../server/postgresProjectionStore.cjs");
 const { resolveCommittedPostgresPublication, acquireGenerationReadLease } = require("../server/dataGenerationBundle.cjs");
 const { FAST_RESULT_RECEIPT_META_KEYS, validateFastResultReceiptMetadata } = require("./fastResultReceiptIntegrity.cjs");
+const { receiptBarrierState, validateReceiptWait, acquireReceiptReadBarrier } = require("./postgresReceiptBarrier.cjs");
 
 async function openPostgresRuntimeReadSession(options = {}) {
+  const receiptWaitMs = validateReceiptWait(options.receiptWaitMs ?? 0);
+  if (receiptWaitMs && options.protectReceipt !== true) throw new Error("receipt wait requires protected read");
   const storeDir = path.resolve(options.storeDir || process.env.SERVER_STORE_DIR || process.env.DATA_STORE_DIR || path.join(__dirname, "../server-data"));
   const publicDataDir = path.resolve(options.publicDataDir || process.env.DATA_GENERATION_PUBLIC_DATA_DIR || path.join(__dirname, "../public/data"));
   const owned = !options.pool, pool = options.pool || createPostgresPool({ max: 1, applicationName: "football-runtime-reader" });
-  let client, lease, closed = false, sharedLock = false, lockQueryUncertain = false;
+  let client, lease, closed = false;
+  const barrier = receiptBarrierState();
   const close = async () => {
     if (closed) return;
     closed = true;
-    let releaseError = lockQueryUncertain ? new Error("native read lock acquisition outcome unknown") : undefined;
+    let releaseError = barrier.acquisitionUncertain || barrier.configurationUncertain
+      ? new Error("native read lock or session configuration outcome unknown") : undefined;
     try { if (client) await client.query("ROLLBACK"); }
     catch (error) { releaseError = error; }
     finally {
-      if (sharedLock) try { await client.query("SELECT pg_advisory_unlock_shared(hashtext($1))", ["football-postgres-projection-sync-v1"]); }
+      if (barrier.held) try { await client.query("SELECT pg_advisory_unlock_shared(hashtext($1))", ["football-postgres-projection-sync-v1"]); }
       catch (error) { releaseError = error; }
       client?.release(releaseError); lease?.release(); if (owned) await pool.end();
     }
@@ -33,11 +38,7 @@ async function openPostgresRuntimeReadSession(options = {}) {
       // failed attempt is retried by the owning worker on its next cycle.
       // If the network times out after dispatch, discard the connection so a
       // late server response cannot strand a session lock in the pool.
-      lockQueryUncertain = true;
-      const acquired = await client.query("SELECT pg_try_advisory_lock_shared(hashtext($1)) AS acquired", ["football-postgres-projection-sync-v1"]);
-      lockQueryUncertain = false;
-      if (acquired.rows[0]?.acquired !== true) throw new Error("native receipt read barrier busy; retry after projection completes");
-      sharedLock = true;
+      await acquireReceiptReadBarrier(client, barrier, receiptWaitMs);
     }
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
     const rows = await client.query("SELECT key,value FROM football.projection_meta WHERE key = ANY($1::text[])",

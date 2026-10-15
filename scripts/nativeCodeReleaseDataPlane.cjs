@@ -450,7 +450,7 @@ async function captureLeaseInputOnce(state, directory) {
   const source = pool(state, 'football', state.oldDatabaseOid); let session;
   try {
     session = await require('./postgresRuntimeReadSession.cjs').openPostgresRuntimeReadSession({ pool: source,
-      storeDir: STORE, publicDataDir: LIVE + '/public/data', protectReceipt: true });
+      storeDir: STORE, publicDataDir: LIVE + '/public/data', protectReceipt: true, receiptWaitMs: 2000 });
     await session.guardedFinals();
     const current = leaseCurrent(session);
     await session.client.query("SET LOCAL statement_timeout = '8000ms'");
