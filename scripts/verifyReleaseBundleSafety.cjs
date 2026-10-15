@@ -598,6 +598,8 @@ const requiredReleaseEntries = [
   "scripts/verifyResearchArchivePostgres.cjs",
   "tests/code-data-release.test.cjs",
   "tests/postgres-committed-publication.test.cjs",
+  "tests/postgres-file-json-payload.test.cjs",
+  "tests/postgres-source-memory.integration.cjs",
   "tests/generation-startup-streaming.test.cjs",
   "scripts/installResearchBroker.cjs",
   "tests/research-broker-installer.test.cjs",

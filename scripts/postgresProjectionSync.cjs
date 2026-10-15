@@ -208,36 +208,64 @@ const withSourceFileAssemblySession = async (client, assemble) => {
   return result;
 };
 
-const insertFileSourceRow = async ({ client, row, payload, conflict, onFileBytes, batchBytes }) => {
-  // The caller owns the transaction. Failure leaves its rollback responsible
-  // for the parts and all earlier projection writes; never catch/commit here.
-  const temp = `projection_json_parts_${crypto.randomBytes(12).toString("hex")}`;
-  await client.query(`CREATE TEMP TABLE ${temp} (seq integer PRIMARY KEY, piece text NOT NULL) ON COMMIT DROP`);
-  let parts = [], partBytes = 0, sequence = 0;
-  const flush = async () => {
-    if (!parts.length) return;
-    await client.query(`INSERT INTO ${temp} (seq,piece) VALUES ${parts.map((_, index) => `($${index * 2 + 1},$${index * 2 + 2})`).join(",")}`, parts.flat());
-    parts = [];
-    partBytes = 0;
-  };
-  for await (const piece of fileJsonPayloadChunks(payload, { onBytes: onFileBytes })) {
-    const bytes = Buffer.byteLength(piece) + 12;
-    if (partBytes + bytes > batchBytes) await flush();
-    parts.push([sequence++, piece]);
-    partBytes += bytes;
-  }
-  // Exhausting the iterator verifies the source hash/stat before assembly.
-  await flush();
-  // A large, admitted JSON source is assembled without a ledger-sized JS
-  // string. Bound this one SQL operation on the server before the writer's
-  // client deadline. Preserve a stricter operator statement limit.
-  const result = await withSourceFileAssemblySession(client, () => client.query(`
-    INSERT INTO football.source_snapshots (id,source,captured_at,payload)
-    SELECT $1, $2, $3, string_agg(piece, '' ORDER BY seq)::json FROM ${temp}
-    ${conflict}
-  `, [row.id ?? null, row.source ?? null, row.captured_at ?? null]));
-  await client.query(`DROP TABLE ${temp}`);
-  return result;
+const insertFileSourceRow = async ({ client, row, payload, onFileBytes, batchBytes }) => {
+  // The ordinary projection transaction owns the global writer barrier. Read
+  // and lock this row before assembling a new value. Hash exact PostgreSQL json
+  // text in a separate statement, so it cannot coexist with aggregation/casts
+  // of another ledger-sized value in one executor memory context.
+  return withSourceFileAssemblySession(client, async () => {
+    const existing = await client.query(`
+      SELECT (source IS NOT DISTINCT FROM $2::text
+        AND captured_at IS NOT DISTINCT FROM $3::timestamptz
+        AND encode(sha256(convert_to(payload::text, 'UTF8')), 'hex') = $4::text) AS unchanged
+      FROM football.source_snapshots WHERE id=$1 FOR UPDATE
+    `, [row.id ?? null, row.source ?? null, row.captured_at ?? null, payload.sha256]);
+    if (existing.rows[0]?.unchanged === true) {
+      // An admitted descriptor is not proof that its file stayed unchanged.
+      // Exhaust the same lossless byte/hash/stat verifier even for a no-op.
+      for await (const ignored of fileJsonPayloadChunks(payload, { onBytes: onFileBytes })) void ignored;
+      return { rowCount: 0 };
+    }
+    // The caller owns the transaction. Failure leaves its rollback responsible
+    // for the parts and all earlier projection writes; never catch/commit here.
+    const temp = `projection_json_parts_${crypto.randomBytes(12).toString("hex")}`;
+    await client.query(`CREATE TEMP TABLE ${temp} (seq integer PRIMARY KEY, piece text NOT NULL) ON COMMIT DROP`);
+    let parts = [], partBytes = 0, sequence = 0;
+    const flush = async () => {
+      if (!parts.length) return;
+      await client.query(`INSERT INTO ${temp} (seq,piece) VALUES ${parts.map((_, index) => `($${index * 2 + 1},$${index * 2 + 2})`).join(",")}`, parts.flat());
+      parts = [];
+      partBytes = 0;
+    };
+    for await (const piece of fileJsonPayloadChunks(payload, { onBytes: onFileBytes })) {
+      const bytes = Buffer.byteLength(piece) + 12;
+      if (partBytes + bytes > batchBytes) await flush();
+      parts.push([sequence++, piece]);
+      partBytes += bytes;
+    }
+    // Exhausting the iterator verifies the source hash/stat before assembly.
+    await flush();
+    // Separate statements release aggregation and json input memory before the
+    // final upsert. Each temporary value is TOASTed by PostgreSQL; no persistent
+    // schema or source representation changes. The complete source was verified
+    // above and the existing row is locked, so repeating an old/new ::text ROW
+    // comparison here would only recreate the multi-GiB peak.
+    const textTable = `${temp}_text`, jsonTable = `${temp}_json`;
+    await client.query(`CREATE TEMP TABLE ${textTable} (body text NOT NULL) ON COMMIT DROP`);
+    await client.query(`INSERT INTO ${textTable} SELECT string_agg(piece, '' ORDER BY seq) FROM ${temp}`);
+    await client.query(`DROP TABLE ${temp}`);
+    await client.query(`CREATE TEMP TABLE ${jsonTable} (body json NOT NULL) ON COMMIT DROP`);
+    await client.query(`INSERT INTO ${jsonTable} SELECT body::json FROM ${textTable}`);
+    await client.query(`DROP TABLE ${textTable}`);
+    const result = await client.query(`
+      INSERT INTO football.source_snapshots (id,source,captured_at,payload)
+      SELECT $1, $2, $3, body FROM ${jsonTable}
+      ON CONFLICT (id) DO UPDATE SET source=EXCLUDED.source,
+        captured_at=EXCLUDED.captured_at,payload=EXCLUDED.payload
+    `, [row.id ?? null, row.source ?? null, row.captured_at ?? null]);
+    await client.query(`DROP TABLE ${jsonTable}`);
+    return result;
+  });
 };
 
 const insertBatches = async ({

@@ -33,8 +33,9 @@ const options = (client, rows, extra = {}) => ({
 });
 const row = (id, payload) => ({ id, source: "sporttery:public-reference", captured_at: "2026-09-27T00:00:00.000Z", payload });
 
-const fakeDatabase = ({ onParts, failAt, statementTimeoutMs = 0, toastOptions = ['pglz', 'lz4'] } = {}) => {
+const fakeDatabase = ({ onParts, onExisting, failAt, statementTimeoutMs = 0, toastOptions = ['pglz', 'lz4'] } = {}) => {
   const state = { calls: [], committed: new Map(), pending: null, parts: new Map(),
+    text: new Map(), json: new Map(),
     maxPartBytes: 0, maxBatchBytes: 0, assembled: 0, released: false, normalBatches: [], sessionChanges: [] };
   const client = {
     async query(sql, values = []) {
@@ -43,14 +44,38 @@ const fakeDatabase = ({ onParts, failAt, statementTimeoutMs = 0, toastOptions = 
       if (normalized.startsWith("SELECT current_setting('statement_timeout')")) return { rows: [{ statement_timeout: String(statementTimeoutMs), statement_timeout_ms: statementTimeoutMs, toast_compression: 'pglz', toast_options: toastOptions }] };
       if (normalized.startsWith('SELECT set_config(')) { state.sessionChanges.push({ sql: normalized, value: values[0] }); return { rows: [] }; }
       if (normalized.startsWith("BEGIN")) { state.pending = new Map(state.committed); return { rows: [] }; }
-      if (normalized === "ROLLBACK") { state.pending = null; state.parts.clear(); return { rows: [] }; }
-      if (normalized === "COMMIT") { state.committed = state.pending; state.pending = null; state.parts.clear(); return { rows: [] }; }
+      if (normalized === "ROLLBACK") { state.pending = null; state.parts.clear(); state.text.clear(); state.json.clear(); return { rows: [] }; }
+      if (normalized === "COMMIT") { state.committed = state.pending; state.pending = null; state.parts.clear(); state.text.clear(); state.json.clear(); return { rows: [] }; }
+      if (normalized.startsWith('SELECT (source IS NOT DISTINCT FROM')) {
+        assert.match(normalized, /encode\(sha256\(convert_to\(payload::text, 'UTF8'\)\), 'hex'\) = \$4::text/);
+        assert(normalized.endsWith('FROM football.source_snapshots WHERE id=$1 FOR UPDATE'));
+        const prior = state.pending?.get(values[0]);
+        if (onExisting) onExisting(state);
+        return { rows: prior ? [{ unchanged: prior.source === values[1] && prior.captured_at === values[2] && sha(prior.payload) === values[3] }] : [] };
+      }
       if (normalized.startsWith("CREATE TEMP TABLE")) {
-        assert.match(normalized, /^CREATE TEMP TABLE projection_json_parts_[a-f0-9]{24} \(seq integer PRIMARY KEY, piece text NOT NULL\) ON COMMIT DROP$/);
-        state.parts.set(normalized.split(" ")[3], new Map());
+        const name = normalized.split(' ')[3];
+        if (name.endsWith('_text')) { assert.match(normalized, /^CREATE TEMP TABLE projection_json_parts_[a-f0-9]{24}_text \(body text NOT NULL\) ON COMMIT DROP$/); state.text.set(name, null); }
+        else if (name.endsWith('_json')) { assert.match(normalized, /^CREATE TEMP TABLE projection_json_parts_[a-f0-9]{24}_json \(body json NOT NULL\) ON COMMIT DROP$/); state.json.set(name, null); }
+        else { assert.match(normalized, /^CREATE TEMP TABLE projection_json_parts_[a-f0-9]{24} \(seq integer PRIMARY KEY, piece text NOT NULL\) ON COMMIT DROP$/); state.parts.set(name, new Map()); }
         return { rows: [] };
       }
       if (normalized.startsWith("INSERT INTO projection_json_parts_")) {
+        if (normalized.includes('SELECT string_agg(piece')) {
+          if (failAt === 'assembly') throw new Error('injected assembly failure');
+          assert.match(normalized, /^INSERT INTO projection_json_parts_[a-f0-9]{24}_text SELECT string_agg\(piece, '' ORDER BY seq\) FROM projection_json_parts_[a-f0-9]{24}$/);
+          const names = normalized.match(/^INSERT INTO (\w+).* FROM (\w+)$/);
+          const ordered = [...state.parts.get(names[2])].sort((a, b) => a[0] - b[0]);
+          assert.deepEqual(ordered.map(([seq]) => seq), ordered.map((_, index) => index));
+          state.text.set(names[1], ordered.map(([, piece]) => piece).join(''));
+          return { rows: [], rowCount: 1 };
+        }
+        if (normalized.includes('SELECT body::json FROM')) {
+          const names = normalized.match(/^INSERT INTO (\w+) SELECT body::json FROM (\w+)$/);
+          assert(names && state.text.has(names[2]) && state.json.has(names[1]));
+          const value = state.text.get(names[2]); JSON.parse(value); state.json.set(names[1], value);
+          return { rows: [], rowCount: 1 };
+        }
         if (failAt === "parts") throw new Error("injected parts failure");
         const target = normalized.match(/^INSERT INTO (\w+)/)[1], parts = state.parts.get(target);
         assert.ok(parts);
@@ -69,17 +94,14 @@ const fakeDatabase = ({ onParts, failAt, statementTimeoutMs = 0, toastOptions = 
       }
       if (normalized.startsWith("INSERT INTO football.source_snapshots")) {
         assert.ok(state.pending, "writer must use caller transaction");
-        if (normalized.includes("string_agg")) {
-          if (failAt === "assembly") throw new Error("injected assembly failure");
-          assert.match(normalized, /string_agg\(piece, '' ORDER BY seq\)::json FROM projection_json_parts_[a-f0-9]{24}/);
+        if (normalized.includes('SELECT $1, $2, $3, body FROM')) {
+          assert.match(normalized, /SELECT \$1, \$2, \$3, body FROM projection_json_parts_[a-f0-9]{24}_json/);
           assert.ok(!normalized.includes("::jsonb"));
-          assert.ok(normalized.endsWith(snapshotUpsertConflict("source_snapshots").replace(/\s+/g, " ")));
+          assert(!normalized.includes('payload::text'));
+          assert(normalized.endsWith('ON CONFLICT (id) DO UPDATE SET source=EXCLUDED.source, captured_at=EXCLUDED.captured_at,payload=EXCLUDED.payload'));
           assert.equal(values.length, 3);
           const target = normalized.match(/FROM (projection_json_parts_\w+)/)[1];
-          const ordered = [...state.parts.get(target)].sort((a, b) => a[0] - b[0]);
-          assert.deepEqual(ordered.map(([seq]) => seq), ordered.map((_, index) => index));
-          const payload = ordered.map(([, piece]) => piece).join("");
-          JSON.parse(payload);
+          const payload = state.json.get(target); assert.equal(typeof payload, 'string');
           state.pending.set(values[0], { source: values[1], captured_at: values[2], payload });
           state.assembled++;
           return { rows: [], rowCount: 1 };
@@ -90,7 +112,7 @@ const fakeDatabase = ({ onParts, failAt, statementTimeoutMs = 0, toastOptions = 
         }
         return { rows: [], rowCount: values.length / 4 };
       }
-      if (normalized.startsWith("DROP TABLE")) { state.parts.delete(normalized.split(" ")[2]); return { rows: [] }; }
+      if (normalized.startsWith("DROP TABLE")) { const name=normalized.split(' ')[2]; state.parts.delete(name); state.text.delete(name); state.json.delete(name); return { rows: [] }; }
       throw new Error(`Unexpected fake query: ${normalized}`);
     },
     release() { state.released = true; },
@@ -220,6 +242,39 @@ test("mixed rows preserve inventory and exact table hash while reading the file 
   assert.equal(db.state.parts.size, 0);
   assert.ok(db.state.calls.some(sql => sql.startsWith("DROP TABLE projection_json_parts_")));
   assert.ok(db.state.released);
+});
+
+test('unchanged file sources still verify complete bytes and hashes without reassembling PostgreSQL text', async () => {
+  const raw = '{ "球队": "中文⚽", "z": 1 }\n', payload = spool(raw), db = fakeDatabase();
+  const input = row('archive', payload);
+  assert.equal(await withPostgresTransaction(db.pool, client => insertBatches(options(client, [input]))), 1);
+  const start = db.state.calls.length;
+  const result = await withPostgresTransaction(db.pool, client => streamIteratorInsert({
+    ...options(client, [input]), iterator: [input], mapper: value => value,
+  }));
+  assert.equal(result.written, 1); assert.deepEqual(result.activeIds, ['archive']);
+  assert.equal(result.hash, sha('archive\0' + raw + '\n'));
+  assert.equal(db.state.assembled, 1);
+  assert(!db.state.calls.slice(start).some(sql => sql.startsWith('CREATE TEMP TABLE')));
+  const changedText = spool(JSON.stringify(JSON.parse(raw)));
+  assert.equal(await withPostgresTransaction(db.pool, client => insertBatches(options(client, [row('archive', changedText)]))), 1);
+  assert.equal(db.state.committed.get('archive').payload, JSON.stringify(JSON.parse(raw)));
+  assert.equal(db.state.assembled, 2);
+});
+
+test('unchanged lookup cannot bypass source mutation or metadata updates', async () => {
+  const raw = '{"original":true}\n', payload = spool(raw); let mutate = false;
+  const db = fakeDatabase({ onExisting: () => { if (mutate) { mutate = false; fs.appendFileSync(payload.filePath, ' '); } } });
+  const input = row('archive', payload);
+  await withPostgresTransaction(db.pool, client => insertBatches(options(client, [input])));
+  const before = new Map(db.state.committed); mutate = true;
+  await assert.rejects(withPostgresTransaction(db.pool, client => insertBatches(options(client, [input]))), /changed/);
+  assert.deepEqual(db.state.committed, before);
+  const fresh = spool(raw), next = { ...row('archive', fresh), source: 'changed-source' };
+  assert.equal(await withPostgresTransaction(db.pool, client => insertBatches(options(client, [next]))), 1);
+  assert.equal(db.state.committed.get('archive').source, 'changed-source');
+  assert.equal(db.state.committed.get('archive').payload, raw);
+  assert.equal(db.state.text.size, 0); assert.equal(db.state.json.size, 0);
 });
 
 test("ordinary row batches respect byte and row limits and retain fail-closed affected-row checks", async () => {

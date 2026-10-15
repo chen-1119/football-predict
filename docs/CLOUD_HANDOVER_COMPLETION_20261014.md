@@ -20,7 +20,10 @@ Official references:
 - <https://learn.chatgpt.com/docs/enterprise/chatgpt-work-cloud-security>
 - <https://help.openai.com/en/articles/6614161-how-can-i-contact-support>
 
-Suggested support request, not yet submitted:
+The following support request was submitted and escalated to a support
+specialist on 2026-10-14. No case number or production-IP approval has been
+confirmed. Do not submit it again or treat the desktop proxy restart as cloud
+network permission:
 
 > My dot cloud task needs authorized HTTPS access to my production server
 > 134.175.132.183 on port 443. The original cloud connection returned
@@ -37,13 +40,13 @@ Suggested support request, not yet submitted:
 | GET `/api/operator/research/day` | Existing publication index | Included in r863 |
 | GET `/api/operator/research/artifact` | Original record/signature/ACK replay | Included in r863 |
 | GET `/api/operator/research/official` | Complete current/calculator signed inputs | Included in r863 |
-| POST `/api/operator/research/report` | Original create-only report archive | Admission candidate, not wired |
-| POST `/api/operator/research/report-read` | Exact report/hash readback | Admission candidate, not wired |
-| POST `/api/operator/research/publish` | Original v3 exact-draft controlled publication | Admission candidate, not wired |
-| POST `/api/operator/research/publication-read` | Record plus second ACK readback | Admission candidate, not wired |
+| POST `/api/operator/research/report` | Original create-only report archive | HTTP wired in r868; signed broker installation pending |
+| POST `/api/operator/research/report-read` | Exact report/hash readback | HTTP wired; actual broker caller acceptance pending |
+| POST `/api/operator/research/publish` | Original v3 exact-draft controlled publication | HTTP wired; actual signed broker/publish/ACK acceptance pending |
+| POST `/api/operator/research/publication-read` | Record plus second ACK readback | HTTP wired; actual broker caller acceptance pending |
 
-Before installing the POST routes, finish the fixed authenticated caller adapter
-and normal signed installer. Verify the root-owned installed binding, signature,
+Before accepting the POST routes as operational, complete the separate normal
+signed broker installation. Verify the root-owned installed binding, signature,
 Node image, complete source closure, API process identity and inherited real
 `/run/lock/football-release.lock`. Keep the release mutex until the actual child
 exits. Publication reuses the original signed official identity/market/SP/cutoff

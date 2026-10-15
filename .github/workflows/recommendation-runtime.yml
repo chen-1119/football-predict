@@ -79,6 +79,7 @@ on:
       - 'tests/postgres-model-input-paging.test.cjs'
       - 'tests/postgres-reference-admission.test.cjs'
       - 'tests/postgres-generation-native.integration.cjs'
+      - 'tests/postgres-source-memory.integration.cjs'
       - 'tests/reconcile-history-admission.test.cjs'
       - 'tests/football-data-lower-league-history.test.cjs'
       - 'tests/postgres-team-history*.test.cjs'
@@ -209,6 +210,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
+          --memory=2304m --memory-swap=2304m
           --health-cmd pg_isready
           --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
@@ -291,6 +293,11 @@ jobs:
       - run: node tests/postgres-generation-native.integration.cjs
         env:
           POSTGRES_GENERATION_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
+      - name: Bounded PostgreSQL source assembly with real 512 MiB original bytes
+        run: node --max-old-space-size=256 tests/postgres-source-memory.integration.cjs
+        env:
+          POSTGRES_SOURCE_MEMORY_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
+          POSTGRES_SOURCE_MEMORY_CONTAINER: ${{ job.services.postgres.id }}
       - name: Frontend evidence semantics
         run: node scripts/verifyFrontendEvidenceSemantics.cjs
       - name: Audited static receipt dependency closure

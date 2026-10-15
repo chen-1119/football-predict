@@ -46,11 +46,14 @@ async function verify(pool){
   snapshot.publicReferenceEvidence[1].evidence.probabilityModel.version='invalid-binding';meta.sourceCycleId+='-invalid';publish();
   await assert.rejects(sync(),/PUBLIC_REFERENCE_EVIDENCE_BINDING_INVALID/);assert.deepEqual(await state(),before);
   passed.push('invalid bound evidence rolls back all PostgreSQL projection changes and preserves the last receipt');
-  snapshot.publicReferenceEvidence[1].evidence.probabilityModel.version='synthetic-model';meta.sourceCycleId+='-late-failure';publish();
+  snapshot.publicReferenceEvidence[1].evidence.probabilityModel.version='synthetic-model';
+  const lateFailureFixture=fixture({id:'887105'});
+  snapshot.publicReferenceDecisions.push(lateFailureFixture.record);snapshot.publicReferenceEvidence.push(lateFailureFixture.entry);
+  meta.sourceCycleId+='-late-failure';publish();
   let assembled=false;const temporaryNames=[];
   const failingPool={query:q,async connect(){const client=await mapped.connect();return{release:()=>client.release(),async query(sql,args){
    if(sql.includes('string_agg(piece'))assembled=true;
-   if(sql.startsWith('CREATE TEMP TABLE projection_json_parts_'))temporaryNames.push(sql.match(/CREATE TEMP TABLE (projection_json_parts_[a-f0-9]+)/)[1]);
+   if(sql.startsWith('CREATE TEMP TABLE projection_json_parts_'))temporaryNames.push(sql.match(/CREATE TEMP TABLE (projection_json_parts_[a-f0-9]+(?:_text|_json)?)/)[1]);
    if(sql.includes('SELECT id, state_key, captured_at, first_seen_at, last_seen_at, seen_count FROM football.prediction_snapshots'))throw new Error('injected-after-streamed-source');
    return client.query(sql,args);
   }};}};
@@ -58,6 +61,7 @@ async function verify(pool){
   assert.equal(assembled,true);assert.deepEqual(await state(),before);
   assert.equal((await q("SELECT count(*)::int AS count FROM pg_class WHERE relname=ANY($1::text[]) AND relpersistence='t'",[temporaryNames])).rows[0].count,0);
   passed.push('failure after real segmented JSON assembly rolls back source rows, metadata, receipts and temporary parts');
+  snapshot.publicReferenceDecisions.pop();snapshot.publicReferenceEvidence.pop();
   const added=fixture({id:'887104'});
   payloads['matches-current.json'].push(added.match);snapshot.publicReferenceDecisions.push(added.record);snapshot.publicReferenceEvidence.push(added.entry);
   meta.sourceCycleId+='-before-commit';publish();
