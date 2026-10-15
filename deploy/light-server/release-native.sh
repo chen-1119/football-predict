@@ -289,7 +289,14 @@ run_native_release() {
   install_nginx_config "$NEXT_DIR"
   systemctl daemon-reload
   write_recovery_phase host-config-applied
-  wait_for_health "http://${HOST}:${PORT}" native-before-stop 90 2 service
+  if [ -n "${NATIVE_BASELINE_AUTHORITY_REPAIR_PROOF:-}" ]; then
+    # The corrected candidate already passed its real health and core verifier.
+    # Reconfirm only the same broken old baseline before stopping that process.
+    assert_release_fast_watcher_pause_guard
+    printf '%s' "$NATIVE_BASELINE_AUTHORITY_REPAIR_PROOF" | "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/baselineAuthorityReplayRepair.cjs" paused "$BUNDLE_SHA256" "$$"
+  else
+    wait_for_health "http://${HOST}:${PORT}" native-before-stop 90 2 service
+  fi
   if [ "$NATIVE_CODE_RELEASE" = 1 ]; then native_code_verify_cutover_lease 300; fi
   quiesce_managed_maintenance_for_sqlite_snapshot
   stop_worker_for_release_window
