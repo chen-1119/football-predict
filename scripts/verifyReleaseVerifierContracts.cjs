@@ -110,7 +110,8 @@ check('root broker installer consumes the actual normal archive inventory commit
   const child=require('node:child_process').spawnSync(process.execPath,['--test',...files],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
   assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 17$/m);assert.match(child.stdout,/^# skipped 0$/m);
   for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
-    for(const file of ['scripts/installResearchBroker.cjs',...files])assert(read(entry).includes('"'+file+'"'));
+    for(const file of ['scripts/installResearchBroker.cjs','scripts/verifyResearchSocketBinding.py',...files])assert(read(entry).includes('"'+file+'"'));
+  assert(read('.github/workflows/recommendation-runtime.yml').includes('sudo /usr/bin/python3.12 -I -S -B scripts/verifyResearchSocketBinding.py'));
 });
 check('file source assembly separates backend memory phases and preserves verified no-ops',()=>{
   const file='tests/postgres-file-json-payload.test.cjs';

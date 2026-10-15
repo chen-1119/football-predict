@@ -95,9 +95,13 @@ def installed_binding():
         if hashlib.sha256(trusted_read(filename, 128 * 1024 * 1024)).hexdigest() != row.get("sha256"):
             fail("RESEARCH_SOCKET_PLATFORM_CHANGED")
     bound_paths = {row["path"] for row in platform["files"]}
+    # These two application sources were checked above against their separate
+    # signed hashes. /usr/local is not part of the Python standard library.
+    # Admit only these exact files, never an arbitrary sibling or base prefix.
+    signed_source_paths = {filename for filename, _ in paths[:2]}
     for module in tuple(sys.modules.values()):
         filename = getattr(module, "__file__", None)
-        if filename and filename.startswith("/usr/") and os.path.realpath(filename) not in bound_paths:
+        if filename and filename.startswith("/usr/") and os.path.realpath(filename) not in bound_paths | signed_source_paths:
             fail("RESEARCH_SOCKET_UNBOUND_PYTHON_MODULE")
         cached = getattr(module, "__cached__", None)
         if cached and cached.startswith("/usr/") and os.path.isfile(cached) and os.path.realpath(cached) not in bound_paths:
@@ -111,7 +115,9 @@ def load_peer_module():
     filename = BASE + "/researchSocketPeer.py"
     spec = importlib.util.spec_from_file_location("football_research_socket_peer", filename)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # -B suppresses cache writes but does not suppress cache reads. Compile the
+    # already verified source directly so a pre-existing .pyc cannot replace it.
+    exec(compile(trusted_read(filename, 1024 * 1024), filename, "exec", dont_inherit=True), module.__dict__)
     return module
 
 
@@ -181,11 +187,18 @@ def serve_connection(connection, binding, binding_hash, peer_module):
 
 
 def main():
+    verify_only = sys.argv[1:] == ["--verify-binding"]
     if sys.platform != "linux" or os.getuid() != 0 or not sys.flags.isolated or not sys.flags.no_site or not sys.flags.dont_write_bytecode \
-            or len(sys.argv) != 1 or os.path.realpath(sys.argv[0]) != BASE + "/researchSocketServer.py":
+            or (len(sys.argv) != 1 and not verify_only) or os.path.realpath(sys.argv[0]) != BASE + "/researchSocketServer.py":
         fail("RESEARCH_FIXED_ROOT_SOCKET_REQUIRED")
     binding, fingerprint = installed_binding()
     peer = load_peer_module()
+    if installed_binding()[1] != fingerprint:
+        fail("RESEARCH_SOCKET_BINDING_CHANGED")
+    if verify_only:
+        print(json.dumps({"verified": True, "releaseSha": binding["releaseSha"],
+                          "bindingSha256": fingerprint, "listenerStarted": False, "productionWrites": 0}))
+        return
     directory = os.lstat(os.path.dirname(SOCKET))
     if not stat.S_ISDIR(directory.st_mode) or directory.st_uid != 0 or directory.st_gid != binding["transport"]["footballGid"] \
             or stat.S_IMODE(directory.st_mode) != 0o750:

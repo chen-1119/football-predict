@@ -965,6 +965,7 @@ const requiredEntries = [
   "tests/postgres-source-memory.integration.cjs",
   "tests/generation-startup-streaming.test.cjs",
   "scripts/installResearchBroker.cjs",
+  "scripts/verifyResearchSocketBinding.py",
   "tests/research-broker-installer.test.cjs",
   "tests/research-installer-archive-contract.test.cjs",
   "server/streamedJsonObjectArrays.cjs",

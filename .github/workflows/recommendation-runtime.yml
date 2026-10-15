@@ -27,6 +27,7 @@ on:
       - 'scripts/researchSocketServer.py'
       - 'scripts/researchBrokerPlatform.py'
       - 'scripts/verifyResearchSocketServer.py'
+      - 'scripts/verifyResearchSocketBinding.py'
       - 'deploy/light-server/football-research-broker.service'
       - 'scripts/researchSocketPeer.py'
       - 'scripts/verifyResearchSocketPeer.py'
@@ -236,6 +237,8 @@ jobs:
         run: python3 scripts/verifyResearchSocketPeer.py
       - name: Root socket bounded frames and process boundary fixtures
         run: python3 scripts/verifyResearchSocketServer.py
+      - name: Actual isolated installed-path Python binding and unsigned dependencies
+        run: sudo /usr/bin/python3.12 -I -S -B scripts/verifyResearchSocketBinding.py
       - name: Real Linux release-lock contention and child lifetime
         run: node scripts/verifyResearchReleaseLock.cjs
       - name: Native PostgreSQL report archive concurrency
