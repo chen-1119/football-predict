@@ -47,7 +47,9 @@ try {
     const invalid = ['{"skip":[1,]}', '{"skip":{"x":1,}}', '{"skip":01}', '{"skip":1.}', '{"skip":1e}',
       '{"skip":+1}', '{"skip":NaN}', '{"skip":tru}', '{"skip":nullfalse}', '{"skip":"\\x41"}',
       '{"skip":"\\u12x4"}', '{"skip":"raw\nline"}', '{"skip":[}', '{"skip" 1}', '{skip:1}',
-      '{"skip":[] "keep":2}', '{"skip":1', '{"skip":"unterminated}', '{}true', '[]', 'null', '\ufeff{}'];
+      '{"skip":[] "keep":2}', '{"skip":1', '{"skip":"unterminated}', '{}true', '[]', 'null', '\ufeff{}',
+      '{"skip":1 2}', '{"skip":[truefalse]}', '{"skip":-}', '{"skip":1e+}', '{"skip":1\u000b}',
+      '{"skip":1\u00a0}', '{"skip":false\u0000}'];
     for (const text of invalid) {
       if (!['[]', 'null'].includes(text)) assert.throws(() => JSON.parse(text));
       for (const chunkBytes of [1, 7, 65536]) assert.throws(() => fixture(text, ['keep'], { chunkBytes }), e => e.code === 'FILE_JSON_INVALID', text);
@@ -83,8 +85,13 @@ try {
     const value = depth => depth > 3 ? `值😀${random()}\\\"` : [null, true, random() / 7, [value(depth + 1)], { [String(random())]: value(depth + 1) }][random() % 5];
     for (let i = 0; i < 80; i++) {
       const source = { ignored: value(0), keep: value(0), tail: value(0) };
-      const result = fixture(JSON.stringify(source), ['keep'], { chunkBytes: 1 + random() % 4096 });
-      assert.deepEqual(result.value.keep, JSON.parse(JSON.stringify(source.keep)));
+      for (const indent of [0, 2, 6]) for (const chunkBytes of [1, 7, 1 + random() % 4096]) {
+        const text = JSON.stringify(source, null, indent);
+        const result = fixture(text, ['keep'], { chunkBytes });
+        assert.deepEqual(result.value.keep, JSON.parse(JSON.stringify(source.keep)));
+        assert.equal(result.evidence.bytes, Buffer.byteLength(text));
+        assert.equal(result.evidence.sha256, sha(text));
+      }
     }
   });
   check('generation wrapper binds normalized paths, expected bytes and hash; caller limits cannot replace identity', () => {
