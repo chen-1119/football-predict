@@ -213,7 +213,7 @@ function verifyFrontendRuntimeBoundary() {
       changed("scripts/runSyncWorker.cjs", text => text.replace("const child = spawn(command, args, {", "const child = spawn(process.env.OVERRIDE || command, args, {"), rejected);
     });
     check("unchanged generic process adapter cannot authorize a new dynamic wrapper caller", () => {
-      changed("scripts/runSyncWorker.cjs", text => text.replace('"sync:team-evidence"));', 'process.env.UNREVIEWED_EVIDENCE_COMMAND));'), unreviewed);
+      changed("scripts/runSyncWorker.cjs", text => text.replace('"sync:team-evidence",\n      {},', 'process.env.UNREVIEWED_EVIDENCE_COMMAND,\n      {},'), unreviewed);
       changed("server/index.cjs", text => `${text}\nrunCommand(process.env.UNKNOWN_EXECUTABLE, process.env.UNKNOWN_ARGUMENTS);\n`, unreviewed);
       changed("server/index.cjs", text => `${text}\nrunCommand('node', ['src/pages/PredictionsList.tsx']);\n`, unreviewed);
     });

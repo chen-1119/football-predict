@@ -18132,11 +18132,16 @@ async function sync() {
   // Existing locked decisions still flow through applyPredictionPersistence's
   // preservation branch and retain their original revision/source cycle.
   output = finalizePublishedPredictionDecisions(output, existingBySourceId, capturedAt);
+  const prospectiveAsOf = new Date().toISOString();
   const prematchV3Registry = await require('../src/services/prematchV3ModelRegistry.cjs').loadPrematchV3ModelRegistry({
-    asOf: new Date().toISOString(),
+    asOf: prospectiveAsOf,
+  });
+  const storedTeamEvidence = await require('./loadPrematchTeamEvidence.cjs').loadPrematchTeamEvidence({
+    matches: prospectiveAuditMatches, asOf: prospectiveAsOf,
   });
   output = require('../src/services/prospectiveForecastInput.cjs').attachProspectiveForecastInputs(
-    output, prospectiveAuditMatches, Date.now(), {
+    output, prospectiveAuditMatches, Date.parse(prospectiveAsOf), {
+      storedTeamEvidence,
       baseline: prematchV3Registry.baseline, parameters: prematchV3Registry.parameters,
       modelRegistry: { asOf: prematchV3Registry.asOf, status: prematchV3Registry.status,
         storage: prematchV3Registry.storage, blockers: prematchV3Registry.blockers, receipts: prematchV3Registry.receipts,

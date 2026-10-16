@@ -60,6 +60,13 @@ function attachProspectiveForecastInputs(matches, freshMatches, now, v3Options =
     // supply probabilities, publication authority, or rewrite the frozen parent.
     input.prematchV3Assessment = require('./prematchV3Assessment.cjs').buildPrematchV3Assessment(fresh,
       {...v3Options, asOf: new Date(now).toISOString()});
+    // Stored source facts are reviewable research, not an admitted numeric
+    // feature family. In particular, probabilityUseApproved=false snapshots
+    // cannot bypass the existing V3 source/parameter gates.
+    const teamResearch = require('./teamEvidencePrematchBridge.cjs').researchForMatch(
+      fresh, v3Options.storedTeamEvidence, new Date(now).toISOString(),
+    );
+    if (teamResearch) input.storedTeamEvidenceResearch = structuredClone(teamResearch);
     // Carry current-cycle HAD/HHAD source objects only. Never borrow a later
     // quote from the parent frozen match or refresh a receipt by copying metadata.
     const had = fresh.externalSignals?.bookmakerOdds?.had;
