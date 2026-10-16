@@ -1106,7 +1106,12 @@ const publicSnapshotRows = ({ observationsOnly = false } = {}) => {
   }
   if (!observationsOnly && publicSnapshotAllRowsCache) return publicSnapshotAllRowsCache;
   if (observationsOnly) {
-    const prefix = readTopLevelArrayProperty(publicSnapshotsFile, "observations");
+    // Large warehouses already require complete hash/UTF-8/grammar validation.
+    // Avoid the extra growing-prefix regex probe before that mandatory read.
+    const fileBytes = fs.statSync(publicSnapshotsFile).size;
+    const prefix = fileBytes > publicSnapshotPrefixMaxBytes
+      ? { ok: false, rows: [], bytesRead: 0, fileBytes, reason: "large-file-complete-validation" }
+      : readTopLevelArrayProperty(publicSnapshotsFile, "observations");
     if (prefix.ok) {
       publicSnapshotObservationCache = prefix.rows;
       publicSnapshotReadAudit = {
@@ -1136,7 +1141,8 @@ const publicSnapshotRows = ({ observationsOnly = false } = {}) => {
       publicSnapshotReadAudit = {
         version: "candidate-public-snapshot-read-audit-v1", mode: "observations-streamed",
         bytesRead: prefix.bytesRead + selected.bytesRead, fileBytes: selected.fileBytes,
-        rowsLoaded: selected.rows.length, reason: null,
+        rowsLoaded: selected.rows.length, reason: null, prefixProbeSkipped: prefix.bytesRead === 0,
+        timings: selected.timings,
       };
       return publicSnapshotObservationCache;
     }
@@ -2332,6 +2338,7 @@ const writeStatus = (payload) => {
     commonCohortG2SuiteFile,
     sqliteDbPath,
     researchSettlementInputFingerprint: currentResearchSettlementInputFingerprint,
+    nativeReadSessionAudit: nativeReadSession?.readAudit || null,
     publicSnapshotRead: publicSnapshotReadAudit,
     benchmark: benchmarkCaptureStatus,
     ...payload,

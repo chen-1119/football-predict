@@ -13,6 +13,9 @@ if (process.argv[2] === "--bounded-child") {
     readJson: () => { throw new Error("unbounded full-JSON fallback must not execute"); },
   }, { timeout: 30000 });
   assert.equal(result.audit.mode, "observations-streamed"); assert.equal(result.rows.length, 2);
+  assert.equal(result.audit.prefixProbeSkipped, true);
+  assert.equal(result.audit.bytesRead, result.audit.fileBytes * 2);
+  assert.ok(result.audit.timings.hashMs >= 0 && result.audit.timings.selectedParseMs >= 0);
   console.log(JSON.stringify({ ok: true, mode: result.audit.mode, rows: result.rows.length, noteHash: digest(result.rows[0].note),
     second: result.rows[1], fileBytes: result.audit.fileBytes, maxRssKiB: process.resourceUsage().maxRSS }));
 } else {

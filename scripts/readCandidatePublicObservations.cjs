@@ -1,10 +1,12 @@
 "use strict";
 const fs = require("node:fs"), crypto = require("node:crypto");
+const { performance } = require("node:perf_hooks");
 const { readSelectedJsonObjectFile } = require("../server/selectedJsonObjectFile.cjs");
 // A failed prefix probe must never cause an unbounded JSON.parse of the full
 // snapshot warehouse. Hash the stable file in chunks, then strictly parse all
 // JSON syntax while materializing only the complete observations property.
 function readCandidatePublicObservations(filePath, { maxSelectedChars = 128 * 1024 * 1024, maxFileBytes = 2 * 1024 ** 3 } = {}) {
+  const startedAt = performance.now();
   const fail = (code, message) => { const error = new Error(message); error.code = code; throw error; };
   const before = fs.lstatSync(filePath);
   if (!before.isFile() || before.isSymbolicLink() || before.size > maxFileBytes) fail("CANDIDATE_SNAPSHOT_FILE_BOUND", "snapshot file exceeds bounded object admission");
@@ -21,10 +23,13 @@ function readCandidatePublicObservations(filePath, { maxSelectedChars = 128 * 10
     }
     if (bytesRead !== before.size || !same(before, fs.fstatSync(fd)) || !same(before, fs.lstatSync(filePath))) fail("GENERATION_FILE_CHANGED", "snapshot changed while hashing");
   } finally { fs.closeSync(fd); }
+  const hashedAt = performance.now();
   const result = readSelectedJsonObjectFile({ filePath, expectedBytes: before.size, expectedSha256: hash.digest("hex"), keys: ["observations"], maxSelectedChars });
   if (!same(before, fs.lstatSync(filePath))) fail("GENERATION_FILE_CHANGED", "snapshot changed during selected read");
   if (result.value.observations !== undefined && !Array.isArray(result.value.observations)) fail("CANDIDATE_OBSERVATIONS_INVALID", "snapshot observations must be an array");
   return { rows: result.value.observations || [], bytesRead: bytesRead + result.evidence.bytes, fileBytes: before.size,
-    evidence: result.evidence };
+    evidence: result.evidence, timings: { hashMs: Number((hashedAt - startedAt).toFixed(3)),
+      selectedParseMs: Number((performance.now() - hashedAt).toFixed(3)),
+      totalMs: Number((performance.now() - startedAt).toFixed(3)) } };
 }
 module.exports = { readCandidatePublicObservations };

@@ -1097,18 +1097,10 @@ const ensureReaderLeaseDirectory = (storeDir) => {
   return directory;
 };
 
-const acquireGenerationReadLease = ({
+const withGenerationReaderPointerLock = ({
   storeDir,
-  generationId,
-  context = null,
-  owner = `pid-${process.pid}`,
-  ttlMs = DEFAULT_READER_LEASE_MS,
-  now = Date.now(),
   pointerLockHandle = null,
-}) => {
-  if (!GENERATION_ID_PATTERN.test(String(generationId || ""))) {
-    fail("INVALID_GENERATION_ID", "reader lease generationId is invalid");
-  }
+}, action) => {
   const paths = storePaths(storeDir);
   fs.mkdirSync(paths.root, { recursive: true });
   if (pointerLockHandle) {
@@ -1126,35 +1118,32 @@ const acquireGenerationReadLease = ({
     timeoutMs: 10_000,
     staleMs: 60_000,
   });
-  let leasePath;
-  let payload;
   try {
-    resolveGeneration({
-      storeDir,
-      generationId,
-      manifestHash: context?.manifestHash,
-      sourceCycleId: context?.sourceCycleId,
-    });
-    const safeTtlMs = Math.max(1_000, Number(ttlMs || DEFAULT_READER_LEASE_MS));
-    const directory = ensureReaderLeaseDirectory(storeDir);
-    const leaseId = crypto.randomUUID();
-    leasePath = path.join(directory, `reader-${leaseId}.json`);
-    payload = {
-      version: 1,
-      leaseId,
-      generationId,
-      owner: String(owner || `pid-${process.pid}`).slice(0, 160),
-      acquiredAt: new Date(now).toISOString(),
-      expiresAt: new Date(now + safeTtlMs).toISOString(),
-    };
-    fs.writeFileSync(leasePath, `${JSON.stringify(payload, null, 2)}\n`, {
-      encoding: "utf8",
-      flag: "wx",
-      mode: 0o600,
-    });
+    return action();
   } finally {
     if (!pointerLockHandle) pointerLock.release();
   }
+};
+
+// Private: callers must first validate every immutable payload while holding
+// the actual pointer lock. This function never accepts caller-asserted hashes.
+const createValidatedGenerationReadLease = ({
+  storeDir, generationId, owner = `pid-${process.pid}`,
+  ttlMs = DEFAULT_READER_LEASE_MS, now = Date.now(),
+}) => {
+  const safeTtlMs = Math.max(1_000, Number(ttlMs || DEFAULT_READER_LEASE_MS));
+  const directory = ensureReaderLeaseDirectory(storeDir);
+  const leaseId = crypto.randomUUID();
+  const leasePath = path.join(directory, `reader-${leaseId}.json`);
+  const payload = {
+    version: 1, leaseId, generationId,
+    owner: String(owner || `pid-${process.pid}`).slice(0, 160),
+    acquiredAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + safeTtlMs).toISOString(),
+  };
+  fs.writeFileSync(leasePath, `${JSON.stringify(payload, null, 2)}\n`, {
+    encoding: "utf8", flag: "wx", mode: 0o600,
+  });
   let released = false;
   return Object.freeze({
     ...payload,
@@ -1173,6 +1162,20 @@ const acquireGenerationReadLease = ({
       fs.unlinkSync(leasePath);
       return true;
     },
+  });
+};
+
+const acquireGenerationReadLease = ({
+  storeDir, generationId, context = null, owner = `pid-${process.pid}`,
+  ttlMs = DEFAULT_READER_LEASE_MS, now = Date.now(), pointerLockHandle = null,
+}) => {
+  if (!GENERATION_ID_PATTERN.test(String(generationId || ""))) {
+    fail("INVALID_GENERATION_ID", "reader lease generationId is invalid");
+  }
+  return withGenerationReaderPointerLock({ storeDir, pointerLockHandle }, () => {
+    resolveGeneration({ storeDir, generationId,
+      manifestHash: context?.manifestHash, sourceCycleId: context?.sourceCycleId });
+    return createValidatedGenerationReadLease({ storeDir, generationId, owner, ttlMs, now });
   });
 };
 
@@ -1436,6 +1439,21 @@ const resolveCommittedPostgresPublication = ({
       reason: "exact-committed-postgres-generation", clockAuthority: "postgres-projection-meta" }) });
 };
 
+// One complete validation and lease acquisition in the same pointer-lock scope.
+// No cross-request cache or caller-supplied context can replace that validation.
+const acquireCommittedPostgresPublicationReadLease = ({
+  storeDir, publicDataDir, postgresIdentity, validatePayloadSemantics = true,
+  owner = `pid-${process.pid}`, ttlMs = DEFAULT_READER_LEASE_MS,
+  now = Date.now(), pointerLockHandle = null,
+}) => withGenerationReaderPointerLock({ storeDir, pointerLockHandle }, () => {
+  const publication = resolveCommittedPostgresPublication({
+    storeDir, publicDataDir, postgresIdentity, validatePayloadSemantics,
+  });
+  const lease = createValidatedGenerationReadLease({ storeDir,
+    generationId: publication.context.generationId, owner, ttlMs, now });
+  return Object.freeze({ publication, lease });
+});
+
 const resolveServingPublicationForSqliteIdentity = ({
   storeDir,
   publicDataDir,
@@ -1493,6 +1511,7 @@ module.exports = {
   assertActivePublicationPointerUnchanged,
   assertActivePublicationUnchanged,
   acquireGenerationReadLease,
+  acquireCommittedPostgresPublicationReadLease,
   bundleSemanticHash,
   cleanupDataGenerations,
   commitWithActivePublicationPointerLock,
