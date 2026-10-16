@@ -22,16 +22,25 @@ function streamJsonObjectArrays(filePath,{keys,onItem,expectedSha256,expectedByt
   if(isKey){const frame=stack.at(-1);frame.key=value;frame.state='colon';}else accept(value);fragments=[];scalarChars=0;mode='';};
  const push=array=>{const parent=stack.at(-1),top=stack.length===1&&selected.has(parent.key)&&array;if(top){if(seen.has(parent.key))invalid('Duplicate ledger array');seen.add(parent.key);}const keep=Boolean(parent?.keep||parent?.selected);stack.push({array,keep,selected:top?parent.key:null,value:keep?(array?[]:{}):undefined,key:null,state:array?'valueOrEnd':'keyOrEnd'});if(stack.length>maxDepth)fail('STREAM_JSON_DEPTH_LIMIT','JSON depth exceeds admission bound');};
  const close=()=>{const frame=stack.pop();accept(frame.value);};
+
+ const atomDelimiter=/[\x20\t\r\n,\]}]/g,whitespace=/[\x20\t\r\n]+/y,special=/["\\\x00-\x1f]/g;
+ const jsonString='"(?:[^"\\\\\\x00-\\x1f]|\\\\(?:["\\\\/bfnrt]|u[0-9a-fA-F]{4}))*"';
+ const jsonScalar='(?:'+jsonString+'|true|false|null|-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)';
+ const scalarProperty=new RegExp(jsonString+'[ \\t\\r\\n]*:[ \\t\\r\\n]*('+jsonScalar+')(?=[ \\t\\r\\n]*[,}])','y');
  const consume=text=>{let i=0,fragmentStart=mode?0:-1;while(i<text.length){position=offset+i;checkItem();const c=text[i];
    if(mode==='string'){
     if(unicodeLeft){if(!/[a-fA-F0-9]/.test(c))invalid('Invalid Unicode escape');unicodeLeft--;i++;continue;}
     if(escape){escape=false;if(c==='u')unicodeLeft=4;else if(!'"\\/bfnrt'.includes(c))invalid('Invalid string escape');i++;continue;}
-    const special=/["\\\x00-\x1f]/g;special.lastIndex=i;const found=special.exec(text);if(!found){i=text.length;continue;}i=found.index;if(text[i]==='\\'){escape=true;i++;continue;}if(text[i]!=='"')invalid('Unescaped control character');append(text.slice(fragmentStart,++i));position=offset+i;finishScalar();fragmentStart=-1;continue;
+    special.lastIndex=i;const found=special.exec(text);if(!found){i=text.length;continue;}i=found.index;if(text[i]==='\\'){escape=true;i++;continue;}if(text[i]!=='"')invalid('Unescaped control character');append(text.slice(fragmentStart,++i));position=offset+i;finishScalar();fragmentStart=-1;continue;
    }
-   if(mode==='atom'){const end=/[\x20\t\r\n,\]}]/g;end.lastIndex=i;const found=end.exec(text);if(!found){i=text.length;continue;}i=found.index;append(text.slice(fragmentStart,i));position=offset+i;finishScalar();fragmentStart=-1;continue;}
-   if(/[\x20\t\r\n]/.test(c)){const nonspace=/[^\x20\t\r\n]/g;nonspace.lastIndex=i;const found=nonspace.exec(text);i=found?found.index:text.length;continue;}
+   if(mode==='atom'){atomDelimiter.lastIndex=i;const found=atomDelimiter.exec(text);if(!found){i=text.length;continue;}i=found.index;append(text.slice(fragmentStart,i));position=offset+i;finishScalar();fragmentStart=-1;continue;}
+   if(c===' '||c==='\t'||c==='\r'||c==='\n'){whitespace.lastIndex=i;whitespace.exec(text);i=whitespace.lastIndex;continue;}
    if(rootDone)invalid('Trailing content');const frame=stack.at(-1);
    if(!frame&&c!=='{')invalid('Root must be an object');
+
+   if(frame&&!frame.keep&&!frame.selected&&!frame.array&&stack.length>1&&(frame.state==='keyOrEnd'||frame.state==='keyRequired')&&c==='"'){
+    scalarProperty.lastIndex=i;const pair=scalarProperty.exec(text);if(pair){if(pair[1][0]!=='"'&&pair[1].length>maxItemChars)fail('STREAM_JSON_ITEM_LIMIT','JSON scalar exceeds memory admission bound');frame.key=null;frame.state='commaOrEnd';i=scalarProperty.lastIndex;continue;}
+   }
    if(frame?.state==='keyOrEnd'||frame?.state==='keyRequired'){if(c==='}'&&frame.state==='keyOrEnd'){position=offset+ ++i;close();continue;}if(c!=='"')invalid('Expected object key');mode='string';isKey=true;retainScalar=stack.length===1||frame.keep;fragmentStart=i++;continue;}
    if(frame?.state==='colon'){if(c!==':')invalid('Expected colon');frame.state='value';i++;continue;}
    if(frame?.state==='commaOrEnd'){if(c===(frame.array?']':'}')){position=offset+ ++i;close();continue;}if(c!==',')invalid('Expected comma or end');frame.state=frame.array?'valueRequired':'keyRequired';i++;continue;}
