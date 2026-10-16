@@ -31,9 +31,9 @@ const PROFILES = Object.freeze({
     }),
   }),
   "scripts/verifySelectedJsonObjectFile.cjs": Object.freeze({
-    // Re-audited 2026-10-17: additional lexical boundary fixtures only; imports,
-    // complete large-file evidence and the ten named result checks are retained.
-    auditedSha256: "cf547b8695c2e10331911baf6177b0a32382057daf52842e30ba0ca672ccd043",
+    // Re-audited 2026-10-17: two compact-object grammar/boundary fixtures added.
+    // Imports and complete 494 MB / 128 MiB heap evidence remain unchanged.
+    auditedSha256: "41e4680285e47147890ab3f7361fccfbf0104c425d988b76da39b171d2653a75",
     files: ["server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs", "server/chunkedJsonFile.cjs"],
     trees: [],
     // These CJS modules execute; pin their audited code as well as hashing
@@ -41,7 +41,7 @@ const PROFILES = Object.freeze({
     auditedModules: Object.freeze({
       // Native scans only batch existing string/scalar/formatting tokens. No new
       // imports, skipped grammar, changed hash/file identity or admission bound.
-      "server/selectedJsonObjectFile.cjs": "0fbc332bb06256d83c3800ac3a61dbb5a6414cd23226bbf9594a21b853b2be05",
+      "server/selectedJsonObjectFile.cjs": "a4b2d1181d69fa149556f4f95dfa28efe5c1495c82a61abec63c98e64d19d556",
       "server/dataGenerationStore.cjs": "d4560309af14336d90fc24903b321c8374c1574a492e4cb8f27bfe2cb71875fb",
       "server/chunkedJsonFile.cjs": "da65cde36f12868209d29f830d49c2ba37c27e6931e3a46dfac1a02d799705c3",
     }),
@@ -115,8 +115,8 @@ function success(result, inputs) {
         '{"ignored":"","keep":{"x":"中😀","n":[1,true,null],"bulk":""},"updatedAt":"2026-09-07"}');
       return inputs.command?.length === 1 && inputs.command[0] === "scripts/verifySelectedJsonObjectFile.cjs"
         && inputs.profile === PROFILES[inputs.command[0]].auditedSha256
-        && body.checks === 10 && Array.isArray(body.cases) && body.cases.length === 10
-        && hashValue(body.cases) === "a883c248ada1a2297807fb1515a33d2a4f33f3b7cbde1493edc0b93843abe4f7"
+        && body.checks === 12 && Array.isArray(body.cases) && body.cases.length === 12
+        && hashValue(body.cases) === "0b1d9aa97cf9f3a4b530f07551d2488513ad1963781dc46c7bf417db242a9f1b"
         && evidence?.bytes === expectedBytes && /^[a-f0-9]{64}$/.test(evidence.sha256)
         && evidence.selectedChars >= 32 * 1024 * 1024 && evidence.selectedChars < 33 * 1024 * 1024
         && evidence.maxObservedDepth === 3
