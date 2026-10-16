@@ -2,11 +2,13 @@
 const path = require("node:path");
 const { createPostgresPool } = require("../server/postgresStore.cjs");
 const { publicationIdentityFromMeta } = require("../server/postgresProjectionStore.cjs");
-const { resolveCommittedPostgresPublication, acquireGenerationReadLease } = require("../server/dataGenerationBundle.cjs");
+const { acquireCommittedPostgresPublicationReadLease } = require("../server/dataGenerationBundle.cjs");
+const { performance } = require("node:perf_hooks");
 const { FAST_RESULT_RECEIPT_META_KEYS, validateFastResultReceiptMetadata } = require("./fastResultReceiptIntegrity.cjs");
 const { receiptBarrierState, validateReceiptWait, acquireReceiptReadBarrier } = require("./postgresReceiptBarrier.cjs");
 
 async function openPostgresRuntimeReadSession(options = {}) {
+  const startedAt = performance.now();
   const receiptWaitMs = validateReceiptWait(options.receiptWaitMs ?? 0);
   if (receiptWaitMs && options.protectReceipt !== true) throw new Error("receipt wait requires protected read");
   const storeDir = path.resolve(options.storeDir || process.env.SERVER_STORE_DIR || process.env.DATA_STORE_DIR || path.join(__dirname, "../server-data"));
@@ -50,11 +52,19 @@ async function openPostgresRuntimeReadSession(options = {}) {
     // Rows come from the repeatable-read PostgreSQL snapshot below. Bind it
     // to the immutable generation and verify every file hash, without parsing
     // unrelated historical JSON payloads that this database reader never uses.
-    const publication = resolveCommittedPostgresPublication({ storeDir, publicDataDir, postgresIdentity: identity,
-      validatePayloadSemantics: false });
+    const validationStartedAt = performance.now();
+    const paired = acquireCommittedPostgresPublicationReadLease({ storeDir, publicDataDir,
+      postgresIdentity: identity, validatePayloadSemantics: false,
+      owner: "postgres-runtime-reader", ttlMs: 15 * 60_000,
+      pointerLockHandle: options.pointerLockHandle || null });
+    lease = paired.lease;
+    const publication = paired.publication;
     if (!publication.context) throw new Error("native read requires matching immutable generation");
-    lease = acquireGenerationReadLease({ storeDir, generationId: identity.generationId, context: publication.context,
-      owner: "postgres-runtime-reader", ttlMs: 15 * 60_000, pointerLockHandle: options.pointerLockHandle || null });
+    const readAudit = Object.freeze({ version: "native-read-session-audit-v1",
+      fullPayloadValidationPasses: 1,
+      payloadBytesValidated: publication.context.manifest.files.reduce((sum, entry) => sum + entry.bytes, 0),
+      validationAndLeaseMs: Number((performance.now() - validationStartedAt).toFixed(3)),
+      openDurationMs: Number((performance.now() - startedAt).toFixed(3)) });
     const receiptState = async () => {
         const result = await client.query("SELECT key,value,updated_at FROM football.projection_meta WHERE key=ANY($1::text[])", [FAST_RESULT_RECEIPT_META_KEYS]);
         if (!result.rows.some(row => ["fast_result_receipt", "fast_result_revision"].includes(row.key))) {
@@ -66,7 +76,7 @@ async function openPostgresRuntimeReadSession(options = {}) {
         if (state.legacy) throw new Error("native receipt requires explicit legacy migration");
         return state;
     };
-    return { client, pool, identity, publication, close,
+    return { client, pool, identity, publication, readAudit, close,
       async receipt() { return (await receiptState()).receipt; },
       async guardedFinals() {
         const state = await receiptState();
