@@ -28,6 +28,48 @@ test('between-pass size/hash drift and during-read mutation are rejected',()=>{
 test('duplicate selected top-level fields fail even when a legacy value is not an array',()=>{
  for(const source of ['{"keep":null,"keep":[]}','{"keep":[],"keep":null}','{"keep":{},"keep":[]}','{"keep":false,"keep":{}}'])assert.throws(()=>streamJsonObjectArrays(file(source),{keys:['keep'],allowNonArrays:true,onItem(){}}),{code:'FILE_JSON_INVALID'});
 });
+test('native scans preserve exact retained callbacks and validate every skipped scalar across chunks',()=>{
+ const keep=[{name:'中文🎯',number:-1.25e9,escaped:'a"\\\n',nested:[true,false,null]},[],0,'end'];
+ const source=JSON.stringify({ignored:{truth:true,nothing:null,number:-1.25e9,text:'中😀',nested:{escaped:'a"\\\n'}},keep});
+ for(const chunkBytes of [1,2,7,97,65536,1024*1024]){
+  const rows=[],evidence=streamJsonObjectArrays(file(source),{keys:['keep'],chunkBytes,onItem:(key,value,index)=>rows.push({key,value,index})});
+  assert.deepEqual(rows,keep.map((value,index)=>({key:'keep',value,index})));
+  assert.equal(evidence.bytes,Buffer.byteLength(source));assert.equal(evidence.sha256,crypto.createHash('sha256').update(source).digest('hex'));
+ }
+ for(const scalar of ['01','1.','1e+','+1','truefalse','nul','"\\q"','"\\u12xz"'])for(const chunkBytes of [1,7,65536]){
+  assert.throws(()=>streamJsonObjectArrays(file('{"ignored":{"value":'+scalar+'},"keep":[]}'),{keys:['keep'],chunkBytes,onItem(){}}),{code:'FILE_JSON_INVALID'});
+ }
+});
+test('native skipped properties retain the original scalar, item, and depth bounds',()=>{
+ for(const chunkBytes of [3,65536]){
+  assert.throws(()=>streamJsonObjectArrays(file('{"x":{"value":123456789},"keep":[]}'),{keys:['keep'],chunkBytes,maxItemChars:8,onItem(){}}),{code:'STREAM_JSON_ITEM_LIMIT'});
+  assert.equal(streamJsonObjectArrays(file({x:{value:'x'.repeat(2000)},keep:[]}),{keys:['keep'],chunkBytes,maxItemChars:8,onItem(){}}).counts.keep,0);
+  assert.throws(()=>streamJsonObjectArrays(file({keep:[{value:'x'.repeat(2000)}]}),{keys:['keep'],chunkBytes,maxItemChars:1000,onItem(){}}),{code:'STREAM_JSON_ITEM_LIMIT'});
+ }
+ const nested=file({ignored:{a:{b:[]}},keep:[]});
+ assert.equal(streamJsonObjectArrays(nested,{keys:['keep'],maxDepth:4,onItem(){}}).counts.keep,0);
+ assert.throws(()=>streamJsonObjectArrays(nested,{keys:['keep'],maxDepth:3,onItem(){}}),{code:'STREAM_JSON_DEPTH_LIMIT'});
+});
+test('escape-heavy skipped keys and strings remain exact at the maximum supported chunk',()=>{
+ const escaped='\\u0061'.repeat(120000);
+ for(const source of ['{"ignored":{"'+escaped+'":false},"keep":[null]}','{"ignored":{"value":"'+escaped+'"},"keep":[null]}']){
+  for(const chunkBytes of [65536,1024*1024]){
+   const rows=[],result=streamJsonObjectArrays(file(source),{keys:['keep'],chunkBytes,onItem:(_key,value)=>rows.push(value)});
+   assert.deepEqual(rows,[null]);assert.equal(result.sha256,crypto.createHash('sha256').update(source).digest('hex'));
+  }
+ }
+});
+test('more than 480 MiB of fully validated skipped objects preserves callbacks under a 128 MiB heap',()=>{
+ const p=path.join(dir,'large-native-scan.json'),fd=fs.openSync(p,'wx'),digest=crypto.createHash('sha256');let bytes=0;
+ const write=value=>{const b=Buffer.from(value);fs.writeSync(fd,b);digest.update(b);bytes+=b.length;};
+ const row=JSON.stringify({active:true,nothing:null,number:-1.25e4,text:'中😀',nested:{a:1,b:false,escaped:'a"\\\n'}}),block=Array(4096).fill(row).join(','),expected=[{id:'first',text:'中文🎯'},null,[1,true]];
+ try{write('{"ignored":[');let first=true;while(bytes<=480*1024*1024){if(!first)write(',');first=false;write(block);}write('],"keep":'+JSON.stringify(expected)+',"tail":true}');}finally{fs.closeSync(fd);}
+ const sha256=digest.digest('hex'),modulePath=require.resolve('../server/streamedJsonObjectArrays.cjs');
+ const program=`const a=require('node:assert/strict'),m=require(${JSON.stringify(modulePath)}),rows=[];const evidence=m.streamJsonObjectArrays(${JSON.stringify(p)},{keys:['keep'],expectedBytes:${bytes},expectedSha256:${JSON.stringify(sha256)},onItem:(key,value,index)=>{a.equal(key,'keep');a.equal(index,rows.length);rows.push(value);}});a.deepEqual(rows,${JSON.stringify(expected)});a.equal(evidence.bytes,${bytes});a.equal(evidence.sha256,${JSON.stringify(sha256)});console.log(JSON.stringify({bytes:evidence.bytes,sha256:evidence.sha256,rows:rows.length,maxRssKiB:process.resourceUsage().maxRSS}));`;
+ const child=spawnSync(process.execPath,['--max-old-space-size=128','-e',program],{encoding:'utf8',timeout:120000,maxBuffer:1024*1024});
+ assert.equal(child.status,0,child.stderr);const result=JSON.parse(child.stdout);assert(result.bytes>480*1024*1024);assert.equal(result.rows,3);
+ console.log('native-stream-full-large-evidence '+child.stdout.trim());
+});
 test('full paired summary is identical for HAD/HHAD, duplicate copies, exclusions, and trust revocation',()=>{
  const fixtures=[fixture({id:'88701'}),fixture({id:'88702',pool:'HHAD',scores:[2,1]}),fixture({id:'88703',quote:{odds1:3.4,oddsX:3.4,odds2:3.4}})],payload=snapshot(fixtures),p=file(payload);
  const normal=fixtures.map(f=>f.match),conflict=structuredClone(normal[0]);conflict.scoreHome=8;const untraced=structuredClone(normal[1]);delete untraced.postMatchReview.predictionReview.rows.find(row=>row.marketType==='BEST').frozenVersion;
