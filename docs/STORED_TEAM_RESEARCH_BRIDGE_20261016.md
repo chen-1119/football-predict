@@ -31,6 +31,14 @@ future or stale receipts, failed transactions and ambiguous event bindings rejec
 attachment. Missing optional evidence does not abort the official collection.
 The reader performs no networking, training, registration or production writes.
 
+The full source batch also contains historical results. The caller selects the
+current Beijing business day before invoking the unchanged 512-match reader;
+it never truncates the first 512 rows. This prevents a 2,274-row source batch
+from excluding a valid current fixture after the historical rows. A same-day
+batch over the limit still rejects. Cycle metadata records the source batch,
+selected day, source reads, attachment count and blockers so an absent research
+field is observable without interpreting it as successful adoption.
+
 The focused regression exercises the actual collector store/readback, prospective
 input and V3 assessment boundary using synthetic fixtures. This proves software
 behavior only. Live installation, a natural current-event read, and a source-

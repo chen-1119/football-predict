@@ -68,6 +68,67 @@ async function savedFixture() {
   return {...f, db, loaded};
 }
 
+async function actualSyncResearchStage(fresh, published, observedAt, pool) {
+  const text = fs.readFileSync(require.resolve('../scripts/syncData.cjs'), 'utf8');
+  const start = text.indexOf('  const teamResearchBusinessDate =');
+  const end = text.indexOf('  output = attachImmutableAnalysisReferenceDecisions', start);
+  assert.ok(start > 0 && end > start);
+  return vm.runInNewContext('(async()=>{' + text.slice(start, end)
+    + ';return {output, storedTeamEvidence, teamResearchReadSummary};})()', {
+    prospectiveAuditMatches: fresh, output: published, prospectiveAsOf: observedAt,
+    prematchV3Registry: {baseline: null, parameters: null, asOf: observedAt,
+      status: 'missing', storage: 'postgres', blockers: [], receipts: []},
+    require: name => name === './loadPrematchTeamEvidence.cjs'
+      ? {loadPrematchTeamEvidence: options => loadPrematchTeamEvidence({...options, pool})}
+      : name === '../src/services/publishedForecastPolicy.cjs'
+        ? require('../src/services/publishedForecastPolicy.cjs')
+        : name === '../src/services/prospectiveForecastInput.cjs'
+          ? require('../src/services/prospectiveForecastInput.cjs') : assert.fail('unexpected stage import'),
+  });
+}
+
+test('the actual sync call selects the current business day from a 2274-row history batch without truncating the live fixture', async () => {
+  const f = await savedFixture();
+  const fresh = [...Array.from({length: 2271}, (_, i) => ({id: 'history-' + i,
+    businessDate: '2026-09-16', status: 'FINISHED'})),
+  {...f.match, id: 'sporttery_previous', sourceMatchId: 'previous', businessDate: '2026-09-16'},
+  {...f.match, id: 'sporttery_next', sourceMatchId: 'next', businessDate: '2026-09-18'}, f.match];
+  const before = structuredClone(fresh), parent = structuredClone(f.match);
+  const old = await loadPrematchTeamEvidence({matches: fresh, asOf, pool: f.db.pool});
+  assert.deepEqual(old.blockers, ['team-evidence-input-invalid']);
+  const result = await actualSyncResearchStage(fresh, [parent], asOf, f.db.pool);
+  assert.equal(result.storedTeamEvidence.status, 'read');
+  assert.ok(result.output[0].prospectiveForecastInput.storedTeamEvidenceResearch);
+  assert.equal(result.teamResearchReadSummary.sourceInputMatches, 2274);
+  assert.equal(result.teamResearchReadSummary.currentDayMatches, 1);
+  assert.equal(result.teamResearchReadSummary.researchAttached, 1);
+  assert.equal(result.teamResearchReadSummary.sourcePacketsRead, 2);
+  assert.equal(result.teamResearchReadSummary.numericModelInputAdmitted, false);
+  assert.deepEqual(fresh, before); assert.deepEqual(parent, f.match);
+});
+
+test('the actual sync call retains the 512-match bound for an oversized current-day batch', async () => {
+  const f = await savedFixture();
+  const fresh = [...Array.from({length: 512}, (_, i) => ({...structuredClone(f.match),
+    id: 'sporttery_extra-' + i, sourceMatchId: 'extra-' + i})), f.match];
+  const result = await actualSyncResearchStage(fresh, [f.match], asOf, f.db.pool);
+  assert.equal(result.storedTeamEvidence.status, 'blocked');
+  assert.deepEqual(Array.from(result.teamResearchReadSummary.blockers), ['team-evidence-input-invalid']);
+  assert.equal(result.teamResearchReadSummary.currentDayMatches, 513);
+  assert.equal(result.teamResearchReadSummary.researchAttached, 0);
+  assert.equal(result.output[0].prospectiveForecastInput.storedTeamEvidenceResearch, undefined);
+});
+
+test('the actual sync call records empty current-day evidence without opening a source transaction', async () => {
+  const f = await savedFixture(); f.db.log.length = 0;
+  const result = await actualSyncResearchStage([{...f.match, businessDate: '2026-09-16'}],
+    [f.match], asOf, f.db.pool);
+  assert.equal(result.teamResearchReadSummary.currentDayMatches, 0);
+  assert.equal(result.teamResearchReadSummary.status, 'no-supported-events');
+  assert.equal(result.teamResearchReadSummary.researchAttached, 0);
+  assert.equal(f.db.log.length, 0);
+});
+
 test('native stored packets become same-event research with source hashes, standings, H2H and honest sample coverage', async () => {
   const f = await savedFixture(), receipt = researchForMatch(f.match, f.loaded, asOf);
   assert.equal(f.loaded.status, 'read'); assert.equal(f.loaded.receipts.filter(r => r.status === 'read').length, 2);
