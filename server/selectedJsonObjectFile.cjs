@@ -61,6 +61,9 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
     if (!/^(?:true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)$/.test(atom)) invalid('invalid scalar');
     mode = ''; atom = ''; completeValue(end);
   };
+  // Reuse native scans within this invocation; grammar and byte hashing remain
+  // complete even when a skipped ledger contains long runs of formatting.
+  const atomDelimiter = /[\x20\t\r\n,\]}]/g, whitespace = /[\x20\t\r\n]+/y, special = /["\\\x00-\x1f]/g;
   const consume = text => {
     currentText = text;
     if (capture) captureStart = 0;
@@ -80,7 +83,6 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
           i++; continue;
         }
         // Native scanning keeps a hundreds-of-megabytes skipped string cheap.
-        const special = /["\\\x00-\x1f]/g;
         special.lastIndex = i;
         const found = special.exec(text);
         if (!found) { i = text.length; continue; }
@@ -96,20 +98,26 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
         continue;
       }
       if (mode === 'atom') {
-        if (/[\x20\t\r\n,\]}]/.test(c)) { finishAtom(i); continue; }
-        atom += c;
+        atomDelimiter.lastIndex = i;
+        const found = atomDelimiter.exec(text), end = found ? found.index : text.length;
+        atom += text.slice(i, end);
         if (atom.length > 4096) fail('SELECTED_JSON_SCALAR_LIMIT', 'JSON scalar is too long');
-        i++; continue;
+        i = end;
+        if (found) finishAtom(i);
+        continue;
       }
-      if (/[\x20\t\r\n]/.test(c)) {
+      if (c === ' ' || c === '\t' || c === '\r' || c === '\n') {
         // Formatting whitespace can dominate an audited pretty-printed ledger.
         // Retain only JSON tokens; string contents still use the string branch
         // above unchanged, and the hash continues to cover every original byte.
+        whitespace.lastIndex = i;
+        whitespace.exec(text);
+        const after = whitespace.lastIndex;
         if (capture) {
           appendCapture(text.slice(captureStart, i));
-          captureStart = i + 1;
+          captureStart = after;
         }
-        i++; continue;
+        i = after; continue;
       }
       if (rootDone) invalid('trailing content');
       if (!rootStarted) {

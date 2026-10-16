@@ -31,13 +31,17 @@ const PROFILES = Object.freeze({
     }),
   }),
   "scripts/verifySelectedJsonObjectFile.cjs": Object.freeze({
-    auditedSha256: "f1d8b0db55c699ad692f56b07375031a73b1f9ac7586ec1fa0a0c4ac70376b39",
+    // Re-audited 2026-10-17: additional lexical boundary fixtures only; imports,
+    // complete large-file evidence and the ten named result checks are retained.
+    auditedSha256: "cf547b8695c2e10331911baf6177b0a32382057daf52842e30ba0ca672ccd043",
     files: ["server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs", "server/chunkedJsonFile.cjs"],
     trees: [],
     // These CJS modules execute; pin their audited code as well as hashing
     // actual input bytes. A newly introduced dependency requires a new audit.
     auditedModules: Object.freeze({
-      "server/selectedJsonObjectFile.cjs": "93bb9b7144e283a8ad54669d2ff5851eecb72ea4fc9553350169b51decaf4d99",
+      // Native scans only batch existing string/scalar/formatting tokens. No new
+      // imports, skipped grammar, changed hash/file identity or admission bound.
+      "server/selectedJsonObjectFile.cjs": "0fbc332bb06256d83c3800ac3a61dbb5a6414cd23226bbf9594a21b853b2be05",
       "server/dataGenerationStore.cjs": "d4560309af14336d90fc24903b321c8374c1574a492e4cb8f27bfe2cb71875fb",
       "server/chunkedJsonFile.cjs": "da65cde36f12868209d29f830d49c2ba37c27e6931e3a46dfac1a02d799705c3",
     }),
