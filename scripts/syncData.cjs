@@ -18136,8 +18136,10 @@ async function sync() {
   const prematchV3Registry = await require('../src/services/prematchV3ModelRegistry.cjs').loadPrematchV3ModelRegistry({
     asOf: prospectiveAsOf,
   });
+  const teamResearchBusinessDate = require('../src/services/publishedForecastPolicy.cjs').day(Date.parse(prospectiveAsOf));
+  const teamResearchMatches = prospectiveAuditMatches.filter(match => match.businessDate === teamResearchBusinessDate);
   const storedTeamEvidence = await require('./loadPrematchTeamEvidence.cjs').loadPrematchTeamEvidence({
-    matches: prospectiveAuditMatches, asOf: prospectiveAsOf,
+    matches: teamResearchMatches, asOf: prospectiveAsOf,
   });
   output = require('../src/services/prospectiveForecastInput.cjs').attachProspectiveForecastInputs(
     output, prospectiveAuditMatches, Date.parse(prospectiveAsOf), {
@@ -18148,6 +18150,15 @@ async function sync() {
         parameterValidation: prematchV3Registry.parameterValidation || null },
     },
   );
+  const teamResearchReadSummary = {
+    version: 'prematch-stored-team-research-cycle-v1', asOf: prospectiveAsOf,
+    businessDate: teamResearchBusinessDate, sourceInputMatches: prospectiveAuditMatches.length,
+    currentDayMatches: teamResearchMatches.length, supportedEvents: storedTeamEvidence.events.length,
+    status: storedTeamEvidence.status, blockers: storedTeamEvidence.blockers,
+    sourcePacketsRead: storedTeamEvidence.receipts.filter(row => row.status === 'read').length,
+    researchAttached: output.filter(match => match.prospectiveForecastInput?.storedTeamEvidenceResearch?.asOf === prospectiveAsOf).length,
+    numericModelInputAdmitted: false, productionRecommendationWrites: 0,
+  };
   output = attachImmutableAnalysisReferenceDecisions(output, existingBySourceId, capturedAt);
   output = output.map((match) => attachWorldCupPrior(match, worldCupKimiDataset));
   output = output.map(normalizePublishedPredictionText);
@@ -18687,6 +18698,7 @@ async function sync() {
     } : null,
     historicalTraining: historicalTrainingModeling,
     postgresTeamHistory: postgresTeamHistorySummary,
+    teamEvidenceResearch: teamResearchReadSummary,
     worldCupKimiData: worldCupKimiSummary,
     ...(keptExistingReason ? {
       fallback: {
@@ -18899,6 +18911,7 @@ async function sync() {
         oddsHistory: oddsHistorySummary,
         historicalTraining: historicalTrainingModeling,
         postgresTeamHistory: postgresTeamHistorySummary,
+        teamEvidenceResearch: teamResearchReadSummary,
         worldCupKimiData: worldCupKimiSummary,
         byStatus,
       },

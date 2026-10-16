@@ -2586,7 +2586,6 @@ const describeCycleStages = () => ([
       "sync:api-football",
       "sync:weather",
       "sync:openfootball-observations",
-      "sync:team-evidence",
       "sync:football-data-fixtures",
       "sync:football-data-results",
       "sync:open-research",
