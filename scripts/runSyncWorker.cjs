@@ -2567,6 +2567,7 @@ const describeCycleStages = () => ([
     id: "official-result",
     fatal: true,
     operations: [
+      "sync:team-evidence",
       "sync:data",
       "sync:free-football",
       "sync:prematch",
@@ -3302,6 +3303,17 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     if (fastPhase) await onFastPublished(fastPhase);
 
     const officialPhaseStartedAt = new Date().toISOString();
+    // Native append-only source receipts must be available before the current
+    // research input is rebuilt. Their own advisory lock/cadence prevents a
+    // second collector; they do not rewrite shared JSON/model artifacts.
+    const officialTeamEvidenceEnabled = storageMode.postgresOnly && process.env.ENABLE_TEAM_EVIDENCE_SYNC !== "0";
+    if (officialTeamEvidenceEnabled) await onBeforeHeavyStep("sync:team-evidence");
+    const officialTeamEvidenceStep = await runOptional(
+      officialTeamEvidenceEnabled,
+      "sync:team-evidence",
+      {},
+      { fatal: false, timeoutMs: commandTimeouts.enrichment },
+    );
     await onBeforeHeavyStep("sync:data");
     const officialSyncStep = await runCommand("node", ["scripts/syncData.cjs"], {
       SYNC_WORKFLOW_MINUTES: String(cadence.workflowMinutes)
@@ -3382,6 +3394,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       uefaOfficialResultStep,
       officialClubResultStep,
       fiveHundredResultFallbackStep,
+      officialTeamEvidenceStep,
       officialSyncStep,
       officialFreeFootballStep,
       officialPreMatchStep,
@@ -3549,9 +3562,6 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_500_DETAILS_SYNC === "1", "sync:500:details"));
     enrichmentSteps.push(await runEnrichment(apiFootballRuntimePolicy.enabled, "sync:api-football"));
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_WEATHER_SYNC !== "0", "sync:weather"));
-    // Independent append-only PostgreSQL evidence; no legacy file rewrite or
-    // implicit model promotion. Per-source cadence and retries live in the job.
-    enrichmentSteps.push(await runEnrichment(storageMode.postgresOnly && process.env.ENABLE_TEAM_EVIDENCE_SYNC !== "0", "sync:team-evidence"));
     // Private community receipts do not feed the publication planner. They
     // retain a visible slow-step result but cannot trigger base reconstruction.
     const communityReceiptStep = await runOpenFootballObservationSchedule({

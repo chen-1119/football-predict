@@ -98,7 +98,10 @@ const COMMAND_CALLER_FUNCTIONS = deepFreeze({
     "bc5de663a3c33c468d9062d6b8eec3be88c4c4202a173e1aaae7af2d74147678",
     // Same literal commands; generation and model writers share the existing
     // artifact permit. No new command grammar or source closure exemptions.
-    "7cb92d576c07496fda1d70a17eb8d7e42467f7d36864b50859a1e3f6e12b18e7"],
+    "7cb92d576c07496fda1d70a17eb8d7e42467f7d36864b50859a1e3f6e12b18e7",
+    // Same bounded literal collector, before the research rebuild. The source
+    // job keeps its own cooldown/PG lock; adapters and grammar remain exact.
+    "decb2a5b48626a502346e0bc46428e57b2e77194fbece4d1b9afb3ebcbcc0cac"],
 });
 const UNIT_SOURCE_HASHES = Object.freeze({
   "football-daily-prematch.service": "9e6af93d56635ed0940590b4a027e02ab5310080e53b2873775b520f46796d8a",
