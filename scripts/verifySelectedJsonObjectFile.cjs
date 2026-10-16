@@ -61,6 +61,44 @@ try {
     assert.throws(() => fixture('{}', [], { expectedBytes: 3 }), e => e.code === 'FILE_SIZE_MISMATCH');
     assert.throws(() => fixture('{}x', []), e => e.code === 'FILE_JSON_INVALID');
   });
+  check('compact skipped scalar properties retain exact grammar across small and 1 MiB chunks', () => {
+    const valid = '{"skip":{"a":-0,"a":1.25e-9,"q\\\"k":"quote\\\" slash\\\\ / \\uD83D\\uDE00 中😀","yes":true,"no":false,"nil":null,"nested":[{"a":1},{"b":"x"}]},"keep":{"a":false,"n":-0,"s":"same  spaces"},"tail":{"end":2}}';
+    const expected = JSON.parse(valid).keep;
+    for (const chunkBytes of [1, 7, 31, 127, 65536, 1024 * 1024]) {
+      const result = fixture(valid, ['keep'], { chunkBytes });
+      assert.deepEqual(result.value.keep, expected);
+      assert.equal(result.evidence.sha256, sha(valid));
+      assert.equal(result.evidence.maxObservedDepth, 4);
+    }
+    const invalidValues = ['01', '-01', '+1', '1.', '1e', '1e+', 'truefalse', 'nullfalse',
+      '"\\x41"', '"\\u12x4"', '"raw\nline"', '"bad\\q"', '"unterminated'];
+    for (const value of invalidValues) {
+      const text = '{"skip":{"first":true,"bad":' + value + '},"keep":1}';
+      assert.throws(() => JSON.parse(text));
+      for (const chunkBytes of [1, 7, 31, 65536, 1024 * 1024])
+        assert.throws(() => fixture(text, ['keep'], { chunkBytes }), e => e.code === 'FILE_JSON_INVALID', text);
+    }
+    for (const text of ['{"skip":{"a":1,},"keep":1}', '{"skip":{"a":1 "b":2},"keep":1}',
+      '{"skip":{"a":true],"keep":1}', '{"skip":{"a":1},"keep":1}garbage']) {
+      for (const chunkBytes of [7, 65536, 1024 * 1024])
+        assert.throws(() => fixture(text, ['keep'], { chunkBytes }), e => e.code === 'FILE_JSON_INVALID', text);
+    }
+  });
+  check('compact scalar admission bound and long skipped strings survive complete native scans and boundaries', () => {
+    for (const chunkBytes of [7, 65536, 1024 * 1024]) {
+      const accepted = '{"skip":{"n":' + '1'.repeat(4096) + '},"keep":true}';
+      assert.equal(fixture(accepted, ['keep'], { chunkBytes }).value.keep, true);
+      const refused = '{"skip":{"n":' + '1'.repeat(4097) + '},"keep":true}';
+      assert.throws(() => fixture(refused, ['keep'], { chunkBytes }), e => e.code === 'SELECTED_JSON_SCALAR_LIMIT');
+    }
+    const text = JSON.stringify({ skip: { long: 'x'.repeat(1024 * 1024 + 19) + '\\"中😀', end: 1 }, keep: [true, -0] });
+    for (const chunkBytes of [65536, 1024 * 1024]) {
+      const result = fixture(text, ['keep'], { chunkBytes });
+      assert.deepEqual(result.value.keep, [true, 0]);
+      assert.equal(result.evidence.sha256, sha(text));
+      assert.equal(result.evidence.bytes, Buffer.byteLength(text));
+    }
+  });
   check('depth, retained characters, key size and scalar bounds are explicit refusals', () => {
     assert.throws(() => fixture('{"skip":[[[]]]}', [], { maxDepth: 3 }), e => e.code === 'SELECTED_JSON_DEPTH_LIMIT');
     assert.throws(() => fixture('{"keep":"12345"}', ['keep'], { maxSelectedChars: 4 }), e => e.code === 'SELECTED_JSON_VALUE_LIMIT');
