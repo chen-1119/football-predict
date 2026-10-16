@@ -1108,7 +1108,10 @@ const publicSnapshotRows = ({ observationsOnly = false } = {}) => {
   if (observationsOnly) {
     // Large warehouses already require complete hash/UTF-8/grammar validation.
     // Avoid the extra growing-prefix regex probe before that mandatory read.
-    const fileBytes = fs.statSync(publicSnapshotsFile).size;
+    const fileBytes = (() => {
+      try { return fs.statSync(publicSnapshotsFile).size; }
+      catch { return 0; } // Keep the existing missing-file diagnostic/fallback.
+    })();
     const prefix = fileBytes > publicSnapshotPrefixMaxBytes
       ? { ok: false, rows: [], bytesRead: 0, fileBytes, reason: "large-file-complete-validation" }
       : readTopLevelArrayProperty(publicSnapshotsFile, "observations");

@@ -46,7 +46,17 @@ if (process.argv[2] === "--bounded-child") {
     check("invalid observation type fails closed", () => { small('{"observations":{}}'); assert.throws(() => readCandidatePublicObservations(file), { code: "CANDIDATE_OBSERVATIONS_INVALID" }); });
     check("selected-value bound does not fall back to a full parse", () => { small('{"observations":["' + "x".repeat(200) + '"]}'); assert.throws(() => readCandidatePublicObservations(file, { maxSelectedChars: 100 }), { code: "SELECTED_JSON_VALUE_LIMIT" }); });
     check("file admission bound rejects before loading data", () => assert.throws(() => readCandidatePublicObservations(file, { maxFileBytes: 10 }), { code: "CANDIDATE_SNAPSHOT_FILE_BOUND" }));
-    check("absent observations remains empty after validating complete JSON", () => { small('{"rows":[]}'); assert.deepEqual(readCandidatePublicObservations(file).rows, []); });
+    check("absent observations and missing legacy warehouse retain their existing fallback", () => {
+      small('{"rows":[]}'); assert.deepEqual(readCandidatePublicObservations(file).rows, []);
+      fs.unlinkSync(file);
+      const source = fs.readFileSync(path.join(__dirname, "captureCandidateProspectiveDeadline.cjs"), "utf8");
+      const a = source.indexOf("const readTopLevelArrayProperty = ("), b = source.indexOf("\nconst publicOddsRows", a);
+      const result = require("node:vm").runInNewContext(source.slice(a, b) + '\n({rows:publicSnapshotRows({observationsOnly:true}),audit:publicSnapshotReadAudit});', {
+        fs, Buffer, publicSnapshotPrefixMaxBytes: 8 * 1024 * 1024, publicSnapshotsFile: file, require,
+        readJson: (_file, fallback) => fallback,
+      });
+      assert.equal(result.rows.length, 0); assert.match(result.audit.reason, /ENOENT/);
+    });
     console.log(JSON.stringify({ ok: true, verifier: "candidate-public-observations-v1", checks, productionWrites: 0, providerRequests: 0 }, null, 2));
   } finally {
     const resolved = fs.realpathSync(dir); assert.equal(path.dirname(resolved).toLowerCase(), fs.realpathSync(os.tmpdir()).toLowerCase());
