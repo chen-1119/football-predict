@@ -481,7 +481,10 @@ async function seed(state, directory) {
   const source = pool(state, 'football', state.oldDatabaseOid); let session;
   try {
     session = await require('./postgresRuntimeReadSession.cjs').openPostgresRuntimeReadSession({ pool: source,
-      storeDir: STORE, publicDataDir: LIVE + '/public/data', protectReceipt: true });
+      // Keep one bounded FIFO position while an already admitted projection drains.
+      // This consumes the original cutover lease; no lease is refreshed and any
+      // publication identity advance still rejects below before candidate copying.
+      storeDir: STORE, publicDataDir: LIVE + '/public/data', protectReceipt: true, receiptWaitMs: 60_000 });
     await session.guardedFinals();
     const leaseInput = driver().read(path.join(directory, 'code-lease-input.json'));
     assert.equal(leaseInput.sha, state.sha);
