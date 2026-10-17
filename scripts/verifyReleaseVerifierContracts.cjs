@@ -11,6 +11,8 @@ check('native worker readiness and counts isolate full validation in an owned bo
  const file='tests/postgres-worker-read-process.test.cjs';
  const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
  assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 14$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ const cadence=require('node:child_process').spawnSync(process.execPath,['scripts/verifySyncWorkerCadence.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(cadence.status,0,cadence.stderr||cadence.stdout);
  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const required of [file,'scripts/postgresWorkerReadProcess.cjs','scripts/postgresWorkerReadProtocol.cjs','scripts/postgresWorkerReadChild.cjs','scripts/verifyPostgresWorkerReadIsolation.cjs'])assert(read(entry).includes('"'+required+'"'));
  assert(read('.github/workflows/recommendation-runtime.yml').includes('node --max-old-space-size=128 scripts/verifyPostgresWorkerReadIsolation.cjs'));
 });
