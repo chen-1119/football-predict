@@ -349,6 +349,14 @@ check('candidate observation prefix overflow stays bounded before signing', () =
   assert.equal(report.verifier, 'candidate-public-observations-v1'); assert.ok(report.checks.every(row => row.ok === true));
   assert.equal(report.productionWrites, 0); assert.equal(report.providerRequests, 0);
 });
+check('owned parallel complete hash cannot publish before successful thread exit', () => {
+  const child = require('node:child_process').spawnSync(process.execPath, ['scripts/verifySelectedJsonParallel.cjs'],
+    { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 60000, maxBuffer: 1024 * 1024 });
+  assert.equal(child.status, 0, child.stderr || child.stdout);
+  const report = JSON.parse(child.stdout); assert.equal(report.ok, true); assert.ok(report.checks.length >= 20);
+  assert.equal(report.verifier, 'selected-json-parallel-full-v1'); assert.ok(report.checks.every(row => row.ok === true));
+  assert.equal(report.productionWrites, 0);
+});
 const bundle=read('scripts/createReleaseBundle.cjs'),safety=read('scripts/verifyReleaseBundleSafety.cjs');
 check('large-file foundation reader and regression are included in signed source', () => {
   for (const entry of ['server/chunkedJsonFile.cjs', 'scripts/verifyChunkedJsonFoundation.cjs']) {
@@ -478,6 +486,7 @@ const collectorEntries = ['scripts/releaseWorkerCodeRepair.cjs','scripts/verifyR
   'scripts/productionFixtureIsolationContract.cjs', 'scripts/verifyProductionFixtureIsolationContract.cjs',
   'scripts/verifyProductionFixtureIsolation.cjs',
   'scripts/readCandidatePublicObservations.cjs', 'scripts/verifyCandidatePublicObservations.cjs',
+  'server/selectedJsonFullHashWorker.cjs', 'scripts/verifySelectedJsonParallel.cjs',
   'scripts/releasePrivateModelSeed.cjs', 'scripts/verifyReleasePrivateModelSeed.cjs',
   'scripts/verifyFrontendRuntimeAlternatives.cjs',
   'scripts/frontendReleaseInputs.cjs', 'scripts/prepareFrontendRelease.cjs', 'scripts/verifyFrontendReleaseInputs.cjs',

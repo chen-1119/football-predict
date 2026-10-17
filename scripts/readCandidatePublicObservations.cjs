@@ -32,4 +32,13 @@ function readCandidatePublicObservations(filePath, { maxSelectedChars = 128 * 10
       selectedParseMs: Number((performance.now() - hashedAt).toFixed(3)),
       totalMs: Number((performance.now() - startedAt).toFixed(3)) } };
 }
-module.exports = { readCandidatePublicObservations };
+async function readCandidatePublicObservationsParallel(filePath, { maxSelectedChars = 128 * 1024 * 1024, maxFileBytes = 2 * 1024 ** 3 } = {}) {
+  const result = await require('../server/selectedJsonObjectFile.cjs').readSelectedJsonObjectFileWithIndependentHash({
+    filePath, keys: ['observations'], maxSelectedChars, maxFileBytes });
+  if (result.value.observations !== undefined && !Array.isArray(result.value.observations)) {
+    const error = new Error('snapshot observations must be an array'); error.code = 'CANDIDATE_OBSERVATIONS_INVALID'; throw error;
+  }
+  return { rows: result.value.observations || [], bytesRead: result.bytesRead, fileBytes: result.fileBytes,
+    evidence: result.evidence, timings: result.timings };
+}
+module.exports = { readCandidatePublicObservations, readCandidatePublicObservationsParallel };

@@ -1,12 +1,15 @@
 'use strict';
 const fs = require('node:fs');
 const crypto = require('node:crypto');
+const { Worker } = require('node:worker_threads');
+const HASH_FROM_OWNED_THREAD = Symbol('independent full hash');
+let hashOwner = null;
 
 // A strict streaming JSON recognizer. Only selected top-level values are
 // materialized; skipped values still undergo the complete JSON grammar check.
 // This is deliberately not a regex extractor, nor a fallback for bad hashes.
 function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, keys,
-  chunkBytes = 64 * 1024, maxSelectedChars = 128 * 1024 * 1024, maxDepth = 256 }) {
+  chunkBytes = 64 * 1024, maxSelectedChars = 128 * 1024 * 1024, maxDepth = 256 }, privateMode) {
   const fail = (code, detail) => { const e = new Error(detail); e.code = code; throw e; };
   if (!Number.isSafeInteger(expectedBytes) || expectedBytes < 0 || !/^[a-f0-9]{64}$/.test(expectedSha256)
     || !Array.isArray(keys) || keys.some(k => typeof k !== 'string')
@@ -207,9 +210,70 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
       || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs
       || current.isSymbolicLink() || current.dev !== opened.dev || current.ino !== opened.ino) fail('GENERATION_FILE_CHANGED', 'selected JSON file changed while reading');
     const actualHash = hash.digest('hex');
-    if (actualHash !== expectedSha256) fail('FILE_HASH_MISMATCH', 'selected JSON file hash mismatch');
+    if (privateMode !== HASH_FROM_OWNED_THREAD && actualHash !== expectedSha256) fail('FILE_HASH_MISMATCH', 'selected JSON file hash mismatch');
     return { value: result, evidence: { bytes: readBytes, sha256: actualHash, selectedChars, maxObservedDepth, selectedKeys: Object.keys(result).sort() } };
   } finally { fs.closeSync(fd); }
 }
 
-module.exports = { readSelectedJsonObjectFile };
+// Two independent complete passes overlap. Only this function has the private
+// capability to retain the strict parser result before the other digest arrives.
+// No rows escape until its fixed owned thread has actually exited successfully.
+async function readSelectedJsonObjectFileWithIndependentHash({ filePath, keys,
+  maxFileBytes = 2 * 1024 ** 3, maxSelectedChars = 128 * 1024 * 1024 }) {
+  const fail = (code, message) => { const error = new Error(message); error.code = code; throw error; };
+  if (hashOwner) fail('SELECTED_JSON_HASH_BUSY', 'an owned full hash read is still active');
+  if (!Number.isSafeInteger(maxFileBytes) || maxFileBytes < 0 || maxFileBytes > 2 * 1024 ** 3)
+    fail('SELECTED_JSON_OPTIONS_INVALID', 'invalid full hash file bound');
+  const started = performance.now(), before = fs.lstatSync(filePath);
+  if (!before.isFile() || before.isSymbolicLink() || before.size > maxFileBytes)
+    fail('CANDIDATE_SNAPSHOT_FILE_BOUND', 'snapshot file exceeds bounded object admission');
+  const same = (a, b) => a.isFile() && b.isFile() && !b.isSymbolicLink()
+    && a.dev === b.dev && a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs;
+  const fd = fs.openSync(filePath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+  const nonce = crypto.randomBytes(16).toString('hex');
+  let worker, exited = false, done, reply, messages = 0, failure = null, exitCode;
+  hashOwner = { fd, nonce };
+  try {
+    if (!same(before, fs.fstatSync(fd))) fail('GENERATION_FILE_CHANGED', 'snapshot changed before independent hashing');
+    worker = new Worker(require.resolve('./selectedJsonFullHashWorker.cjs'), {
+      workerData: { version: 1, action: 'full-sha256', nonce, fd, expectedBytes: before.size },
+      env: {}, stdout: true, stderr: true, trackUnmanagedFds: true,
+      resourceLimits: { maxOldGenerationSizeMb: 16, maxYoungGenerationSizeMb: 4 },
+    });
+    const refuse = () => { failure ||= new Error('invalid owned full hash response'); };
+    done = new Promise(resolve => {
+      worker.on('message', value => {
+        messages++;
+        if (messages !== 1 || typeof value !== 'string' || Buffer.byteLength(value) > 1024) return refuse();
+        try { reply = JSON.parse(value); } catch { refuse(); }
+      });
+      worker.on('messageerror', refuse);
+      worker.on('error', error => { failure = error; });
+      worker.stdout.on('data', refuse); worker.stderr.on('data', refuse);
+      worker.once('exit', code => { exited = true; exitCode = code; resolve(); });
+    });
+    const parseStarted = performance.now();
+    const result = readSelectedJsonObjectFile({ filePath, expectedBytes: before.size,
+      expectedSha256: '0'.repeat(64), keys, maxSelectedChars, chunkBytes: 1024 * 1024 }, HASH_FROM_OWNED_THREAD);
+    const parseMs = performance.now() - parseStarted;
+    await done;
+    if (failure || exitCode !== 0 || messages !== 1 || !reply || Object.getPrototypeOf(reply) !== Object.prototype
+      || Object.keys(reply).sort().join(',') !== 'action,bytes,durationMs,nonce,sha256,version'
+      || reply.version !== 1 || reply.action !== 'full-sha256' || reply.nonce !== nonce
+      || reply.bytes !== before.size || !/^[a-f0-9]{64}$/.test(reply.sha256)
+      || !Number.isFinite(reply.durationMs) || reply.durationMs < 0)
+      fail('SELECTED_JSON_HASH_PROTOCOL', 'owned full hash did not complete with one valid response and exit zero');
+    if (reply.sha256 !== result.evidence.sha256) fail('FILE_HASH_MISMATCH', 'independent complete snapshot hashes differ');
+    if (!same(before, fs.fstatSync(fd)) || !same(before, fs.lstatSync(filePath)))
+      fail('GENERATION_FILE_CHANGED', 'snapshot changed during independent full reads');
+    return { ...result, bytesRead: reply.bytes + result.evidence.bytes, fileBytes: before.size,
+      timings: { hashMs: Number(reply.durationMs.toFixed(3)), selectedParseMs: Number(parseMs.toFixed(3)),
+        totalMs: Number((performance.now() - started).toFixed(3)), fullPasses: 2, passesOverlap: true, hashThreadExited: true } };
+  } finally {
+    // Keep both descriptor and owner until the actual final exit event. The
+    // capture's existing process deadline also owns all of its worker threads.
+    if (worker && !exited) { try { await worker.terminate(); } finally { await done; } }
+    fs.closeSync(fd); hashOwner = null;
+  }
+}
+module.exports = { readSelectedJsonObjectFile, readSelectedJsonObjectFileWithIndependentHash };
