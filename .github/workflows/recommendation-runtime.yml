@@ -5,6 +5,8 @@ on:
       - 'server/accounts.cjs'
       - 'server/selectedJsonFullHashWorker.cjs'
       - 'scripts/verifySelectedJsonParallel.cjs'
+      - 'scripts/capturePublicationCoordinator.cjs'
+      - 'tests/capture-publication-coordination.test.cjs'
       - 'server/publicProduct.cjs'
       - 'server/index.cjs'
       - 'server/researchArchiveRead.cjs'
@@ -371,6 +373,8 @@ jobs:
           POSTGRES_SOURCE_MEMORY_CONTAINER: ${{ job.services.postgres.id }}
       - name: Owned complete parallel hash, actual 820 MB reader and unchanged bounds
         run: node scripts/verifySelectedJsonParallel.cjs
+      - name: Capture lanes drain before generation and retain original budgets
+        run: node --test tests/capture-publication-coordination.test.cjs
       - name: Frontend evidence semantics
         run: node scripts/verifyFrontendEvidenceSemantics.cjs
       - name: Audited static receipt dependency closure

@@ -7,6 +7,14 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('generation coordinates the two original capture lanes without weakening deadlines or locks',()=>{
+ const file='tests/capture-publication-coordination.test.cjs';
+ const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 19$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
+  for(const required of ['scripts/capturePublicationCoordinator.cjs',file])assert(read(entry).includes('"'+required+'"'));
+ assert(read('.github/workflows/recommendation-runtime.yml').includes('node --test '+file));
+});
 check('native worker readiness and counts isolate full validation in an owned bounded child',()=>{
  const file='tests/postgres-worker-read-process.test.cjs';
  const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});

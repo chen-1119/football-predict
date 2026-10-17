@@ -448,6 +448,15 @@ const createWorkerShutdownController = ({
 };
 
 const runtimeShutdownController = createWorkerShutdownController();
+let capturePublicationTelemetryEnabled = false;
+const captureInputPublicationCoordinator = require('./capturePublicationCoordinator.cjs').createCapturePublicationCoordinator({
+  isInterrupted: () => runtimeShutdownController.requested,
+  interruptionError: () => runtimeShutdownController.interruptionError(),
+  onState: state => {
+    if (capturePublicationTelemetryEnabled && workerStatusState?.pid === process.pid)
+      writeWorkerStatusBestEffort({ ...workerStatusState, checkedAt: new Date().toISOString(), captureInputPublicationCoordination: state });
+  },
+});
 
 const commandTimeoutError = (command, args, timeoutMs) => {
   const error = new Error(`${command} ${args.join(" ")} timed out after ${timeoutMs}ms`);
@@ -946,9 +955,10 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
       clearNormal();
       clearRetry();
     },
-    resume: () => {
+    resume: ({ recoveryIfStale = false } = {}) => {
       if (stopped || !paused) return null;
       paused = false;
+      if (recoveryIfStale && !exactPublishedStatus().exact) return scheduleRetry();
       return scheduleNormal();
     },
     stop: () => {
@@ -1152,6 +1162,7 @@ const startBenchmarkProspectiveDeadlineCapture = ({
     get handle() { return handle; },
     get inFlight() { return inFlightTick !== null; },
     get lastResult() { return lastResult; },
+    get paused() { return paused; },
     get nextRunAt() { return nextRunAt; },
     waitForIdle: () => inFlightTick || Promise.resolve(lastResult),
     pause: () => {
@@ -2326,7 +2337,7 @@ const runOfficialArtifactGeneration = async ({ task, isInterrupted, acquireLock 
     error.code = 'SYNC_WORKER_SHARED_ARTIFACT_BUSY';
     throw error;
   }
-  try { return await task(); } finally { await lock.release(); }
+  try { return await captureInputPublicationCoordinator.run('datastore:generation', task); } finally { await lock.release(); }
 };
 
 const describePostEnrichmentPublicationNeed = (stepsInput = []) => {
@@ -3814,7 +3825,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       await onBeforeHeavyStep("datastore:generation:consolidated-slow-publication");
     }
     const consolidatedGenerationStep = {
-      ...(await runOptional(
+      ...(await captureInputPublicationCoordinator.run('datastore:generation', () => runOptional(
         consolidatedPublicationRequired
           && consolidatedDataValidationStep.ok === true,
         "datastore:generation",
@@ -3822,7 +3833,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
           SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
         },
         { fatal: false, timeoutMs: commandTimeouts.sqlite }
-      )),
+      ), Boolean(consolidatedPublicationRequired && consolidatedDataValidationStep.ok === true))),
       phase: "consolidated-slow-publication",
     };
     if (runtimeProjectionEnabled
@@ -4337,9 +4348,11 @@ const main = async () => {
   const handleSigint = () => handleShutdownSignal("SIGINT");
   process.once("SIGTERM", handleSigterm);
   process.once("SIGINT", handleSigint);
+  capturePublicationTelemetryEnabled = loop;
   candidateDeadlineHeartbeat = loop
     ? startCandidateProspectiveDeadlineHeartbeat()
     : null;
+  captureInputPublicationCoordinator.attach(candidateDeadlineHeartbeat, 'candidate');
   if (loop && candidateDeadlineHeartbeat && benchmarkDeadlineCaptureEnabled) {
     // Formal cutoff publication owns startup priority. Arm the independent
     // benchmark lane only after the first exact heartbeat, and schedule its
@@ -4348,6 +4361,7 @@ const main = async () => {
     void candidateDeadlineHeartbeat.waitForPublished().then(() => {
       if (runtimeShutdownController.requested || benchmarkDeadlineHeartbeat) return;
       benchmarkDeadlineHeartbeat = startBenchmarkProspectiveDeadlineCapture({ immediate: false });
+      captureInputPublicationCoordinator.attach(benchmarkDeadlineHeartbeat, 'benchmark');
     });
   }
   const startupResultRecoveryPlan = describeFiveHundredResultFallbackNeed();
