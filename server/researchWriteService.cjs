@@ -12,7 +12,13 @@ function decodeRequest(raw) {
   const text = raw.toString('utf8');
   if (!Buffer.from(text).equals(raw)) fail('RESEARCH_REQUEST_UTF8');
   let r; try { r = JSON.parse(text); } catch { fail('RESEARCH_REQUEST_JSON'); }
-  if (!r || r.version !== 'research-broker-request-v1' || !['archive', 'archive-read', 'publish', 'publication-read','revision-publish','revision-read','combo-revision-publish','combo-revision-read'].includes(r.action)) fail('RESEARCH_REQUEST_ACTION');
+  if (!r || r.version !== 'research-broker-request-v1' || !['archive', 'archive-read', 'publish', 'publication-read','revision-publish','revision-read','combo-revision-publish','combo-revision-read','publication-retry'].includes(r.action)) fail('RESEARCH_REQUEST_ACTION');
+  if(r.action==='publication-retry'){
+    const input=require('./researchPublicationRetry.cjs').original(r);
+    decodeRequest(Buffer.from(r.originalRequestJson));
+    if(input.action!=='publish')fail('RESEARCH_REQUEST_ACTION');
+    return r;
+  }
   const fields = r.action === 'publication-read' ? 'action,draftHash,recordKey,version'
     : r.action === 'archive-read' ? 'action,businessDate,reportKind,sha256,version'
       : r.action === 'archive' || r.action.includes('revision-') ? 'action,json,sha256,version' : 'action,draftHash,json,sha256,version';
@@ -70,13 +76,14 @@ function createResearchWriteService({ pool, runExclusive } = {}) {
     finally { c.release(broken); }
   }
   async function execute(raw) {
-    const r = decodeRequest(raw);
+    const input=decodeRequest(raw),retry=input.action==='publication-retry';
+    const r=retry?decodeRequest(Buffer.from(input.originalRequestJson)):input;
     if(r.action==='combo-revision-publish')return combos.publish(JSON.parse(r.json));
     if(r.action==='combo-revision-read')return runExclusive(()=>combos.read(JSON.parse(r.json)));
     if(r.action==='revision-publish')return revisions.publish(JSON.parse(r.json));
     if(r.action==='revision-read')return runExclusive(()=>revisions.read(JSON.parse(r.json)));
     if (r.action === 'archive') return store.archive(Buffer.from(r.json), r.sha256);
-    return runExclusive(async () => {
+    const result=await runExclusive(async () => {
       if (r.action === 'archive-read') return store.read(r.businessDate,r.reportKind,r.sha256);
       if (r.action === 'publication-read') return observe(r.recordKey, r.draftHash);
       const draft = JSON.parse(r.json), key = 'reviewed-analysis-' + draft.businessDate + '-batch-' + r.draftHash;
@@ -89,6 +96,7 @@ function createResearchWriteService({ pool, runExclusive } = {}) {
       if (!after.verified) fail('RESEARCH_COMMITTED_READBACK_UNVERIFIED');
       return { ...after, submitted: true };
     });
+    return retry?{...result,explicitRetry:true,originalRequestSha256:input.originalRequestSha256}:result;
   }
   return { execute };
 }

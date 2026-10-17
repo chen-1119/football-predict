@@ -134,6 +134,13 @@ check('receipt reader queue keeps bounded waits, connection disposal and before-
     for(const required of ['scripts/postgresReceiptBarrier.cjs','scripts/verifyReceiptBarrierPostgres.cjs',file])assert(read(entry).includes('"'+required+'"'));
   assert(read('.github/workflows/recommendation-runtime.yml').includes('run: node scripts/verifyReceiptBarrierPostgres.cjs'));
 });
+check('explicit publication retry binds exact failed bytes and preserves unknown commit refusal',()=>{
+  const file='tests/research-publication-retry.test.cjs';
+  const child=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# fail 0$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const f of [file,'server/researchPublicationRetry.cjs','scripts/verifyResearchPublicationRetryPostgres.cjs'])assert(read(entry).includes('"'+f+'"'));
+  assert(read('.github/workflows/recommendation-runtime.yml').includes('run: node scripts/verifyResearchPublicationRetryPostgres.cjs'));
+});
 check('root broker installer consumes the actual normal archive inventory commitment',()=>{
   const files=['tests/research-broker-installer.test.cjs','tests/research-installer-archive-contract.test.cjs'];
   const child=require('node:child_process').spawnSync(process.execPath,['--test',...files],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});

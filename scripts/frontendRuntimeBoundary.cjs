@@ -57,7 +57,7 @@ const COMMAND_FUNCTIONS = deepFreeze({
   // One fixed read-only worker entrypoint; its protocol and full PG reader
   // remain in the ordinary authenticated source closure via require.resolve.
   "scripts/postgresWorkerReadProcess.cjs": ["1f5e8ec54ad4f7d599aa0866e6d2bd60b78fa1fbd42d6240f1440ff6e10f55c2"],
-  "scripts/researchReleaseBroker.cjs": ["65c05b4386cb41ded4293b9d95146639d73f321101d87c936e5b76230f50fbff"],
+  "scripts/researchReleaseBroker.cjs": ["65c05b4386cb41ded4293b9d95146639d73f321101d87c936e5b76230f50fbff", "60b58fb8d3d04a6555ad4ebe52ba30d0395faced3a8baaa52f8e2f3d4916ded7"],
   "scripts/syncDailyPrematchApi.cjs": ["91da78aabb2c925254c42abec031be710d4f9a5316a2ba059533b60189b3bedf"],
   "server/index.cjs": ["209dac00faf2eb81c7c6348cacd5c273dd31dfc8ef913d9f77e0cf2fd4a621b6"],
   "server/relayFastResultWatcher.cjs": ["dbea20508195f9cafdb058ff0e4242448cac19a914c163ef961cfa5d16243567"],
