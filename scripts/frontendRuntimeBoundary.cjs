@@ -114,7 +114,11 @@ const COMMAND_CALLER_FUNCTIONS = deepFreeze({
     "decb2a5b48626a502346e0bc46428e57b2e77194fbece4d1b9afb3ebcbcc0cac",
     // Existing model:backtest command is unchanged; its coverage input now
     // awaits the same native count reader through the fixed owned child.
-    "ec22292480cabdbbd6429a3b9b3e45dc8927b4bac769acbdbe2eba26c3a991df"],
+    "ec22292480cabdbbd6429a3b9b3e45dc8927b4bac769acbdbe2eba26c3a991df",
+    // Generation alone drains and pauses the two existing capture lanes.
+    // Removing that wrapper restores the audited runCycle exactly; every
+    // command expression, argument and original artifact lock is unchanged.
+    "a456e7ee291c58e36618e28abb1f272076b00d28a834f1d27fb86b65090a6826"],
 });
 const UNIT_SOURCE_HASHES = Object.freeze({
   "football-daily-prematch.service": "9e6af93d56635ed0940590b4a027e02ab5310080e53b2873775b520f46796d8a",
