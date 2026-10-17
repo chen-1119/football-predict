@@ -249,7 +249,9 @@ test('seed refuses a pointer advance before any candidate copy or lease refresh'
     './nativeReleasePostgresTransport.cjs':{ NativeReleasePostgresPool:class { async connect(){return client;} async end(){ended++;} } },
     '../server/postgresStore.cjs':{ verifyPostgresSchemaCurrent:async()=>{} },
     './postgresReleaseMirror.cjs':{ assertMirrorSourceCatalog:async()=>({catalogHash:'fixture'}) },
-    './postgresRuntimeReadSession.cjs':{ openPostgresRuntimeReadSession:async()=>currentSession },
+    './postgresRuntimeReadSession.cjs':{ openPostgresRuntimeReadSession:async options=>{
+      a.equal(options.protectReceipt,true);a.equal(options.receiptWaitMs,60000);return currentSession;
+    } },
     './nativeReleaseDataPlane.cjs':{ read:()=>({sha:state.sha,identity:original.identity}),
       copyGenerationAsService:async()=>{copies++;}, write:()=>{writes++;} },
     '../server/dataGenerationStore.cjs':{ ...x.generations, storePaths:()=>x.paths,
@@ -271,6 +273,10 @@ test('current affinity is checked before durable capture and copying; final affi
   a(seed.indexOf('assertCodePublicationForState(state,session)') < seed.indexOf('copyGenerationAsService'));
   a(source.includes('if(!state.committedGenerationRepairAuthorizationHash) return assertCodeCurrentPublication(session,storeDir)'));
   a(!seed.includes('retryLeaseRead')); a(!seed.includes('code-transition-lease'));
+  a.match(seed,/protectReceipt: true, receiptWaitMs: 60_000/);
+  const shell=fs.readFileSync(path.join(root,'deploy/light-server/release-native.sh'),'utf8');
+  a(shell.includes('900 - $1'));a(shell.includes('native_code_verify_cutover_lease 300'));
+  a.equal((shell.match(/CODE_CUTOVER_STARTED_SECONDS=\$SECONDS/g)||[]).length,1);
   const final = fs.readFileSync(path.join(root,'scripts/nativeReleaseDataPlane.cjs'),'utf8');
   a(final.includes('assertSamePublication(seed.identity, session.identity)'));
   a(final.includes('for (const name of ["generationId", "manifestHash", "sourceCycleId", "committedAt"]) assert.equal(pointer[name], session.identity[name]);'));
