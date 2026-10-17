@@ -11,7 +11,7 @@ const { Pool } = require("pg");
 const root = path.resolve(__dirname, "..");
 async function main() {
   if (process.platform !== "win32" || !process.argv[2]) throw new Error("Supply a PostgreSQL 16 bin directory on Windows");
-  if (process.argv[3] !== undefined && !["--all-native", "--worker-cycle", "--schema-startup"].includes(process.argv[3])) throw new Error("Unknown native QA suite selection");
+  if (process.argv[3] !== undefined && !["--all-native", "--worker-cycle", "--schema-startup", "--worker-read"].includes(process.argv[3])) throw new Error("Unknown native QA suite selection");
   const bin = fs.realpathSync(path.resolve(process.argv[2]));
   for (const name of ["initdb", "pg_ctl", "postgres", "createdb"]) if (!fs.statSync(path.join(bin, `${name}.exe`)).isFile()) throw new Error(`Missing ${name}`);
   const password = crypto.randomBytes(32).toString("hex");
@@ -62,8 +62,9 @@ async function main() {
     }
     const workerCycle = process.argv[3] === "--worker-cycle";
     const schemaStartup = process.argv[3] === "--schema-startup";
-    const test = spawnSync(process.execPath, [path.join(__dirname, schemaStartup ? "verifyNativeSchemaStartup.cjs" : workerCycle ? "verifyNativeWorkerCycle.cjs" : "verifyPredictionEvidenceRoundtrip.cjs")], {
-      cwd: root, env: { ...env, EVIDENCE_TEST_POSTGRES_URL: connectionString }, encoding: "utf8", windowsHide: true, timeout: workerCycle ? 360000 : 120000, maxBuffer: 4 * 1024 * 1024,
+    const workerRead = process.argv[3] === "--worker-read";
+    const test = spawnSync(process.execPath, [...(workerRead ? ["--max-old-space-size=128"] : []), path.join(__dirname, workerRead ? "verifyPostgresWorkerReadIsolation.cjs" : schemaStartup ? "verifyNativeSchemaStartup.cjs" : workerCycle ? "verifyNativeWorkerCycle.cjs" : "verifyPredictionEvidenceRoundtrip.cjs")], {
+      cwd: root, env: { ...env, EVIDENCE_TEST_POSTGRES_URL: connectionString, ...(workerRead ? { WORKER_READ_TEST_DATABASE_URL: connectionString } : {}) }, encoding: "utf8", windowsHide: true, timeout: workerCycle ? 360000 : 120000, maxBuffer: 4 * 1024 * 1024,
     });
     if (test.status !== 0) throw new Error(`Evidence verification failed: ${(test.stderr || test.stdout || test.error?.message || test.status).toString().replaceAll(password, "[redacted]").slice(-2500)}`);
     report.verification = JSON.parse(test.stdout); report.ok = report.verification.ok === true;
@@ -82,7 +83,7 @@ async function main() {
     fs.rmSync(resolved, { recursive: true, force: true }); report.cleanup = true;
   }
   fs.mkdirSync(path.join(root, "outputs"), { recursive: true });
-  fs.writeFileSync(path.join(root, process.argv[3] === "--schema-startup" ? "outputs/native-schema-startup-result.json" : process.argv[3] === "--worker-cycle" ? "outputs/native-worker-postgres-result.json" : "outputs/q1-native-postgres-evidence-result.json"), `${JSON.stringify(report, null, 2)}\n`);
+  fs.writeFileSync(path.join(root, process.argv[3] === "--worker-read" ? "outputs/native-worker-read-result.json" : process.argv[3] === "--schema-startup" ? "outputs/native-schema-startup-result.json" : process.argv[3] === "--worker-cycle" ? "outputs/native-worker-postgres-result.json" : "outputs/q1-native-postgres-evidence-result.json"), `${JSON.stringify(report, null, 2)}\n`);
   console.log(JSON.stringify(report, null, 2));
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; });

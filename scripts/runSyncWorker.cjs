@@ -1729,8 +1729,11 @@ const runRuntimeProjectionOrReuse = async (input = {}) => {
     "postgres:sync", input.extraEnv || {}, input.options || {}), storage: "postgres" };
 };
 const readRuntimeSourceCycleObservation = async (input = {}) => storageMode.postgresOnly
-  ? require("./postgresWorkerObservation.cjs").readPostgresWorkerObservation({
+  ? require("./postgresWorkerReadProcess.cjs").readPostgresWorkerInChild("observation", {
     ...input, storeDir, publicDataDir: path.join(rootDir, "public/data"),
+  }, {
+    timeoutMs: commandTimeoutMs, terminateGraceMs: commandTerminateGraceMs,
+    forceSettleMs: commandForceSettleMs, shutdownController: runtimeShutdownController,
   })
   : readSourceCycleObservation(input);
 
@@ -2492,7 +2495,12 @@ const maybeRunModelBacktest = async ({
   const decision = describeModelBacktestNeed({
     sqliteStep,
     warehouseCoverage: storageMode.postgresOnly
-      ? await require("./postgresWorkerObservation.cjs").readPostgresWorkerCounts({ storeDir, publicDataDir: path.join(rootDir, "public/data") })
+      ? await require("./postgresWorkerReadProcess.cjs").readPostgresWorkerInChild("counts", {
+        storeDir, publicDataDir: path.join(rootDir, "public/data"),
+      }, {
+        timeoutMs: commandTimeoutMs, terminateGraceMs: commandTerminateGraceMs,
+        forceSettleMs: commandForceSettleMs, shutdownController: runtimeShutdownController,
+      })
       : null,
     forceCandidateImplementationRefreeze,
   });

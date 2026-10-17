@@ -344,6 +344,10 @@ jobs:
       - run: node tests/postgres-generation-native.integration.cjs
         env:
           POSTGRES_GENERATION_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
+      - name: Owned native worker read isolation and unchanged deadlines
+        run: node --test tests/postgres-worker-read-process.test.cjs && node scripts/verifySyncWorkerCadence.cjs && node --max-old-space-size=128 scripts/verifyPostgresWorkerReadIsolation.cjs
+        env:
+          WORKER_READ_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Bounded PostgreSQL source assembly with real 512 MiB original bytes
         run: node --max-old-space-size=256 tests/postgres-source-memory.integration.cjs
         env:

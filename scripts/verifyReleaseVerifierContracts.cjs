@@ -7,6 +7,15 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('native worker readiness and counts isolate full validation in an owned bounded child',()=>{
+ const file='tests/postgres-worker-read-process.test.cjs';
+ const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 14$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ const cadence=require('node:child_process').spawnSync(process.execPath,['scripts/verifySyncWorkerCadence.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(cadence.status,0,cadence.stderr||cadence.stdout);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const required of [file,'scripts/postgresWorkerReadProcess.cjs','scripts/postgresWorkerReadProtocol.cjs','scripts/postgresWorkerReadChild.cjs','scripts/verifyPostgresWorkerReadIsolation.cjs'])assert(read(entry).includes('"'+required+'"'));
+ assert(read('.github/workflows/recommendation-runtime.yml').includes('node --max-old-space-size=128 scripts/verifyPostgresWorkerReadIsolation.cjs'));
+});
 check('exact r876 baseline preparation retains false health and all candidate admission gates',()=>{
  const files=['scripts/baselineAuthorityReplayRepair.cjs','scripts/baselineReadonlyPeer.cjs','scripts/verifyBaselineReadonlyPeer.cjs','scripts/verifyBaselineAuthorityReplayLock.cjs','tests/baseline-authority-replay-repair.test.cjs'];
  const r=require('node:child_process').spawnSync(process.execPath,['--test','tests/baseline-authority-replay-repair.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1048576});

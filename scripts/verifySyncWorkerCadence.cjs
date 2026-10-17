@@ -620,6 +620,7 @@ assert.deepEqual(stages[1].operations, [
   "publish-fast-event-if-changed",
 ]);
 assert.deepEqual(stages[2].operations, [
+  "sync:team-evidence",
   "sync:data",
   "sync:free-football",
   "sync:prematch",
@@ -695,7 +696,7 @@ const officialClubResultIndex = workerSource.indexOf('"sync:official-club-result
 const resultFallbackIndex = workerSource.indexOf("const fiveHundredResultFallbackPlan = describeFiveHundredResultFallbackNeed()");
 const fastPublishIndex = workerSource.indexOf("await onFastPublished(fastPhase)");
 const officialSyncIndex = workerSource.indexOf("const officialSyncStep = await runCommand");
-const officialGenerationIndex = workerSource.indexOf("const officialGenerationStep = await runOptional");
+const officialGenerationIndex = workerSource.indexOf("const officialGenerationStep = await runOfficialArtifactGeneration");
 const officialSqliteIndex = workerSource.indexOf("const sqliteStep = await runRuntimeProjectionOrReuse");
 const officialPublishIndex = workerSource.indexOf("await onOfficialPublished(officialPhase)");
 const officialLockReleaseIndex = workerSource.indexOf("await releasePhaseLock();", officialPublishIndex);
@@ -705,16 +706,16 @@ const postEnrichmentValidationIndex = workerSource.indexOf("const postEnrichment
 const postEnrichmentPublicationPlanIndex = workerSource.indexOf("const postEnrichmentPublicationPlan =");
 const sourceCycleObservationIndex = workerSource.indexOf("const sourceCycleObservation = await readRuntimeSourceCycleObservation");
 const modelBacktestIndex = workerSource.indexOf("const modelBacktestStep = sourceCycleObservation.ready");
-const autonomousModelLearningIndex = workerSource.indexOf("const autonomousModelLearningStep = await runOptional");
-const modelLearningIndex = workerSource.indexOf("const modelLearningStep = await runOptional");
-const capabilityAuditIndex = workerSource.indexOf("const capabilityAuditStep = await runOptional");
+const autonomousModelLearningIndex = workerSource.indexOf("const autonomousModelLearningStep = await runModelArtifactTask");
+const modelLearningIndex = workerSource.indexOf("const modelLearningStep = await runModelArtifactTask");
+const capabilityAuditIndex = workerSource.indexOf("const capabilityAuditStep = await runModelArtifactTask");
 const modelStrategyIndex = workerSource.indexOf("const modelStrategyEnabled =");
 const modelStrategyLockAcquireIndex = workerSource.indexOf(
   'await acquireSlowPhaseLock("sync-worker-model-strategy-and-publication")',
   modelStrategyIndex,
 );
 const modelStrategyCommandIndex = workerSource.indexOf(
-  "const modelStrategyCommandStep = await runOptional",
+  "const modelStrategyCommandStep = await runModelArtifactTask",
   modelStrategyLockAcquireIndex,
 );
 const consolidatedPublicationPlanIndex = workerSource.indexOf(
@@ -1554,7 +1555,7 @@ const verifyRelayWake = async () => {
   const end = workerSource.indexOf("let officialPhaseFinishedAt", start);
   assert.ok(start > 0 && end > start);
   const execute = new (Object.getPrototypeOf(async function () {}).constructor)(
-    "onBeforeHeavyStep", "runOptional", "commandTimeouts", "runCommand", "npmCommand", "storeDir", "runtimeProjectionEnabled", "runRuntimeProjectionOrReuse", "storageMode",
+    "onBeforeHeavyStep", "runOptional", "commandTimeouts", "runCommand", "npmCommand", "storeDir", "runtimeProjectionEnabled", "runRuntimeProjectionOrReuse", "storageMode", "runOfficialArtifactGeneration", "isInterrupted",
     workerSource.slice(start, end) + "return officialFastResultReconciliationStep;",
   );
   for (const failing of [null, "reconcile:fast-results-generation", "validate:data"]) {
@@ -1562,7 +1563,9 @@ const verifyRelayWake = async () => {
     const record = async name => { calls.push(name); if (name === failing) throw new Error("synthetic-stop"); return {ok:true,script:name}; };
     const task = () => execute(async () => {}, async (enabled, name, env, options) => {
       assert.equal(enabled, true); assert.notEqual(options?.fatal, false); return record(name);
-    }, {validation:1000,sqlite:1000}, async (_npm, args) => record(args[1]), "synthetic-npm", "synthetic-store", true, async () => record("datastore:sqlite"), {postgresOnly:false});
+    }, {validation:1000,sqlite:1000}, async (_npm, args) => record(args[1]), "synthetic-npm", "synthetic-store", true, async () => record("datastore:sqlite"), {postgresOnly:false},
+    options => require("./runSyncWorker.cjs").runOfficialArtifactGeneration({ ...options,
+      acquireLock: async () => ({ acquired: true, release: async () => {} }) }), () => false);
     if (failing) await assert.rejects(task, /synthetic-stop/); else assert.equal((await task()).ok, true);
     assert.deepEqual(calls, failing === "reconcile:fast-results-generation" ? [failing]
       : failing === "validate:data" ? ["reconcile:fast-results-generation", failing]
