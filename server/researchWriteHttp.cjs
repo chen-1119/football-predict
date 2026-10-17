@@ -5,6 +5,7 @@ const { decodeRequest, MAX_REQUEST_BYTES } = require('./researchWriteService.cjs
 const { readResearchRequestBody } = require('./researchRequestBody.cjs');
 const paths = new Map([
   ['/api/operator/research/report', 'archive'],
+  ['/api/operator/research/report-retry', 'archive-retry'],
   ['/api/operator/research/report-read', 'archive-read'],
   ['/api/operator/research/publish', 'publish'],
   ['/api/operator/research/publication-retry', 'publication-retry'],

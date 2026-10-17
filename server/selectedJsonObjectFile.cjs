@@ -65,12 +65,16 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
   // complete even when a skipped ledger contains long runs of formatting.
   const atomDelimiter = /[\x20\t\r\n,\]}]/g, whitespace = /[\x20\t\r\n]+/y, special = /["\\\x00-\x1f]/g;
 
-  // Complete scalar properties in skipped nested objects can be recognized in
-  // one native scan. Containers, retained values and chunk boundaries still
-  // use the complete state machine below. String and scalar grammar are exact.
+  // Bounded runs of complete skipped scalars use the same exact grammar in a
+  // native scan. Containers, retained values and incomplete chunk tails still
+  // use the state machine. The numeric lookahead keeps the original 4096-char
+  // admission bound; longer atoms fall back to its explicit refusal below.
   const jsonString = '"(?:[^"\\\\\\x00-\\x1f]|\\\\(?:["\\\\/bfnrt]|u[0-9a-fA-F]{4}))*"';
-  const jsonScalar = '(?:' + jsonString + '|true|false|null|-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)';
-  const scalarProperty = new RegExp(jsonString + '[ \\t\\r\\n]*:[ \\t\\r\\n]*(' + jsonScalar + ')(?=[ \\t\\r\\n]*[,}])', 'y');
+  const jsonScalar = '(?:' + jsonString + '|true|false|null|(?![-0-9eE+.]{4097})-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)';
+  const gap = '[ \\t\\r\\n]*', separator = gap + ',' + gap;
+  const property = jsonString + gap + ':' + gap + jsonScalar;
+  const scalarProperties = new RegExp(property + '(?:' + separator + property + '){0,63}(?=' + gap + '[,}])', 'y');
+  const scalarValues = new RegExp(jsonScalar + '(?:' + separator + jsonScalar + '){0,63}(?=' + gap + '[,\\]])', 'y');
   const consume = text => {
     currentText = text;
     if (capture) captureStart = 0;
@@ -135,12 +139,16 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
 
       if (!capture && stack.length > 1 && frame.type === 'object'
         && (frame.state === 'keyOrEnd' || frame.state === 'keyRequired') && c === '"') {
-        scalarProperty.lastIndex = i;
-        const pair = scalarProperty.exec(text);
-        if (pair) {
-          if (pair[1][0] !== '"' && pair[1].length > 4096)
-            fail('SELECTED_JSON_SCALAR_LIMIT', 'JSON scalar is too long');
-          frame.state = 'commaOrEnd'; i = scalarProperty.lastIndex; continue;
+        scalarProperties.lastIndex = i;
+        if (scalarProperties.exec(text)) {
+          frame.state = 'commaOrEnd'; i = scalarProperties.lastIndex; continue;
+        }
+      }
+      if (!capture && frame.type === 'array'
+        && (frame.state === 'valueOrEnd' || frame.state === 'valueRequired')) {
+        scalarValues.lastIndex = i;
+        if (scalarValues.exec(text)) {
+          frame.state = 'commaOrEnd'; i = scalarValues.lastIndex; continue;
         }
       }
       if (frame.state === 'keyOrEnd' || frame.state === 'keyRequired') {

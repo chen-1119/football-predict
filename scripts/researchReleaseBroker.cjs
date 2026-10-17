@@ -67,11 +67,11 @@ function syncNew(file, bytes) {
 }
 function requestJournalIdentity(request) {
   let purpose; try { purpose = JSON.parse(request.toString('utf8')); } catch { fail('RESEARCH_REQUEST_JSON'); }
-  if (purpose?.version !== 'research-broker-request-v1' || !['archive','archive-read','publish','publication-read','revision-publish','revision-read','combo-revision-publish','combo-revision-read','publication-retry'].includes(purpose.action)) fail('RESEARCH_REQUEST_ACTION');
+  if (purpose?.version !== 'research-broker-request-v1' || !['archive','archive-read','publish','publication-read','revision-publish','revision-read','combo-revision-publish','combo-revision-read','publication-retry','archive-retry'].includes(purpose.action)) fail('RESEARCH_REQUEST_ACTION');
   const requestSha = sha(request), readOnly = ['archive-read','publication-read','revision-read','combo-revision-read'].includes(purpose.action);
   // Read requests need a fresh database observation. A cached not-observed read
   // must never hide a later COMMIT. Mutation identities remain durable/exact.
-  return { requestSha, readOnly, journalId: purpose.action==='publication-retry'?require('../server/researchPublicationRetry.cjs').journalId(purpose):requestSha + (readOnly ? '-read-' + crypto.randomBytes(12).toString('hex') : '') };
+  return { requestSha, readOnly, journalId: purpose.action==='archive-retry'?require('../server/researchArchiveRetry.cjs').journalId(purpose):purpose.action==='publication-retry'?require('../server/researchPublicationRetry.cjs').journalId(purpose):requestSha + (readOnly ? '-read-' + crypto.randomBytes(12).toString('hex') : '') };
 }
 function replayEnvelope(saved, requestSha, releaseSha, now = new Date().toISOString()) {
   if (!Buffer.isBuffer(saved) || saved.length > 3*1024*1024-4096) fail('RESEARCH_RECEIPT_BOUND');
@@ -92,6 +92,7 @@ async function main() {
   const { requestSha, readOnly, journalId } = requestJournalIdentity(request);
   const purpose=JSON.parse(request.toString('utf8'));
   if(purpose.action==='publication-retry')require('../server/researchPublicationRetry.cjs').verifyFailure(purpose,trustedFile);
+  if(purpose.action==='archive-retry')require('../server/researchArchiveRetry.cjs').verifyFailure(purpose,trustedFile);
   // Full request/draft validation stays in the unprivileged child. Root only
   // classifies the four fixed purposes and journals the original bounded bytes.
   const intent = path.join(JOURNAL, journalId + '.intent.json'), receipt = path.join(JOURNAL, journalId + '.receipt.json');

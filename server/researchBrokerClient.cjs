@@ -58,7 +58,7 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
       || typeof result.originalReceiptBase64 !== 'string'
       || typeof result.deliveredAt !== 'string' || !Number.isFinite(Date.parse(result.deliveredAt))
       || new Date(result.deliveredAt).toISOString() !== result.deliveredAt || Date.parse(result.deliveredAt) < startedAt
-      || Date.parse(result.deliveredAt) > finishedBy || !['archive','publish','revision-publish','combo-revision-publish','publication-retry'].includes(decodeRequest(raw).action)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+      || Date.parse(result.deliveredAt) > finishedBy || !['archive','publish','revision-publish','combo-revision-publish','publication-retry','archive-retry'].includes(decodeRequest(raw).action)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
     const saved = Buffer.from(result.originalReceiptBase64,'base64');
     if(saved.toString('base64')!==result.originalReceiptBase64||saved.length>3*1024*1024-4096
       ||sha(saved)!==result.originalReceiptSha256||!Buffer.from(saved.toString()).equals(saved)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
@@ -74,12 +74,17 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
     || Date.parse(result.finishedAt) > receiptUpperBound) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
   let value; try { value = JSON.parse(result.stdout); } catch { fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED'); }
   if (!value || value.ok !== true || value.retryWriteAutomatically !== false) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
-  const request = decodeRequest(raw);
+  const envelopeRequest = decodeRequest(raw);
+  const archiveRetry = envelopeRequest.action === 'archive-retry';
+  const request = archiveRetry ? decodeRequest(Buffer.from(envelopeRequest.originalRequestJson)) : envelopeRequest;
+  if(archiveRetry&&(value.explicitRetry!==true||value.originalRequestSha256!==envelopeRequest.originalRequestSha256
+    ||typeof value.submitted!=='boolean'||typeof value.inserted!=='boolean'
+    ||(value.submitted===false&&value.inserted!==false)))fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
   if (request.action.startsWith('archive')) {
     const original = request.action === 'archive' ? JSON.parse(request.json) : request;
     const key = reportKey(original.businessDate, original.reportKind);
     if (value.key !== key || !['report-archived', 'not-observed'].includes(value.state)
-      || (request.action === 'archive' && (value.state !== 'report-archived' || value.commitAcknowledged !== true))
+      || (request.action === 'archive' && (value.state !== 'report-archived' || ((!archiveRetry||value.submitted===true)&&value.commitAcknowledged !== true)))
       || (value.state === 'report-archived' && (value.sha256 !== request.sha256 || value.readbackVerified !== true
         || value.verificationScope !== 'archive-byte-integrity-only' || value.published !== false
         || value.recommendationEligibilityVerified !== false))) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
