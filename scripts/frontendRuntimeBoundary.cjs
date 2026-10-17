@@ -54,6 +54,8 @@ const RESEARCH_COMPONENT = deepFreeze({
 // arbitrary command. Their enclosing function source must remain exact, and
 // baseline/candidate package and entire reachable-source bytes must also match.
 const COMMAND_FUNCTIONS = deepFreeze({
+  // Existing fixed publisher CLI, with the worker's owned-close barrier.
+  "scripts/workerFastResultPublisher.cjs": ["95f2dad4de2755e3715d2344e88c7142ef86bf8713908af0185805af726d62bb"],
   // One fixed read-only worker entrypoint; its protocol and full PG reader
   // remain in the ordinary authenticated source closure via require.resolve.
   "scripts/postgresWorkerReadProcess.cjs": ["1f5e8ec54ad4f7d599aa0866e6d2bd60b78fa1fbd42d6240f1440ff6e10f55c2"],
@@ -118,7 +120,10 @@ const COMMAND_CALLER_FUNCTIONS = deepFreeze({
     // Generation alone drains and pauses the two existing capture lanes.
     // Removing that wrapper restores the audited runCycle exactly; every
     // command expression, argument and original artifact lock is unchanged.
-    "a456e7ee291c58e36618e28abb1f272076b00d28a834f1d27fb86b65090a6826"],
+    "a456e7ee291c58e36618e28abb1f272076b00d28a834f1d27fb86b65090a6826",
+    // Only the inline fast publisher callback moves into its fixed child.
+    // All other worker bytes and original four command calls are unchanged.
+    "facd991fc312ccab15e90b6ba1311c67a6ea569535138c307a8933fbc8df38ed"],
 });
 const UNIT_SOURCE_HASHES = Object.freeze({
   "football-daily-prematch.service": "9e6af93d56635ed0940590b4a027e02ab5310080e53b2873775b520f46796d8a",

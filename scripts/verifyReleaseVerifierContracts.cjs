@@ -7,6 +7,15 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('fast publication keeps complete validation in one fixed owned child until actual close',()=>{
+ const file='tests/worker-fast-result-publisher.test.cjs';
+ const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 16$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
+  for(const required of [file,'scripts/workerFastResultPublisher.cjs','scripts/verifyWorkerFastPublisherIsolation.cjs'])assert(read(entry).includes('"'+required+'"'));
+ assert.equal(pkg.scripts['verify:worker-fast-publisher'],'node --test '+file);
+ assert(read('.github/workflows/recommendation-runtime.yml').includes('node --max-old-space-size=128 scripts/verifyWorkerFastPublisherIsolation.cjs'));
+});
 check('generation coordinates the two original capture lanes without weakening deadlines or locks',()=>{
  const file='tests/capture-publication-coordination.test.cjs';
  const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});

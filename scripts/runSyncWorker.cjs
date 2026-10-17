@@ -3235,38 +3235,10 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     const fastResultStep = await runBestEffort(
       "publish:official-results-fast",
       async () => {
-        const { publishOfficialResultsRuntime } = require("./publishOfficialResultsFast.cjs");
-        let result = {
-          script: "publish:official-results-fast",
-          ...await publishOfficialResultsRuntime(),
-        };
-        const postgresMode = String(process.env.FOOTBALL_POSTGRES_MODE || "disabled").trim().toLowerCase();
-        if (
-          ["shadow-write", "shadow-read", "primary"].includes(postgresMode)
-          && result.storage !== "postgres"
-          && result.ok === true
-          && (Number(result.publishedRows || 0) > 0 || result.visibleStateChanged === true)
-        ) {
-          const { syncPostgresProjectionFromSqlite } = require("./postgresProjectionSync.cjs");
-          try {
-            result = {
-              ...result,
-              postgresProjection: await syncPostgresProjectionFromSqlite({ mode: "fast-result" }),
-            };
-          } catch (error) {
-            if (postgresMode === "primary") throw error;
-            result = {
-              ...result,
-              postgresProjection: {
-                ok: false,
-                warning: true,
-                code: error.code || null,
-                error: error.message || String(error),
-              },
-            };
-          }
-        }
-        return result;
+        const result = await require("./workerFastResultPublisher.cjs").runWorkerFastResultPublisher({
+          shutdownController: runtimeShutdownController, timeoutMs: commandTimeoutMs, terminateGraceMs: commandTerminateGraceMs,
+        });
+        return { script: "publish:official-results-fast", ...result };
       }
     );
     const uefaOfficialResultStep = await runOptional(
