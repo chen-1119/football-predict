@@ -583,6 +583,8 @@ const requiredReleaseEntries = [
   "scripts/verifyProductionFixtureIsolationContract.cjs",
   "scripts/verifyProductionFixtureIsolation.cjs",
   "scripts/readCandidatePublicObservations.cjs",
+  "server/selectedJsonFullHashWorker.cjs",
+  "scripts/verifySelectedJsonParallel.cjs",
   "scripts/verifyCandidatePublicObservations.cjs",
   "scripts/verifyChunkedJsonFoundation.cjs",
   "scripts/verifyPostgresSemanticReviewCleanup.cjs",

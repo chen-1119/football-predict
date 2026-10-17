@@ -1100,7 +1100,7 @@ let publicSnapshotReadAudit = {
   reason: null,
 };
 
-const publicSnapshotRows = ({ observationsOnly = false } = {}) => {
+const publicSnapshotRows = async ({ observationsOnly = false } = {}) => {
   if (observationsOnly && publicSnapshotObservationCache) {
     return publicSnapshotObservationCache;
   }
@@ -1139,7 +1139,7 @@ const publicSnapshotRows = ({ observationsOnly = false } = {}) => {
       // Preserve every current observation, including arrays larger than the
       // prefix window, without loading the unrelated historical state rows.
       // Corruption, concurrent replacement and memory bounds fail closed.
-      const selected = require("./readCandidatePublicObservations.cjs").readCandidatePublicObservations(publicSnapshotsFile);
+      const selected = await require("./readCandidatePublicObservations.cjs").readCandidatePublicObservationsParallel(publicSnapshotsFile);
       publicSnapshotObservationCache = selected.rows;
       publicSnapshotReadAudit = {
         version: "candidate-public-snapshot-read-audit-v1", mode: "observations-streamed",
@@ -2410,7 +2410,7 @@ const captureBenchmark = async () => {
     const snapshots = dueMatches.length
       ? dedupeSnapshots([
           ...sqliteSnapshots.rows,
-          ...publicSnapshotRows({ observationsOnly: sqliteSnapshots.ok }),
+          ...await publicSnapshotRows({ observationsOnly: sqliteSnapshots.ok }),
         ])
       : [];
     const sqliteOdds = await runtimeOddsForMatches(
@@ -2659,7 +2659,7 @@ const capture = async ({ deadlineOnly = false } = {}) => {
     const snapshots = snapshotQueryMatches.length
       ? dedupeSnapshots([
           ...sqlite.rows,
-          ...publicSnapshotRows({ observationsOnly: sqlite.ok }),
+          ...await publicSnapshotRows({ observationsOnly: sqlite.ok }),
         ])
       : [];
     const readinessSqlite = await runtimeSnapshotsForMatches(
@@ -2678,7 +2678,7 @@ const capture = async ({ deadlineOnly = false } = {}) => {
     const readinessSnapshots = upcomingMatches.length
       ? dedupeSnapshots([
           ...readinessSqlite.rows,
-          ...publicSnapshotRows({ observationsOnly: readinessSqlite.ok }),
+          ...await publicSnapshotRows({ observationsOnly: readinessSqlite.ok }),
         ])
       : [];
     const trustedCollectorCount = Math.max(

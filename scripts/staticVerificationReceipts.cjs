@@ -34,14 +34,16 @@ const PROFILES = Object.freeze({
     // Re-audited 2026-10-17: bounded scalar runs, arrays and 64-item boundaries.
     // Imports and complete 494 MB / 128 MiB heap evidence remain unchanged.
     auditedSha256: "f3dc560ea85e10d9a8f91cb3de00af672a3f6e4831ef17d7fa1c7c0f5636af65",
-    files: ["server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs", "server/chunkedJsonFile.cjs"],
+    files: ["server/selectedJsonObjectFile.cjs", "server/selectedJsonFullHashWorker.cjs", "server/dataGenerationStore.cjs", "server/chunkedJsonFile.cjs"],
     trees: [],
     // These CJS modules execute; pin their audited code as well as hashing
     // actual input bytes. A newly introduced dependency requires a new audit.
     auditedModules: Object.freeze({
-      // Native scans only batch existing string/scalar/formatting tokens. No new
-      // imports, skipped grammar, changed hash/file identity or admission bound.
-      "server/selectedJsonObjectFile.cjs": "7d6fce4bab2ef5068cc5ca0114ad32dd0da3d0b9f6da24c6e1c98d53fa77d67e",
+      // Audited 2026-10-18: sync parser retains its full hash comparison. The
+      // private deferred path is available only to the two-pass owned reader,
+      // which validates the independent digest and real thread exit first.
+      "server/selectedJsonObjectFile.cjs": "7746ceea113d0135fa73e4889754772f763f4bceb8982a07379d3276128b2d96",
+      "server/selectedJsonFullHashWorker.cjs": "95d7da747a18362bea6b457c2da1531c831afa6eceb98b55e5e4ad4a2b788b5c",
       "server/dataGenerationStore.cjs": "d4560309af14336d90fc24903b321c8374c1574a492e4cb8f27bfe2cb71875fb",
       "server/chunkedJsonFile.cjs": "da65cde36f12868209d29f830d49c2ba37c27e6931e3a46dfac1a02d799705c3",
     }),

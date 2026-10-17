@@ -81,6 +81,10 @@ const SPORTTERY_IMPORT = Object.freeze({ file: "scripts/syncServerDirectSportter
 const PUBLICATION_WORKER = Object.freeze({ file: "server/index.cjs", target: "server/publicationResolverWorker.cjs",
   argument: 'path.join(__dirname, "publicationResolverWorker.cjs")',
   functionSha256: "8c0aa528e4f77e431963383fc39b0b4570ca9746d57b6af5045637fe774255da" });
+// One fixed read-only hash thread. Both its exact owner function and complete
+// reachable bytes remain authenticated; no arbitrary worker loaders are admitted.
+const SELECTED_HASH_WORKER = Object.freeze({ file: "server/selectedJsonObjectFile.cjs", target: "server/selectedJsonFullHashWorker.cjs",
+  argument: "require.resolve('./selectedJsonFullHashWorker.cjs')", functionSha256: "ae3241e68470dfea5b0e22c4d8fb4775b301a5dc843065f0c1f0c96045aa5bc3" });
 const PROCESS_PARAMETER_ALIAS = Object.freeze({ file: "server/relayFastResultWatcher.cjs", expression: "spawnImpl = spawn",
   functionSha256: "db38fdab1eb8e7dde20b024ed125919468dbe22fe9f7f32a1678fe9a04ee3cd5",
   target: "scripts/publishOfficialResultsFast.cjs" });
@@ -130,7 +134,7 @@ const POLICY_HASH = digest({ version: VERSION, parser: PARSER, entrypoints: ENTR
   researchComponent: RESEARCH_COMPONENT,
   unitSourceHashes: UNIT_SOURCE_HASHES,
   commandFunctions: COMMAND_FUNCTIONS, commandCallers: COMMAND_CALLER_FUNCTIONS, commandParameterAlias: PROCESS_PARAMETER_ALIAS,
-  dynamicImport: SPORTTERY_IMPORT, worker: PUBLICATION_WORKER, dailyPrematchChild: DAILY_PREMATCH_CHILD, uiPaths: FRONTEND_PATHS,
+  dynamicImport: SPORTTERY_IMPORT, worker: PUBLICATION_WORKER, selectedHashWorker: SELECTED_HASH_WORKER, dailyPrematchChild: DAILY_PREMATCH_CHILD, uiPaths: FRONTEND_PATHS,
   commandGrammar: "node-reviewed-flags-local-script-arguments-and-and-v1" });
 const processApis = new Set(["spawn", "spawnSync", "exec", "execSync", "execFile", "execFileSync", "fork"]);
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -268,7 +272,7 @@ function inspectFrontendRuntimeBoundary(input) {
       } else {
         const bare = specifier.replace(/^node:/, "");
         if (["module", "vm"].includes(bare) && !(bare === "module" && from === "server/researchBrokerDependencies.cjs") || bare === "worker_threads"
-          && ![PUBLICATION_WORKER.file, PUBLICATION_WORKER.target].includes(from)) throw new Error(`unreviewed-runtime-loader-facility:${from}:${specifier}`);
+          && ![PUBLICATION_WORKER.file, PUBLICATION_WORKER.target, SELECTED_HASH_WORKER.file, SELECTED_HASH_WORKER.target].includes(from)) throw new Error(`unreviewed-runtime-loader-facility:${from}:${specifier}`);
         if (isBuiltin(specifier)) { externalImports.push({ from, specifier, kind: "node-builtin" }); return; }
         const name = specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier.split("/")[0];
         if (!declaredPackages.has(name) || !lock.packages[`node_modules/${name}`]?.integrity) throw new Error(`undeclared-runtime-package:${from}:${specifier}`);
@@ -336,7 +340,7 @@ function inspectFrontendRuntimeBoundary(input) {
         if (ts.isCallExpression(node) && ["node:worker_threads", "worker_threads"].includes(requireCall(node))) {
           const declaration = node.parent;
           if (!ts.isVariableDeclaration(declaration) || !ts.isObjectBindingPattern(declaration.name)) throw new Error(`unreviewed-worker-binding:${file}`);
-          const expected = file === PUBLICATION_WORKER.file ? ["Worker"] : ["parentPort", "workerData"];
+          const expected = [PUBLICATION_WORKER.file, SELECTED_HASH_WORKER.file].includes(file) ? ["Worker"] : ["parentPort", "workerData"];
           const actual = declaration.name.elements.map(element => element.name.getText(sf));
           if (JSON.stringify(actual) !== JSON.stringify(expected) || declaration.name.elements.some(element => element.propertyName || element.initializer || element.dotDotDotToken)) throw new Error(`unreviewed-worker-binding:${file}`);
           for (const element of declaration.name.elements) if (element.name.text === "Worker") { workerAliases.add(symbol(element.name)); bindingIdentifiers.add(element.name); }
@@ -414,9 +418,10 @@ function inspectFrontendRuntimeBoundary(input) {
           }
         }
         if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && workerAliases.has(symbol(node.expression))) {
-          if (file !== PUBLICATION_WORKER.file || node.arguments?.length !== 2 || node.arguments[0].getText(sf) !== PUBLICATION_WORKER.argument
-            || enclosingFunctionHash(node, sf) !== PUBLICATION_WORKER.functionSha256) throw new Error(`unreviewed-worker-loader:${file}`);
-          workers.push(clone(PUBLICATION_WORKER)); queue.push(PUBLICATION_WORKER.target);
+          const reviewedWorker = [PUBLICATION_WORKER, SELECTED_HASH_WORKER].find(entry => entry.file === file);
+          if (!reviewedWorker || node.arguments?.length !== 2 || node.arguments[0].getText(sf) !== reviewedWorker.argument
+            || enclosingFunctionHash(node, sf) !== reviewedWorker.functionSha256) throw new Error(`unreviewed-worker-loader:${file}`);
+          workers.push(clone(reviewedWorker)); queue.push(reviewedWorker.target);
         }
         if (ts.isIdentifier(node) && !bindingIdentifiers.has(node)) {
           const binding = symbol(node), parent = node.parent;

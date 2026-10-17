@@ -45,7 +45,9 @@ function verifyFrontendRuntimeBoundary() {
       assert.equal(observed.dynamicImports.length, 1);
       assert.equal(observed.dynamicImports[0].target, "cloudflare/sync-trigger/src/sportteryCollector.js");
       assert.ok(observed.files.some(row => row.path === "cloudflare/sync-trigger/src/sportteryCollector.js"));
-      assert.equal(observed.workers.length, 1);
+      assert.equal(observed.workers.length, 2);
+      assert.ok(observed.workers.some(row => row.target === "server/selectedJsonFullHashWorker.cjs"));
+      assert.ok(observed.files.some(row => row.path === "server/selectedJsonFullHashWorker.cjs"));
       assert.ok(observed.files.some(row => row.path === "server/publicationResolverWorker.cjs"));
       assert.ok(observed.files.some(row => row.path === "scripts/publishOfficialResultsFast.cjs"));
       assert.ok(observed.files.some(row => row.path === "scripts/syncTeamEvidence.cjs"));
@@ -188,6 +190,9 @@ function verifyFrontendRuntimeBoundary() {
       changed("server/index.cjs", text => `${text}\nnew Worker(process.env.WORKER, { eval: true });\n`, unreviewed);
       changed("server/index.cjs", text => `${text}\nconst ArbitraryWorker = Worker;\n`, unreviewed);
       changed("server/publicationResolverWorker.cjs", text => text.replace("parentPort, workerData", "parentPort, workerData, Worker"), unreviewed);
+      changed("server/selectedJsonObjectFile.cjs", text => text.replace("require.resolve('./selectedJsonFullHashWorker.cjs')", "process.env.UNREVIEWED_HASH_THREAD"), unreviewed);
+      changed("server/selectedJsonObjectFile.cjs", text => text.replace("env: {}, stdout: true", "env: process.env, stdout: true"), unreviewed);
+      changed("server/selectedJsonFullHashWorker.cjs", text => text.replace("parentPort, workerData", "parentPort, workerData, Worker"), unreviewed);
     });
     check("new dynamic process command fails even when aliased from child_process", () => {
       changed("server/index.cjs", text => `${text}\nconst { spawn: launchUnknown } = require('node:child_process');\nlaunchUnknown(process.env.COMMAND, []);\n`, candidate => {
