@@ -54,6 +54,9 @@ const RESEARCH_COMPONENT = deepFreeze({
 // arbitrary command. Their enclosing function source must remain exact, and
 // baseline/candidate package and entire reachable-source bytes must also match.
 const COMMAND_FUNCTIONS = deepFreeze({
+  // One fixed read-only worker entrypoint; its protocol and full PG reader
+  // remain in the ordinary authenticated source closure via require.resolve.
+  "scripts/postgresWorkerReadProcess.cjs": ["1f5e8ec54ad4f7d599aa0866e6d2bd60b78fa1fbd42d6240f1440ff6e10f55c2"],
   "scripts/researchReleaseBroker.cjs": ["65c05b4386cb41ded4293b9d95146639d73f321101d87c936e5b76230f50fbff"],
   "scripts/syncDailyPrematchApi.cjs": ["91da78aabb2c925254c42abec031be710d4f9a5316a2ba059533b60189b3bedf"],
   "server/index.cjs": ["209dac00faf2eb81c7c6348cacd5c273dd31dfc8ef913d9f77e0cf2fd4a621b6"],
@@ -101,7 +104,10 @@ const COMMAND_CALLER_FUNCTIONS = deepFreeze({
     "7cb92d576c07496fda1d70a17eb8d7e42467f7d36864b50859a1e3f6e12b18e7",
     // Same bounded literal collector, before the research rebuild. The source
     // job keeps its own cooldown/PG lock; adapters and grammar remain exact.
-    "decb2a5b48626a502346e0bc46428e57b2e77194fbece4d1b9afb3ebcbcc0cac"],
+    "decb2a5b48626a502346e0bc46428e57b2e77194fbece4d1b9afb3ebcbcc0cac",
+    // Existing model:backtest command is unchanged; its coverage input now
+    // awaits the same native count reader through the fixed owned child.
+    "ec22292480cabdbbd6429a3b9b3e45dc8927b4bac769acbdbe2eba26c3a991df"],
 });
 const UNIT_SOURCE_HASHES = Object.freeze({
   "football-daily-prematch.service": "9e6af93d56635ed0940590b4a027e02ab5310080e53b2873775b520f46796d8a",
