@@ -125,7 +125,7 @@ async function verifyStaticVerificationReceipts() {
     }
     const selectedSource = fs.readFileSync(path.join(fixture, selectedArgs[0]), "utf8");
     const cases = [...selectedSource.matchAll(/check\('([^']+)', /g)].map(match => match[1]);
-    const fullBody = { ok: true, checks: 12, cases, largeEvidence: { maxRssKiB: 200000, evidence: {
+    const fullBody = { ok: true, checks: 13, cases, largeEvidence: { maxRssKiB: 200000, evidence: {
       bytes: 472 * 1024 * 1024 + Buffer.byteLength('{"ignored":"","keep":{"x":"中😀","n":[1,true,null],"bulk":""},"updatedAt":"2026-09-07"}'),
       sha256: "d".repeat(64), selectedChars: 32 * 1024 * 1024 + 64,
       maxObservedDepth: 3, selectedKeys: ["keep", "updatedAt"],

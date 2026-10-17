@@ -84,6 +84,25 @@ try {
         assert.throws(() => fixture(text, ['keep'], { chunkBytes }), e => e.code === 'FILE_JSON_INVALID', text);
     }
   });
+  check('bounded scalar runs retain arrays, 64-item boundaries and all invalid token refusals', () => {
+    const values = Array.from({length: 140}, (_, i) => [null, true, false, -1.25e-3, 'escaped\\"中😀'][i % 5]);
+    const source = {skip: {array: values, object: Object.fromEntries(values.map((v,i)=>['key'+i,v])), end: [[],{},[null]]}, keep: values};
+    for (const chunkBytes of [1,7,31,127,65536,1024*1024]) {
+      const text=JSON.stringify(source,null,2),out=fixture(text,['keep'],{chunkBytes});
+      assert.deepEqual(out.value.keep,values);assert.equal(out.evidence.sha256,sha(text));assert.equal(out.evidence.maxObservedDepth,4);
+    }
+    for(const position of [0,1,63,64,65,127,139])for(const bad of ['01','1e+','truefalse','"\\q"','[1,]']){
+      const elements=values.map(JSON.stringify);elements[position]=bad;
+      for(const text of ['{"skip":['+elements.join(',')+'],"keep":1}', '{"skip":{'+elements.map((v,i)=>'"k'+i+'":'+v).join(',')+'},"keep":1}']){
+        for(const chunkBytes of [7,65536])assert.throws(()=>fixture(text,['keep'],{chunkBytes}),e=>e.code==='FILE_JSON_INVALID');
+      }
+    }
+    for(const chunkBytes of [7,65536,1024*1024])for(const count of [4096,4097]){
+      const text='{"skip":[0,'+'1'.repeat(count)+',true],"keep":1}';
+      if(count===4096)assert.equal(fixture(text,['keep'],{chunkBytes}).value.keep,1);
+      else assert.throws(()=>fixture(text,['keep'],{chunkBytes}),e=>e.code==='SELECTED_JSON_SCALAR_LIMIT');
+    }
+  });
   check('compact scalar admission bound and long skipped strings survive complete native scans and boundaries', () => {
     for (const chunkBytes of [7, 65536, 1024 * 1024]) {
       const accepted = '{"skip":{"n":' + '1'.repeat(4096) + '},"keep":true}';
