@@ -21,7 +21,12 @@ function fixture(){
 test('input recovery binds both original terminal failures and the installed reviewed repair',()=>{
  const f=fixture(),r=f.make();a.deepEqual(decodeRequest(Buffer.from(JSON.stringify(r))),r);a.deepEqual(recovery.prior(r),f.prior);
  a.equal(recovery.verifyFailures(r,f.read,f.installed).originalRequestSha256,f.prior.originalRequestSha256);
- a.equal(p.sha(require('node:fs').readFileSync(require('node:path').resolve(__dirname,'../scripts/syncData.cjs'))),recovery.REPAIR_SOURCE_SHA256);
+ // This one-release recovery remains pinned to its historical r903 source.
+ // New sync code must not silently expand or reactivate the consumed scope.
+ a.equal(recovery.REPAIR_SOURCE_SHA256,'c0ddc1bd225801c3899ec8b25fc5999e45c0eb41049bd6408e39db2538078c15');
+ const candidateSourceSha=p.sha(require('node:fs').readFileSync(require('node:path').resolve(__dirname,'../scripts/syncData.cjs')));
+ a.notEqual(candidateSourceSha,recovery.REPAIR_SOURCE_SHA256);
+ a.throws(()=>recovery.verifyFailures(r,f.read,{...f.installed,repairSourceSha256:candidateSourceSha}),/INPUT_RECOVERY_REFUSED/);
 });
 for(const [name,change]of [
  ['success',f=>{f.last.code=0;}],['unknown exit',f=>{f.last.code=null;}],['partial stdout',f=>{f.last.stdout='{}';}],

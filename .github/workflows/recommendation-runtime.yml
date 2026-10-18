@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'server/accounts.cjs'
+      - 'server/publicReferenceCompanionStore.cjs'
+      - 'tests/public-reference-companion-store.test.cjs'
       - 'server/selectedJsonFullHashWorker.cjs'
       - 'scripts/verifySelectedJsonParallel.cjs'
       - 'scripts/capturePublicationCoordinator.cjs'
@@ -383,6 +385,8 @@ jobs:
         run: node scripts/verifySelectedJsonParallel.cjs
       - name: Capture lanes drain before generation and retain original budgets
         run: node --test tests/capture-publication-coordination.test.cjs
+      - name: Original companion custody survives killed writers and bounded complete archive import
+        run: node --test tests/public-reference-companion-store.test.cjs
       - name: Fixed worker fast publisher owns actual close and preserves native receipts
         run: node --test tests/worker-fast-result-publisher.test.cjs && node --max-old-space-size=128 scripts/verifyWorkerFastPublisherIsolation.cjs
         env:

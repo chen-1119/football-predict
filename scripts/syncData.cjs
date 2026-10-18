@@ -16764,6 +16764,7 @@ function retainPredictionSnapshotRows(rows, {
 
 function appendPredictionSnapshots(publicDir, matches, capturedAt, {
   observationMatches = matches,
+  companionStoreDir = null,
 } = {}) {
   const history = loadPredictionSnapshots(publicDir);
   const cutoff = Date.parse(capturedAt) - PREDICTION_SNAPSHOT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
@@ -16894,12 +16895,25 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
       updated,
     },
   };
+  const originalEntries = [
+    ...(history.publicReferenceEvidence || []),
+    ...(matches || []).map((match) => require("../src/services/publicReferenceDecision.cjs")
+      .pendingPublicReferenceEvidence(match)).filter(Boolean),
+  ];
+  if (companionStoreDir) {
+    const present = new Set(originalEntries.map(entry => entry.referenceHash));
+    for (const match of matches || []) {
+      const record = match?.predictionMeta?.publicReferenceDecision;
+      if (!record?.evidenceBinding || present.has(record.contentHash)) continue;
+      // Read only an exact previously durable original for this admitted public
+      // record. A missing/corrupt store never falls back to the current model.
+      const original = require("../server/publicReferenceCompanionStore.cjs")
+        .readOriginalCompanion(companionStoreDir, record);
+      if (original) { originalEntries.push(original.entry); present.add(record.contentHash); }
+    }
+  }
   payload.publicReferenceEvidence = require("../src/services/publicReferenceEvidence.cjs")
-    .collectPublicReferenceEvidence(payload.publicReferenceDecisions, [
-      ...(history.publicReferenceEvidence || []),
-      ...(matches || []).map((match) => require("../src/services/publicReferenceDecision.cjs")
-        .pendingPublicReferenceEvidence(match)).filter(Boolean),
-    ]);
+    .collectPublicReferenceEvidence(payload.publicReferenceDecisions, originalEntries);
   return payload;
 }
 
@@ -18217,7 +18231,14 @@ async function sync() {
     publicDir,
     output,
     capturedAt,
-    { observationMatches: prospectiveAuditMatches },
+    { observationMatches: prospectiveAuditMatches, companionStoreDir: DEFAULT_STORE_DIR },
+  );
+  // Preserve the original finalized binding before any mutable public file can
+  // expose it. The separately committed warehouse may fail or be interrupted;
+  // a WeakMap alone cannot survive that boundary. Missing original evidence
+  // still fails in appendPredictionSnapshots above; never rebuild it here.
+  require("../server/publicReferenceCompanionStore.cjs").persistCurrentReferenceCompanions(
+    DEFAULT_STORE_DIR, output, predictionSnapshotsPayload.publicReferenceEvidence,
   );
   // Private pre-persistence computation evidence is not a public decision ledger.
   // Capture failures expose a diagnostic gap without changing publication or old records.
@@ -18749,6 +18770,11 @@ async function sync() {
     retentionHours: CURRENT_UNSETTLED_RETENTION_HOURS,
     rows: unresolvedArchive,
   });
+  // Re-read exact durable originals immediately before the public rename.
+  // This is custody only, not a new decision or permission to change history.
+  require("../server/publicReferenceCompanionStore.cjs").assertCurrentReferenceCompanions(
+    DEFAULT_STORE_DIR, [...split.current, ...split.history],
+  );
   if (process.env.WRITE_LEGACY_STATIC_PAYLOADS !== "0") {
     writeJson(path.join(publicDir, "matches.json"), split.current);
     writeJson(path.join(publicDir, "odds-history.json"), oddsHistoryPayload);

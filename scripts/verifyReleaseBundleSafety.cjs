@@ -444,6 +444,8 @@ const requiredReleaseEntries = [
   "scripts/verifyTeamCategoryIdentity.cjs",
   "src/services/decisionEventIdentity.cjs",
   "server/publicReferenceArchive.cjs",
+  "server/publicReferenceCompanionStore.cjs",
+  "tests/public-reference-companion-store.test.cjs",
   "scripts/predictionEvidenceAudit.cjs",
   "scripts/runtimePrivateModelArtifactStore.cjs",
   "scripts/postgresPrivateModelArtifactStore.cjs",
