@@ -7,6 +7,15 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('readiness retains exact per-event native snapshot bounds while both full reads drain before release',()=>{
+ const file='tests/postgres-capture-readiness.test.cjs';
+ const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 11$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
+  for(const required of [file,'scripts/postgresCaptureReadiness.cjs','scripts/verifyPostgresCaptureReadiness.cjs'])assert(read(entry).includes('"'+required+'"'));
+ assert.equal(pkg.scripts['verify:capture-readiness'],'node --test '+file);
+ assert(read('.github/workflows/recommendation-runtime.yml').includes('node --max-old-space-size=128 scripts/verifyPostgresCaptureReadiness.cjs'));
+});
 check('fast publication keeps complete validation in one fixed owned child until actual close',()=>{
  const file='tests/worker-fast-result-publisher.test.cjs';
  const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
@@ -156,7 +165,14 @@ check('explicit publication retry binds exact failed bytes and preserves unknown
   const child=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
   assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# fail 0$/m);assert.match(child.stdout,/^# skipped 0$/m);
   for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const f of [file,'server/researchPublicationRetry.cjs','scripts/verifyResearchPublicationRetryPostgres.cjs'])assert(read(entry).includes('"'+f+'"'));
-  assert(read('.github/workflows/recommendation-runtime.yml').includes('run: node scripts/verifyResearchPublicationRetryPostgres.cjs'));
+  assert(read('.github/workflows/recommendation-runtime.yml').includes('node scripts/verifyResearchPublicationRetryPostgres.cjs'));
+});
+check('input recovery preserves two failed journals, exact source repair and unknown commit refusal',()=>{
+  const file='tests/research-publication-input-recovery.test.cjs';
+  const child=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# fail 0$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const f of [file,'server/researchPublicationInputRecovery.cjs','scripts/verifyResearchPublicationInputRecoveryPostgres.cjs'])assert(read(entry).includes('"'+f+'"'));
+  assert(read('.github/workflows/recommendation-runtime.yml').includes('node scripts/verifyResearchPublicationInputRecoveryPostgres.cjs'));
 });
 check('explicit archive retry binds a completed lock failure and preserves immutable report bytes',()=>{
   const file='tests/research-archive-retry.test.cjs';
@@ -251,7 +267,7 @@ check('prospective PRD paper model, signed prices, immutable commit and public p
   const factory=read('scripts/createReleaseBundle.cjs'),safety=read('scripts/verifyReleaseBundleSafety.cjs');
   for(const file of ['scripts/zeroMarketResearchBaseline.cjs','src/services/marketSeparatedDirectionResearch.cjs',
     'tests/zero-market-research-baseline.test.cjs','tests/market-separated-direction-research.test.cjs',
-    'scripts/verifyPrdPaperPipeline.cjs','scripts/recommendationPlatform/prdPaperRuntime.cjs',
+    'scripts/verifyPrdPaperPipeline.cjs','tests/prospective-forecast-input.test.cjs','scripts/recommendationPlatform/prdPaperRuntime.cjs',
     'scripts/recommendationPlatform/prdPaperRepository.cjs','src/services/prdPaperRecommendation.cjs',
     'src/components/recommendations/PrdPaperDirections.tsx','tests/prd-paper-recommendation.test.cjs',
     'tests/prd-paper-repository.test.cjs','tests/prd-paper-runtime.test.cjs','tests/prd-paper-directions-view.test.cjs']){

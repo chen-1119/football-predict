@@ -4,7 +4,7 @@ const tests=['tests/league-model-adoption.test.cjs','tests/prd-paper-recommendat
   'tests/prd-paper-runtime.test.cjs','tests/prd-paper-directions-view.test.cjs',
   'tests/zero-market-research-baseline.test.cjs','tests/market-separated-direction-research.test.cjs',
   'tests/team-evidence-pipeline.test.cjs','tests/stored-team-evidence-research.test.cjs',
-  'tests/expanded-league-history.test.cjs','tests/reviewed-analysis.test.cjs'];
+  'tests/expanded-league-history.test.cjs','tests/reviewed-analysis.test.cjs','tests/prospective-forecast-input.test.cjs'];
 function run(){
  const child=spawnSync(process.execPath,['--test','--test-reporter=tap',...tests],{
   cwd:path.resolve(__dirname,'..'),encoding:'utf8',windowsHide:true,timeout:45000,maxBuffer:2*1024*1024});

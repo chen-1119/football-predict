@@ -58,7 +58,7 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
       || typeof result.originalReceiptBase64 !== 'string'
       || typeof result.deliveredAt !== 'string' || !Number.isFinite(Date.parse(result.deliveredAt))
       || new Date(result.deliveredAt).toISOString() !== result.deliveredAt || Date.parse(result.deliveredAt) < startedAt
-      || Date.parse(result.deliveredAt) > finishedBy || !['archive','publish','revision-publish','combo-revision-publish','publication-retry','archive-retry'].includes(decodeRequest(raw).action)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+      || Date.parse(result.deliveredAt) > finishedBy || !['archive','publish','revision-publish','combo-revision-publish','publication-retry','archive-retry','publication-input-recovery'].includes(decodeRequest(raw).action)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
     const saved = Buffer.from(result.originalReceiptBase64,'base64');
     if(saved.toString('base64')!==result.originalReceiptBase64||saved.length>3*1024*1024-4096
       ||sha(saved)!==result.originalReceiptSha256||!Buffer.from(saved.toString()).equals(saved)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
@@ -134,7 +134,10 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
         ||latest.modelProbability!==null||latest.modelVersion!==null||latest.formalEligible!==false)fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
     }
   } else {
-    const publicationRequest=request.action==='publication-retry'?decodeRequest(Buffer.from(request.originalRequestJson)):request;
+    const inputRecovery=request.action==='publication-input-recovery';
+    const prior=inputRecovery?require('./researchPublicationInputRecovery.cjs').prior(request):null;
+    const publicationRequest=inputRecovery?decodeRequest(Buffer.from(prior.originalRequestJson)):request.action==='publication-retry'?decodeRequest(Buffer.from(request.originalRequestJson)):request;
+    if(inputRecovery&&(value.explicitInputRecovery!==true||value.originalRequestSha256!==prior.originalRequestSha256||typeof value.submitted!=='boolean'))fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
     if(request.action==='publication-retry'&&(value.explicitRetry!==true||value.originalRequestSha256!==request.originalRequestSha256))fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
     const key = publicationRequest.action === 'publish' ? 'reviewed-analysis-' + JSON.parse(publicationRequest.json).businessDate + '-batch-' + publicationRequest.draftHash : publicationRequest.recordKey;
     if (value.recordKey !== key || !['not-observed','orphan-ack-unverified','record-present-ack-missing','committed-and-acknowledged'].includes(value.state)

@@ -15928,13 +15928,38 @@ function latestOddsSnapshotForMatch(match, historyRows, poolCode = "HAD", handic
 }
 
 function enrichRawMatchWithPredictionSnapshot(match, existingBySourceId, historyRows) {
-  if (sanitizeOdds(match.odds)) return match;
-
   const sourceMatchId = normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
   const existingCandidate = existingBySourceId.get(sourceMatchId);
   const existing = predictionPersistenceSameEvent(existingCandidate, match)
     ? existingCandidate
     : null;
+  // Current/calculator can omit a previously observed sale deadline. Carry
+  // that unchanged event field before model construction, including when the
+  // row already has fresh odds. The display merge already retains it; letting
+  // the independent source view omit it creates a different event envelope.
+  // This is not a new observation or permission to extend an expired window.
+  const home = normText(match.homeTeam || match.homeTeamName);
+  const away = normText(match.awayTeam || match.awayTeamName);
+  const inheritedCutoffMs = parseBeijingDateTime(existing?.buyEndTime);
+  if ([undefined, null, ""].includes(match.buyEndTime)
+    && existing && home && away
+    && home === normText(existing.homeTeamName || existing.homeTeam)
+    && away === normText(existing.awayTeamName || existing.awayTeam)
+    && /^\d{4}-\d{2}-\d{2}$/.test(match.businessDate || "")
+    && match.businessDate === existing.businessDate
+    && sportterySaleClockMatchesEvent(existing.buyEndTime, match.kickoffTime)
+    // Do not mask a stricter current or preserved deadline by introducing a
+    // top-level value that matchCutoffValue would otherwise prefer to it.
+    && [match.kickoffTime, match.cutoffAt, match.cutoffTime, match.predictionMeta?.cutoffTime,
+      match.externalSignals?.buyEndTime, match.externalSignals?.sale?.buyEndTime,
+      match.externalSignals?.fiveHundred?.sale?.buyEndTime,
+      existing.cutoffAt, existing.cutoffTime, existing.predictionMeta?.cutoffTime]
+      .filter(value => value != null && value !== "")
+      .every(value => Number.isFinite(parseBeijingDateTime(value)) && parseBeijingDateTime(value) >= inheritedCutoffMs)) {
+    match = { ...match, buyEndTime: existing.buyEndTime };
+  }
+  if (sanitizeOdds(match.odds)) return match;
+
   const existingOdds = sanitizeOdds(existing?.odds);
   if (existingOdds) {
     const existingHandicapOdds = sanitizeHandicapOdds(existing);

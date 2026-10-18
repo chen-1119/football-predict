@@ -821,10 +821,18 @@ const snapshotReadOperations = function* (matches, frozenAt, {
   let db = null;
   try {
     db = session ? null : new DatabaseSync(dbPath, { readOnly: true });
-    for (const match of matches) {
+    const preparedMatches = matches.map((match, ordinal) => {
       const ids = matchIdentityValues(match);
+      const upperBound = ids.length ? timestampValue(upperBoundForMatch(match)) || evaluatedAt : null;
+      return { ordinal, match, ids, upperBound, frozenAt };
+    });
+    const batchRequests = session && !ensureSelectable
+      ? preparedMatches.filter(row => row.ids.length && Number.isFinite(Date.parse(row.upperBound))) : null;
+    const batch = batchRequests ? (yield require("./postgresCaptureReadiness.cjs").queryReadinessSnapshotBatch(
+      session.client, batchRequests, Math.min(snapshotLimit, Math.max(1, Math.floor(Number(perMatchLimit) || 1))) + 1,
+    )) : null;
+    for (const { ordinal, match, ids, upperBound } of preparedMatches) {
       if (!ids.length) continue;
-      const upperBound = timestampValue(upperBoundForMatch(match)) || evaluatedAt;
       if (!Number.isFinite(Date.parse(upperBound))) continue;
       queriedMatches += 1;
       const placeholders = ids.map(() => "?").join(",");
@@ -844,7 +852,7 @@ const snapshotReadOperations = function* (matches, frozenAt, {
       let selected = [];
       let saturated = false;
       while (true) {
-        const queried = session
+        const queried = batch ? batch.get(ordinal) || [] : session
           ? (yield session.client.query(`SELECT payload::text AS payload FROM football.prediction_snapshots
               WHERE captured_at >= $1 AND captured_at <= $2 AND (source_match_id=ANY($3::text[]) OR match_id=ANY($3::text[]))
               ORDER BY captured_at DESC,id DESC LIMIT $4`, [frozenAt, upperBound, ids, Math.min(snapshotLimit, limit) + 1])).rows
@@ -2662,7 +2670,7 @@ const capture = async ({ deadlineOnly = false } = {}) => {
           ...await publicSnapshotRows({ observationsOnly: sqlite.ok }),
         ])
       : [];
-    const readinessSqlite = await runtimeSnapshotsForMatches(
+    const readReadinessSnapshots = () => runtimeSnapshotsForMatches(
       upcomingMatches,
       ledger.header?.frozenAt || evaluatedAt,
       {
@@ -2675,6 +2683,12 @@ const capture = async ({ deadlineOnly = false } = {}) => {
         perMatchLimit: readinessSnapshotsPerMatchLimit,
       },
     );
+    const readinessInputs = nativeReadSession && upcomingMatches.length
+      ? await require("./postgresCaptureReadiness.cjs").overlapReadinessInputs(
+        readReadinessSnapshots, () => publicSnapshotRows({ observationsOnly: true }),
+      )
+      : { snapshots: await readReadinessSnapshots(), publicRows: null };
+    const readinessSqlite = readinessInputs.snapshots;
     const readinessSnapshots = upcomingMatches.length
       ? dedupeSnapshots([
           ...readinessSqlite.rows,

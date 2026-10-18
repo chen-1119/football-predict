@@ -16,11 +16,14 @@ on:
       - 'server/researchReportStore.cjs'
       - 'server/researchWriteService.cjs'
       - 'server/researchPublicationRetry.cjs'
+      - 'server/researchPublicationInputRecovery.cjs'
       - 'server/researchArchiveRetry.cjs'
       - 'tests/research-archive-retry.test.cjs'
       - 'scripts/verifyResearchArchiveRetryPostgres.cjs'
       - 'tests/research-publication-retry.test.cjs'
+      - 'tests/research-publication-input-recovery.test.cjs'
       - 'scripts/verifyResearchPublicationRetryPostgres.cjs'
+      - 'scripts/verifyResearchPublicationInputRecoveryPostgres.cjs'
       - 'server/researchWriteHttp.cjs'
       - 'server/researchHttp.cjs'
       - 'tests/research-http-routing.test.cjs'
@@ -272,7 +275,7 @@ jobs:
         env:
           RESEARCH_ARCHIVE_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Immutable report archive storage and unknown commit recovery
-        run: node --test tests/research-report-store.test.cjs tests/research-write-service.test.cjs tests/research-publication-retry.test.cjs tests/research-archive-retry.test.cjs tests/research-write-http.test.cjs tests/research-http-routing.test.cjs tests/research-broker-client.test.cjs tests/research-broker-journal.test.cjs tests/research-revision-policy.test.cjs tests/research-reviewed-revision.test.cjs tests/research-broker-dependencies.test.cjs tests/research-broker-installer.test.cjs tests/research-installer-archive-contract.test.cjs
+        run: node --test tests/research-report-store.test.cjs tests/research-write-service.test.cjs tests/research-publication-retry.test.cjs tests/research-publication-input-recovery.test.cjs tests/research-archive-retry.test.cjs tests/research-write-http.test.cjs tests/research-http-routing.test.cjs tests/research-broker-client.test.cjs tests/research-broker-journal.test.cjs tests/research-revision-policy.test.cjs tests/research-reviewed-revision.test.cjs tests/research-broker-dependencies.test.cjs tests/research-broker-installer.test.cjs tests/research-installer-archive-contract.test.cjs
       - name: Kernel Unix socket peer identity in isolated Linux fixtures
         run: python3 scripts/verifyResearchSocketPeer.py
       - name: Independent review versions, frozen combo legs and refresh authority
@@ -299,7 +302,9 @@ jobs:
       - name: Real systemd privilege drop, zero child capabilities and inherited lock
         run: sudo env RESEARCH_ISOLATED_SYSTEMD_TEST=1 "$(command -v node)" scripts/verifyResearchRunuser.cjs
       - name: Explicit exact publication retry after a completed lock failure
-        run: node scripts/verifyResearchPublicationRetryPostgres.cjs
+        run: |
+          node scripts/verifyResearchPublicationRetryPostgres.cjs
+          node scripts/verifyResearchPublicationInputRecoveryPostgres.cjs
         env:
           RESEARCH_REPORT_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Explicit immutable report retry after a completed lock failure
@@ -382,6 +387,10 @@ jobs:
         run: node --test tests/worker-fast-result-publisher.test.cjs && node --max-old-space-size=128 scripts/verifyWorkerFastPublisherIsolation.cjs
         env:
           WORKER_PUBLISH_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
+      - name: Exact native readiness batching and complete public verification overlap
+        run: node --test tests/postgres-capture-readiness.test.cjs && node --max-old-space-size=128 scripts/verifyPostgresCaptureReadiness.cjs
+        env:
+          CAPTURE_READINESS_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Frontend evidence semantics
         run: node scripts/verifyFrontendEvidenceSemantics.cjs
       - name: Audited static receipt dependency closure

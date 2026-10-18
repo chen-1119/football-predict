@@ -9,6 +9,7 @@ const paths = new Map([
   ['/api/operator/research/report-read', 'archive-read'],
   ['/api/operator/research/publish', 'publish'],
   ['/api/operator/research/publication-retry', 'publication-retry'],
+  ['/api/operator/research/publication-input-recovery', 'publication-input-recovery'],
   ['/api/operator/research/publication-read', 'publication-read'],
   ['/api/operator/research/single-review', 'revision-publish'],
   ['/api/operator/research/single-review-read', 'revision-read'],
