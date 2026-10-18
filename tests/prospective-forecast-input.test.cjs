@@ -54,3 +54,23 @@ test('deadline inheritance rejects another fixture, team order, day or invalid d
  assert.equal(attachProspectiveForecastInputs([expired],[{...fresh,buyEndTime:enriched.buyEndTime}],now)[0].prospectiveForecastInput,null,
   'retaining a deadline never extends the sales window');
 });
+
+test('deadline inheritance cannot mask an earlier or invalid current or retained cutoff',()=>{
+ const {enrichRawMatchWithPredictionSnapshot}=require('../scripts/syncData.cjs');
+ const raw={...fresh,homeTeam:fresh.homeTeamName,awayTeam:fresh.awayTeamName,buyEndTime:''};
+ for(const patch of [
+  {cutoffAt:'2026-09-17T13:00:00Z'}, {cutoffTime:'2026-09-17 21:00:00'},
+  {predictionMeta:{cutoffTime:'2026-09-17T13:00:00Z'}},
+  {externalSignals:{buyEndTime:'2026-09-17 21:00:00'}},
+  {externalSignals:{sale:{buyEndTime:'2026-09-17 21:00:00'}}},
+  {externalSignals:{fiveHundred:{sale:{buyEndTime:'2026-09-17 21:00:00'}}}},
+  {cutoffAt:'invalid'}, {externalSignals:{buyEndTime:'invalid'}},
+ ])assert.equal(enrichRawMatchWithPredictionSnapshot({...raw,...patch},new Map([[fresh.sourceMatchId,old]]),[]).buyEndTime,'');
+ for(const patch of [
+  {cutoffAt:'2026-09-17T13:00:00Z'}, {cutoffTime:'invalid'},
+  {predictionMeta:{cutoffTime:'2026-09-17 21:00:00'}},
+  {buyEndTime:'2026-09-18 03:10:00'},
+ ])assert.equal(enrichRawMatchWithPredictionSnapshot(raw,new Map([[fresh.sourceMatchId,{...old,...patch}]]),[]).buyEndTime,'');
+ const later={...raw,cutoffAt:'2026-09-17T14:30:00Z',externalSignals:{buyEndTime:old.buyEndTime}};
+ assert.equal(enrichRawMatchWithPredictionSnapshot(later,new Map([[fresh.sourceMatchId,old]]),[]).buyEndTime,old.buyEndTime);
+});

@@ -15940,13 +15940,22 @@ function enrichRawMatchWithPredictionSnapshot(match, existingBySourceId, history
   // This is not a new observation or permission to extend an expired window.
   const home = normText(match.homeTeam || match.homeTeamName);
   const away = normText(match.awayTeam || match.awayTeamName);
+  const inheritedCutoffMs = parseBeijingDateTime(existing?.buyEndTime);
   if ([undefined, null, ""].includes(match.buyEndTime)
     && existing && home && away
     && home === normText(existing.homeTeamName || existing.homeTeam)
     && away === normText(existing.awayTeamName || existing.awayTeam)
     && /^\d{4}-\d{2}-\d{2}$/.test(match.businessDate || "")
     && match.businessDate === existing.businessDate
-    && sportterySaleClockMatchesEvent(existing.buyEndTime, match.kickoffTime)) {
+    && sportterySaleClockMatchesEvent(existing.buyEndTime, match.kickoffTime)
+    // Do not mask a stricter current or preserved deadline by introducing a
+    // top-level value that matchCutoffValue would otherwise prefer to it.
+    && [match.kickoffTime, match.cutoffAt, match.cutoffTime, match.predictionMeta?.cutoffTime,
+      match.externalSignals?.buyEndTime, match.externalSignals?.sale?.buyEndTime,
+      match.externalSignals?.fiveHundred?.sale?.buyEndTime,
+      existing.cutoffAt, existing.cutoffTime, existing.predictionMeta?.cutoffTime]
+      .filter(value => value != null && value !== "")
+      .every(value => Number.isFinite(parseBeijingDateTime(value)) && parseBeijingDateTime(value) >= inheritedCutoffMs)) {
     match = { ...match, buyEndTime: existing.buyEndTime };
   }
   if (sanitizeOdds(match.odds)) return match;
