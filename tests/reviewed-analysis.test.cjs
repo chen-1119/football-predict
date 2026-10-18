@@ -108,6 +108,31 @@ test('real importer transaction protocol preserves original, requires separate c
  await a.rejects(runtime.publish(v.draft,opts),/ALREADY_PUBLISHED_READ_FIRST/);a.equal(db.rows().size,2);
  db.rows().delete(saved.key+'-ack');await a.rejects(runtime.projection(db.client,v.draft.businessDate,fixture.stamp(fixture.NOW+1000)),/ACK_MISSING/);
 });
+test('the raw producer retains an omitted same-event deadline for the actual nested importer and separate ACK',async()=>{
+ const {enrichRawMatchWithPredictionSnapshot}=require('../scripts/syncData.cjs');
+ const {attachProspectiveForecastInputs}=require('../src/services/prospectiveForecastInput.cjs');
+ const v=setup(),cutoff='2026-09-17 22:00:00';
+ v.matches=v.matches.map(m=>{
+  const previous={...m,buyEndTime:cutoff},raw={...m,homeTeam:m.homeTeamName,awayTeam:m.awayTeamName,buyEndTime:''};
+  const fresh=enrichRawMatchWithPredictionSnapshot(raw,new Map([[m.sourceMatchId,previous]]),[]);
+  return attachProspectiveForecastInputs([previous],[fresh],fixture.NOW)[0];
+ });
+ const before=JSON.stringify(v.matches);
+ const broken={...v,matches:structuredClone(v.matches)};
+ for(const m of broken.matches)delete m.prospectiveForecastInput.buyEndTime;
+ const rejected=controlledPool(broken);
+ await a.rejects(controlledRuntime(broken).publish(broken.draft,{pool:rejected.pool,expectedDraftHash:p.hash(broken.draft)}),/PROSPECTIVE/);
+ a.equal(rejected.rows().size,0);a.equal(rejected.log.includes('COMMIT'),false);
+ const db=controlledPool(v),runtime=controlledRuntime(v);
+ const saved=await runtime.publish(v.draft,{pool:db.pool,expectedDraftHash:p.hash(v.draft)});
+ a.equal(saved.status,'committed-and-acknowledged');a.equal(db.rows().size,2);
+ a.equal(db.log.filter(sql=>sql==='COMMIT').length,2);
+ const publication=await runtime.readPublication(db.client,saved.key,fixture.stamp(fixture.NOW+1000));
+ a.equal(publication.v.record.records.length,3);
+ for(const m of publication.v.inputs.matches){a.equal(m.buyEndTime,cutoff);a.equal(m.prospectiveForecastInput.buyEndTime,cutoff);}
+ a.equal(JSON.stringify(v.matches),before,'the publisher must not repair or flatten its input envelope');
+});
+
 test('unknown COMMIT retains original without producing ACK or public recommendation',async()=>{
  const v=setup(),runtime=controlledRuntime(v),db=controlledPool(v,{failCommit:true});
  await a.rejects(runtime.publish(v.draft,{pool:db.pool,expectedDraftHash:p.hash(v.draft)}),{code:'LEAGUE_MODEL_COMMIT_UNKNOWN'});
