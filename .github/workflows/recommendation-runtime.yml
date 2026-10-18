@@ -382,6 +382,10 @@ jobs:
         run: node --test tests/worker-fast-result-publisher.test.cjs && node --max-old-space-size=128 scripts/verifyWorkerFastPublisherIsolation.cjs
         env:
           WORKER_PUBLISH_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
+      - name: Exact native readiness batching and complete public verification overlap
+        run: node --test tests/postgres-capture-readiness.test.cjs && node --max-old-space-size=128 scripts/verifyPostgresCaptureReadiness.cjs
+        env:
+          CAPTURE_READINESS_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Frontend evidence semantics
         run: node scripts/verifyFrontendEvidenceSemantics.cjs
       - name: Audited static receipt dependency closure
