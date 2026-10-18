@@ -237,6 +237,7 @@ const requiredReleaseEntries = [
   "scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs",
   "src/components/recommendations/ReviewedAnalysis.tsx",
   "tests/reviewed-analysis.test.cjs",
+  "tests/prospective-forecast-input.test.cjs",
   "server/matchDetailPublication.cjs",
   "collectors/leisu-prematch/website-reader.cjs",
   "collectors/leisu-prematch/website-reader.test.cjs",

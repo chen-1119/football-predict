@@ -260,7 +260,7 @@ check('prospective PRD paper model, signed prices, immutable commit and public p
   const factory=read('scripts/createReleaseBundle.cjs'),safety=read('scripts/verifyReleaseBundleSafety.cjs');
   for(const file of ['scripts/zeroMarketResearchBaseline.cjs','src/services/marketSeparatedDirectionResearch.cjs',
     'tests/zero-market-research-baseline.test.cjs','tests/market-separated-direction-research.test.cjs',
-    'scripts/verifyPrdPaperPipeline.cjs','scripts/recommendationPlatform/prdPaperRuntime.cjs',
+    'scripts/verifyPrdPaperPipeline.cjs','tests/prospective-forecast-input.test.cjs','scripts/recommendationPlatform/prdPaperRuntime.cjs',
     'scripts/recommendationPlatform/prdPaperRepository.cjs','src/services/prdPaperRecommendation.cjs',
     'src/components/recommendations/PrdPaperDirections.tsx','tests/prd-paper-recommendation.test.cjs',
     'tests/prd-paper-repository.test.cjs','tests/prd-paper-runtime.test.cjs','tests/prd-paper-directions-view.test.cjs']){
