@@ -165,7 +165,14 @@ check('explicit publication retry binds exact failed bytes and preserves unknown
   const child=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
   assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# fail 0$/m);assert.match(child.stdout,/^# skipped 0$/m);
   for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const f of [file,'server/researchPublicationRetry.cjs','scripts/verifyResearchPublicationRetryPostgres.cjs'])assert(read(entry).includes('"'+f+'"'));
-  assert(read('.github/workflows/recommendation-runtime.yml').includes('run: node scripts/verifyResearchPublicationRetryPostgres.cjs'));
+  assert(read('.github/workflows/recommendation-runtime.yml').includes('node scripts/verifyResearchPublicationRetryPostgres.cjs'));
+});
+check('input recovery preserves two failed journals, exact source repair and unknown commit refusal',()=>{
+  const file='tests/research-publication-input-recovery.test.cjs';
+  const child=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# fail 0$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const f of [file,'server/researchPublicationInputRecovery.cjs','scripts/verifyResearchPublicationInputRecoveryPostgres.cjs'])assert(read(entry).includes('"'+f+'"'));
+  assert(read('.github/workflows/recommendation-runtime.yml').includes('node scripts/verifyResearchPublicationInputRecoveryPostgres.cjs'));
 });
 check('explicit archive retry binds a completed lock failure and preserves immutable report bytes',()=>{
   const file='tests/research-archive-retry.test.cjs';

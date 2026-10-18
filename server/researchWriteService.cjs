@@ -12,7 +12,13 @@ function decodeRequest(raw) {
   const text = raw.toString('utf8');
   if (!Buffer.from(text).equals(raw)) fail('RESEARCH_REQUEST_UTF8');
   let r; try { r = JSON.parse(text); } catch { fail('RESEARCH_REQUEST_JSON'); }
-  if (!r || r.version !== 'research-broker-request-v1' || !['archive', 'archive-read', 'publish', 'publication-read','revision-publish','revision-read','combo-revision-publish','combo-revision-read','publication-retry','archive-retry'].includes(r.action)) fail('RESEARCH_REQUEST_ACTION');
+  if (!r || r.version !== 'research-broker-request-v1' || !['archive', 'archive-read', 'publish', 'publication-read','revision-publish','revision-read','combo-revision-publish','combo-revision-read','publication-retry','archive-retry','publication-input-recovery'].includes(r.action)) fail('RESEARCH_REQUEST_ACTION');
+  if(r.action==='publication-input-recovery'){
+    const prior=require('./researchPublicationInputRecovery.cjs').prior(r);
+    decodeRequest(Buffer.from(r.priorRetryRequestJson));
+    if(prior.action!=='publication-retry')fail('RESEARCH_REQUEST_ACTION');
+    return r;
+  }
   if(r.action==='archive-retry'){
     const input=require('./researchArchiveRetry.cjs').original(r);
     decodeRequest(Buffer.from(r.originalRequestJson));
@@ -83,7 +89,9 @@ function createResearchWriteService({ pool, runExclusive } = {}) {
   }
   async function execute(raw) {
     const input=decodeRequest(raw),retry=input.action==='publication-retry',archiveRetry=input.action==='archive-retry';
-    const r=retry||archiveRetry?decodeRequest(Buffer.from(input.originalRequestJson)):input;
+    const inputRecovery=input.action==='publication-input-recovery';
+    const prior=inputRecovery?require('./researchPublicationInputRecovery.cjs').prior(input):null;
+    const r=inputRecovery?decodeRequest(Buffer.from(prior.originalRequestJson)):retry||archiveRetry?decodeRequest(Buffer.from(input.originalRequestJson)):input;
     if(r.action==='combo-revision-publish')return combos.publish(JSON.parse(r.json));
     if(r.action==='combo-revision-read')return runExclusive(()=>combos.read(JSON.parse(r.json)));
     if(r.action==='revision-publish')return revisions.publish(JSON.parse(r.json));
@@ -110,7 +118,7 @@ function createResearchWriteService({ pool, runExclusive } = {}) {
       if (!after.verified) fail('RESEARCH_COMMITTED_READBACK_UNVERIFIED');
       return { ...after, submitted: true };
     });
-    return retry?{...result,explicitRetry:true,originalRequestSha256:input.originalRequestSha256}:result;
+    return inputRecovery?{...result,explicitInputRecovery:true,originalRequestSha256:prior.originalRequestSha256}:retry?{...result,explicitRetry:true,originalRequestSha256:input.originalRequestSha256}:result;
   }
   return { execute };
 }
