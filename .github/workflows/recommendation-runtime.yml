@@ -5,6 +5,8 @@ on:
       - 'server/accounts.cjs'
       - 'server/publicReferenceCompanionStore.cjs'
       - 'tests/public-reference-companion-store.test.cjs'
+      - 'tests/bounded-prediction-snapshots.test.cjs'
+      - 'tests/fixtures/prediction-snapshot-original-functions.json'
       - 'server/selectedJsonFullHashWorker.cjs'
       - 'scripts/verifySelectedJsonParallel.cjs'
       - 'scripts/capturePublicationCoordinator.cjs'
@@ -385,6 +387,8 @@ jobs:
         run: node scripts/verifySelectedJsonParallel.cjs
       - name: Capture lanes drain before generation and retain original budgets
         run: node --test tests/capture-publication-coordination.test.cjs
+      - name: Bounded full snapshot append, original retention bytes and all derived consumers
+        run: node --test tests/bounded-prediction-snapshots.test.cjs
       - name: Original companion custody survives killed writers and bounded complete archive import
         run: node --test tests/public-reference-companion-store.test.cjs
       - name: Fixed worker fast publisher owns actual close and preserves native receipts
