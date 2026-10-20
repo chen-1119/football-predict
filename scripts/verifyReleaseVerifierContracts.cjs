@@ -7,6 +7,33 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('V4 official editorial publication keeps complete dual signatures, separate ACK and original worker failure',()=>{
+ const tests=['tests/reviewed-official-event.test.cjs','tests/official-editorial-reference-view.test.cjs','tests/manual-official-release-preparation.test.cjs','tests/manual-official-public-carry-forward.test.cjs'];
+ const result=require('node:child_process').spawnSync(process.execPath,['--test',...tests],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:2*1024*1024});
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 100$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
+  for(const file of [...tests,'scripts/manualOfficialReleaseRecovery.cjs','scripts/manualOfficialPublicCarryForward.cjs','scripts/recommendationPlatform/reviewedOfficialEvent.cjs','server/researchOfficialEventRead.cjs','src/services/officialEditorialReferences.ts','src/hooks/useOfficialEditorialReferences.ts','src/components/recommendations/OfficialEditorialReferences.tsx','tests/fixtures/reviewed-official-event.cjs','scripts/verifyReviewedOfficialEventPostgres.cjs'])assert(read(entry).includes('"'+file+'"'));
+ assert.equal(pkg.scripts['verify:reviewed-official-events'],'node --test '+tests.join(' '));
+ assert(read('.github/workflows/recommendation-runtime.yml').includes('node scripts/verifyReviewedOfficialEventPostgres.cjs'));
+});
+check('full snapshot append and derived graphs retain original bytes within a fixed 128 MiB synthetic child',()=>{
+ const file='tests/bounded-prediction-snapshots.test.cjs';
+ const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:240000,maxBuffer:1048576});
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 8$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
+  for(const required of [file,'server/boundedPredictionSnapshots.cjs','tests/fixtures/prediction-snapshot-original-functions.json'])assert(read(entry).includes('"'+required+'"'));
+ assert.equal(pkg.scripts['verify:bounded-prediction-snapshots'],'node --test '+file);
+ assert(read('.github/workflows/recommendation-runtime.yml').includes('node --test '+file));
+});
+check('public reference custody preserves exact originals across killed writers and complete bounded import',()=>{
+ const file='tests/public-reference-companion-store.test.cjs';
+ const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:180000,maxBuffer:1048576});
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 9$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
+  for(const required of [file,'server/publicReferenceCompanionStore.cjs'])assert(read(entry).includes('"'+required+'"'));
+ assert.equal(pkg.scripts['verify:reference-companion-custody'],'node --test '+file);
+ assert(read('.github/workflows/recommendation-runtime.yml').includes('node --test '+file));
+});
 check('readiness retains exact per-event native snapshot bounds while both full reads drain before release',()=>{
  const file='tests/postgres-capture-readiness.test.cjs';
  const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});

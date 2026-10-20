@@ -90,7 +90,11 @@ run_native_release() {
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/verifyDeploymentConfig.cjs"
   # The optional incident authorization is read only from this trusted signed
   # source. Without it the original worker preparation policy runs unchanged.
-  "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseWorkerCodeRepair.cjs" "$TRUSTED_SOURCE_DIR"
+  if [ -e "$TRUSTED_SOURCE_DIR/deploy/light-server/manual-official-recovery-authorization.json" ] || [ -L "$TRUSTED_SOURCE_DIR/deploy/light-server/manual-official-recovery-authorization.json" ]; then
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/manualOfficialReleaseRecovery.cjs" "$TRUSTED_SOURCE_DIR"
+  else
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseWorkerCodeRepair.cjs" "$TRUSTED_SOURCE_DIR"
+  fi
   NATIVE_PLANNED_CODE="$("$NODE_HOME/bin/node" -e 'const p=require(process.argv[1]);console.log(p.classify(p.capture(process.argv[2]),p.capture(process.argv[3])).mode === "code-only" ? "1" : "0")' "$TRUSTED_SOURCE_DIR/scripts/releaseDataPlanePolicy.cjs" "$APP_DIR" "$TRUSTED_SOURCE_DIR")"
   [[ "$NATIVE_PLANNED_CODE" =~ ^[01]$ ]]
   CODE_EMERGENCY_AUTHORIZATION="$TRUSTED_SOURCE_DIR/deploy/light-server/code-release-activation-authorization.json"
@@ -231,6 +235,7 @@ run_native_release() {
     start_release_sync_write_barrier "$APP_DIR"
     native_data seed >"$native_seed_log" 2>&1
     native_materialize_candidate
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/manualOfficialPublicCarryForward.cjs" capture "$BUNDLE_SHA256" "$$" "$BUILD_DIR"
     seed_candidate_model_artifacts
     candidate_ai_state_status=0
     copy_regular_file_nofollow "$LIVE_STORE_DIR/ai-arena-state.json" "$CANDIDATE_STORE_DIR/ai-arena-state.json" || candidate_ai_state_status="$?"
@@ -246,6 +251,9 @@ run_native_release() {
   fix_worker_write_permissions "$NEXT_DIR"
   validate_build_artifacts "$NEXT_DIR"
   verify_worker_write_permissions "$NEXT_DIR"
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/manualOfficialPublicCarryForward.cjs" next "$BUNDLE_SHA256" "$$" "$NEXT_DIR"
+  fi
   prepare_release_static_attestations
   if [ "$NATIVE_CODE_RELEASE" != 1 ]; then
   run_candidate_refresh_step native-deadline-refresh env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production \
@@ -335,6 +343,7 @@ run_native_release() {
   release_stage_observe begin stopped-window
   native_data final
   if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/manualOfficialPublicCarryForward.cjs" before-swap "$BUNDLE_SHA256" "$$" "$NEXT_DIR"
     native_code_verify_cutover_lease "$CODE_CUTOVER_POST_SWAP_MARGIN_SECONDS"
   else
   "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/releaseTransitionLease.cjs" verify --current "$NEXT_DIR/public/data/matches-current.json" \
@@ -353,11 +362,15 @@ run_native_release() {
   chmod 0644 "$APP_DIR/.release-bundle-sha256.next"
   mv "$APP_DIR/.release-bundle-sha256.next" "$APP_DIR/.release-bundle-sha256"
   cd "$APP_DIR"
+  if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/manualOfficialPublicCarryForward.cjs" after-swap "$BUNDLE_SHA256" "$$" "$APP_DIR"
+  fi
   sync_model_artifact_mirrors "$LIVE_STORE_DIR" "$APP_DIR" store-only
   verify_worker_write_permissions "$APP_DIR"
   restart_service_if_needed
   wait_for_health "http://${HOST}:${PORT}" native-post-swap 120 2 service
   if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/manualOfficialPublicCarryForward.cjs" serving "$BUNDLE_SHA256" "$$" "$APP_DIR"
     [ "$((SECONDS - CODE_CUTOVER_STARTED_SECONDS))" -lt 900 ]
     if [ "$CODE_EMERGENCY_ACTIVE" = 1 ]; then
       native_code_verify_cutover_lease 30 "$APP_DIR"

@@ -5,6 +5,7 @@ const p=require('../scripts/recommendationPlatform/reviewedAnalysis.cjs');
 const single=require('./researchReviewedRevision.cjs'),combo=require('./researchComboRevision.cjs');
 const results=require('../scripts/recommendationPlatform/results.cjs');
 const {epochNanoseconds:ns}=require('../src/services/prematchV3Clock.cjs');
+const official=require('../scripts/recommendationPlatform/reviewedOfficialEvent.cjs');
 const fail=code=>{throw Object.assign(Error(code),{code});};
 const VERSION='reviewed-revisions-view-v1',MAX_ROWS=2*16*(32+6),MAX_BYTES=32*1024*1024;
 function settlement(decision,heads,at){
@@ -39,11 +40,7 @@ async function projection(c,original,at,heads=[],{eventId=null}={}){
   if(ack&&!all.has(r.artifact_key.slice(0,-4)))fail('REVIEW_REVISION_VIEW_ORPHAN_ACK');
  }
  const singles=[],combos=[],pending=[];
- let current=[];
- if(rows.some(r=>r.artifact_version===combo.VERSION)){
-  current=(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(r=>r.payload);
-  if(current.length>512)fail('REVIEW_REVISION_MATCH_BOUND');
- }
+ let current=null,officialObserver=null;
  for(const r of rows.filter(r=>!r.artifact_key.endsWith('-ack'))){
   const isSingle=r.artifact_version===single.VERSION;
   const v=await(isSingle?single:combo).verifyCommitted(c,r.artifact_key,at);
@@ -57,10 +54,14 @@ async function projection(c,original,at,heads=[],{eventId=null}={}){
   if(isSingle)singles.push({...common,eventId:v.latestDecision.eventId,originalDecisionHash:v.originalDecisionHash,decision:v.latestDecision,
    settlement:settlement(v.latestDecision,heads,at)});
   else {const legSettlements=v.latestDecisions.map(d=>settlement(d,heads,at));
+   if(originals.some(d=>d.eventAuthority?.version!==official.VERSION)&&current===null){current=(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(r=>r.payload);if(current.length>512)fail('REVIEW_REVISION_MATCH_BOUND');}
+   if(officialObserver===null)officialObserver=official.createOfficialEventObserver(at);
+   const displayed=v.latestDecisions.map((d,i)=>({...d,cutoffAt:ns(d.cutoffAt)<ns(originals[i].cutoffAt)?d.cutoffAt:originals[i].cutoffAt}));
+   const officialObserved=officialObserver(displayed);
    combos.push({...common,baseArchiveKey:v.baseArchiveKey,baseArchiveSha256:v.baseArchiveSha256,originalCombo:v.originalCombo,
-    decisions:v.latestDecisions,combo:v.combo,frozen:originals.some(d=>{
-      const observed=current.filter(m=>String(m.sourceMatchId||'').replace(/^sporttery_/,'')===d.eventId&&ns(m.eventVersion||m.kickoffTime)===ns(d.eventVersion));
-      return ns(at)>=ns(d.eventVersion)||ns(at)>=ns(d.cutoffAt)||observed.length!==1||observed[0].status!=='SCHEDULED';
+    decisions:v.latestDecisions,combo:v.combo,frozen:displayed.some(d=>{
+      const observed=(current||[]).filter(m=>String(m.sourceMatchId||'').replace(/^sporttery_/,'')===d.eventId&&ns(m.eventVersion||m.kickoffTime)===ns(d.eventVersion));
+      return ns(at)>=ns(d.eventVersion)||ns(at)>=ns(d.cutoffAt)||(d.eventAuthority?.version===official.VERSION?!officialObserved.has(d.eventId):observed.length!==1||observed[0].status!=='SCHEDULED');
     }),settlement:groupSettlement(legSettlements),legSettlements});}
  }
  const value=p.seal({version:VERSION,state:'verified',businessDate:day,updatedAt:at,originalPublicationHash:original.publicationHash,singles,combos,pending,

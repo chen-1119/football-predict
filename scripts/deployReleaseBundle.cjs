@@ -526,6 +526,17 @@ const expectedRecoveryHelperSha256 = recoveryHelperInspection.sha256;
 // preparation only and leaves all native/final/cutover checks in place.
 let workerCodeRepairProbe = null;
 const workerCodeRepairEntry = 'deploy/light-server/worker-code-repair-authorization.json';
+const manualOfficialEntry='deploy/light-server/manual-official-recovery-authorization.json';
+if(bundleInspection.entries.some(entry=>entry.replace(/^\.\//,'')===manualOfficialEntry)){
+  if(!nativeFullRelease||frontendOnly||bundleInspection.entries.some(entry=>entry.replace(/^\.\//,'')===workerCodeRepairEntry))fail('manual official preparation requires one signed native full authorization');
+  const authorization=inspectBundleEntryBytes(bundlePath,manualOfficialEntry),policy=inspectBundleEntryBytes(bundlePath,'scripts/manualOfficialReleaseRecovery.cjs');
+  if(!authorization.ok||authorization.bytes>65536||!policy.ok||policy.sha256!==crypto.createHash('sha256').update(fs.readFileSync(path.join(rootDir,'scripts/manualOfficialReleaseRecovery.cjs'))).digest('hex'))fail('signed manual preparation policy unavailable');
+  try{
+    const manual=require('./manualOfficialReleaseRecovery.cjs'),auth=manual.candidateAuthorization(rootDir,JSON.parse(authorization.content.toString('utf8')));
+    for(const row of auth.files){const file=inspectBundleEntryBytes(bundlePath,row.path);if(!file.ok||file.sha256!==row.afterSha256)throw Error('signed manual target differs');}
+    workerCodeRepairProbe=manual.buildProbe(auth);
+  }catch(error){fail('signed manual preparation authorization rejected',{reason:error.message});}
+}
 if (bundleInspection.entries.some(entry => entry.replace(/^\.\//, '') === workerCodeRepairEntry)) {
   if (!nativeFullRelease || frontendOnly) fail('worker code repair requires signed native full source');
   const authorization = inspectBundleEntryBytes(bundlePath, workerCodeRepairEntry);

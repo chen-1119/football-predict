@@ -30,7 +30,13 @@ async function verify(pool){
   const lastJson=JSON.stringify(last),lastIntent=JSON.stringify({version:'research-broker-intent-v1',requestSha:priorRetryRequestSha256,releaseSha:last.releaseSha,admittedAt:last.finishedAt,automaticWriteRetry:false});
   const recoveryRequest={version:original.version,action:'publication-input-recovery',priorRetryRequestJson,priorRetryRequestSha256,failedRetryReceiptSha256:p.sha(lastJson)};
   const read=file=>{const base='/var/lib/football-research-broker/';const files={[base+originalRequestSha256+'.receipt.json']:receiptJson,[base+originalRequestSha256+'.intent.json']:intent,[base+retry.journalId(request)+'.receipt.json']:lastJson,[base+retry.journalId(request)+'.intent.json']:lastIntent};a.ok(files[file]);return Buffer.from(files[file]);};
-  recovery.verifyFailures(recoveryRequest,read,{releaseSha:'b'.repeat(64),repairSourceSha256:p.sha(fs.readFileSync(path.join(__dirname,'syncData.cjs')))});
+  const candidateSourceSha=p.sha(fs.readFileSync(path.join(__dirname,'syncData.cjs')));
+  a.notEqual(candidateSourceSha,recovery.REPAIR_SOURCE_SHA256);
+  a.throws(()=>recovery.verifyFailures(recoveryRequest,read,{releaseSha:'b'.repeat(64),repairSourceSha256:candidateSourceSha}),{code:'RESEARCH_PUBLICATION_INPUT_RECOVERY_REFUSED'});
+  a.equal(Number((await q('SELECT count(*) AS n FROM football.private_model_artifacts')).rows[0].n),0);
+  // Historical positive fixture only. Never expand the consumed r903 source
+  // pin to the candidate or claim this synthetic context is an installed host.
+  recovery.verifyFailures(recoveryRequest,read,{releaseSha:'b'.repeat(64),repairSourceSha256:recovery.REPAIR_SOURCE_SHA256});
   const raw={...nested,homeTeam:m.homeTeamName,awayTeam:m.awayTeamName,buyEndTime:''};
   const enriched=require('./syncData.cjs').enrichRawMatchWithPredictionSnapshot(raw,new Map([[m.sourceMatchId,m]]),[]);
   a.equal(enriched.buyEndTime,m.buyEndTime);
@@ -42,7 +48,7 @@ async function verify(pool){
   const saved=JSON.parse(before.find(r=>r.artifact_key===key).json);a.deepEqual(saved.draft,draft);a.equal(JSON.stringify(saved.draft),json);a.deepEqual(p.make(saved.draft,{...saved.inputs,trustRegistry:source.registry,asOf:saved.record.createdAt}),saved.record);
   const repeat=await service.execute(Buffer.from(JSON.stringify(recoveryRequest)));a.equal(repeat.submitted,false);a.equal(repeat.payloadSha256,result.payloadSha256);a.deepEqual((await q('SELECT artifact_key,payload::text AS json FROM football.private_model_artifacts ORDER BY artifact_key')).rows,before);
   a.equal(JSON.stringify(receipt),receiptJson);a.equal(JSON.stringify(last),lastJson);a.equal(request.originalRequestJson,originalRequestJson);a.equal(recoveryRequest.priorRetryRequestJson,priorRetryRequestJson);
-  return{ok:true,scope:'disposable-native-postgres',realOriginalLockTimeout55P03:true,realPriorRetryProspectiveRefusal:true,bothFailuresZeroWrites:true,actualProducerRepair:true,stableSingleRecoveryJournal:true,originalRequestBytesUnchanged:true,freshReadBeforeRetry:true,normalSignedPublisherAndSecondAck:true,completeSignedReplay:true,duplicateDoesNotWrite:true,failedReceiptPreserved:true,productionWrites:0,productionRootBrokerVerified:false};
+  return{ok:true,scope:'disposable-native-postgres',candidateSourceRefused:true,candidateRefusalZeroWrites:true,historicalRecoveryScopeOnly:true,realOriginalLockTimeout55P03:true,realPriorRetryProspectiveRefusal:true,bothFailuresZeroWrites:true,actualProducerRepair:true,stableSingleRecoveryJournal:true,originalRequestBytesUnchanged:true,freshReadBeforeRetry:true,normalSignedPublisherAndSecondAck:true,completeSignedReplay:true,duplicateDoesNotWrite:true,failedReceiptPreserved:true,productionWrites:0,productionRootBrokerVerified:false};
  }finally{if(holder){await holder.query("SELECT pg_advisory_unlock_all()");holder.release();}if(previous===undefined)delete process.env.SPORTTERY_RELAY_FAST_LANE_SNAPSHOT;else process.env.SPORTTERY_RELAY_FAST_LANE_SNAPSHOT=previous;try{await pool.query('DROP SCHEMA IF EXISTS '+schema+' CASCADE');}finally{signed.cleanup();}}
 }
 if(require.main===module){const u=new URL(process.env.RESEARCH_REPORT_TEST_DATABASE_URL||'invalid:');if(!['postgres:','postgresql:'].includes(u.protocol)||!['127.0.0.1','localhost','[::1]'].includes(u.hostname)||u.pathname!=='/recommendation_test')throw Error('Explicit disposable local database required');const pool=new(require('pg').Pool)({connectionString:u.href,ssl:false,max:4});verify(pool).then(v=>console.log(JSON.stringify(v))).catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>pool.end());}

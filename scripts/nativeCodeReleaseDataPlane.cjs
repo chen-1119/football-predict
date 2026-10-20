@@ -67,6 +67,20 @@ async function tryAllocate(sha, directory) {
     legacyBaselineSha256: null, key: crypto.randomBytes(32).toString('hex'), createdAt: new Date().toISOString() };
   if (emergency) state.emergencyActivationAuthorizationHash = emergency.authorizationHash;
   const repairFile=path.join(candidateRoot,'deploy/light-server/worker-code-repair-authorization.json');
+  const manualPolicy=require('./manualOfficialReleaseRecovery.cjs'),manualFile=path.join(candidateRoot,manualPolicy.AUTH_ENTRY);
+  let manualPreparation=null,manualAuthorizationBytes=null;
+  if(fs.existsSync(manualFile)){
+    assert.equal(fs.existsSync(repairFile),false,'manual and old preparation authorizations conflict');
+    manualAuthorizationBytes=fs.readFileSync(manualFile);
+    const auth=manualPolicy.candidateAuthorization(candidateRoot,JSON.parse(manualAuthorizationBytes));
+    const worker=require('./releaseWorkerPreflight.cjs').collectWorkerPreflight(),base=require('./releaseWorkerPreflight.cjs').evaluateWorkerPreflight(worker);
+    if(!base.ok){
+      const observed=manualPolicy.collect(auth,worker),report=manualPolicy.evaluate(auth,worker,observed);
+      assert.equal(report.preparationAllowed,true,'manual preparation changed before allocation');
+      state.manualOfficialPreparationAuthorizationHash=crypto.createHash('sha256').update(manualAuthorizationBytes).digest('hex');
+      manualPreparation={authorizationHash:state.manualOfficialPreparationAuthorizationHash,worker,observed,report};
+    }
+  }
   if(fs.existsSync(repairFile)) {
     const policy=require('./releaseWorkerCodeRepair.cjs');
     const repair=policy.candidateAuthorization(candidateRoot,JSON.parse(fs.readFileSync(repairFile)));
@@ -87,6 +101,10 @@ async function tryAllocate(sha, directory) {
   state.contract = require('./nativeReleaseJournal.cjs').contractFor({ kind: 'runtime-only', oldIdentity,
     topology: before, nativeAlreadyActive: true });
   d.write(path.join(directory, 'capacity-before-allocation.json'), capacity);
+  if(manualPreparation){
+    fs.writeFileSync(path.join(directory,'manual-official-preparation-authorization.json'),manualAuthorizationBytes,{flag:'wx',mode:0o600});
+    d.write(path.join(directory,'manual-official-preparation-observation.json'),manualPreparation);
+  }
   d.write(path.join(directory, 'allocation-intent.json'), state);
   d.write(path.join(directory, 'state.json'), state);
   // Build gets no database connection or serving credential. Prebuilt dist is

@@ -130,7 +130,7 @@ function createResearchArchiveRead({ pool, replay, readOfficial, trustRegistry }
         if (!record) return { key, state: 'record-not-found', verified: false };
         const saved = record.payload, draft = saved?.draft;
         const expectedKey = draft && 'reviewed-analysis-' + day(draft.businessDate)
-          + (draft.version === 3 ? '-batch-' + hash(draft) : '-selected-two');
+          + ([3,4].includes(draft.version) ? '-batch-' + hash(draft) : '-selected-two');
         if (saved?.version !== 'reviewed-analysis-freeze-v1' || expectedKey !== key
           || saved.record?.businessDate !== draft.businessDate) fail('ARCHIVE_IDENTITY_CONFLICT');
         const ack = await boundedRow(client, key + '-ack');

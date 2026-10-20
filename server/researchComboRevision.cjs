@@ -13,7 +13,7 @@ function validate(r){
  if(!r||Object.keys(r).sort().join(',')!=='band,baseArchiveKey,baseArchiveSha256,bases,draft,draftHash,previousRevisionHash,revision,size,version'
   ||r.version!=='reviewed-combo-request-v1'||![2,3].includes(r.size)||![2.5,5,10].includes(r.band)
   ||!/^reviewed-combo-view-\d{4}-\d{2}-\d{2}-[a-f0-9]{64}$/.test(r.baseArchiveKey||'')||!hex(r.baseArchiveSha256)
-  ||!Array.isArray(r.bases)||r.bases.length!==r.size||r.draft?.version!==3||r.draft.singles?.length!==r.size
+  ||!Array.isArray(r.bases)||r.bases.length!==r.size||![3,4].includes(r.draft?.version)||r.draft.singles?.length!==r.size
   ||!hex(r.draftHash)||p.hash(r.draft)!==r.draftHash||!Number.isSafeInteger(r.revision)||r.revision<1||r.revision>single.MAX_REVISIONS
   ||(r.revision===1?r.previousRevisionHash!==null:!hex(r.previousRevisionHash)))fail('REVIEW_REVISION_COMBO_REQUEST');
  const day=r.draft.businessDate;
@@ -63,7 +63,7 @@ async function verifyCommitted(c,key,at,depth=0){
   if(!prior.verified||prior.payloadSha256!==v.request.previousRevisionHash||prior.baseIdentity!==identity(v.request)||ns(prior.commitObservedAt)>=ns(v.createdAt))fail('REVIEW_REVISION_CHAIN');}
  const replay=p.make(v.request.draft,{...v.inputs,trustRegistry:single.trust(),asOf:v.createdAt});
  if(p.hash(replay)!==p.hash(v.record)||p.hash(group(replay,v.request.band))!==p.hash(v.combo))fail('REVIEW_REVISION_COMBO_REPLAY');
- if(v.record.records.some((r,i)=>['eventId','eventVersion','businessDate','homeTeamId','awayTeamId','homeTeamName','awayTeamName'].some(k=>r[k]!==first.decisions[i][k])))fail('REVIEW_REVISION_EVENT_CHANGED');
+ if(v.record.records.some((r,i)=>['eventId','eventVersion','businessDate','homeTeamId','awayTeamId','homeTeamName','awayTeamName'].some(k=>r[k]!==first.decisions[i][k])||!require('../scripts/recommendationPlatform/reviewedOfficialEvent.cjs').sameOfficialEventIdentity(first.decisions[i],r)))fail('REVIEW_REVISION_EVENT_CHANGED');
  deadline(v.record,v.storedAt);
  const ack=await single.row(c,key+'-ack');if(!ack)return {state:'record-present-ack-missing',key,verified:false,retryWriteAutomatically:false};
  const a=ack.payload;single.checkSeal(a);
@@ -89,14 +89,14 @@ function createComboRevisionStore({pool,runExclusive}={}){
    const at=await single.now(c),first=await base(c,r,at);
    if(r.revision>1){const prior=await verifyCommitted(c,previousKey(r),at);
     if(!prior.verified||prior.payloadSha256!==r.previousRevisionHash||prior.baseIdentity!==identity(r)||ns(prior.commitObservedAt)>=ns(at))fail('REVIEW_REVISION_PREDECESSOR');}
-   const all=(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(x=>x.payload);
+   const all=r.draft.version===4?[]:(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(x=>x.payload);
    if(all.length>512)fail('REVIEW_REVISION_MATCH_BOUND');
    const matches=all.filter(m=>r.bases.some(b=>b.eventId===String(m.sourceMatchId||'').replace(/^sporttery_/,'')));
    const snapshot=require('../scripts/recommendationPlatform/liveOfficialHandicap.cjs').readLiveOfficialSnapshot();
    const record=p.make(r.draft,{matches,snapshot,trustRegistry:single.trust(),asOf:at});
-   const observed=record.records.map(d=>({...d,status:matches.find(m=>String(m.sourceMatchId||'').replace(/^sporttery_/,'')===d.eventId)?.status,isOnSale:true,observedAt:d.quoteObservedAt}));
+   const observed=record.records.map(d=>({...d,status:r.draft.version===4?'SCHEDULED':matches.find(m=>String(m.sourceMatchId||'').replace(/^sporttery_/,'')===d.eventId)?.status,isOnSale:true,observedAt:d.quoteObservedAt}));
    if(!comboDisposition({legs:first.decisions},observed,at).canRefresh)fail('REVIEW_REVISION_COMBO_FROZEN');
-   if(record.records.some((d,i)=>['eventVersion','homeTeamId','awayTeamId','homeTeamName','awayTeamName'].some(k=>d[k]!==first.decisions[i][k])))fail('REVIEW_REVISION_EVENT_CHANGED');
+   if(record.records.some((d,i)=>['eventVersion','homeTeamId','awayTeamId','homeTeamName','awayTeamName'].some(k=>d[k]!==first.decisions[i][k])||!require('../scripts/recommendationPlatform/reviewedOfficialEvent.cjs').sameOfficialEventIdentity(first.decisions[i],d)))fail('REVIEW_REVISION_EVENT_CHANGED');
    const storedAt=await single.now(c);deadline(record,storedAt);
    const value=p.seal({version:VERSION,createdAt:at,storedAt,request:r,record,combo:group(record,r.band),inputs:{matches,snapshot},originalHash:p.hash(first)});
    const saved=await single.insert(c,key,value,storedAt);deadline(record,await single.now(c));return saved;

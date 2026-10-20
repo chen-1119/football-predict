@@ -186,7 +186,7 @@ function publicationClientAsOf(client, { center, now, trustRegistry, reviewedRun
       && createdNs < storedNs && storedNs <= BigInt(now) * 1000000n
       && saved.generatedAt === new Date(createdAt).toISOString()
       && saved.updatedAt === new Date(storedAt).toISOString(), 'FREEZE_STORAGE_CLOCK');
-    const expectedKey = kind === 'trained' ? record.id : value.draft?.version === 3
+    const expectedKey = kind === 'trained' ? record.id : [3,4].includes(value.draft?.version)
       ? 'reviewed-analysis-' + center.businessDate + '-batch-' + hash(value.draft)
       : 'reviewed-analysis-' + center.businessDate + '-selected-two';
     check(key === expectedKey, 'FREEZE_KEY');

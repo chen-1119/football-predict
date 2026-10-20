@@ -3,6 +3,24 @@ on:
   pull_request:
     paths:
       - 'server/accounts.cjs'
+      - 'scripts/manualOfficialReleaseRecovery.cjs'
+      - 'scripts/manualOfficialPublicCarryForward.cjs'
+      - 'deploy/light-server/manual-official-recovery-authorization.json'
+      - 'scripts/recommendationPlatform/reviewedOfficialEvent.cjs'
+      - 'server/researchOfficialEventRead.cjs'
+      - 'src/services/officialEditorialReferences.ts'
+      - 'src/hooks/useOfficialEditorialReferences.ts'
+      - 'src/components/recommendations/OfficialEditorialReferences.tsx'
+      - 'tests/reviewed-official-event.test.cjs'
+      - 'tests/official-editorial-reference-view.test.cjs'
+      - 'tests/manual-official-release-preparation.test.cjs'
+      - 'tests/manual-official-public-carry-forward.test.cjs'
+      - 'tests/fixtures/reviewed-official-event.cjs'
+      - 'scripts/verifyReviewedOfficialEventPostgres.cjs'
+      - 'server/publicReferenceCompanionStore.cjs'
+      - 'tests/public-reference-companion-store.test.cjs'
+      - 'tests/bounded-prediction-snapshots.test.cjs'
+      - 'tests/fixtures/prediction-snapshot-original-functions.json'
       - 'server/selectedJsonFullHashWorker.cjs'
       - 'scripts/verifySelectedJsonParallel.cjs'
       - 'scripts/capturePublicationCoordinator.cjs'
@@ -261,6 +279,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22.22.1'
@@ -383,6 +402,10 @@ jobs:
         run: node scripts/verifySelectedJsonParallel.cjs
       - name: Capture lanes drain before generation and retain original budgets
         run: node --test tests/capture-publication-coordination.test.cjs
+      - name: Bounded full snapshot append, original retention bytes and all derived consumers
+        run: node --test tests/bounded-prediction-snapshots.test.cjs
+      - name: Original companion custody survives killed writers and bounded complete archive import
+        run: node --test tests/public-reference-companion-store.test.cjs
       - name: Fixed worker fast publisher owns actual close and preserves native receipts
         run: node --test tests/worker-fast-result-publisher.test.cjs && node --max-old-space-size=128 scripts/verifyWorkerFastPublisherIsolation.cjs
         env:
@@ -391,6 +414,12 @@ jobs:
         run: node --test tests/postgres-capture-readiness.test.cjs && node --max-old-space-size=128 scripts/verifyPostgresCaptureReadiness.cjs
         env:
           CAPTURE_READINESS_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
+      - name: Complete V4 editorial signature, ACK, display and preparation contracts
+        run: node --test tests/reviewed-official-event.test.cjs tests/official-editorial-reference-view.test.cjs tests/manual-official-release-preparation.test.cjs tests/manual-official-public-carry-forward.test.cjs
+      - name: Real PostgreSQL V4 official publication, single and combo revisions without native event rows
+        run: node scripts/verifyReviewedOfficialEventPostgres.cjs
+        env:
+          RESEARCH_REPORT_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Frontend evidence semantics
         run: node scripts/verifyFrontendEvidenceSemantics.cjs
       - name: Audited static receipt dependency closure

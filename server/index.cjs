@@ -11883,6 +11883,20 @@ const handleApi = async (req, res, url) => {
     return sendJson(res, await getSourceHealth());
   }
 
+  if (url.pathname === "/api/research/official-event-references") {
+    if (req.method !== "GET" && req.method !== "HEAD") return sendJson(res, { ok: false, error: "method not allowed" }, 405);
+    if (!(await hasRecommendationAccess(req, url))) return sendJson(res, { ok: false, error: "access code required" }, 401);
+    if ([...url.searchParams.keys()].some(key => key !== "businessDate") || url.searchParams.getAll("businessDate").length !== 1) {
+      return sendJson(res, { ok: false, error: "invalid business day" }, 400);
+    }
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      return sendJson(res, await require('./researchOfficialEventRead.cjs').read(postgresPool, url.searchParams.get("businessDate")));
+    } catch {
+      return sendJson(res, { ok: false, error: "official editorial references unavailable" }, 503);
+    }
+  }
+
   if (url.pathname === "/api/matches/current") {
     const [matches, globalRiskTier] = await Promise.all([
       readCurrentMatchesDetailed({ recommendationAuthorityPolicy: currentRecommendationPolicy }).then(read => read.rows),

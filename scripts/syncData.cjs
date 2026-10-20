@@ -4547,6 +4547,13 @@ function sourceMatchKeyForReview(match) {
 }
 
 function buildPredictionSnapshotIndex(predictionSnapshotsPayload) {
+  const bounded = require("../server/boundedPredictionSnapshots.cjs");
+  if (bounded.isSequence(predictionSnapshotsPayload?.rows)) return {
+    get(sourceMatchId) {
+      return bounded.sourceRows(predictionSnapshotsPayload.rows, sourceMatchId)
+        .sort((a, b) => parseBeijingDateTime(a.capturedAt) - parseBeijingDateTime(b.capturedAt));
+    },
+  };
   const bySourceId = new Map();
   const rows = Array.isArray(predictionSnapshotsPayload?.rows) ? predictionSnapshotsPayload.rows : [];
   for (const row of rows) {
@@ -16764,26 +16771,42 @@ function retainPredictionSnapshotRows(rows, {
 
 function appendPredictionSnapshots(publicDir, matches, capturedAt, {
   observationMatches = matches,
+  companionStoreDir = null,
+  boundedHistory = false,
 } = {}) {
-  const history = loadPredictionSnapshots(publicDir);
   const cutoff = Date.parse(capturedAt) - PREDICTION_SNAPSHOT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
-  const byKey = new Map();
+  const acceptHistoryRow = (target, row) => {
+    const rowTime = Date.parse(row?.lastSeenAt || row?.capturedAt);
+    const sourceMatchId = normText(row?.sourceMatchId);
+    const phase = normText(row?.phase);
+    const signature = normText(row?.signature);
+    if (!Number.isFinite(rowTime) || rowTime < cutoff || !sourceMatchId || !phase || !signature) return;
+    const normalized = normalizePredictionSnapshotAudit(row);
+    const featureHash = normalized?.featureSnapshotHash || normalized?.featureSnapshot?.hash || "legacy";
+    target.set(`${sourceMatchId}|${phase}|${signature}|${featureHash}`, normalized);
+  };
+  const workspace = boundedHistory ? require("../server/boundedPredictionSnapshots.cjs").openWorkspace(publicDir, {
+    cutoff, acceptHistoryRow,
+    rowMetadata(row) {
+      const firstTime = Date.parse(row?.firstSeenAt || row?.capturedAt || "");
+      return {
+        firstTime: Number.isFinite(firstTime) ? firstTime : 0,
+        retentionKey: normText(row?.sourceMatchId || row?.matchId),
+        sourceKey: sourceMatchKeyForReview(row), summaryKey: normText(row?.sourceMatchId),
+        captureKey: [row?.sourceMatchId, row?.decisionSnapshot?.capturedAt || row?.capturedAt].join("|"),
+      };
+    },
+  }) : null;
+  try {
+  const history = workspace ? workspace.history : loadPredictionSnapshots(publicDir);
+  const byKey = workspace ? workspace.rowMap : new Map();
   const observations = (observationMatches || [])
     .filter((match) => shouldCaptureLockedShadowRevision(match, capturedAt))
     .map((match) => predictionSnapshotRow(match, capturedAt))
     .filter(Boolean)
     .map((row) => ({ ...row, auditRole: "shadow-candidate" }));
 
-  for (const row of history.rows) {
-    const rowTime = Date.parse(row?.lastSeenAt || row?.capturedAt);
-    const sourceMatchId = normText(row?.sourceMatchId);
-    const phase = normText(row?.phase);
-    const signature = normText(row?.signature);
-    if (!Number.isFinite(rowTime) || rowTime < cutoff || !sourceMatchId || !phase || !signature) continue;
-    const normalized = normalizePredictionSnapshotAudit(row);
-    const featureHash = normalized?.featureSnapshotHash || normalized?.featureSnapshot?.hash || "legacy";
-    byKey.set(`${sourceMatchId}|${phase}|${signature}|${featureHash}`, normalized);
-  }
+  for (const row of history.rows) acceptHistoryRow(byKey, row);
 
   let appended = 0;
   let updated = 0;
@@ -16855,7 +16878,9 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
     observationKeyByCapture.set(captureKey, key);
   }
 
-  const rows = retainPredictionSnapshotRows(
+  const rows = workspace ? workspace.retain(observationKeyByCapture, {
+    maxRows: PREDICTION_SNAPSHOT_MAX_ROWS, maxRowsPerMatch: PREDICTION_SNAPSHOT_MAX_ROWS_PER_MATCH,
+  }) : retainPredictionSnapshotRows(
     Array.from(byKey.entries())
       .filter(([key, row]) => {
         const captureKey = [
@@ -16867,15 +16892,14 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
       })
       .map(([, row]) => row),
   );
-  const byPhase = rows.reduce((acc, row) => {
-    acc[row.phase] = (acc[row.phase] || 0) + 1;
-    return acc;
-  }, {});
+  const byPhase = {};
+  for (const row of rows) byPhase[row.phase] = (byPhase[row.phase] || 0) + 1;
+  const references = workspace ? workspace.finishReferences(matches, companionStoreDir) : null;
   const payload = {
     version: 3,
     source: "sporttery:prediction-snapshots",
     // Separate immutable public lineage; never enter the candidate deadline selector.
-    publicReferenceDecisions: [...new Map([
+    publicReferenceDecisions: references ? references.publicReferenceDecisions : [...new Map([
       ...(history.publicReferenceDecisions || []),
       ...(matches || []).map((match) => match?.predictionMeta?.publicReferenceDecision).filter(Boolean),
     ].filter((record) => Date.parse(record.recordedAt) >= cutoff)
@@ -16894,18 +16918,38 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
       updated,
     },
   };
+  if (workspace) {
+    payload.publicReferenceEvidence = references.publicReferenceEvidence;
+    return workspace.attach(payload);
+  }
+  const originalEntries = [
+    ...(history.publicReferenceEvidence || []),
+    ...(matches || []).map((match) => require("../src/services/publicReferenceDecision.cjs")
+      .pendingPublicReferenceEvidence(match)).filter(Boolean),
+  ];
+  if (companionStoreDir) {
+    const present = new Set(originalEntries.map(entry => entry.referenceHash));
+    for (const match of matches || []) {
+      const record = match?.predictionMeta?.publicReferenceDecision;
+      if (!record?.evidenceBinding || present.has(record.contentHash)) continue;
+      // Read only an exact previously durable original for this admitted public
+      // record. A missing/corrupt store never falls back to the current model.
+      const original = require("../server/publicReferenceCompanionStore.cjs")
+        .readOriginalCompanion(companionStoreDir, record);
+      if (original) { originalEntries.push(original.entry); present.add(record.contentHash); }
+    }
+  }
   payload.publicReferenceEvidence = require("../src/services/publicReferenceEvidence.cjs")
-    .collectPublicReferenceEvidence(payload.publicReferenceDecisions, [
-      ...(history.publicReferenceEvidence || []),
-      ...(matches || []).map((match) => require("../src/services/publicReferenceDecision.cjs")
-        .pendingPublicReferenceEvidence(match)).filter(Boolean),
-    ]);
+    .collectPublicReferenceEvidence(payload.publicReferenceDecisions, originalEntries);
   return payload;
+  } catch (error) { workspace?.close(); throw error; }
 }
 
 function attachPredictionSnapshotSummary(matches, snapshotPayload, capturedAt) {
-  const rowsByMatch = new Map();
-  for (const row of snapshotPayload?.rows || []) {
+  const bounded = require("../server/boundedPredictionSnapshots.cjs");
+  const diskRows = bounded.isSequence(snapshotPayload?.rows);
+  const rowsByMatch = diskRows ? { get: key => bounded.sourceRows(snapshotPayload.rows, key, "summaryKey") } : new Map();
+  for (const row of diskRows ? [] : snapshotPayload?.rows || []) {
     const key = normText(row?.sourceMatchId);
     if (!key) continue;
     if (!rowsByMatch.has(key)) rowsByMatch.set(key, []);
@@ -16997,10 +17041,14 @@ function writePrettyJsonArray(fd, rows, indent = 0, compact = false) {
   const prefix = " ".repeat(indent);
   const itemIndent = indent + 2;
   writeTextFully(fd, "[");
-  for (let index = 0; index < rows.length; index += 1) {
-    const serialized = JSON.stringify(rows[index], null, compact ? undefined : 2) ?? "null";
+  const sequence = require("../server/boundedPredictionSnapshots.cjs").isSequence(rows);
+  const values = sequence ? rows : (function* () { for (let i = 0; i < rows.length; i++) yield rows[i]; })();
+  let index = 0;
+  for (const value of values) {
+    const serialized = JSON.stringify(value, null, compact ? undefined : 2) ?? "null";
     writeTextFully(fd, compact ? `${index === 0 ? "" : ","}${serialized}`
       : `${index === 0 ? "\n" : ",\n"}${indentSerializedJson(serialized, itemIndent)}`);
+    index++;
   }
   writeTextFully(fd, rows.length && !compact ? `\n${prefix}]` : "]");
 }
@@ -17021,7 +17069,7 @@ function writePrettyJsonStreaming(file, payload, compact = false) {
     for (const [key, value] of entries) {
       const prefix = compact ? `${writtenEntries > 0 ? "," : ""}${JSON.stringify(key)}:`
         : `${writtenEntries > 0 ? ",\n" : ""}  ${JSON.stringify(key)}: `;
-      if (Array.isArray(value)) {
+      if (Array.isArray(value) || require("../server/boundedPredictionSnapshots.cjs").isSequence(value)) {
         writeTextFully(fd, prefix);
         writePrettyJsonArray(fd, value, 2, compact);
         writtenEntries += 1;
@@ -18217,7 +18265,15 @@ async function sync() {
     publicDir,
     output,
     capturedAt,
-    { observationMatches: prospectiveAuditMatches },
+    { observationMatches: prospectiveAuditMatches, companionStoreDir: DEFAULT_STORE_DIR, boundedHistory: true },
+  );
+  try {
+  // Preserve the original finalized binding before any mutable public file can
+  // expose it. The separately committed warehouse may fail or be interrupted;
+  // a WeakMap alone cannot survive that boundary. Missing original evidence
+  // still fails in appendPredictionSnapshots above; never rebuild it here.
+  require("../server/publicReferenceCompanionStore.cjs").persistCurrentReferenceCompanions(
+    DEFAULT_STORE_DIR, output, predictionSnapshotsPayload.publicReferenceEvidence,
   );
   // Private pre-persistence computation evidence is not a public decision ledger.
   // Capture failures expose a diagnostic gap without changing publication or old records.
@@ -18749,6 +18805,11 @@ async function sync() {
     retentionHours: CURRENT_UNSETTLED_RETENTION_HOURS,
     rows: unresolvedArchive,
   });
+  // Re-read exact durable originals immediately before the public rename.
+  // This is custody only, not a new decision or permission to change history.
+  require("../server/publicReferenceCompanionStore.cjs").assertCurrentReferenceCompanions(
+    DEFAULT_STORE_DIR, [...split.current, ...split.history],
+  );
   if (process.env.WRITE_LEGACY_STATIC_PAYLOADS !== "0") {
     writeJson(path.join(publicDir, "matches.json"), split.current);
     writeJson(path.join(publicDir, "odds-history.json"), oddsHistoryPayload);
@@ -18944,6 +19005,7 @@ async function sync() {
       2
     )
   );
+  } finally { require("../server/boundedPredictionSnapshots.cjs").closePayload(predictionSnapshotsPayload); }
 }
 
 if (require.main === module) {

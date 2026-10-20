@@ -5,7 +5,7 @@ const {SELECT}=require('../leagueBaselineRegistry.cjs');
 const {transaction}=require('./leagueBaselineRuntime.cjs');
 const {loadCollectorTrustRegistry}=require('../../src/services/collectorAttestation.cjs');
 const {readLiveOfficialSnapshot}=require('./liveOfficialHandicap.cjs');
-const key=d=>d.version===3?'reviewed-analysis-'+d.businessDate+'-batch-'+p.hash(d):'reviewed-analysis-'+d.businessDate+'-selected-two';
+const key=d=>[3,4].includes(d.version)?'reviewed-analysis-'+d.businessDate+'-batch-'+p.hash(d):'reviewed-analysis-'+d.businessDate+'-selected-two';
 async function keys(c,businessDate){
  p.check(/^\d{4}-\d{2}-\d{2}$/.test(businessDate),'BUSINESS_DAY');
  const rows=(await c.query("SELECT artifact_key FROM football.private_model_artifacts WHERE artifact_key=$1 OR (artifact_key LIKE $2 AND artifact_version=$3) ORDER BY artifact_key LIMIT 33",
@@ -29,7 +29,7 @@ async function publish(draft,{pool,expectedDraftHash}){
   const prior=await projection(c,draft.businessDate,await dbNow(c));
   p.check(prior.records.length+draft.singles.length<=32,'DAILY_RECORD_BOUND');
   p.check(draft.singles.every(r=>!prior.records.some(v=>v.eventId===r.eventId)),'EVENT_ALREADY_FROZEN');
-  const allMatches=(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(r=>r.payload);p.check(allMatches.length<=512,'MATCH_BOUND');
+  const allMatches=draft.version===4?[]:(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(r=>r.payload);p.check(allMatches.length<=512,'MATCH_BOUND');
   const snapshot=readLiveOfficialSnapshot(),asOf=await dbNow(c),evidenceByEvent={};
   p.validateDraft(draft,asOf);
   // Freeze only this batch's events. Keep the complete signed source and every

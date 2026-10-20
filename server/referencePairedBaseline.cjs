@@ -49,6 +49,11 @@ function compactReferencePairedBaseline(value, summary) {
 }
 
 function buildReferencePerformanceWithPairs({ matches, snapshotPayload, trustRegistry, generatedAt, startDate } = {}) {
+  const workspace = require("./boundedPredictionSnapshots.cjs").workspaceFor(snapshotPayload);
+  if (workspace) return buildReferencePerformanceFromOriginalPairs({
+    matches, records: snapshotPayload.publicReferenceDecisions, getPair: workspace.getOriginalPair,
+    trustRegistry, generatedAt, startDate,
+  });
   const { buildReferenceReviewPerformance, compactReferenceReviewPerformance } = require("./reviewPerformanceSummary.cjs");
   const { buildPublicReferenceArchive } = require("./publicReferenceArchive.cjs");
   const { buildPublicReferencePairAudit } = require("../scripts/auditPublicReferencePairs.cjs");
@@ -56,6 +61,50 @@ function buildReferencePerformanceWithPairs({ matches, snapshotPayload, trustReg
   if (!summary) throw new Error("Complete reference history failed validation before pairing");
   const audit = buildPublicReferencePairAudit({ matches, archive:buildPublicReferenceArchive(snapshotPayload), trustRegistry, generatedAt, startDate });
   return composeReferencePerformance(summary, audit.rows);
+}
+
+// The cycle-owned spool has already collected every original companion using
+// the unchanged hash/binding/conflict rules. Validate every retained record
+// again, including records unrelated to the settled cohort; then inflate only
+// the pair being audited. No second full model/evidence graph or Merkle-shard
+// array is retained just to publish aggregate counts.
+function buildReferencePerformanceFromOriginalPairs({ matches, records, getPair, trustRegistry, generatedAt, startDate }) {
+  const { attestPublicReferenceDecision } = require("../src/services/publicReferenceDecision.cjs");
+  const { verifyPublicReferenceEvidence } = require("../src/services/publicReferenceEvidence.cjs");
+  const { auditFrozenReferenceMarket, isFrozenPairClock } = require("../src/services/frozenReferenceMarketPair.cjs");
+  const { buildReferenceReviewPerformance, compactReferenceReviewPerformance, matchIdentity, businessDateForMatch } = require("./reviewPerformanceSummary.cjs");
+  if (!Array.isArray(matches) || !isFrozenPairClock(generatedAt)) throw new Error("Explicit complete history and audit clock required");
+  const summary = compactReferenceReviewPerformance(buildReferenceReviewPerformance({ matches, generatedAt, startDate }));
+  if (!summary) throw new Error("Complete reference history failed validation before pairing");
+  const seen = new Set();
+  for (const record of records) {
+    if (!/^[a-f0-9]{64}$/.test(record?.contentHash || "") || seen.has(record.contentHash)
+      || !attestPublicReferenceDecision(record, record)) throw new Error("REFERENCE_INDEX_RECORD_INVALID");
+    seen.add(record.contentHash);
+    const { entry } = getPair(record.contentHash);
+    if (record.evidenceBinding && !verifyPublicReferenceEvidence(entry, record)) throw new Error("REFERENCE_INDEX_EVIDENCE_INVALID");
+    if (!record.evidenceBinding && entry) throw new Error("REFERENCE_INDEX_UNBOUND_EVIDENCE");
+  }
+  const groups = new Map(), rows = [];
+  for (const match of matches) {
+    const key = matchIdentity(match);
+    if (key) { const copies = groups.get(key) || []; copies.push(match); groups.set(key, copies); }
+  }
+  for (const copies of groups.values()) {
+    const cohort = buildReferenceReviewPerformance({ matches: copies, generatedAt, startDate });
+    if (!cohort.cumulative.settled) continue;
+    const audits = copies.map(match => {
+      const hash = match?.postMatchReview?.predictionReview?.rows?.find(row => row.marketType === "BEST" && row.performanceTrack === "reference")?.frozenVersion?.referenceHash;
+      return auditFrozenReferenceMarket({ match, ...getPair(hash), trustRegistry, auditAt: generatedAt });
+    });
+    const eligible = audits.every(audit => audit.eligible)
+      && new Set(audits.filter(audit => audit.eligible).map(audit => audit.contentHash)).size <= 1;
+    const market = ["HAD", "HHAD", "UNKNOWN"].find(pool => cohort.marketBreakdown[pool].cumulative.settled === 1);
+    const versionKey = cohort.versionBreakdown.groups.length === 1 ? cohort.versionBreakdown.groups[0].key : "UNKNOWN";
+    rows.push({ date: businessDateForMatch(copies[0]), market, versionKey, eligible, ...(eligible ? { pair: audits[0] } : {}) });
+  }
+  if (rows.length !== summary.cumulative.settled) throw new Error("Paired cohort does not reconcile to complete reference history");
+  return composeReferencePerformance(summary, rows);
 }
 function composeReferencePerformance(summary, rows) {
   const groups = new Map();
