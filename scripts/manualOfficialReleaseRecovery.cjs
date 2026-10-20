@@ -31,7 +31,7 @@ function validate(auth,now){
    if(changed){a(r.beforeSha256===null||/^[a-f0-9]{64}$/.test(r.beforeSha256));a.match(r.afterSha256,/^[a-f0-9]{64}$/);}else a.match(r.sha256,/^[a-f0-9]{64}$/);
   }
  }
- for(const name of ['scripts/manualOfficialReleaseRecovery.cjs','scripts/recommendationPlatform/reviewedOfficialEvent.cjs','server/researchOfficialEventRead.cjs'])a(auth.files.some(r=>r.path===name));
+ for(const name of ['scripts/manualOfficialReleaseRecovery.cjs','scripts/manualOfficialPublicCarryForward.cjs','scripts/recommendationPlatform/reviewedOfficialEvent.cjs','server/researchOfficialEventRead.cjs'])a(auth.files.some(r=>r.path===name));
  for(const name of READER_ROOTS)a(auth.baselineClosure.some(r=>r.path===name));
  a.deepEqual(Object.keys(auth.publication).sort(),['committedAt','databaseOid','generationId','manifestHash','mode','sourceCycleId']);
  a.equal(auth.publication.databaseOid,'28598409');a.equal(auth.publication.mode,'active-generation');a.match(auth.publication.manifestHash,/^[a-f0-9]{64}$/);a.equal(auth.publication.generationId,'g-'+auth.publication.manifestHash);a.equal(new Date(auth.publication.committedAt).toISOString(),auth.publication.committedAt);a(typeof auth.publication.sourceCycleId==='string'&&auth.publication.sourceCycleId.length>0&&auth.publication.sourceCycleId.length<=256);

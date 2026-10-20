@@ -4,7 +4,7 @@ function fixture(){
  const checkedAt='2026-10-20T16:00:00.000Z',start='2026-10-20T15:50:00.000Z',end='2026-10-20T15:55:00.000Z';
  const incident={workerMainPid:'2990491',workerStartedAt:'2026-10-18T04:49:51.000Z',cycleStartedAt:start,cycleFinishedAt:end,journalPid:'4094260',
   journalTimestampUs:String(BigInt(Date.parse(end)-200)*1000n),journalMessageSha256:p.hash(p.MESSAGE)};
- const files=['scripts/manualOfficialReleaseRecovery.cjs','scripts/recommendationPlatform/reviewedOfficialEvent.cjs','server/researchOfficialEventRead.cjs'].sort().map(path=>({path,beforeSha256:null,afterSha256:'b'.repeat(64)}));
+ const files=['scripts/manualOfficialReleaseRecovery.cjs','scripts/manualOfficialPublicCarryForward.cjs','scripts/recommendationPlatform/reviewedOfficialEvent.cjs','server/researchOfficialEventRead.cjs'].sort().map(path=>({path,beforeSha256:null,afterSha256:'b'.repeat(64)}));
  const gap=Array.from({length:29},(_,i)=>({sourceMatchId:String(i+1),recordHash:'c'.repeat(64),recordSha256:'d'.repeat(64)})).sort((a,b)=>a.sourceMatchId<b.sourceMatchId?-1:1);
  const publication={databaseOid:'28598409',mode:'active-generation',generationId:'g-'+'a'.repeat(64),manifestHash:'a'.repeat(64),sourceCycleId:'synthetic-cycle',committedAt:'2026-10-18T10:03:47.828Z'};
  const auth={version:p.VERSION,reason:'install-independent-official-editorial-authority-preserving-r903-original-gap',createdAt:'2026-10-20T15:59:00.000Z',expiresAt:'2026-10-20T17:59:00.000Z',

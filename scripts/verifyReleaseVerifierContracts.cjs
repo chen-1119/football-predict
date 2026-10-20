@@ -8,11 +8,11 @@ const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
 check('V4 official editorial publication keeps complete dual signatures, separate ACK and original worker failure',()=>{
- const tests=['tests/reviewed-official-event.test.cjs','tests/official-editorial-reference-view.test.cjs','tests/manual-official-release-preparation.test.cjs'];
+ const tests=['tests/reviewed-official-event.test.cjs','tests/official-editorial-reference-view.test.cjs','tests/manual-official-release-preparation.test.cjs','tests/manual-official-public-carry-forward.test.cjs'];
  const result=require('node:child_process').spawnSync(process.execPath,['--test',...tests],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:2*1024*1024});
- assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 86$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 100$/m);assert.match(result.stdout,/^# skipped 0$/m);
  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
-  for(const file of [...tests,'scripts/manualOfficialReleaseRecovery.cjs','scripts/recommendationPlatform/reviewedOfficialEvent.cjs','server/researchOfficialEventRead.cjs','src/services/officialEditorialReferences.ts','src/hooks/useOfficialEditorialReferences.ts','src/components/recommendations/OfficialEditorialReferences.tsx','tests/fixtures/reviewed-official-event.cjs','scripts/verifyReviewedOfficialEventPostgres.cjs'])assert(read(entry).includes('"'+file+'"'));
+  for(const file of [...tests,'scripts/manualOfficialReleaseRecovery.cjs','scripts/manualOfficialPublicCarryForward.cjs','scripts/recommendationPlatform/reviewedOfficialEvent.cjs','server/researchOfficialEventRead.cjs','src/services/officialEditorialReferences.ts','src/hooks/useOfficialEditorialReferences.ts','src/components/recommendations/OfficialEditorialReferences.tsx','tests/fixtures/reviewed-official-event.cjs','scripts/verifyReviewedOfficialEventPostgres.cjs'])assert(read(entry).includes('"'+file+'"'));
  assert.equal(pkg.scripts['verify:reviewed-official-events'],'node --test '+tests.join(' '));
  assert(read('.github/workflows/recommendation-runtime.yml').includes('node scripts/verifyReviewedOfficialEventPostgres.cjs'));
 });

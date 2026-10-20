@@ -4,6 +4,7 @@ on:
     paths:
       - 'server/accounts.cjs'
       - 'scripts/manualOfficialReleaseRecovery.cjs'
+      - 'scripts/manualOfficialPublicCarryForward.cjs'
       - 'deploy/light-server/manual-official-recovery-authorization.json'
       - 'scripts/recommendationPlatform/reviewedOfficialEvent.cjs'
       - 'server/researchOfficialEventRead.cjs'
@@ -13,6 +14,7 @@ on:
       - 'tests/reviewed-official-event.test.cjs'
       - 'tests/official-editorial-reference-view.test.cjs'
       - 'tests/manual-official-release-preparation.test.cjs'
+      - 'tests/manual-official-public-carry-forward.test.cjs'
       - 'tests/fixtures/reviewed-official-event.cjs'
       - 'scripts/verifyReviewedOfficialEventPostgres.cjs'
       - 'server/publicReferenceCompanionStore.cjs'
@@ -413,7 +415,7 @@ jobs:
         env:
           CAPTURE_READINESS_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Complete V4 editorial signature, ACK, display and preparation contracts
-        run: node --test tests/reviewed-official-event.test.cjs tests/official-editorial-reference-view.test.cjs tests/manual-official-release-preparation.test.cjs
+        run: node --test tests/reviewed-official-event.test.cjs tests/official-editorial-reference-view.test.cjs tests/manual-official-release-preparation.test.cjs tests/manual-official-public-carry-forward.test.cjs
       - name: Real PostgreSQL V4 official publication, single and combo revisions without native event rows
         run: node scripts/verifyReviewedOfficialEventPostgres.cjs
         env:
