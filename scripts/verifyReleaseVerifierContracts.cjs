@@ -19,7 +19,7 @@ check('full snapshot append and derived graphs retain original bytes within a fi
 check('public reference custody preserves exact originals across killed writers and complete bounded import',()=>{
  const file='tests/public-reference-companion-store.test.cjs';
  const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:180000,maxBuffer:1048576});
- assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 8$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 9$/m);assert.match(result.stdout,/^# skipped 0$/m);
  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
   for(const required of [file,'server/publicReferenceCompanionStore.cjs'])assert(read(entry).includes('"'+required+'"'));
  assert.equal(pkg.scripts['verify:reference-companion-custody'],'node --test '+file);

@@ -18,6 +18,12 @@ It does not recover r903's existing missing originals or authorize a release.
 3. All bound current/history records are checked again before either legacy or
    data-directory public current files can be written. Missing, corrupt or
    conflicting originals abort. No bound record is deleted to make this pass.
+   When snapshot retention omits an expired reference and its entry, the exact
+   previously durable original is read and fully verified for custody. The
+   expired pair is not reinserted into retained warehouse output. A missing,
+   corrupt or conflicting durable original still aborts.
+   The custody parent directory is synced again before accepting this read,
+   completing a possible earlier interruption after rename; sync failure aborts.
 4. A later process can read the same original after a current/warehouse split.
    Custody alone grants no public publication, numerical input or win-rate
    eligibility. Other signed source, current identity and publication gates stay

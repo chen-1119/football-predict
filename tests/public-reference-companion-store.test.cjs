@@ -65,6 +65,47 @@ test("actual append boundary replays only previously durable originals after cur
   assert.equal(fs.readFileSync(warehouse, "utf8"), before);
 });
 
+test("expired snapshot references require exact durable custody without changing retention output", () => {
+  const { appendPredictionSnapshots } = require("../scripts/syncData.cjs");
+  const { closePayload } = require("../server/boundedPredictionSnapshots.cjs");
+  const afterRetention = new Date(Date.parse(auditAt)
+    + (Math.max(30, Number(process.env.PREDICTION_SNAPSHOT_RETENTION_DAYS || 365)) + 1) * 86400000).toISOString();
+  for (const boundedHistory of [false, true]) {
+    const store = directory(), publicDir = directory(), f = original();
+    fs.mkdirSync(path.join(publicDir, "data"));
+    const warehouse = path.join(publicDir, "data", "prediction-snapshots.json");
+    const before = JSON.stringify({ updatedAt: auditAt, rows: [], publicReferenceDecisions: [f.record], publicReferenceEvidence: [f.entry] });
+    fs.writeFileSync(warehouse, before);
+    custody.persistOriginalCompanion(store, f.record, f.entry);
+    const pairFile = path.join(store, "public-reference-companions", f.record.contentHash, "pair.json");
+    const pairBefore = fs.readFileSync(pairFile), serialized = JSON.parse(JSON.stringify(f.match));
+    const payload = appendPredictionSnapshots(publicDir, [serialized], afterRetention,
+      { observationMatches: [], companionStoreDir: store, boundedHistory });
+    try {
+      assert.deepEqual([...payload.publicReferenceDecisions], []);
+      assert.deepEqual([...payload.publicReferenceEvidence], []);
+      const sync = fs.fsyncSync; let directoriesSynced = 0;
+      fs.fsyncSync = fd => { if (fs.fstatSync(fd).isDirectory()) directoriesSynced++; return sync(fd); };
+      try { assert.equal(custody.persistCurrentReferenceCompanions(store, [serialized], payload.publicReferenceEvidence).references, 1); }
+      finally { fs.fsyncSync = sync; }
+      assert.equal(directoriesSynced, process.platform === "win32" ? 0 : 1);
+      if (process.platform !== "win32") {
+        fs.fsyncSync = () => { const error = new Error("injected directory EIO"); error.code = "EIO"; throw error; };
+        try { assert.throws(() => custody.persistCurrentReferenceCompanions(store, [serialized], payload.publicReferenceEvidence), { code: "EIO" }); }
+        finally { fs.fsyncSync = sync; }
+      }
+      assert.equal(custody.assertCurrentReferenceCompanions(store, [serialized]).references, 1);
+      assert.deepEqual(fs.readFileSync(pairFile), pairBefore);
+      assert.equal(fs.readFileSync(warehouse, "utf8"), before);
+      assert.throws(() => custody.persistCurrentReferenceCompanions(directory(), [serialized], payload.publicReferenceEvidence), /BINDING_MISSING/);
+      fs.appendFileSync(pairFile, " ");
+      assert.throws(() => custody.persistCurrentReferenceCompanions(store, [serialized], payload.publicReferenceEvidence), /CUSTODY_BYTES_INVALID/);
+      const conflictStore = directory(); custody.persistOriginalCompanion(conflictStore, f.record, f.entry);
+      assert.throws(() => custody.persistCurrentReferenceCompanions(conflictStore, [serialized], [{ ...f.entry, different: true }]), /PAIR_CONFLICT/);
+    } finally { closePayload(payload); }
+  }
+});
+
 test("changed/truncated bytes, symlinks and oversized sealed files fail without replacement", () => {
   for (const change of [file => fs.appendFileSync(file, " "), file => fs.truncateSync(file, 20),
     file => fs.truncateSync(file, 32 * 1024 * 1024 + 1)]) {
@@ -121,7 +162,18 @@ test("actual killed writers before file sync, before rename, after rename and af
     if (["pair-sync", "seal-sync"].includes(boundary)) {
       assert.equal(pair, null);
       assert(fs.readdirSync(path.join(store, "public-reference-companions")).some(name => name.startsWith(".pending-")));
-    } else assert.deepEqual(pair.entry, f.entry);
+    } else {
+      assert.deepEqual(pair.entry, f.entry);
+      // In the rename case the actual killed child has not synced its parent.
+      // Re-observing its exact original must finish that boundary on Linux.
+      if (boundary === "rename") {
+        const sync = fs.fsyncSync; let directoriesSynced = 0;
+        fs.fsyncSync = fd => { if (fs.fstatSync(fd).isDirectory()) directoriesSynced++; return sync(fd); };
+        try { custody.persistCurrentReferenceCompanions(store, [current(f)], []); }
+        finally { fs.fsyncSync = sync; }
+        assert.equal(directoriesSynced, process.platform === "win32" ? 0 : 1);
+      }
+    }
     assert.equal(fs.existsSync(path.join(store, "current.json")), boundary === "current");
     if (boundary === "current") assert.deepEqual(JSON.parse(fs.readFileSync(path.join(store, "current.json"))), f.record);
   }

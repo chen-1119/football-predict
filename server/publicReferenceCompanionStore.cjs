@@ -149,7 +149,15 @@ function persistCurrentReferenceCompanions(storeDir, matches, entries) {
     persistOriginalCompanion(storeDir, record, entry);
     found.add(record.contentHash);
   }
-  for (const hash of wanted.keys()) if (!found.has(hash)) fail("PUBLIC_REFERENCE_EVIDENCE_BINDING_MISSING");
+  for (const [hash, record] of wanted) if (!found.has(hash)) {
+    // Snapshot retention may omit an old current/history reference from this
+    // cycle's warehouse. Its previously durable exact original still proves
+    // custody; do not recreate it or change the retained public output.
+    if (!readOriginalCompanion(storeDir, record)) fail("PUBLIC_REFERENCE_EVIDENCE_BINDING_MISSING");
+    // A previous writer may have stopped after rename but before syncing its
+    // parent. Complete that same durability boundary before granting custody.
+    syncDirectory(rootPath(storeDir));
+  }
   return { references: wanted.size, durability: process.platform === "win32" ? "process-crash" : "directory-fsync" };
 }
 function assertCurrentReferenceCompanions(storeDir, matches) {
