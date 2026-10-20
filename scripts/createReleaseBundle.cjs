@@ -62,7 +62,7 @@ if (nativePreparation) require("./validateNativeReleasePolicy.cjs").readPolicy(n
 if (process.env.RELEASE_DEPLOY_KEY) {
   const workerPreflight = require("./runReleaseWorkerPreflight.cjs").runLiveWorkerPreflight();
   console.error(JSON.stringify({ phase: "worker-preflight-before-build", ...workerPreflight }));
-  if (!workerPreflight.ok) throw new Error(`release foundation unavailable before sequence reservation and build: ${workerPreflight.blockers.join(",")}`);
+  if (!workerPreflight.ok && workerPreflight.preparationAllowed !== true) throw new Error(`release foundation unavailable before sequence reservation and build: ${workerPreflight.blockers.join(",")}`);
   const capacityPreflight = require("./runReleaseCapacityPreflight.cjs").runLiveCapacityPreflight();
   console.error(JSON.stringify({ phase: "capacity-preflight-before-build", ...capacityPreflight }));
   if (!capacityPreflight.ok) throw new Error("release capacity unavailable before sequence reservation and build");
@@ -697,6 +697,17 @@ const requiredEntries = [
   "server/publicReferenceCompanionStore.cjs",
   "tests/public-reference-companion-store.test.cjs",
   "tests/bounded-prediction-snapshots.test.cjs",
+  "scripts/manualOfficialReleaseRecovery.cjs",
+  "scripts/recommendationPlatform/reviewedOfficialEvent.cjs",
+  "server/researchOfficialEventRead.cjs",
+  "src/services/officialEditorialReferences.ts",
+  "src/hooks/useOfficialEditorialReferences.ts",
+  "src/components/recommendations/OfficialEditorialReferences.tsx",
+  "tests/reviewed-official-event.test.cjs",
+  "tests/official-editorial-reference-view.test.cjs",
+  "tests/manual-official-release-preparation.test.cjs",
+  "tests/fixtures/reviewed-official-event.cjs",
+  "scripts/verifyReviewedOfficialEventPostgres.cjs",
   "tests/fixtures/prediction-snapshot-original-functions.json",
   "server/boundedPredictionSnapshots.cjs",
   "scripts/predictionEvidenceAudit.cjs",

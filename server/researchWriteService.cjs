@@ -53,7 +53,7 @@ function decodeRequest(raw) {
   } else if (r.action === 'archive') reports.prepare(Buffer.from(r.json), r.sha256);
   else {
     let draft; try { draft = JSON.parse(r.json); } catch { fail('RESEARCH_DRAFT_JSON'); }
-    if (draft?.version !== 3 || !/^[a-f0-9]{64}$/.test(r.draftHash || '') || policy.hash(draft) !== r.draftHash) fail('RESEARCH_DRAFT_HASH');
+    if (![3,4].includes(draft?.version) || !/^[a-f0-9]{64}$/.test(r.draftHash || '') || policy.hash(draft) !== r.draftHash) fail('RESEARCH_DRAFT_HASH');
   }
   return r;
 }

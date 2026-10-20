@@ -31,7 +31,7 @@ function reviewed(pair,{asOf,trustRegistry}){
  const saved=verifyRow(pair.recordRow,pair.recordRow?.artifact_key,8*1024*1024),v=saved.payload;
  const ackSaved=verifyRow(pair.ackRow,saved.artifactKey+'-ack',8*1024*1024),ack=ackSaved.payload;
  sealOK(v);sealOK(ack);check(v.version==='reviewed-analysis-freeze-v1'&&ack.version==='reviewed-analysis-ack-v1','MANUAL_VERSION');
- const expectedKey=v.draft.version===3?'reviewed-analysis-'+v.draft.businessDate+'-batch-'+p.hash(v.draft):'reviewed-analysis-'+v.draft.businessDate+'-selected-two';
+ const expectedKey=[3,4].includes(v.draft.version)?'reviewed-analysis-'+v.draft.businessDate+'-batch-'+p.hash(v.draft):'reviewed-analysis-'+v.draft.businessDate+'-selected-two';
  check(saved.artifactKey===expectedKey&&v.record.businessDate===v.draft.businessDate&&v.createdAt===v.record.createdAt,'MANUAL_IDENTITY');
  check(p.hash(p.make(v.draft,{...v.inputs,trustRegistry,asOf:v.record.createdAt}))===p.hash(v.record),'MANUAL_REPLAY');
  check(ack.recordKey===saved.artifactKey&&ack.storedSha256===saved.payloadSha256&&ack.recordHash===v.record.contentHash,'ACK_BINDING');

@@ -121,7 +121,8 @@ function verifyReleaseWorkerPreflight() {
       const localRequire=name=>{
         if(name==='node:assert/strict')return assert;
         if(name==='node:path')return path;
-        if(name==='node:fs')return {statSync:()=>({isFile:()=>true})};
+        if(name==='node:fs')return {statSync:()=>({isFile:()=>true}),existsSync:()=>false};
+        if(name==='./manualOfficialReleaseRecovery.cjs')return {AUTH_ENTRY:'deploy/light-server/manual-official-recovery-authorization.json',ENVELOPE:'manual-official-preparation-observation-v1'};
         if(name==='./releaseSshHostKeyPin.cjs')return {resolveReleaseSshHostKeyPin:()=>({pinned:true}),
           buildPinnedSshBaseOptions:({pin})=>{assert.equal(pin.pinned,true);return ['-o','StrictHostKeyChecking=yes'];}};
         if(name==='./releaseWorkerPreflight.cjs')return {buildReadOnlyWorkerProbe};

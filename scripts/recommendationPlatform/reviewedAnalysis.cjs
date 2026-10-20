@@ -7,13 +7,14 @@ const {day}=require('../../src/services/publishedForecastPolicy.cjs');
 const check=(v,c)=>{if(!v)throw Object.assign(Error('REVIEWED_ANALYSIS_'+c),{code:'REVIEWED_ANALYSIS_'+c});};
 const text=(v,n=500)=>typeof v==='string'&&v.length>0&&v.length<=n&&!/[\x00-\x08\ufffd]/.test(v);
 const safeUrl=v=>{try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password;}catch{return false;}};
-const draftSupportsHandicap=d=>d.version===3;
+const draftSupportsHandicap=d=>d.version===3||d.version===4;
 const scoreDirection=(s,line)=>s[0]+line===s[1]?'d':s[0]+line>s[1]?'h':'a';
 function validateDraft(d,asOf){
  check((d?.version===1&&d.reportKind==='weekday-2000-selected-two'&&d.predictionScope==='chat-only research')
   ||(d?.version===2&&d.reportKind==='evidence-backed-prematch'&&d.predictionScope==='reviewed-online-reference')
-  ||(d?.version===3&&d.reportKind==='manual-prematch-batch'&&d.predictionScope==='reviewed-online-reference'),'DRAFT_KIND');
- if(d.version===3){
+  ||([3,4].includes(d?.version)&&d.reportKind==='manual-prematch-batch'&&d.predictionScope==='reviewed-online-reference'),'DRAFT_KIND');
+ if(d.version===4)check(d.eventAuthority==='signed-official-events-v1','OFFICIAL_EVENT_VERSION');
+ if(d.version===3||d.version===4){
   check(typeof d.originalArchive==='string'&&Buffer.byteLength(d.originalArchive)<=384*1024
    &&sha(d.originalArchive)===d.originalArchiveSha256,'ORIGINAL_ARCHIVE');
   let original;try{original=JSON.parse(d.originalArchive);}catch{check(false,'ORIGINAL_ARCHIVE');}
@@ -41,6 +42,7 @@ function validateDraft(d,asOf){
  return true;
 }
 function make(draft,{matches,snapshot,trustRegistry,asOf,evidenceByEvent={}}){
+ if(draft?.version===4)return require('./reviewedOfficialEvent.cjs').make(draft,{matches,snapshot,trustRegistry,asOf,evidenceByEvent});
  validateDraft(draft,asOf);check(Buffer.byteLength(JSON.stringify({draft,matches,snapshot,evidenceByEvent}))<=8*1024*1024,'BOUND');
  const endpoints=snapshot?.endpoints?.filter(e=>e.method==='current');check(endpoints?.length===1,'ENDPOINT');
  const records=draft.singles.map(r=>{

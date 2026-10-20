@@ -7,6 +7,7 @@ import { PrematchCollectionPanel } from '../components/predictions/PrematchColle
 import { acceptMatchDetail, detailResponseMatchesFields } from '../services/matchDetailIdentity.js';
 import type { DetailIdentityBinding } from '../services/matchDetailIdentity.js';
 import { useRecommendationCenter } from '../hooks/useRecommendationCenter';
+import { OfficialEditorialReferenceDetail } from '../components/recommendations/OfficialEditorialReferences';
 import { publishedMatchRecommendation, publishedPosteriorDisagreement, usesPublishedRecommendation } from '../services/publishedMatchRecommendation';
 import { MixedModelEstimateNote, PublishedMatchPick } from '../components/recommendations/PublishedMatchPick';
 import { PublishedHadDistribution } from '../components/recommendations/SelectionQualityNote';
@@ -1211,7 +1212,7 @@ const selectFreshestMatch = (
   return contextFreshness > detailFreshness ? resolvedContext : resolvedDetail;
 };
 
-export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initialTab = 'overview', capturedData }) => {
+const CanonicalMatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initialTab = 'overview', capturedData }) => {
   const { language, matches, dataSync } = useApp();
   const published = useRecommendationCenter();
   const displayText = (value: string | null | undefined, fallback = '') => formatSourceNeutralText(value, language, fallback);
@@ -4632,4 +4633,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     </div>
   );
 };
+export const MatchDetail: React.FC<MatchDetailProps> = (props) => props.matchId.startsWith('official_')
+  ? <OfficialEditorialReferenceDetail referenceId={props.matchId} onBack={props.onBack}/>
+  : <CanonicalMatchDetail {...props}/>;
 import { FollowButton } from '../components/FollowButton';
