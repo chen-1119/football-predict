@@ -90,4 +90,54 @@ for(const [label,change]of [
 test('the complete fixed SSH probe compiles before any transport',()=>{
  const v=fixture(),now=Date.now();v.auth.createdAt=new Date(now).toISOString();v.auth.expiresAt=new Date(now+60000).toISOString();const source=p.buildProbe(v.auth);new(require('node:vm').Script)(source);a(Buffer.byteLength(source)<120000);
 });
+// Exercise the actual collector in the same VM realm as the signed CLI. Only
+// operating-system I/O is replaced; Buffer is deliberately not a VM global.
+function collectInEntryRealm(change){
+ const path=require('node:path').posix,root='/opt/football-predict',v=fixture(),files=new Map(),fds=new Map(),reads=[],calls=[];
+ const put=(relative,value)=>files.set(path.join(root,relative),Buffer.from(value));
+ for(const name of p.READER_ROOTS)put(name,'// fixture reader '+name);
+ put('package.json',JSON.stringify({scripts:{'sync:cloudflare-sporttery-evidence':p.PRELUDE.command,'sync:data':'node scripts/syncData.cjs'}}));
+ put('.release-bundle-sha256',p.BASE);put('.release-live-complete',p.BASE);
+ put('public/data/matches-current.json','[]');put('public/data/prediction-snapshots.json','["streamed original fixture"]');
+ v.auth.baselineClosure=p.READER_ROOTS.map(name=>({path:name,sha256:p.hash(files.get(path.join(root,name)))})).sort((x,y)=>x.path<y.path?-1:1);
+ const directories=new Set([root]);for(const file of files.keys()){let dir=path.dirname(file);while(dir!==root){directories.add(dir);dir=path.dirname(dir);}}
+ const ino=new Map([...files.keys()].map((name,i)=>[name,i+100]));let next=10;
+ function stat(name){
+  if(!files.has(name)&&!directories.has(name))throw Object.assign(Error('missing fixture'),{code:'ENOENT'});
+  return {dev:1,ino:ino.get(name)||1,size:files.get(name)?.length||0,mtimeMs:1,ctimeMs:1,nlink:1,isFile:()=>files.has(name),isDirectory:()=>directories.has(name),isSymbolicLink:()=>false};
+ }
+ const fakeFs={constants:require('node:fs').constants,realpathSync:name=>name,lstatSync:stat,
+  openSync(name,flags){a.equal(flags,this.constants.O_RDONLY|this.constants.O_NOFOLLOW);stat(name);fds.set(++next,{name,offset:0});return next;},
+  fstatSync:fd=>stat(fds.get(fd).name),closeSync:fd=>fds.delete(fd),
+  readFileSync(fd){const name=fds.get(fd).name;reads.push(name);return Buffer.from(files.get(name));},
+  readSync(fd,buffer,offset,length,position){a(Buffer.isBuffer(buffer));a.equal(buffer.length,1024*1024);a.equal(position,null);const row=fds.get(fd),bytes=files.get(row.name),n=Math.min(length,bytes.length-row.offset);bytes.copy(buffer,offset,row.offset,row.offset+n);row.offset+=n;reads.push(row.name);return n;}};
+ const fakeCp={execFileSync(command,args,options){a.equal(command,'/usr/bin/journalctl');a(args.includes('--lines=2000'));a.equal(options.maxBuffer,8*1024*1024);calls.push('journal');return '';},
+  spawnSync(command,args,options){a.equal(command,'/usr/sbin/runuser');a.deepEqual(Array.from(args),['-u','football','--','/opt/node-v22.22.1/bin/node','-']);a(options.input.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY'));a.equal(options.timeout,35000);calls.push('publication-readonly');return {status:0,stdout:JSON.stringify({publication:v.auth.publication,ordinaryPointerAffinity:true,indexMatches:0,globalArchiveAccepted:true,servingHealthAccepted:true})};}};
+ const fakeRequire=id=>{
+  if(id==='node:fs')return fakeFs;if(id==='node:path')return path;if(id==='node:child_process')return fakeCp;
+  if(id===root+'/scripts/releaseDataPlanePolicy.cjs')return {capture:()=>({entries:v.auth.dataContract})};
+  if(['node:assert/strict','node:crypto','node:buffer'].includes(id))return require(id);
+  throw Error('unexpected collector dependency: '+id);
+ };
+ fakeRequire.resolve=file=>file;
+ if(change)change({fakeFs,files,root,stat,v,calls});
+ const code='const OLD_AUTH='+JSON.stringify(p.OLD_AUTH)+',PRELUDE='+JSON.stringify(p.PRELUDE)+',READER_ROOTS='+JSON.stringify(p.READER_ROOTS)+';'
+  +'const auth='+JSON.stringify(v.auth)+',worker='+JSON.stringify(v.worker)+';'
+  +p.hash.toString()+'\nfunction collectWorkerPreflight(){return JSON.parse('+JSON.stringify(JSON.stringify(v.worker))+');}\n'
+  +p.collect.toString()+'\ncollect(auth,worker);';
+ const context={require:fakeRequire,process:{env:{}},console,Date};a.equal(Object.hasOwn(context,'Buffer'),false);
+ const observed=new(require('node:vm').Script)(code).runInNewContext(context);
+ a.equal(fds.size,0);return {observed,reads,calls,files,root};
+}
+test('signed CLI VM collector streams complete bytes without a Buffer global and reaches read-only gates',()=>{
+ const out=collectInEntryRealm(),bytes=out.files.get(out.root+'/public/data/prediction-snapshots.json');
+ a.equal(out.observed.warehouse.bytes,bytes.length);a.equal(out.observed.warehouse.sha256,p.hash(bytes));
+ a.deepEqual(out.calls,['journal','publication-readonly']);a.equal(out.observed.globalArchiveAccepted,true);
+ a(out.reads.filter(name=>name.endsWith('/prediction-snapshots.json')).length>=2);
+});
+test('VM collector still rejects stream mutation, symlinks and changed source pins',()=>{
+ a.throws(()=>collectInEntryRealm(({fakeFs,root,stat})=>{const original=fakeFs.readSync;let streamed=false;fakeFs.readSync=function(...args){streamed=true;return original.apply(this,args);};fakeFs.lstatSync=name=>{const result=stat(name);if(streamed&&name===root+'/public/data/prediction-snapshots.json')result.ino++;return result;};}),{code:'ERR_ASSERTION'});
+ a.throws(()=>collectInEntryRealm(({fakeFs,root,stat})=>{fakeFs.lstatSync=name=>({...stat(name),isSymbolicLink:()=>name===root+'/public/data'});}),{code:'ERR_ASSERTION'});
+ a.throws(()=>collectInEntryRealm(({files,root})=>files.set(root+'/scripts/nativeCodeReleaseDataPlane.cjs',Buffer.from('// changed source'))),{code:'ERR_ASSERTION'});
+});
 module.exports={fixture};
