@@ -138,6 +138,9 @@ async function authority(c, m, binding) {
       || material.record.dependencySha256 !== binding.runtime.buildDependencySha256 || hash(c.read(c.NODE, 160 * 1024 * 1024)) !== binding.runtime.nodeSha256) fail("policy-refresh-runtime-or-material-drift");
     const pinned = ["/etc/football-release/signing-public.pem", "/etc/football-release/expected-site", "/etc/football-release/expected-channel", "/etc/football-release/public-base-url",
       original.verified.directory + "/manifest.json", original.verified.directory + "/manifest.sig", material.root + "/dependencies.json", material.root + "/complete.json"];
+    const signingTrust = require("./releaseSigningTrust.cjs"), trust = signingTrust.loadReleaseSigningTrust();
+    if (trust.record) pinned.push(signingTrust.STORE+"/trust.json",signingTrust.STORE+"/active-public.pem",signingTrust.STORE+"/legacy-public.pem",
+      signingTrust.JOURNAL+"/"+trust.record.enrollmentId+"/completed.json");
     const proof = { ...protectedFiles, authorityFiles: [auditedBootstrap, ...pinned.map(filename => ({ path: filename, sha256: hash(c.read(filename, 1024 * 1024)) }))],
       installedRuntimeSha256: installed.installedRuntimeSha256, policyPins: c.MODULES.map(name => ({ name, sha256: hash(c.read(INSTALL + "/" + name, 8 * 1024 * 1024)) })) };
     if (JSON.stringify(c.load().policies) !== JSON.stringify(m.policies)) fail("policy-refresh-installed-policy-drift");

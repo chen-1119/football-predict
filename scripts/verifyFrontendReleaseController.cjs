@@ -266,6 +266,8 @@ async function fixture(options = {}) {
     releasePrebuiltDist: distModule,
   };
   const fixed = Object.fromEntries(Object.entries(closure).map(([name, value]) => [INSTALL + "/" + name + ".cjs", value]));
+  fixed[INSTALL + "/releaseSigningTrust.cjs"] = evaluate(fs.readFileSync(path.join(__dirname, "releaseSigningTrust.cjs"), "utf8"), INSTALL + "/releaseSigningTrust.cjs", fixed);
+  fixed["./releaseSigningTrust.cjs"] = fixed[INSTALL + "/releaseSigningTrust.cjs"];
   fixed[INSTALL + "/frontendPolicyRefresh.cjs"] = {};
   fixed[INSTALL + "/frontendReleaseAttempt.cjs"] = {};
   const controller = evaluate(controllerSource, INSTALL + "/frontendReleaseController.cjs", fixed);

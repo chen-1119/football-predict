@@ -15,9 +15,9 @@ done
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SOURCE_BASELINE_SOURCE_DIR="${SCRIPT_DIR}/../../scripts"
 readonly SOURCE_BASELINE_INSTALL_DIR="/usr/local/libexec/football-release-source-baseline"
-readonly SOURCE_BASELINE_MODULES=(releaseSourceBaseline.cjs releaseSigning.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs frontendReleaseAuthorization.cjs)
+readonly SOURCE_BASELINE_MODULES=(releaseSourceBaseline.cjs releaseSigning.cjs releaseSigningTrust.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs frontendReleaseAuthorization.cjs)
 readonly FRONTEND_INSTALL_DIR="/usr/local/libexec/football-release-frontend"
-readonly FRONTEND_MODULES=(frontendReleaseController.cjs frontendPolicyRefresh.cjs frontendReleaseAttempt.cjs frontendReleaseAuthorization.cjs frontendReleaseTransaction.cjs frontendInstalledRuntime.cjs frontendRuntimeBoundary.cjs frontendBuildSandbox.cjs frontendBuildEvidence.cjs frontendBuildDependencies.cjs releaseSourceBaseline.cjs releaseSigning.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs)
+readonly FRONTEND_MODULES=(frontendReleaseController.cjs frontendPolicyRefresh.cjs frontendReleaseAttempt.cjs frontendReleaseAuthorization.cjs frontendReleaseTransaction.cjs frontendInstalledRuntime.cjs frontendRuntimeBoundary.cjs frontendBuildSandbox.cjs frontendBuildEvidence.cjs frontendBuildDependencies.cjs releaseSourceBaseline.cjs releaseSigning.cjs releaseSigningTrust.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs)
 PUBLIC_KEY_SOURCE="${1:-${FOOTBALL_RELEASE_PUBLIC_KEY:-}}"
 PUBLIC_BASE_URL="${2:-${FOOTBALL_PUBLIC_BASE_URL:-http://127.0.0.1:8788}}"
 UPLOAD_OWNER="${3:-${FOOTBALL_RELEASE_UPLOAD_USER:-ubuntu}}"

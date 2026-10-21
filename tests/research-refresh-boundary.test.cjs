@@ -15,7 +15,7 @@ function fixture(change=()=>{}){
  const previous={brokerPid:0,invocationId:'',releaseSha:manifest.sha256,files:[...names.map(n=>({path:BASE+'/'+n,bytes:data.get(n).length,sha256:hash(data.get(n))})),{path:UNITFILE,bytes:data.get(UNITFILE).length,sha256:hash(data.get(UNITFILE))}]};
  const writes=[];let validatorCalls=0;const source=installRoot.toString(),start=source.indexOf('if(refresh){\n  const old=body.previous'),end=source.indexOf(' }else{\n  for(const p of [BASE,JOURNAL,UNITFILE])',start);
  a(start>0&&end>start,'actual refresh gate must remain before mutation');
- const context={BASE,UNIT,UNITFILE,APP,JOURNAL,body:{previous,releaseSha:'b'.repeat(64),attemptId:'1'.repeat(24)},manifest:{releaseSequence:875},key:keys.publicKey,crypto,hash,names:['scripts/researchSocketServer.py','scripts/researchSocketPeer.py','deploy/light-server/football-research-broker.service'],previousFiles:names,
+ const context={BASE,UNIT,UNITFILE,APP,JOURNAL,body:{previous,releaseSha:'b'.repeat(64),attemptId:'1'.repeat(24)},manifest:{releaseSequence:875},key:keys.publicKey,keyPath:'/etc/football-release/signing-public.pem',trustPolicy:null,crypto,hash,names:['scripts/researchSocketServer.py','scripts/researchSocketPeer.py','deploy/light-server/football-research-broker.service'],previousFiles:names,
   refresh:true,read:p=>data.get(p.startsWith(BASE+'/')?p.slice(BASE.length+1):p),unit:()=>s,command:()=>'',fail:c=>{throw Error(c);},
   fs:{readdirSync:()=>[...names],existsSync:()=>false,lstatSync:()=>({isDirectory:()=>true,isSymbolicLink:()=>false,uid:0,mode:0o700}),writeFileSync:()=>writes.push('write'),renameSync:()=>writes.push('rename')},
   require:()=>({validateSignedArchiveSourceEvidence(v){a.equal(v.sha256,manifest.sha256);validatorCalls++;}})};
@@ -23,6 +23,13 @@ function fixture(change=()=>{}){
  return {run:()=>vm.runInNewContext(source.slice(start,end)+'\n}',context),writes,validatorCalls:()=>validatorCalls};
 }
 test('actual refresh gate accepts signed prior bytes and an inactive unit without assuming a live cgroup',()=>{const f=fixture();f.run();a.equal(f.validatorCalls(),1);a.deepEqual(f.writes,[]);});
+test('refresh verifies the retained broker with its legacy key after the active signing key changes',()=>{
+ const next=crypto.generateKeyPairSync('rsa',{modulusLength:2048});let selected=0;
+ const f=fixture(({context})=>{context.key=next.publicKey;context.keyPath='/etc/football-release/signing-trust-v1/active-public.pem';context.trustPolicy={selectReleaseSigningKey(m){a.equal(m.releaseSequence,874);selected++;return {key:keys.publicKey,path:'/etc/football-release/signing-public.pem'};}};});
+ f.run();a.equal(selected,1);a.equal(f.validatorCalls(),1);a.deepEqual(f.writes,[]);
+ const wrong=fixture(({context})=>{context.key=next.publicKey;context.trustPolicy={selectReleaseSigningKey:()=>({key:next.publicKey,path:'/etc/football-release/signing-public.pem'})};});
+ a.throws(wrong.run,/RESEARCH_REFRESH_PREVIOUS_SIGNATURE/);a.deepEqual(wrong.writes,[]);
+});
 for(const [label,change]of [
  ['changed binding',f=>f.data.set('runtime-binding.json',Buffer.from('{}'))],['wrong prior release',f=>{f.previous.releaseSha='0'.repeat(64);}],
  ['changed prior unit',f=>{f.s.MainPID='99';}],['arbitrary path',f=>{f.previous.files[0].path='/tmp/anything';}],

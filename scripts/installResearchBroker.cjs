@@ -38,7 +38,16 @@ function installRoot(wire){
   ||['installerSha256','manifestSha256','releaseSha','keyId','dependenciesSha256','platformSha256','signatureSha256'].some(k=>!/^[a-f0-9]{64}$/.test(body[k]||''))
   ||['unitApiPid','unitWorkerPid'].some(k=>!Number.isSafeInteger(body[k])||body[k]<2)||body.installerSha256!==hash(installRoot.toString())
   ||!Number.isSafeInteger(body.issuedAtMs)||!Number.isSafeInteger(body.expiresAtMs)||body.issuedAtMs>Date.now()||body.expiresAtMs<=Date.now()||body.expiresAtMs-body.issuedAtMs>900000||body.expiresAtMs<=body.issuedAtMs)fail('RESEARCH_INSTALL_AUTHORITY');
- const keyRaw=read('/etc/football-release/signing-public.pem',16384),key=crypto.createPublicKey(keyRaw);
+ // Read independently installed root policy before importing any candidate
+ // source. A payload-carried public key can never enroll itself.
+ let trustPolicy=null,trustProof=null,keyPath='/etc/football-release/signing-public.pem';
+ let trustStorePresent=false;try{fs.lstatSync('/etc/football-release/signing-trust-v1');trustStorePresent=true;}catch(error){if(error.code!=='ENOENT')throw error;}
+ if(trustStorePresent){
+  const policySource=read('/usr/local/libexec/football-release-source-baseline/releaseSigningTrust.cjs',65536),policyModule={exports:{}};
+  new Function('require','module','exports',policySource.toString())(require,policyModule,policyModule.exports);trustPolicy=policyModule.exports;
+  const active=trustPolicy.selectReleaseSigningKey();keyPath=active.path;trustProof=active.proof;
+ }
+ const keyRaw=read(keyPath,16384),key=crypto.createPublicKey(keyRaw);
  if(key.asymmetricKeyType!=='rsa'||key.asymmetricKeyDetails.modulusLength<2048||hash(key.export({type:'spki',format:'der'}))!==body.keyId
   ||!crypto.verify('RSA-SHA256',Buffer.concat([Buffer.from('football-'+body.version+'\0'),Buffer.from(JSON.stringify(body))]),{key,padding:crypto.constants.RSA_PKCS1_PADDING},Buffer.from(signature,'base64')))fail('RESEARCH_INSTALL_SIGNATURE');
  const names=['scripts/researchSocketServer.py','scripts/researchSocketPeer.py','deploy/light-server/football-research-broker.service','manifest.json','manifest.sig','dependencies.json','platform.json'];
@@ -47,6 +56,7 @@ function installRoot(wire){
  if(hash(bytes[3])!==body.manifestSha256||hash(bytes[4])!==body.signatureSha256||hash(bytes[5])!==body.dependenciesSha256||hash(bytes[6])!==body.platformSha256
   ||!crypto.verify('sha256',bytes[3],{key,padding:crypto.constants.RSA_PKCS1_PADDING},bytes[4]))fail('RESEARCH_INSTALL_RELEASE_SIGNATURE');
  const manifest=JSON.parse(bytes[3]),inventory=new Map(manifest.archiveSourceEvidence?.inventory?.entries?.map(r=>[r.path,r.sha256]));
+ if(trustPolicy&&trustPolicy.selectReleaseSigningKey(manifest).proof!==trustProof)fail('RESEARCH_INSTALL_TRUST_CHANGED');
  if(manifest.ok!==true||manifest.manifestVersion!==3||manifest.sha256!==body.releaseSha||!Number.isSafeInteger(manifest.releaseSequence)||!inventory.size
   ||manifest.archiveSourceEvidence.archiveSha256!==body.releaseSha||manifest.archiveSourceEvidence.inventorySha256!==manifest.archiveSourceEvidence.inventory.treeHash
   ||manifest.signature?.keyId!==body.keyId||manifest.signature?.algorithm!=='rsa-sha256-pkcs1-v1_5')fail('RESEARCH_INSTALL_RELEASE');
@@ -65,7 +75,7 @@ function installRoot(wire){
  const fixed=['/usr/bin/python3.12','/usr/bin/flock','/usr/bin/systemctl','/usr/sbin/runuser',NODE];
  for(const r of platform.files){if(!fixed.includes(r.path)&&!r.path.startsWith('/usr/lib/python3.12/'))fail('RESEARCH_INSTALL_PLATFORM_PATH');if(hash(read(r.path,128*1024*1024))!==r.sha256)fail('RESEARCH_INSTALL_PLATFORM');}
  if(fixed.some(p=>!platform.files.some(r=>r.path===p)))fail('RESEARCH_INSTALL_PLATFORM');
- function boundary(){if(Date.now()>=body.expiresAtMs)fail('RESEARCH_INSTALL_EXPIRED');for(const n of ['.release-bundle-sha256','.release-live-complete'])if(read(APP+'/'+n,128).toString().trim()!==body.releaseSha)fail('RESEARCH_INSTALL_RELEASE_CHANGED');
+ function boundary(){if(trustPolicy&&trustPolicy.selectReleaseSigningKey().proof!==trustProof)fail('RESEARCH_INSTALL_TRUST_CHANGED');if(Date.now()>=body.expiresAtMs)fail('RESEARCH_INSTALL_EXPIRED');for(const n of ['.release-bundle-sha256','.release-live-complete'])if(read(APP+'/'+n,128).toString().trim()!==body.releaseSha)fail('RESEARCH_INSTALL_RELEASE_CHANGED');
   if(fs.existsSync('/var/lib/football-release/recovery/current')||fs.existsSync('/var/lib/football-release/reference-repairs/current'))fail('RESEARCH_INSTALL_RECOVERY_PENDING');
   for(const [n,pid]of [['football-predict.service',body.unitApiPid],['football-sync-worker.service',body.unitWorkerPid]]){const s=unit(n);if(s.MainPID!==String(pid)||s.ActiveState!=='active'||s.SubState!=='running'||s.ControlPID!=='0'||s.Job||s.User!=='football'||s.Group!=='football'||s.NoNewPrivileges!=='yes'||s.RestrictSUIDSGID!=='yes'||s.WorkingDirectory!==APP||s.ControlGroup!=='/system.slice/'+n)fail('RESEARCH_INSTALL_UNIT_CHANGED');}}
  boundary();
@@ -79,10 +89,11 @@ function installRoot(wire){
   const oldBytes=oldNames.map((name,i)=>{const r=old.files[i],b=read(name,16*1024*1024);
    if(!r||Object.keys(r).sort().join(',')!=='bytes,path,sha256'||r.path!==name||r.bytes!==b.length||r.sha256!==hash(b))fail('RESEARCH_REFRESH_PREVIOUS_CHANGED');return b;});
   const binding=JSON.parse(oldBytes[6]),oldManifest=JSON.parse(oldBytes[2]),oldInventory=new Map(oldManifest.archiveSourceEvidence?.inventory?.entries?.map(r=>[r.path,r.sha256]));
-  if(!crypto.verify('sha256',oldBytes[2],{key,padding:crypto.constants.RSA_PKCS1_PADDING},oldBytes[3])||oldManifest.ok!==true||oldManifest.sha256!==old.releaseSha
+  const oldTrust=trustPolicy?trustPolicy.selectReleaseSigningKey(oldManifest):{key,path:keyPath};
+  if(!crypto.verify('sha256',oldBytes[2],{key:oldTrust.key,padding:crypto.constants.RSA_PKCS1_PADDING},oldBytes[3])||oldManifest.ok!==true||oldManifest.sha256!==old.releaseSha
    ||!Number.isSafeInteger(oldManifest.releaseSequence)||oldManifest.releaseSequence>=manifest.releaseSequence
    ||binding.version!=='research-broker-binding-v1'||binding.releaseSha!==old.releaseSha||binding.manifestSha!==hash(oldBytes[2])||binding.manifestPath!==BASE+'/manifest.json'
-   ||binding.signaturePath!==BASE+'/manifest.sig'||binding.publicKeyPath!=='/etc/football-release/signing-public.pem'
+   ||binding.signaturePath!==BASE+'/manifest.sig'||binding.publicKeyPath!==oldTrust.path
    ||binding.transport?.peerSourceSha!==hash(oldBytes[1])||binding.socketService?.listenerSha!==hash(oldBytes[0])
    ||binding.dependenciesSha256!==hash(oldBytes[4])||binding.socketService?.platformSha256!==hash(oldBytes[5])
    ||oldInventory.get(names[0])!==hash(oldBytes[0])||oldInventory.get(names[1])!==hash(oldBytes[1])||oldInventory.get(names[2])!==hash(oldBytes[7]))fail('RESEARCH_REFRESH_PREVIOUS_SIGNATURE');
@@ -115,7 +126,7 @@ function installRoot(wire){
  fs.mkdirSync(BASE,{mode:0o755});sync(path.dirname(BASE));
  if(!refresh){fs.mkdirSync(JOURNAL,{mode:0o700});sync(path.dirname(JOURNAL));}
  for(const [name,index]of [['researchSocketServer.py',0],['researchSocketPeer.py',1],['manifest.json',3],['manifest.sig',4],['dependencies.json',5],['platform.json',6]])create(BASE+'/'+name,bytes[index],0o444);
- const binding={version:'research-broker-binding-v1',releaseSha:body.releaseSha,manifestSha:body.manifestSha256,manifestPath:BASE+'/manifest.json',signaturePath:BASE+'/manifest.sig',publicKeyPath:'/etc/football-release/signing-public.pem',nodeSha:platform.files.find(r=>r.path===NODE).sha256,dependenciesSha256:body.dependenciesSha256,
+ const binding={version:'research-broker-binding-v1',releaseSha:body.releaseSha,manifestSha:body.manifestSha256,manifestPath:BASE+'/manifest.json',signaturePath:BASE+'/manifest.sig',publicKeyPath:keyPath,nodeSha:platform.files.find(r=>r.path===NODE).sha256,dependenciesSha256:body.dependenciesSha256,
   transport:{version:'research-unix-socket-v1',apiSourceSha:inventory.get('server/index.cjs'),clientSourceSha:inventory.get('server/researchBrokerClient.cjs'),peerSourceSha:hash(bytes[1]),footballUid:uid,footballGid:gid},
   socketService:{version:'research-root-socket-service-v1',listenerSha:hash(bytes[0]),brokerSourceSha:inventory.get('scripts/researchReleaseBroker.cjs'),platformSha256:body.platformSha256}};
  create(BASE+'/runtime-binding.json',Buffer.from(JSON.stringify(binding)+'\n'),0o444);create(UNITFILE,bytes[2],0o444);boundary();

@@ -5,7 +5,7 @@ const baseline = require("./releaseSourceBaseline.cjs");
 const { captureReleaseArchiveSourceEvidence } = require("./releaseArchiveSourceInventory.cjs");
 const { publicKeyId, signManifestBytes } = require("./releaseSigning.cjs");
 const hash = value => crypto.createHash("sha256").update(value).digest("hex");
-const SOURCE_BASELINE_HELPER_MODULES = Object.freeze(["releaseSourceBaseline.cjs", "releaseSigning.cjs", "releaseArchiveSourceInventory.cjs",
+const SOURCE_BASELINE_HELPER_MODULES = Object.freeze(["releaseSourceBaseline.cjs", "releaseSigning.cjs", "releaseSigningTrust.cjs", "releaseArchiveSourceInventory.cjs",
   "releaseChangeClassification.cjs", "releasePrebuiltDist.cjs", "frontendReleaseAuthorization.cjs"]);
 
 // A bounded dependency delta, not another run of the RSA/archive retention

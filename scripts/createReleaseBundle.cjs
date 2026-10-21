@@ -923,6 +923,8 @@ const requiredEntries = [
   "scripts/verifyReleaseChangeClassification.cjs",
   "scripts/releaseArchiveSourceInventory.cjs",
   "scripts/verifyReleaseArchiveSourceInventory.cjs",
+  "scripts/releaseSigningTrust.cjs",
+  "scripts/verifyReleaseSigningTrust.cjs",
   "scripts/releaseSourceBaseline.cjs",
   "scripts/verifyReleaseSourceBaseline.cjs",
   "scripts/verifyReleaseSourceBaselineIntegration.cjs",

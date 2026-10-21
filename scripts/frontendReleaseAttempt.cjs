@@ -3,6 +3,7 @@
 // Fixed root evidence for one signed frontend invocation. A source SHA is not
 // an attempt identity: a retry needs a new signed sequence and a new build.
 const fs = require("node:fs"), path = require("node:path"), os = require("node:os"), crypto = require("node:crypto");
+const signingTrust = require("./releaseSigningTrust.cjs");
 const INSTALL = "/usr/local/libexec/football-release-frontend", RELEASE = "/var/lib/football-release", APP = "/opt/football-predict";
 const ROOT = RELEASE + "/frontend-attempts", VERSION = "frontend-release-attempt-v1";
 const HASH = /^[a-f0-9]{64}$/, LIMIT = 32 * 1024 * 1024, BUNDLE_LIMIT = 512 * 1024 * 1024;
@@ -83,7 +84,7 @@ function current(context, value, consumed) {
   const get = (p, cap = 16384, mode = null) => observe(context, target(context, p), cap, false, mode);
   directory(context, target(context, value.workDir));
   const manifest = get(value.workDir + "/" + value.sha256 + ".manifest.json", 1024 * 1024, 0o600), signature = get(value.workDir + "/" + value.sha256 + ".manifest.sig", 16384, 0o600);
-  const key = crypto.createPublicKey(get("/etc/football-release/signing-public.pem", 16384, 0o644).bytes), bits = key.asymmetricKeyDetails?.modulusLength;
+  const key = signingTrust.selectReleaseSigningKey(null, context.fixture ? { fixtureRoot:context.at("/"), fixtureOwnerUid:context.uid } : {}).key, bits = key.asymmetricKeyDetails?.modulusLength;
   if (key.asymmetricKeyType !== "rsa" || bits < 3072 || bits > 8192 || !m.signing.verifyManifestBytes(manifest.bytes, signature.bytes, key)) fail("attempt-signature-invalid");
   const signed = JSON.parse(manifest.bytes); m.signing.validateReleaseManifestV3(signed); m.authorization.validateFrontendAuthorization(signed);
   const archive = get(value.workDir + "/" + value.sha256 + ".tgz", BUNDLE_LIMIT, 0o600), sidecar = get(value.workDir + "/" + value.sha256 + ".sha256", 4096, 0o600);
@@ -265,7 +266,8 @@ function recover(context) {
   if (rows.length > 1) fail("multiple-unresolved-started-attempts");
   for (const value of rows) {
     const saved = prepared(context, value.sha256, value.sequence), r = saved.record;
-    const key = crypto.createPublicKey(observe(context, target(context, "/etc/football-release/signing-public.pem"), 16384, false, 0o644).bytes), manifest = observe(context, saved.dir + "/manifest.json", 1024 * 1024, false, 0o600).bytes, signature = observe(context, saved.dir + "/manifest.sig", 16384, false, 0o600).bytes;
+    const manifest = observe(context, saved.dir + "/manifest.json", 1024 * 1024, false, 0o600).bytes, signature = observe(context, saved.dir + "/manifest.sig", 16384, false, 0o600).bytes;
+    const key = signingTrust.selectReleaseSigningKey(JSON.parse(manifest),context.fixture ? { fixtureRoot:context.at("/"), fixtureOwnerUid:context.uid } : {}).key;
     if (key.asymmetricKeyType !== "rsa" || key.asymmetricKeyDetails?.modulusLength < 3072 || key.asymmetricKeyDetails?.modulusLength > 8192 || !context.modules.signing.verifyManifestBytes(manifest, signature, key)) fail("attempt-recovery-signature-invalid");
     const signed = JSON.parse(manifest); context.modules.signing.validateReleaseManifestV3(signed, { enforceFreshness: false });
     if (signed.releaseKind !== "frontend-only" || signed.sha256 !== value.sha256 || signed.releaseSequence !== value.sequence || signed.bytes !== r.archiveBytes || signed.signature?.keyId !== context.modules.signing.publicKeyId(key)) fail("attempt-recovery-signed-identity-invalid");
