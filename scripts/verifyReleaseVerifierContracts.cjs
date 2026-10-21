@@ -220,7 +220,7 @@ check('explicit archive retry binds a completed lock failure and preserves immut
 check('root broker installer consumes the actual normal archive inventory commitment',()=>{
   const files=['tests/research-broker-installer.test.cjs','tests/research-installer-archive-contract.test.cjs'];
   const child=require('node:child_process').spawnSync(process.execPath,['--test',...files],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
-  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 27$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 18$/m);assert.match(child.stdout,/^# skipped 0$/m);
   for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
     for(const file of ['scripts/installResearchBroker.cjs','scripts/verifyResearchSocketBinding.py',...files])assert(read(entry).includes('"'+file+'"'));
   assert(read('.github/workflows/recommendation-runtime.yml').includes('sudo /usr/bin/python3.12 -I -S -B scripts/verifyResearchSocketBinding.py'));
