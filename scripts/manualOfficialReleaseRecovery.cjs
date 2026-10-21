@@ -99,6 +99,7 @@ function evaluate(auth,worker,observed){
 }
 function collect(auth,worker){
  const fs=require('node:fs'),path=require('node:path'),a=require('node:assert/strict'),cp=require('node:child_process');
+ const {Buffer}=require('node:buffer');
  const root='/opt/football-predict';a.equal(fs.realpathSync(root),root);
  const present=file=>{try{fs.lstatSync(file);return true;}catch(e){if(e.code==='ENOENT')return false;throw e;}};
  let streamIdentity=null;
