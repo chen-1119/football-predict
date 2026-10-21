@@ -10,15 +10,19 @@ test('BestTips honors login return tab, keeps query state through tab changes an
  let search='?tab=two&q=kept';
  const mod=compile('../src/pages/BestTips.tsx',id=>{
   if(id==='react/jsx-runtime')return jsx;
+  if(id==='react')return{useState:initial=>[initial(),()=>{}],useEffect:()=>{}};
+  if(id.endsWith('/useOfficialSchedule'))return{useOfficialSchedule:()=>({data:null,loading:false,failed:true})};
+  if(id.endsWith('/OfficialSchedule'))return{OfficialScheduleCard:'official-card'};
   if(id==='react-router-dom')return{useSearchParams:()=>[new URLSearchParams(search),p=>{search='?'+p.toString();}]};
   if(id.endsWith('/AppContextCore'))return{useApp:()=>({language:'zh'})};
   if(id.endsWith('/RecommendationCenter'))return{RecommendationCenter:'center'};
   throw Error(id);
  });
- const render=()=>mod.BestTips({onSelectMatch:()=>{}});
+ const render=()=>nodes(mod.BestTips({onSelectMatch:()=>{}}),n=>n.type==='center')[0];
  assert.equal(render().props.selectedTab,'two');render().props.onTabChange('three');assert.equal(render().props.selectedTab,'three');assert.equal(new URLSearchParams(search).get('q'),'kept');
  search='?tab=two&q=kept';assert.equal(render().props.selectedTab,'two');render().props.onTabChange('single');assert.equal(new URLSearchParams(search).get('tab'),null);assert.equal(render().props.selectedTab,'single');
  search='?tab=not-a-tab';assert.equal(render().props.selectedTab,'single');
+ assert.match(words(mod.BestTips({onSelectMatch:()=>{}})),/今日官方赛程暂时无法核验/);
 });
 async function center(){
  const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();
