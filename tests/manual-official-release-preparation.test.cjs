@@ -141,3 +141,36 @@ test('VM collector still rejects stream mutation, symlinks and changed source pi
  a.throws(()=>collectInEntryRealm(({files,root})=>files.set(root+'/scripts/nativeCodeReleaseDataPlane.cjs',Buffer.from('// changed source'))),{code:'ERR_ASSERTION'});
 });
 module.exports={fixture};
+
+function scheduleFixture(){
+ const v=fixture(),shift=Date.parse('2026-10-21T17:00:00.000Z')-Date.parse(v.worker.checkedAt),clock=s=>new Date(Date.parse(s)+shift).toISOString();
+ Object.assign(v.auth,{version:p.SCHEDULE_VERSION,reason:'restore-signed-official-schedule-preserving-r906-original-gap',baseRuntimeSha256:p.SCHEDULE_BASE,
+  createdAt:clock(v.auth.createdAt),expiresAt:clock(v.auth.expiresAt)});
+ Object.assign(v.auth.incident,{workerMainPid:'397815',workerStartedAt:'2026-10-21T15:55:29.000Z',cycleStartedAt:clock(v.auth.incident.cycleStartedAt),cycleFinishedAt:clock(v.auth.incident.cycleFinishedAt),journalTimestampUs:String(BigInt(v.auth.incident.journalTimestampUs)+BigInt(shift)*1000n)});
+ for(const path of ['server/officialScheduleRead.cjs','server/officialScheduleHttp.cjs','src/services/officialSchedule.cjs','src/hooks/useOfficialSchedule.ts','src/components/recommendations/OfficialSchedule.tsx','src/pages/PredictionsList.tsx'])v.auth.files.push({path,beforeSha256:null,afterSha256:'b'.repeat(64)});
+ v.auth.files.sort((x,y)=>x.path<y.path?-1:1);v.observed.files=v.auth.files.map(r=>({path:r.path,sha256:r.beforeSha256}));
+ for(const service of [v.worker.serviceBefore,v.worker.serviceAfter])Object.assign(service,{MainPID:'397815',ExecMainStartTimestamp:'Wed 2026-10-21 15:55:29 UTC'});
+ v.worker.status.pid=397815;v.worker.checkedAt=clock(v.worker.checkedAt);v.worker.status.checkedAt=v.worker.checkedAt;
+ v.worker.status.lastCycle.startedAt=clock(v.worker.status.lastCycle.startedAt);v.worker.status.lastCycle.finishedAt=clock(v.worker.status.lastCycle.finishedAt);
+ Object.assign(v.observed,{runtimeSha256:p.SCHEDULE_BASE,completeSha256:p.SCHEDULE_BASE,completedAt:v.worker.checkedAt});v.observed.journal[0].timestampUs=v.auth.incident.journalTimestampUs;
+ return v;
+}
+test('r906 schedule preparation is a separately named exact baseline and keeps original29 plus failed worker intact',()=>{
+ const v=scheduleFixture(),before=JSON.stringify(v),report=p.evaluate(v.auth,v.worker,v.observed);
+ a.equal(report.preparationAllowed,true);a.equal(report.workerHealthy,false);a.equal(report.readyToCutover,false);a.equal(report.productionWrites,0);a.equal(JSON.stringify(v),before);
+});
+for(const [label,change]of [
+ ['old version reused',v=>v.auth.version=p.VERSION],['old reason reused',v=>v.auth.reason='install-independent-official-editorial-authority-preserving-r903-original-gap'],
+ ['unrelated baseline',v=>v.auth.baseRuntimeSha256='0'.repeat(64)],['old903 runtime',v=>v.observed.runtimeSha256=p.BASE],
+ ['old worker ID',v=>v.auth.incident.workerMainPid='2990491'],['different worker incarnation',v=>v.worker.serviceAfter.ExecMainStartTimestamp='Wed 2026-10-21 15:55:30 UTC'],
+ ['missing UI source binding',v=>v.auth.files=v.auth.files.filter(r=>r.path!=='src/pages/PredictionsList.tsx')],
+ ['expired scope',v=>v.auth.expiresAt=v.worker.checkedAt],['changed baseline bytes',v=>v.observed.files[0].sha256='0'.repeat(64)],
+ ['changed original29',v=>v.observed.gap.pop()],['invented original companion',v=>v.observed.indexMatches=1],['changed warehouse',v=>v.observed.warehouse.sha256='0'.repeat(64)],
+ ['healthy worker disguised',v=>v.worker.status.lastCycle.ok=true],['another child error',v=>v.observed.journal.push({...v.observed.journal[0],message:'Error: different failure'})],
+ ['changed DB affinity',v=>v.observed.ordinaryPointerAffinity=false],['health failure',v=>v.observed.servingHealthAccepted=false],
+ ['data contract change',v=>v.observed.dataContract=[]],['pending controller recovery',v=>v.observed.recoveryPending=true]
+])test('r906 preparation refuses '+label,()=>{const v=scheduleFixture();change(v);a.equal(p.evaluate(v.auth,v.worker,v.observed).preparationAllowed,false);});
+test('new r906 CLI probe includes version and fixed baseline in its isolated realm',()=>{
+ const v=scheduleFixture(),original=Date.now;Date.now=()=>Date.parse(v.worker.checkedAt);
+ try{const source=p.buildProbe(v.auth);new(require('node:vm').Script)(source);a(source.includes('const AUTH_ENTRY='));a(source.includes(p.SCHEDULE_BASE));a(source.includes(p.SCHEDULE_VERSION));}finally{Date.now=original;}
+});

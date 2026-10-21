@@ -38,6 +38,13 @@ test('a native ID alone cannot hide a verified reference and only an actually vi
  a.equal(front.officialReferenceNeedsSeparateCard(record,[{...match,homeTeamId:'other-team'}],center),true);
  a.equal(front.officialReferenceNeedsSeparateCard(record,[],center),true);
  a.equal(front.officialReferenceNeedsSeparateCard(record,[match],center),false);
+ const {officialOrderedTeamIds,...nativeOriginal}=record;
+ const revisions={state:'verified',singles:[{eventId:record.eventId,revision:1,publishedAt:record.createdAt,decision:nativeOriginal,settlement:null}],combos:[],pending:0};
+ const latest=load(ts,path.resolve(__dirname,'../src/services/publishedMatchRecommendation.ts')).reviewedLatestRecord(record,revisions);
+ a.deepEqual(latest.review.original.officialOrderedTeamIds,officialOrderedTeamIds);
+ const nativeCenter={reviewedAnalysis:{businessDate:record.businessDate,records:[nativeOriginal]},reviewedRevisions:revisions};
+ a.equal(front.officialReferenceNeedsSeparateCard(latest,[match],nativeCenter),false);
+ a.equal(front.officialReferenceNeedsSeparateCard({...latest,sp:latest.sp+0.01},[match],nativeCenter),true);
 });
 test('real list card renders manual direction, frozen SP and both compatible scores without a model or confidence badge',()=>{
  const raw=fixture(),state={data:front.parseOfficialEditorialReferences(raw,raw.businessDate),loading:false,failed:false};

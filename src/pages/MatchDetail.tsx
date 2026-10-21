@@ -1,3 +1,4 @@
+import { OfficialScheduleDetail } from '../components/recommendations/OfficialSchedule';
 import { detailPublishedRecommendation, detailLineupAvailability } from '../services/matchDetailPublication';
 import { DetailPublicationEvidence } from '../components/recommendations/DetailPublicationEvidence';
 import { reviewedMatchRecommendation } from '../services/publishedMatchRecommendation';
@@ -4633,7 +4634,9 @@ const CanonicalMatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, ini
     </div>
   );
 };
-export const MatchDetail: React.FC<MatchDetailProps> = (props) => props.matchId.startsWith('official_')
+export const MatchDetail: React.FC<MatchDetailProps> = (props) => props.matchId.startsWith('schedule_')
+  ? <OfficialScheduleDetail referenceId={props.matchId} onBack={props.onBack}/>
+  : props.matchId.startsWith('official_')
   ? <OfficialEditorialReferenceDetail referenceId={props.matchId} onBack={props.onBack}/>
   : <CanonicalMatchDetail {...props}/>;
 import { FollowButton } from '../components/FollowButton';
