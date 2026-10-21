@@ -11,7 +11,7 @@ function fixture(change=()=>{},badLock=false){
  let writes=0;
  const raw={ '/proc/self/fdinfo/9':'lock:\t1: FLOCK  ADVISORY  WRITE 777 00:01:123 0 EOF\n', '/proc/locks':'1: FLOCK  ADVISORY  WRITE 777 00:01:123 0 EOF\n', '/etc/football-release/signing-public.pem':keys.publicKey.export({type:'spki',format:'pem'}) };
  const stat=()=>({isDirectory:()=>true,isFile:()=>true,isSymbolicLink:()=>false,uid:0,mode:0o444,nlink:1,dev:1,ino:123,size:450,mtimeMs:1,ctimeMs:1});
- const fakeFs={constants:require('node:fs').constants,readdirSync:()=>['9'],lstatSync:()=>({...stat(),uid:badLock?999:0}),fstatSync:()=>stat(),openSync:()=>10,closeSync(){},readFileSync(p){if(p===10)return Buffer.from(raw['/etc/football-release/signing-public.pem']);return raw[p];},writeFileSync(){writes++;},mkdirSync(){writes++;}};
+ const fakeFs={constants:require('node:fs').constants,existsSync:()=>false,readdirSync:()=>['9'],lstatSync:p=>{if(p==='/etc/football-release/signing-trust-v1'){const e=Error('fixture absent trust store');e.code='ENOENT';throw e;}return {...stat(),uid:badLock?999:0};},fstatSync:()=>stat(),openSync:()=>10,closeSync(){},readFileSync(p){if(p===10)return Buffer.from(raw['/etc/football-release/signing-public.pem']);return raw[p];},writeFileSync(){writes++;},mkdirSync(){writes++;}};
  const context={Buffer,process:{platform:'linux',getuid:()=>0,execPath:NODE,version:'v22.22.1',execArgv:[],env:{},pid:777},require:n=>n==='node:fs'?fakeFs:require(n)};
  const call=vm.runInNewContext('('+installRoot.toString()+')',context);
  return {body,signature,invoke:(signatureValue=signature)=>call({body,signature:signatureValue,payloads:[]}),writes:()=>writes};

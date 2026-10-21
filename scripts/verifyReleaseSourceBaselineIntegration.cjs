@@ -3,7 +3,7 @@ const fs = require("node:fs"), path = require("node:path"), os = require("node:o
 const { spawnSync } = require("node:child_process");
 const root = path.resolve(__dirname, ".."), quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
 const shellPath = value => process.platform === "win32" ? value.replaceAll("\\", "/").replace(/^([A-Za-z]):/, (_, d) => "/" + d.toLowerCase()) : value;
-const SOURCE_BASELINE_HELPER_MODULES = Object.freeze(["releaseSourceBaseline.cjs", "releaseSigning.cjs", "releaseArchiveSourceInventory.cjs",
+const SOURCE_BASELINE_HELPER_MODULES = Object.freeze(["releaseSourceBaseline.cjs", "releaseSigning.cjs", "releaseSigningTrust.cjs", "releaseArchiveSourceInventory.cjs",
   "releaseChangeClassification.cjs", "releasePrebuiltDist.cjs", "frontendReleaseAuthorization.cjs"]);
 function verify() {
   const wrapper = fs.readFileSync(path.join(root, "deploy/light-server/football-release"), "utf8").replaceAll("\r\n", "\n");

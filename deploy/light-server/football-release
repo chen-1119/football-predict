@@ -7,7 +7,7 @@ readonly PATH="/opt/node-v22.22.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/
 export PATH
 
 readonly CONFIG_DIR="/etc/football-release"
-readonly PUBLIC_KEY="${CONFIG_DIR}/signing-public.pem"
+PUBLIC_KEY="${CONFIG_DIR}/signing-public.pem"
 readonly UPLOAD_OWNER_FILE="${CONFIG_DIR}/upload-owner"
 readonly PUBLIC_BASE_URL_FILE="${CONFIG_DIR}/public-base-url"
 readonly RELEASE_EXPORT_MODE_FILE="${CONFIG_DIR}/release-export-live-sqlite"
@@ -88,6 +88,25 @@ check_recovery_runtime() {
 check_release_runtime() {
   local allow_missing_app="${1:-0}"
   check_recovery_runtime
+  # The fixed root policy retains the legacy public key for historical
+  # artifacts and selects the enrolled active key for new release signatures.
+  local trust_directory
+  for trust_directory in / /usr /usr/local /usr/local/libexec "$SOURCE_BASELINE_HELPER_DIR"; do
+    [ -d "$trust_directory" ] && [ ! -L "$trust_directory" ] \
+      && [ "$(realpath -e -- "$trust_directory")" = "$trust_directory" ] \
+      || die "signing trust policy directory is unsafe"
+    local trust_metadata
+    trust_metadata="$(stat -c '%u:%g:%a' -- "$trust_directory")"
+    [[ "$trust_metadata" =~ ^0:0:([0-7]{3,4})$ ]] && (( (8#${BASH_REMATCH[1]} & 8#022) == 0 )) \
+      || die "signing trust policy directory is not root controlled"
+  done
+  assert_root_controlled_file "${SOURCE_BASELINE_HELPER_DIR}/releaseSigningTrust.cjs" 644 "fixed signing trust policy"
+  PUBLIC_KEY="$(env -i PATH="$PATH" LANG=C.UTF-8 "$NODE_BIN" "${SOURCE_BASELINE_HELPER_DIR}/releaseSigningTrust.cjs" active-path)" \
+    || die "release signing trust is incomplete or invalid"
+  case "$PUBLIC_KEY" in
+    /etc/football-release/signing-public.pem|/etc/football-release/signing-trust-v1/active-public.pem) ;;
+    *) die "signing trust selected an unexpected path" ;;
+  esac
   local command_name
   for command_name in openssl sha256sum tar node python3 realpath install mktemp awk sed head bash chmod chown mv rm date grep find sync dirname; do
     command -v "$command_name" >/dev/null 2>&1 || die "missing command: ${command_name}"
@@ -122,7 +141,7 @@ preserve_signed_source_baseline() {
     [[ "$metadata" =~ ^0:0:([0-7]{3,4})$ ]] || return 1
     (( (8#${BASH_REMATCH[1]} & 8#022) == 0 )) || return 1
   done
-  for module in releaseSourceBaseline.cjs releaseSigning.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs frontendReleaseAuthorization.cjs; do
+  for module in releaseSourceBaseline.cjs releaseSigning.cjs releaseSigningTrust.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs frontendReleaseAuthorization.cjs; do
     [ -f "${SOURCE_BASELINE_HELPER_DIR}/${module}" ] && [ ! -L "${SOURCE_BASELINE_HELPER_DIR}/${module}" ] || return 1
     [ "$(stat -c '%u:%g:%a:%h' -- "${SOURCE_BASELINE_HELPER_DIR}/${module}")" = "0:0:644:1" ] || return 1
   done
@@ -140,7 +159,7 @@ assert_frontend_controller() {
     [[ "$metadata" =~ ^0:0:([0-7]{3,4})$ ]] && (( (8#${BASH_REMATCH[1]} & 8#022) == 0 )) \
       || die "frontend controller directory is not root controlled"
   done
-  for module in frontendReleaseController.cjs frontendReleaseAuthorization.cjs frontendReleaseTransaction.cjs frontendReleaseIdentity.cjs frontendInstalledRuntime.cjs frontendRuntimeBoundary.cjs frontendBuildSandbox.cjs frontendBuildEvidence.cjs frontendPolicyRefresh.cjs frontendReleaseAttempt.cjs releaseSourceBaseline.cjs releaseSigning.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs; do
+  for module in frontendReleaseController.cjs frontendReleaseAuthorization.cjs frontendReleaseTransaction.cjs frontendReleaseIdentity.cjs frontendInstalledRuntime.cjs frontendRuntimeBoundary.cjs frontendBuildSandbox.cjs frontendBuildEvidence.cjs frontendPolicyRefresh.cjs frontendReleaseAttempt.cjs releaseSourceBaseline.cjs releaseSigning.cjs releaseSigningTrust.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs; do
     assert_root_controlled_file "${FRONTEND_HELPER_DIR}/${module}" 644 "fixed frontend policy"
   done
 }

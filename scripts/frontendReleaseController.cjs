@@ -13,7 +13,7 @@ const STATE = RELEASE + "/frontend-state.json";
 const HASH = /^[a-f0-9]{64}$/, ID = /^[a-f0-9]{24}$/;
 const MODULES = Object.freeze(["frontendReleaseController.cjs", "frontendPolicyRefresh.cjs", "frontendReleaseAttempt.cjs", "frontendReleaseAuthorization.cjs", "frontendReleaseTransaction.cjs",
   "frontendReleaseIdentity.cjs", "frontendInstalledRuntime.cjs", "frontendRuntimeBoundary.cjs", "frontendBuildSandbox.cjs",
-  "frontendBuildEvidence.cjs", "releaseSourceBaseline.cjs", "releaseSigning.cjs", "releaseArchiveSourceInventory.cjs",
+  "frontendBuildEvidence.cjs", "releaseSourceBaseline.cjs", "releaseSigning.cjs", "releaseSigningTrust.cjs", "releaseArchiveSourceInventory.cjs",
   "releaseChangeClassification.cjs", "releasePrebuiltDist.cjs"]);
 const FIXED_ENV = Object.freeze({ PATH: "/opt/node-v22.22.1/bin:/usr/sbin:/usr/bin:/sbin:/bin", LANG: "C.UTF-8", LC_ALL: "C.UTF-8" });
 const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex"), digest = value => hash(JSON.stringify(value));
@@ -280,7 +280,7 @@ function authenticateRequest(m, sha256, sequence, work) {
     || !new RegExp("^" + sha256 + "\\.[A-Za-z0-9]+$").test(path.basename(work))) fail("frontend-original-work-required");
   directory(work, true);
   const bytes = read(work + "/" + sha256 + ".manifest.json"), signature = read(work + "/" + sha256 + ".manifest.sig", 16384);
-  const keyBytes = read("/etc/football-release/signing-public.pem", 16384);
+  const keyBytes = require("./releaseSigningTrust.cjs").selectReleaseSigningKey().bytes;
   if (!/^-----BEGIN PUBLIC KEY-----\r?\n[A-Za-z0-9+/=\r\n]+-----END PUBLIC KEY-----\r?\n?$/.test(keyBytes.toString("utf8"))) fail("frontend-public-key-only-required");
   const key = crypto.createPublicKey(keyBytes), bits = key.asymmetricKeyDetails?.modulusLength;
   if (key.asymmetricKeyType !== "rsa" || bits < 3072 || bits > 8192 || !m.signing.verifyManifestBytes(bytes, signature, key)) fail("frontend-request-signature-invalid");

@@ -2,6 +2,7 @@
 
 const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto"), { TextDecoder } = require("node:util");
 const { validateReleaseManifestV3, verifyManifestBytes, publicKeyId, RELEASE_SIGNATURE_ALGORITHM } = require("./releaseSigning.cjs");
+const signingTrust = require("./releaseSigningTrust.cjs");
 const { validateSignedArchiveSourceEvidence, verifyArchiveSourceEvidence } = require("./releaseArchiveSourceInventory.cjs");
 const VERSION = "authenticated-release-source-baseline-v1";
 const STORE_ROOT = "/var/lib/football-release/source-baselines", WORK_ROOT = "/var/lib/football-release/work";
@@ -115,9 +116,15 @@ function expectations(options) {
 }
 function readInputs(options, access) {
   const expected = expectations(options), manifestBytes = readProtected(options.manifestPath, LIMITS.manifest, access);
-  const signatureBytes = readProtected(options.signaturePath, LIMITS.signature, access), keyBytes = readProtected(options.publicKeyPath, LIMITS.key, access);
+  const signatureBytes = readProtected(options.signaturePath, LIMITS.signature, access), keyBytes = externalKey(options, manifestBytes, access).bytes;
   const key = publicKey(keyBytes), verified = authenticate(manifestBytes, signatureBytes, key, expected);
   return { expected, manifestBytes, signatureBytes, keyBytes, key, ...verified };
+}
+function externalKey(options, manifestBytes, access) {
+  if (options.fixtureTrustBoundary && !options.fixtureSigningTrustRoot) return publicKey(readProtected(options.publicKeyPath, LIMITS.key, access));
+  const selected = signingTrust.selectReleaseSigningKey(JSON.parse(utf8.decode(manifestBytes)), options.fixtureSigningTrustRoot
+    ? { fixtureRoot:options.fixtureSigningTrustRoot, fixtureOwnerUid:access.ownerUid } : {});
+  return { ...publicKey(selected.bytes), proof:selected.proof };
 }
 function summary(record, extra = {}) {
   return { version: VERSION, status: "source-baseline-retained", release: record.release, inventorySha256: record.inventorySha256,
@@ -142,12 +149,12 @@ async function verifyRetained(options) {
     || Date.parse(record.capturedAt) > Date.now() + 300000 || Date.parse(complete.completedAt) > Date.now() + 300000 || Date.parse(complete.completedAt) < Date.parse(record.capturedAt)
     || record.origin !== "signature-authenticated-original-archive" || record.frontendBuildBindingAvailable !== false || record.uiFastPathAllowed !== false
     || record.releaseAcceptanceProven !== false || !exact(record.files, ["archive", "manifest", "signature", "publicKey", "inventory"])) reject("baseline-completion-binding-invalid");
-  const trustedKey = publicKey(readProtected(options.publicKeyPath, LIMITS.key, access));
   const stored = {};
   for (const name of ["manifest", "signature", "publicKey", "inventory"]) {
     stored[name] = readProtected(path.join(directory, FILES[name]), LIMITS[name === "publicKey" ? "key" : name], access);
     if (!exact(record.files[name], ["bytes", "sha256"]) || record.files[name].sha256 !== digest(stored[name]) || record.files[name].bytes !== stored[name].length) reject("retained-file-digest-mismatch");
   }
+  const trustedKey = externalKey(options, stored.manifest, access);
   const storedKey = publicKey(stored.publicKey);
   if (storedKey.keyId !== trustedKey.keyId) reject("retained-key-not-externally-trusted");
   const { manifest, source } = authenticate(stored.manifest, stored.signature, trustedKey, expected, { now: Date.parse(record.capturedAt), enforceFreshness: true });
@@ -159,7 +166,8 @@ async function verifyRetained(options) {
   await verifyArchiveSourceEvidence(archivePath, manifest);
   if (digest(readProtected(path.join(directory, FILES.complete), LIMITS.record, access)) !== digest(completeBytes)
     || digest(readProtected(path.join(directory, FILES.record), LIMITS.record, access)) !== digest(recordBytes)
-    || digest(readProtected(options.publicKeyPath, LIMITS.key, access)) !== digest(trustedKey.bytes)) reject("baseline-changed-during-verification");
+    || digest(externalKey(options, stored.manifest, access).bytes) !== digest(trustedKey.bytes)
+    || externalKey(options, stored.manifest, access).proof !== trustedKey.proof) reject("baseline-changed-during-verification");
   return { record, directory, ...summary(record, { productionWrites: 0, verification: "signature-and-actual-retained-archive-inventory" }) };
 }
 async function preserveSourceBaseline(options) {

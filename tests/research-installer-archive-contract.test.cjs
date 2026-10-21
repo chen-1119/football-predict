@@ -41,7 +41,7 @@ function executeActualInstallerChecks(value, expected = manifest) {
   let closed = false, called = 0;
   vm.runInNewContext(source.slice(start, end) + '\n' + invocation[0], {
     APP: '/opt/football-predict', bytes: [null, null, null, Buffer.from(JSON.stringify(value))],
-    body: { releaseSha: expected.sha256, keyId: expected.signature.keyId }, hash,
+    body: { releaseSha: expected.sha256, keyId: expected.signature.keyId }, hash, trustPolicy: null, trustProof: null,
     fail: code => { throw Error(code); },
     visit: p => { assert.equal(p, '/opt/football-predict/scripts/releaseArchiveSourceInventory.cjs'); closed = true; },
     require: p => {
