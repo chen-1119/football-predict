@@ -1,3 +1,5 @@
+import { useOfficialSchedule } from '../hooks/useOfficialSchedule';
+import { OfficialScheduleCard, scheduleNeedsSeparateCard } from '../components/recommendations/OfficialSchedule';
 import { reviewedMatchRecommendation } from '../services/publishedMatchRecommendation';
 import { TrainedMatchPick } from '../components/recommendations/LeagueBaselineDirections';
 import { ReviewedMatchPick, ReviewedMatchPrice, ReviewedMatchStatus } from '../components/recommendations/ReviewedAnalysis';
@@ -525,6 +527,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   ));
   const published = useRecommendationCenter(selectedDate < todayStr ? selectedDate : undefined);
   const officialReferences = useOfficialEditorialReferences(selectedDate);
+  const officialSchedule = useOfficialSchedule(selectedDate);
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>(() => (
     restoreReturnView ? restoredViewState?.selectedLeagues || [] : []
   ));
@@ -551,9 +554,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   // Resolve the initial date once before painting; a user's explicit date is
   // never replaced when a later background refresh changes the match list.
-  if (!automaticInitialDateResolved && dataSync.currentLoaded && !officialReferences.loading) {
+  if (!automaticInitialDateResolved && dataSync.currentLoaded && !officialReferences.loading && !officialSchedule.loading) {
     const availableDates = Array.from(new Set([...matches.flatMap(getMatchDateCandidates).filter(Boolean),
-      ...(officialReferences.data?.records.length ? [officialReferences.data.businessDate] : [])])).sort();
+      ...(officialReferences.data?.records.length ? [officialReferences.data.businessDate] : []),
+      ...(officialSchedule.data?.events.length ? [officialSchedule.data.businessDate] : [])])).sort();
     if (availableDates.length > 0) {
       setAutomaticInitialDateResolved(true);
       if (!availableDates.includes(todayStr)) {
@@ -659,12 +663,18 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
   const orphanOfficialRecords = useMemo(() => {
     if (officialReferences.failed || !officialReferences.data || effectiveSelectedLeagues.length) return [];
-    return officialReferences.data.records.map(record => reviewedLatestRecord(record, officialReferences.data?.revisions))
+    return officialReferences.data.records.map(record => ({...reviewedLatestRecord(record, officialReferences.data?.revisions),officialOrderedTeamIds:record.officialOrderedTeamIds}))
       .filter(record => published.loading || published.failed || officialReferenceNeedsSeparateCard(record,baseFilteredMatches,published.data))
       .filter(record => !normalizedSearch || [record.homeTeamName, record.awayTeamName, record.matchNum]
         .some(text => text.toLocaleLowerCase().includes(normalizedSearch)))
       .sort((a,b) => (sortBy === 'odds' ? a.sp-b.sp : Date.parse(a.eventVersion)-Date.parse(b.eventVersion)) * (sortOrder === 'asc' ? 1 : -1));
   }, [officialReferences, effectiveSelectedLeagues.length, baseFilteredMatches, published, normalizedSearch, sortBy, sortOrder]);
+  const scheduleView = officialSchedule.data && nowMs - Date.parse(officialSchedule.data.sourceReceivedAt) <= 900000
+    && nowMs - Date.parse(officialSchedule.data.quoteReceivedAt) <= 900000 ? officialSchedule.data : null;
+  const scheduleEvents = !effectiveSelectedLeagues.length ? (scheduleView?.events ?? [])
+    .filter(event => scheduleNeedsSeparateCard(event,baseFilteredMatches,orphanOfficialRecords))
+    .filter(event => !normalizedSearch || [event.homeTeamName,event.awayTeamName,event.matchNum,event.leagueName].some(text => text.toLocaleLowerCase().includes(normalizedSearch)))
+    .sort((a,b) => (Date.parse(a.kickoff)-Date.parse(b.kickoff)) * (sortOrder === 'asc' ? 1 : -1)) : [];
   const filteredMatches = useMemo(() => {
     if (!normalizedSearch) return baseFilteredMatches;
     return baseFilteredMatches.filter((match) => {
@@ -896,8 +906,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const selectedHistoryDate = historyDateOptions.some((option) => option.date === effectiveSelectedDate) ? effectiveSelectedDate : '';
 
-  const isLoading = Boolean(dataSync.currentLoading || (!dataSync.currentLoaded && !dataSync.error) || (effectiveSelectedDate < todayStr && dataSync.historyLoading && !dataSync.historyLoaded));
-  const emptyStateText = isLoading ? (language === 'zh' ? '比赛加载中…' : 'Loading matches…')
+  const isLoading = Boolean(officialSchedule.loading || dataSync.currentLoading || (!dataSync.currentLoaded && !dataSync.error) || (effectiveSelectedDate < todayStr && dataSync.historyLoading && !dataSync.historyLoaded));
+  const emptyStateText = officialSchedule.loading ? (language === 'zh' ? '正在读取官方赛程…' : 'Loading official fixtures…')
+    : (!scheduleView && baseFilteredMatches.length === 0 && effectiveSelectedDate >= todayStr) ? (language === 'zh' ? '官方赛程暂时无法核验，请稍后重试。' : 'Official fixtures could not be verified. Please try again.')
+    : isLoading ? (language === 'zh' ? '比赛加载中…' : 'Loading matches…')
     : !dataSync.currentLoaded && dataSync.error ? (language === 'zh' ? '暂时无法加载比赛，请稍后重试。' : 'Matches could not be loaded. Please try again shortly.')
     : normalizedSearch ? (language === 'zh' ? `没有找到“${searchQuery.trim()}”相关的比赛` : `No matches for “${searchQuery.trim()}”`)
     : (language === 'zh' ? '这个竞彩日暂无比赛' : 'No matches for this match day');
@@ -909,7 +921,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       <section className="dashboard-hero is-compact">
         <PredictionsPageHeader title={isAnalysisView ? (language === 'zh' ? '赛前推荐' : 'Match picks') : (language === 'zh' ? '赛程' : 'Fixtures')}
           description={language === 'zh' ? '按竞彩日查看赛程、SP 与赛后结果' : 'Fixtures, SP and results by match day'}
-          matchSummary={!dataSync.currentLoaded && baseFilteredMatches.length === 0 ? (language === 'zh' ? '加载中' : 'Loading') : baseFilteredMatches.length + (language === 'zh' ? ' 场比赛' : ' matches')} />
+          matchSummary={officialSchedule.loading && !baseFilteredMatches.length && !orphanOfficialRecords.length ? (language === 'zh' ? '加载中' : 'Loading') : baseFilteredMatches.length + orphanOfficialRecords.length + scheduleEvents.length + (language === 'zh' ? ' 场比赛' : ' matches')} />
       </section>
       <section
         className="date-toolbar"
@@ -959,7 +971,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         </div>
         <div className="matchday-search-results" role="status" aria-live="polite" aria-atomic="true">
           <span>{normalizedSearch ? (language === 'zh' ? '搜索结果' : 'Search results') : (language === 'zh' ? '当前显示' : 'Showing')}
-            {' '}<strong>{filteredMatches.length + orphanOfficialRecords.length}</strong>{language === 'zh' ? ' 场比赛' : ' matches'}</span>
+            {' '}<strong>{filteredMatches.length + orphanOfficialRecords.length + scheduleEvents.length}</strong>{language === 'zh' ? ' 场比赛' : ' matches'}</span>
           <span>{formatShortDate(effectiveSelectedDate, language)} · {filterLeagueSummary}</span>
         </div>
         <details className="panel filters-panel filters-details" aria-label={language === 'zh' ? '赛事筛选与排序' : 'Fixture filters and sorting'}>
@@ -1059,10 +1071,14 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           <small>{language === 'zh' ? '参考、待赛果与作废场次不计入正式命中率。' : 'Reference, pending and void picks are excluded from the formal hit rate.'}</small>
         </section>
       )}
+      {scheduleView && scheduleEvents.length > 0 && <section className="league-stack" aria-label="官方赛程" data-official-schedule-list>
+        <header><h2>官方赛程与 SP</h2><p>按所选竞彩日显示官方赛程；赛前分析以已发布内容为准。</p></header>
+        {scheduleEvents.map(event => <OfficialScheduleCard key={event.eventId} event={event} view={scheduleView} now={nowMs} onSelect={onSelectMatch}/>)}
+      </section>}
       {orphanOfficialRecords.length > 0 && <section className="league-stack" aria-label="人工审核参考" data-official-reference-list>
         <header><h2>人工审核参考</h2><p>保留已发布方向、双比分与发布时官方 SP。</p></header>
         {orphanOfficialRecords.map(record => <OfficialReferenceCard key={record.eventId} record={record} now={nowMs} onSelect={onSelectMatch}/>)}</section>}
-      {groupedMatches.length === 0 && orphanOfficialRecords.length === 0 ? (
+      {groupedMatches.length === 0 && orphanOfficialRecords.length === 0 && scheduleEvents.length === 0 ? (
         <section className="empty-state" role="status" aria-live="polite"><div><CalendarDays size={32} aria-hidden="true" /><p>{emptyStateText}</p>
           {!isLoading && hasActiveFilters && <button type="button" className="reset-btn" onClick={handleResetFilters}><RotateCcw size={15} aria-hidden="true" />{t('reset')}</button>}
           {!isLoading && !hasActiveFilters && <small>{language === 'zh' ? '可选择其他日期查看比赛。' : 'Choose another date to browse matches.'}</small>}

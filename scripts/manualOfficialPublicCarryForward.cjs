@@ -71,8 +71,8 @@ function main(){
  require('./baselineAuthorityReplayRepair.cjs').heldAncestorLock(Number(ownerText));
  const state=JSON.parse(fs.readFileSync(path.join(directory,'state.json')));a.equal(state.sha,sha);a.equal(state.dataPlane,'code-only');
  if(!state.manualOfficialPreparationAuthorizationHash){console.log(JSON.stringify({ok:true,manualOriginalCarryForward:false}));return;}
- a.equal(state.oldSha,policy.BASE);
  const bytes=fs.readFileSync(path.join(directory,'manual-official-preparation-authorization.json')),auth=policy.candidateAuthorization(root,JSON.parse(bytes)),authorizationHash=hash(bytes);
+ a.equal(state.oldSha,auth.baseRuntimeSha256);
  a.equal(authorizationHash,state.manualOfficialPreparationAuthorizationHash);
  const observed=JSON.parse(fs.readFileSync(path.join(directory,'manual-official-preparation-observation.json')));a.equal(observed.authorizationHash,authorizationHash);a.equal(observed.report.preparationAllowed,true);a.equal(observed.report.workerReport.ok,false);
  const unit=require('node:child_process').execFileSync('/usr/bin/systemctl',['show','football-sync-worker.service','--property=ActiveState,MainPID','--value'],{encoding:'utf8',timeout:5000}).trim().split('\n');a(unit.includes('inactive')&&unit.includes('0'),'original copy requires the normally stopped worker');

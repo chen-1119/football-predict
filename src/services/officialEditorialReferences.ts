@@ -2,9 +2,10 @@ import { parseReviewedAnalysis, parseReviewedRevisions, type ReviewedAnalysisRec
 import type { Match } from './mockData';
 import type { RecommendationCenterData } from './recommendationCenterView';
 import { reviewedMatchRecommendation } from './publishedMatchRecommendation';
-export interface OfficialEditorialReferences {businessDate:string;updatedAt:string;records:ReviewedAnalysisRecord[];revisions?:ReviewedRevisions}
+export interface OfficialEditorialReferences {businessDate:string;updatedAt:string;records:Array<ReviewedAnalysisRecord & {officialOrderedTeamIds:[number,number]}>;revisions?:ReviewedRevisions}
 export function officialReferenceNeedsSeparateCard(record:ReviewedAnalysisRecord,visibleNativeMatches:Match[],published:RecommendationCenterData|null):boolean{
- return !visibleNativeMatches.some(match=>JSON.stringify(reviewedMatchRecommendation(published,match))===JSON.stringify(record));
+ const decision=(row:ReviewedAnalysisRecord|null|undefined)=>JSON.stringify(row,(key,value)=>key==='officialOrderedTeamIds'?undefined:value);
+ return !visibleNativeMatches.some(match=>decision(reviewedMatchRecommendation(published,match))===decision(record));
 }
 const object=(v:unknown):Record<string,unknown>=>{if(!v||typeof v!=='object'||Array.isArray(v))throw Error('Official reference object');return v as Record<string,unknown>;};
 export function officialReferenceRoute(record:Pick<ReviewedAnalysisRecord,'businessDate'|'eventId'>):string{
@@ -23,7 +24,7 @@ export function parseOfficialEditorialReferences(value:unknown,expectedDay:strin
   ||v.formalEligible!==false||v.modelAdoption!==false||!Array.isArray(v.officialEventIds)||v.officialEventIds.length>32)throw Error('Official reference envelope');
  const original=object(v.original),data=parseReviewedAnalysis(original,expectedDay,v.updatedAt),raw=original.records;
  if(!Array.isArray(raw))throw Error('Official reference records');
- const ids:string[]=[];
+ const ids:string[]=[],orderedIds=new Map<string,[number,number]>();
  for(const value of raw){
   const row=object(value);if(row.eventAuthority===undefined)continue;
   const a=object(row.eventAuthority);
@@ -33,9 +34,9 @@ export function parseOfficialEditorialReferences(value:unknown,expectedDay:strin
    ||a.officialOrderedTeamIds.some(n=>!Number.isSafeInteger(n)||Number(n)<=0)||a.officialOrderedTeamIds[0]===a.officialOrderedTeamIds[1]
    ||['calculatorCommitmentHash','calculatorRowHash','currentCommitmentHash','currentRowHash'].some(k=>typeof a[k]!=='string'||!/^[a-f0-9]{64}$/.test(String(a[k])))
    ||typeof row.eventId!=='string')throw Error('Official event authority');
-  ids.push(row.eventId);
+  ids.push(row.eventId);orderedIds.set(row.eventId,[Number(a.officialOrderedTeamIds[0]),Number(a.officialOrderedTeamIds[1])]);
  }
  if(new Set(ids).size!==ids.length||JSON.stringify(ids)!==JSON.stringify(v.officialEventIds))throw Error('Official reference selection');
  const revisions=v.revisions===null?undefined:parseReviewedRevisions(v.revisions,original,data,v.updatedAt);
- return {businessDate:expectedDay,updatedAt:v.updatedAt,records:data.records.filter(r=>ids.includes(r.eventId)),revisions};
+ return {businessDate:expectedDay,updatedAt:v.updatedAt,records:data.records.filter(r=>ids.includes(r.eventId)).map(r=>({...r,officialOrderedTeamIds:orderedIds.get(r.eventId)!})),revisions};
 }

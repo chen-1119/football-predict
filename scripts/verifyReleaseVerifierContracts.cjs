@@ -7,10 +7,19 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('signed official schedule remains visible without admitting native predictions or missing originals',()=>{
+ const file='tests/official-schedule-view.test.cjs';
+ const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 27$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
+  for(const required of ["server/officialScheduleRead.cjs", "server/officialScheduleHttp.cjs", "src/services/officialSchedule.cjs", "src/services/officialSchedule.d.cts", "src/hooks/useOfficialSchedule.ts", "src/components/recommendations/OfficialSchedule.tsx", "tests/official-schedule-view.test.cjs"])assert(read(entry).includes('"'+required+'"'));
+ assert.equal(pkg.scripts['verify:official-schedule'],'node --test '+file);
+ assert(read('.github/workflows/recommendation-runtime.yml').includes('node --test '+file));
+});
 check('V4 official editorial publication keeps complete dual signatures, separate ACK and original worker failure',()=>{
  const tests=['tests/reviewed-official-event.test.cjs','tests/official-editorial-reference-view.test.cjs','tests/manual-official-release-preparation.test.cjs','tests/manual-official-public-carry-forward.test.cjs'];
  const result=require('node:child_process').spawnSync(process.execPath,['--test',...tests],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:2*1024*1024});
- assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 102$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 122$/m);assert.match(result.stdout,/^# skipped 0$/m);
  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
   for(const file of [...tests,'scripts/manualOfficialReleaseRecovery.cjs','scripts/manualOfficialPublicCarryForward.cjs','scripts/recommendationPlatform/reviewedOfficialEvent.cjs','server/researchOfficialEventRead.cjs','src/services/officialEditorialReferences.ts','src/hooks/useOfficialEditorialReferences.ts','src/components/recommendations/OfficialEditorialReferences.tsx','tests/fixtures/reviewed-official-event.cjs','scripts/verifyReviewedOfficialEventPostgres.cjs'])assert(read(entry).includes('"'+file+'"'));
  assert.equal(pkg.scripts['verify:reviewed-official-events'],'node --test '+tests.join(' '));
@@ -211,7 +220,7 @@ check('explicit archive retry binds a completed lock failure and preserves immut
 check('root broker installer consumes the actual normal archive inventory commitment',()=>{
   const files=['tests/research-broker-installer.test.cjs','tests/research-installer-archive-contract.test.cjs'];
   const child=require('node:child_process').spawnSync(process.execPath,['--test',...files],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
-  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 18$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 27$/m);assert.match(child.stdout,/^# skipped 0$/m);
   for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
     for(const file of ['scripts/installResearchBroker.cjs','scripts/verifyResearchSocketBinding.py',...files])assert(read(entry).includes('"'+file+'"'));
   assert(read('.github/workflows/recommendation-runtime.yml').includes('sudo /usr/bin/python3.12 -I -S -B scripts/verifyResearchSocketBinding.py'));

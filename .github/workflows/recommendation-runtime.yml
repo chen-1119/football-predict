@@ -10,6 +10,13 @@ on:
       - 'deploy/light-server/manual-official-recovery-authorization.json'
       - 'scripts/recommendationPlatform/reviewedOfficialEvent.cjs'
       - 'server/researchOfficialEventRead.cjs'
+      - 'server/officialScheduleRead.cjs'
+      - 'server/officialScheduleHttp.cjs'
+      - 'src/services/officialSchedule.cjs'
+      - 'src/services/officialSchedule.d.cts'
+      - 'src/hooks/useOfficialSchedule.ts'
+      - 'src/components/recommendations/OfficialSchedule.tsx'
+      - 'tests/official-schedule-view.test.cjs'
       - 'src/services/officialEditorialReferences.ts'
       - 'src/hooks/useOfficialEditorialReferences.ts'
       - 'src/components/recommendations/OfficialEditorialReferences.tsx'
@@ -424,6 +431,9 @@ jobs:
         run: node scripts/verifyReviewedOfficialEventPostgres.cjs
         env:
           RESEARCH_REPORT_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
+      - name: Verify signed official schedule display without native data
+        run: node --test tests/official-schedule-view.test.cjs
+
       - name: Frontend evidence semantics
         run: node scripts/verifyFrontendEvidenceSemantics.cjs
       - name: Audited static receipt dependency closure

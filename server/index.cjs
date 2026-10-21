@@ -11883,6 +11883,12 @@ const handleApi = async (req, res, url) => {
     return sendJson(res, await getSourceHealth());
   }
 
+  if (url.pathname === "/api/research/official-schedule") {
+    return require('./officialScheduleHttp.cjs').handle(req, res, url, {
+      authorize: () => hasRecommendationAccess(req, url), send: (status, body) => sendJson(res, body, status),
+    });
+  }
+
   if (url.pathname === "/api/research/official-event-references") {
     if (req.method !== "GET" && req.method !== "HEAD") return sendJson(res, { ok: false, error: "method not allowed" }, 405);
     if (!(await hasRecommendationAccess(req, url))) return sendJson(res, { ok: false, error: "access code required" }, 401);

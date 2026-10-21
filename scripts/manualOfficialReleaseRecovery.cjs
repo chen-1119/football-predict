@@ -6,6 +6,7 @@ const workerPolicy=require('./releaseWorkerPreflight.cjs');
 const AUTH_ENTRY='deploy/light-server/manual-official-recovery-authorization.json',OLD_AUTH='deploy/light-server/worker-code-repair-authorization.json';
 const VERSION='manual-official-preparation-authorization-v1',ENVELOPE='manual-official-preparation-observation-v1';
 const BASE='3d2c8be0f468de1c3a5bdf9f975375ac4688d4c09b7b4ebe7dd0e4aba664d927';
+const SCHEDULE_VERSION='official-schedule-preparation-authorization-v2',SCHEDULE_BASE='3ffad537a605bc5463031bd29819daee2ced39b66020c8745c4d65b636bb9e3d';
 const CURRENT={bytes:7758090,sha256:'b86ab357fc1d63a93eaf31e15066cd14ebc0c2e76cf70ec46f390e60f6d48b7a'};
 const WAREHOUSE={bytes:1101391274,sha256:'3c9ef2ea5d9052fe6a7027d9d4db63cdd30e71a2fb08abe220b9b8601e10e1a4'};
 const MESSAGE='PUBLIC_REFERENCE_EVIDENCE_BINDING_MISSING';
@@ -15,13 +16,15 @@ function hash(value){return require('node:crypto').createHash('sha256').update(v
 function validate(auth,now){
  const a=require('node:assert/strict');
  a.deepEqual(Object.keys(auth).sort(),['baseRuntimeSha256','baselineClosure','createdAt','current','dataContract','expiresAt','files','gap','incident','optionalPreludePolicy','publication','reason','version','warehouse']);
- a.equal(auth.version,VERSION);a.equal(auth.reason,'install-independent-official-editorial-authority-preserving-r903-original-gap');a.equal(auth.baseRuntimeSha256,BASE);
+ const schedule=auth.version===SCHEDULE_VERSION;
+ if(schedule){a.equal(auth.reason,'restore-signed-official-schedule-preserving-r906-original-gap');a.equal(auth.baseRuntimeSha256,SCHEDULE_BASE);}
+ else{a.equal(auth.version,VERSION);a.equal(auth.reason,'install-independent-official-editorial-authority-preserving-r903-original-gap');a.equal(auth.baseRuntimeSha256,BASE);}
  a.equal(auth.optionalPreludePolicy,PRELUDE.policy);
  const start=Date.parse(auth.createdAt),end=Date.parse(auth.expiresAt);a(Number.isFinite(now)&&Number.isFinite(start)&&Number.isFinite(end)&&start<=now+5000&&now<end&&end>start&&end-start<=7200000,'authorization clock');
  a.deepEqual(auth.current,CURRENT);a.deepEqual(auth.warehouse,WAREHOUSE);a.equal(auth.gap.length,29);let previous='';
  for(const r of auth.gap){a.deepEqual(Object.keys(r).sort(),['recordHash','recordSha256','sourceMatchId']);a.match(r.sourceMatchId,/^[1-9]\d{0,19}$/);a(r.sourceMatchId>previous);previous=r.sourceMatchId;for(const k of ['recordHash','recordSha256'])a.match(r[k],/^[a-f0-9]{64}$/);}
  const i=auth.incident;a.deepEqual(Object.keys(i).sort(),['cycleFinishedAt','cycleStartedAt','journalMessageSha256','journalPid','journalTimestampUs','workerMainPid','workerStartedAt']);
- a.equal(i.workerMainPid,'2990491');a.equal(i.workerStartedAt,'2026-10-18T04:49:51.000Z');a.match(i.journalPid,/^[1-9]\d*$/);a.notEqual(i.journalPid,i.workerMainPid);a.match(i.journalTimestampUs,/^[1-9]\d{15}$/);a.equal(i.journalMessageSha256,hash(MESSAGE));
+ a.equal(i.workerMainPid,schedule?'397815':'2990491');a.equal(i.workerStartedAt,schedule?'2026-10-21T15:55:29.000Z':'2026-10-18T04:49:51.000Z');a.match(i.journalPid,/^[1-9]\d*$/);a.notEqual(i.journalPid,i.workerMainPid);a.match(i.journalTimestampUs,/^[1-9]\d{15}$/);a.equal(i.journalMessageSha256,hash(MESSAGE));
  for(const k of ['cycleStartedAt','cycleFinishedAt'])a.equal(new Date(i[k]).toISOString(),i[k]);
  a(Date.parse(i.cycleStartedAt)>=Date.parse(i.workerStartedAt)&&Date.parse(i.cycleFinishedAt)>=Date.parse(i.cycleStartedAt)&&Date.parse(i.cycleFinishedAt)<=start);
  const stamp=Number(i.journalTimestampUs)/1000;a(stamp>=Date.parse(i.cycleStartedAt)&&stamp<=Date.parse(i.cycleFinishedAt));
@@ -32,6 +35,7 @@ function validate(auth,now){
   }
  }
  for(const name of ['scripts/manualOfficialReleaseRecovery.cjs','scripts/manualOfficialPublicCarryForward.cjs','scripts/recommendationPlatform/reviewedOfficialEvent.cjs','server/researchOfficialEventRead.cjs'])a(auth.files.some(r=>r.path===name));
+ if(schedule)for(const name of ['server/officialScheduleRead.cjs','server/officialScheduleHttp.cjs','src/services/officialSchedule.cjs','src/hooks/useOfficialSchedule.ts','src/components/recommendations/OfficialSchedule.tsx','src/pages/PredictionsList.tsx'])a(auth.files.some(r=>r.path===name),'schedule source closure required');
  for(const name of READER_ROOTS)a(auth.baselineClosure.some(r=>r.path===name));
  a.deepEqual(Object.keys(auth.publication).sort(),['committedAt','databaseOid','generationId','manifestHash','mode','sourceCycleId']);
  a.equal(auth.publication.databaseOid,'28598409');a.equal(auth.publication.mode,'active-generation');a.match(auth.publication.manifestHash,/^[a-f0-9]{64}$/);a.equal(auth.publication.generationId,'g-'+auth.publication.manifestHash);a.equal(new Date(auth.publication.committedAt).toISOString(),auth.publication.committedAt);a(typeof auth.publication.sourceCycleId==='string'&&auth.publication.sourceCycleId.length>0&&auth.publication.sourceCycleId.length<=256);
@@ -86,7 +90,7 @@ function evaluate(auth,worker,observed){
   a.deepEqual([...report.blockers].sort(),['worker-latest-official-cycle-failed','worker-official-recovery-unproven'].filter(k=>report.blockers.includes(k)).sort());
   a(report.blockers.includes('worker-official-recovery-unproven'));a(report.statusAgeSeconds<=300);
   stage='runtime-identity';
-  a.equal(observed.runtimeSha256,BASE);a.equal(observed.completeSha256,BASE);a.equal(observed.recoveryPending,false);a.equal(observed.oldAuthorizationPresent,false);
+  a.equal(observed.runtimeSha256,auth.baseRuntimeSha256);a.equal(observed.completeSha256,auth.baseRuntimeSha256);a.equal(observed.recoveryPending,false);a.equal(observed.oldAuthorizationPresent,false);
   stage='source-closure-and-data-contract';
   a.deepEqual(observed.files,auth.files.map(r=>({path:r.path,sha256:r.beforeSha256})));a.deepEqual(observed.baselineClosure,auth.baselineClosure);a.deepEqual(observed.dataContract,auth.dataContract);
   stage='originals-and-ordinary-publication';
@@ -142,13 +146,13 @@ function candidateAuthorization(root,auth){
  a.deepEqual(require('./releaseDataPlanePolicy.cjs').capture(root).entries,auth.dataContract,'manual preparation requires unchanged data contract');return auth;
 }
 function buildProbe(auth){
- validate(auth,Date.now());const source="'use strict';\nconst AUTH_ENTRY="+JSON.stringify(AUTH_ENTRY)+',OLD_AUTH='+JSON.stringify(OLD_AUTH)+',VERSION='+JSON.stringify(VERSION)+',ENVELOPE='+JSON.stringify(ENVELOPE)+',BASE='+JSON.stringify(BASE)+',CURRENT='+JSON.stringify(CURRENT)+',WAREHOUSE='+JSON.stringify(WAREHOUSE)+',MESSAGE='+JSON.stringify(MESSAGE)+',PRELUDE='+JSON.stringify(PRELUDE)+',READER_ROOTS='+JSON.stringify(READER_ROOTS)+';\n'
+ validate(auth,Date.now());const source="'use strict';\nconst AUTH_ENTRY="+JSON.stringify(AUTH_ENTRY)+',OLD_AUTH='+JSON.stringify(OLD_AUTH)+',VERSION='+JSON.stringify(VERSION)+',ENVELOPE='+JSON.stringify(ENVELOPE)+',BASE='+JSON.stringify(BASE)+',SCHEDULE_VERSION='+JSON.stringify(SCHEDULE_VERSION)+',SCHEDULE_BASE='+JSON.stringify(SCHEDULE_BASE)+',CURRENT='+JSON.stringify(CURRENT)+',WAREHOUSE='+JSON.stringify(WAREHOUSE)+',MESSAGE='+JSON.stringify(MESSAGE)+',PRELUDE='+JSON.stringify(PRELUDE)+',READER_ROOTS='+JSON.stringify(READER_ROOTS)+';\n'
   +[workerPolicy.evaluateWorkerPreflight,workerPolicy.collectWorkerPreflight,hash,validate,preludeFrame,assertCycle,evaluate,collect].map(fn=>fn.toString()).join('\n')
   +'\ntry{const auth='+JSON.stringify(auth)+';const worker=collectWorkerPreflight(),base=evaluateWorkerPreflight(worker);if(base.ok){console.log(JSON.stringify(base));}else{const report=evaluate(auth,worker,collect(auth,worker));console.log(JSON.stringify(report));if(!report.preparationAllowed)process.exitCode=1;}}catch{console.log(JSON.stringify({version:ENVELOPE,preparationAllowed:false,workerHealthy:false,readyToCutover:false,productionWrites:0,blockers:[\'manual-official-preparation-observation-unavailable\']}));process.exitCode=1;}';
  a(Buffer.byteLength(source)<120000,'fixed SSH probe bound');return source;
 }
 const {evaluateWorkerPreflight,collectWorkerPreflight}=workerPolicy;
-module.exports={AUTH_ENTRY,OLD_AUTH,VERSION,ENVELOPE,BASE,CURRENT,WAREHOUSE,MESSAGE,PRELUDE,READER_ROOTS,hash,validate,preludeFrame,assertCycle,evaluate,collect,candidateAuthorization,buildProbe};
+module.exports={AUTH_ENTRY,OLD_AUTH,VERSION,ENVELOPE,BASE,SCHEDULE_VERSION,SCHEDULE_BASE,CURRENT,WAREHOUSE,MESSAGE,PRELUDE,READER_ROOTS,hash,validate,preludeFrame,assertCycle,evaluate,collect,candidateAuthorization,buildProbe};
 if(require.main===module){
  try{a.equal(process.argv.length,3);const root=path.resolve(process.argv[2]),file=path.join(root,AUTH_ENTRY);if(!fs.existsSync(file))throw Error('explicit manual authorization required');const st=fs.lstatSync(file);a(st.isFile()&&!st.isSymbolicLink()&&st.nlink===1&&st.size<=65536);const auth=candidateAuthorization(root,JSON.parse(fs.readFileSync(file)));new(require('node:vm').Script)(buildProbe(auth)).runInNewContext({require,process,console,Date});}
  catch{console.log(JSON.stringify({version:ENVELOPE,preparationAllowed:false,readyToCutover:false,productionWrites:0,blockers:['manual-official-preparation-entry-rejected']}));process.exitCode=1;}
