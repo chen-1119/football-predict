@@ -1,0 +1,23 @@
+.official-schedule-card{padding:20px;min-width:0;display:grid;gap:14px;font-size:14px;line-height:1.5}
+.official-schedule-card>header,.official-schedule-card>footer{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.official-schedule-card h3{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:0;font-size:18px;font-weight:700;line-height:1.5}
+.official-schedule-card h3>span{font-size:12px;font-weight:500;color:hsl(var(--text-muted))}
+.official-schedule-analysis-state{flex-shrink:0;padding:4px 8px;border-radius:6px;background:hsl(var(--bg-soft));color:hsl(var(--text-muted));font-size:12px}
+.official-schedule-facts{display:grid;gap:9px;min-width:0}
+.official-schedule-meta{display:flex;flex-wrap:wrap;gap:8px 12px;margin:0;color:hsl(var(--text-muted));font-size:12px;line-height:1.6}
+.official-schedule-sale{font-weight:600}.official-schedule-sale.is-open{color:hsl(var(--success))}
+.official-schedule-markets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:3px 0}
+.official-schedule-market{display:grid;gap:8px;padding:12px;background:hsl(var(--bg-soft));border-radius:8px;min-width:0}
+.official-schedule-market>strong{font-size:12px;font-weight:600;line-height:1.5}
+.official-schedule-prices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;font-size:12px;color:hsl(var(--text-muted))}
+.official-schedule-prices>span{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px}
+.official-schedule-prices b{font-size:16px;font-variant-numeric:tabular-nums;color:hsl(var(--text-primary));font-weight:650}
+.official-schedule-facts>small,.official-schedule-facts>p:not(.official-schedule-meta){font-size:12px;color:hsl(var(--text-muted));line-height:1.6;margin:0}
+.official-schedule-card>footer{border-top:1px solid hsl(var(--border));padding-top:12px;font-size:12px;color:hsl(var(--text-muted))}
+.official-schedule-link{border:0;background:none;color:hsl(var(--success));font:inherit;font-weight:650;padding:6px 0;cursor:pointer;white-space:nowrap}
+.official-schedule-link:focus-visible{outline:2px solid currentColor;outline-offset:4px;border-radius:2px}
+[data-official-schedule-list]>header h2{font-size:18px;line-height:1.5;font-weight:700;margin:0 0 4px}
+[data-official-schedule-list]>header p{font-size:13px;line-height:1.6;color:hsl(var(--text-muted));margin:0}
+.official-schedule-detail{display:grid;gap:16px}.official-schedule-detail h1{font-size:24px;line-height:1.4;margin-bottom:12px}.official-schedule-detail h2{font-size:18px;margin-bottom:12px}
+.official-reference-card .compact-pick{display:grid;gap:8px;min-width:0}.official-reference-card .compact-pick>strong{font-size:18px;color:hsl(var(--success));line-height:1.5}.official-reference-card .compact-pick>small{font-size:12px;color:hsl(var(--text-muted));line-height:1.6}.official-reference-card .compact-pick details{font-size:13px;line-height:1.7;overflow-wrap:anywhere}.official-reference-card .compact-pick details summary{cursor:pointer;color:hsl(var(--success));font-weight:600}.official-reference-card .compact-pick details p{margin:8px 0}.official-reference-card .compact-pick details a{color:hsl(var(--success));text-decoration:underline}
+@media(max-width:640px){.official-schedule-card{padding:16px;gap:12px}.official-schedule-card>header{align-items:flex-start;flex-direction:column;gap:8px}.official-schedule-card h3{font-size:16px;gap:8px}.official-schedule-markets{grid-template-columns:minmax(0,1fr);gap:8px}.official-schedule-detail h1{font-size:20px}.official-schedule-prices b{font-size:15px}}

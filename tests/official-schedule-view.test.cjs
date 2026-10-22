@@ -80,6 +80,16 @@ test('actual cards and detail render signed facts and stopped status, without fa
   a.match(detail,/本场尚未发布赛前推荐及参考比分/);a.match(detail,/尚未完成本场核实/);a.match(detail,/1\.80/);
  }finally{Date.now=originalNow;}
 });
+test('schedule card never presents unavailable analysis as confirmed unpublished',()=>{
+ const view=run(f.setup()),ui=load(ts,path.resolve(__dirname,'../src/components/recommendations/OfficialSchedule.tsx'),{'../../hooks/useOfficialSchedule':{},'../../hooks/useOfficialEditorialReferences':{}});
+ for(const analysisState of [undefined,'unknown','loading','failed']){
+  const html=render(React.createElement(ui.OfficialScheduleCard,{event:view.events[0],view,now:f.NOW,onSelect(){},analysisState}));
+  a.doesNotMatch(html,/分析尚未发布|暂无已发布推荐/);
+  if(analysisState==='failed')a.match(html,/暂时无法核验/);
+ }
+ const html=render(React.createElement(ui.OfficialScheduleCard,{event:view.events[0],view,now:f.NOW,onSelect(){},analysisState:'unpublished'}));
+ a.match(html,/分析尚未发布/);
+});
 test('hook isolates days, authenticates, bounds the response and clears old facts on errors or unmount',async()=>{
  const vm=require('node:vm'),controllers=[],requests=[],view=run(f.setup()),m={exports:{}},browser={visibilityState:'visible',addEventListener(){},removeEventListener(){}};
  const file=path.resolve(__dirname,'../src/hooks/useOfficialSchedule.ts'),native=createRequire(file);

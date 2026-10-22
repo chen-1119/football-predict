@@ -457,6 +457,7 @@ const requiredReleaseEntries = [
   "src/services/officialSchedule.d.cts",
   "src/hooks/useOfficialSchedule.ts",
   "src/components/recommendations/OfficialSchedule.tsx",
+  "src/components/recommendations/OfficialSchedule.css",
   "tests/official-schedule-view.test.cjs",
   "src/services/officialEditorialReferences.ts",
   "src/hooks/useOfficialEditorialReferences.ts",

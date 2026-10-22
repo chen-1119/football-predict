@@ -1,5 +1,5 @@
 import { useOfficialSchedule } from '../hooks/useOfficialSchedule';
-import { OfficialScheduleCard, scheduleNeedsSeparateCard } from '../components/recommendations/OfficialSchedule';
+import { OfficialScheduleCard, scheduleNeedsSeparateCard, scheduleMatchesReference } from '../components/recommendations/OfficialSchedule';
 import { reviewedMatchRecommendation } from '../services/publishedMatchRecommendation';
 import { TrainedMatchPick } from '../components/recommendations/LeagueBaselineDirections';
 import { ReviewedMatchPick, ReviewedMatchPrice, ReviewedMatchStatus } from '../components/recommendations/ReviewedAnalysis';
@@ -1073,7 +1073,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       )}
       {scheduleView && scheduleEvents.length > 0 && <section className="league-stack" aria-label="官方赛程" data-official-schedule-list>
         <header><h2>官方赛程与 SP</h2><p>按所选竞彩日显示官方赛程；赛前分析以已发布内容为准。</p></header>
-        {scheduleEvents.map(event => <OfficialScheduleCard key={event.eventId} event={event} view={scheduleView} now={nowMs} onSelect={onSelectMatch}/>)}
+        {scheduleEvents.map(event => <OfficialScheduleCard key={event.eventId} event={event} view={scheduleView} now={nowMs} onSelect={onSelectMatch} analysisState={officialReferences.failed?'failed':officialReferences.loading?'loading':officialReferences.data&&!officialReferences.data.records.some(record=>scheduleMatchesReference(event,record))?'unpublished':'unknown'}/>)}
       </section>}
       {orphanOfficialRecords.length > 0 && <section className="league-stack" aria-label="人工审核参考" data-official-reference-list>
         <header><h2>人工审核参考</h2><p>保留已发布方向、双比分与发布时官方 SP。</p></header>
