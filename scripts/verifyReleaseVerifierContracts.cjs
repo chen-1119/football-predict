@@ -19,7 +19,7 @@ check('signed official schedule remains visible without admitting native predict
 check('V4 official editorial publication keeps complete dual signatures, separate ACK and original worker failure',()=>{
  const tests=['tests/reviewed-official-event.test.cjs','tests/official-editorial-reference-view.test.cjs','tests/manual-official-release-preparation.test.cjs','tests/manual-official-public-carry-forward.test.cjs'];
  const result=require('node:child_process').spawnSync(process.execPath,['--test',...tests],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:2*1024*1024});
- assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 135$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 179$/m);assert.match(result.stdout,/^# skipped 0$/m);
  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
   for(const file of [...tests,'scripts/manualOfficialReleaseRecovery.cjs','scripts/manualOfficialPublicCarryForward.cjs','scripts/recommendationPlatform/reviewedOfficialEvent.cjs','server/researchOfficialEventRead.cjs','src/services/officialEditorialReferences.ts','src/hooks/useOfficialEditorialReferences.ts','src/components/recommendations/OfficialEditorialReferences.tsx','tests/fixtures/reviewed-official-event.cjs','scripts/verifyReviewedOfficialEventPostgres.cjs'])assert(read(entry).includes('"'+file+'"'));
  assert.equal(pkg.scripts['verify:reviewed-official-events'],'node --test '+tests.join(' '));
@@ -202,6 +202,13 @@ check('explicit publication retry binds exact failed bytes and preserves unknown
   assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# fail 0$/m);assert.match(child.stdout,/^# skipped 0$/m);
   for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const f of [file,'server/researchPublicationRetry.cjs','scripts/verifyResearchPublicationRetryPostgres.cjs'])assert(read(entry).includes('"'+f+'"'));
   assert(read('.github/workflows/recommendation-runtime.yml').includes('node scripts/verifyResearchPublicationRetryPostgres.cjs'));
+});
+check('V4 freshness recovery preserves thirty-second source validation and the original failed journal',()=>{
+  const files=['tests/research-publication-freshness-retry.test.cjs','tests/reviewed-official-freshness.test.cjs'];
+  const child=require('node:child_process').spawnSync(process.execPath,['--test',...files],{cwd:root,encoding:'utf8',windowsHide:true,timeout:45000,maxBuffer:1048576});
+  assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# fail 0$/m);assert.match(child.stdout,/^# skipped 0$/m);
+  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const f of [...files,'server/researchPublicationFreshnessRetry.cjs','scripts/recommendationPlatform/reviewedOfficialFreshness.cjs','scripts/verifyResearchPublicationFreshnessRetryPostgres.cjs','scripts/verifyResearchPublicationFreshnessJournal.cjs'])assert(read(entry).includes('"'+f+'"'));
+  assert(read('.github/workflows/recommendation-runtime.yml').includes('node scripts/verifyResearchPublicationFreshnessRetryPostgres.cjs'));
 });
 check('input recovery preserves two failed journals, exact source repair and unknown commit refusal',()=>{
   const file='tests/research-publication-input-recovery.test.cjs';

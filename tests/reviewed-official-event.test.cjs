@@ -57,10 +57,10 @@ function runtime(v){
   if(id==='./liveOfficialHandicap.cjs')return {readLiveOfficialSnapshot:()=>v.snapshot};return native(id);
  }});return m.exports;
 }
-function database({loseCommit=false}={}){
+function database({loseCommit=false,onQuery=()=>{}}={}){
  let committed=new Map(),pending=null,clock=f.NOW,readNative=0;const log=[];
  const c={release(){},async query(sql,args=[]){
-  log.push(sql);if(sql.startsWith('BEGIN')){pending=new Map(committed);return {rows:[]};}
+  log.push(sql);onQuery(sql);if(sql.startsWith('BEGIN')){pending=new Map(committed);return {rows:[]};}
   if(sql==='COMMIT'){committed=pending;pending=null;if(loseCommit)throw Error('lost COMMIT reply');return {rows:[]};}
   if(sql==='ROLLBACK'){pending=null;return {rows:[]};}
   if(sql.startsWith('SET ')||sql.includes('pg_advisory'))return {rows:[]};
@@ -89,4 +89,21 @@ test('V4 unknown COMMIT preserves the original freeze without inventing an ACK o
  await a.rejects(r.publish(v.draft,{pool:db.pool,expectedDraftHash:p.hash(v.draft)}),{code:'LEAGUE_MODEL_COMMIT_UNKNOWN'});
  a.equal(db.rows().size,1);a.equal(db.nativeReads(),0);
  await a.rejects(r.projection(db.client,v.draft.businessDate,f.stamp(f.NOW+2000)),/ACK_MISSING/);
+});
+
+test('V4 rereads after passive readiness and refuses a now-stale source inside its single write transaction',async()=>{
+ const v=f.setup(),r=runtime(v),db=database({onQuery(sql){if(sql.includes('pg_advisory'))for(const e of v.snapshot.endpoints){
+  e.requestedAt=f.stamp(f.NOW-31000);e.receivedAt=f.stamp(f.NOW-31000);f.resign(e,v.pair);
+ }}});
+ await a.rejects(r.publish(v.draft,{pool:db.pool,expectedDraftHash:p.hash(v.draft)}),{code:'REVIEWED_ANALYSIS_OFFICIAL_EVENT_FRESH_CLOCK'});
+ a.equal(db.log[0],'SELECT clock_timestamp() AS now');a.equal(db.log.filter(x=>x.startsWith('BEGIN')).length,1);
+ a.equal(db.log.filter(x=>x==='ROLLBACK').length,1);a.equal(db.log.filter(x=>x.startsWith('INSERT')).length,0);a.equal(db.rows().size,0);
+});
+
+test('V4 transaction rejects newly closed sale after readiness without reusing a previously verified snapshot',async()=>{
+ const v=f.setup(),r=runtime(v),db=database({onQuery(sql){if(sql.includes('pg_advisory'))for(const e of v.snapshot.endpoints){
+  rows(e)[0].sellStatus=2;f.resign(e,v.pair);
+ }}});
+ await a.rejects(r.publish(v.draft,{pool:db.pool,expectedDraftHash:p.hash(v.draft)}),{code:'REVIEWED_ANALYSIS_OFFICIAL_EVENT_SALE'});
+ a.equal(db.log.filter(x=>x.startsWith('BEGIN')).length,1);a.equal(db.log.filter(x=>x.startsWith('INSERT')).length,0);a.equal(db.rows().size,0);
 });
