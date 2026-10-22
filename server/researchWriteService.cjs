@@ -12,7 +12,13 @@ function decodeRequest(raw) {
   const text = raw.toString('utf8');
   if (!Buffer.from(text).equals(raw)) fail('RESEARCH_REQUEST_UTF8');
   let r; try { r = JSON.parse(text); } catch { fail('RESEARCH_REQUEST_JSON'); }
-  if (!r || r.version !== 'research-broker-request-v1' || !['archive', 'archive-read', 'publish', 'publication-read','revision-publish','revision-read','combo-revision-publish','combo-revision-read','publication-retry','archive-retry','publication-input-recovery'].includes(r.action)) fail('RESEARCH_REQUEST_ACTION');
+  if (!r || r.version !== 'research-broker-request-v1' || !['archive', 'archive-read', 'publish', 'publication-read','revision-publish','revision-read','combo-revision-publish','combo-revision-read','publication-retry','archive-retry','publication-input-recovery','publication-freshness-retry'].includes(r.action)) fail('RESEARCH_REQUEST_ACTION');
+  if(r.action==='publication-freshness-retry'){
+    const input=require('./researchPublicationFreshnessRetry.cjs').original(r);
+    decodeRequest(Buffer.from(r.originalRequestJson));
+    if(input.action!=='publish')fail('RESEARCH_REQUEST_ACTION');
+    return r;
+  }
   if(r.action==='publication-input-recovery'){
     const prior=require('./researchPublicationInputRecovery.cjs').prior(r);
     decodeRequest(Buffer.from(r.priorRetryRequestJson));
@@ -89,9 +95,9 @@ function createResearchWriteService({ pool, runExclusive } = {}) {
   }
   async function execute(raw) {
     const input=decodeRequest(raw),retry=input.action==='publication-retry',archiveRetry=input.action==='archive-retry';
-    const inputRecovery=input.action==='publication-input-recovery';
+    const inputRecovery=input.action==='publication-input-recovery',freshnessRetry=input.action==='publication-freshness-retry';
     const prior=inputRecovery?require('./researchPublicationInputRecovery.cjs').prior(input):null;
-    const r=inputRecovery?decodeRequest(Buffer.from(prior.originalRequestJson)):retry||archiveRetry?decodeRequest(Buffer.from(input.originalRequestJson)):input;
+    const r=inputRecovery?decodeRequest(Buffer.from(prior.originalRequestJson)):retry||archiveRetry||freshnessRetry?decodeRequest(Buffer.from(input.originalRequestJson)):input;
     if(r.action==='combo-revision-publish')return combos.publish(JSON.parse(r.json));
     if(r.action==='combo-revision-read')return runExclusive(()=>combos.read(JSON.parse(r.json)));
     if(r.action==='revision-publish')return revisions.publish(JSON.parse(r.json));
@@ -118,7 +124,7 @@ function createResearchWriteService({ pool, runExclusive } = {}) {
       if (!after.verified) fail('RESEARCH_COMMITTED_READBACK_UNVERIFIED');
       return { ...after, submitted: true };
     });
-    return inputRecovery?{...result,explicitInputRecovery:true,originalRequestSha256:prior.originalRequestSha256}:retry?{...result,explicitRetry:true,originalRequestSha256:input.originalRequestSha256}:result;
+    return freshnessRetry?{...result,explicitFreshnessRetry:true,originalRequestSha256:input.originalRequestSha256}:inputRecovery?{...result,explicitInputRecovery:true,originalRequestSha256:prior.originalRequestSha256}:retry?{...result,explicitRetry:true,originalRequestSha256:input.originalRequestSha256}:result;
   }
   return { execute };
 }

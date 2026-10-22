@@ -23,6 +23,7 @@ async function insert(c,k,v,at){
 }
 async function publish(draft,{pool,expectedDraftHash}){
  p.check(p.hash(draft)===expectedDraftHash,'DRAFT_CHANGED');const registry=trust(),k=key(draft);
+ if(draft.version===4)await require('./reviewedOfficialFreshness.cjs').waitForFreshOfficialDraft(draft,{pool,trustRegistry:registry,readSnapshot:readLiveOfficialSnapshot});
  const stored=await transaction(pool,false,async c=>{
   await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',['football-postgres-projection-sync-v1']);
   p.check(!(await c.query(SELECT,[k])).rows.length,'ALREADY_PUBLISHED_READ_FIRST');

@@ -59,10 +59,10 @@ const COMMAND_FUNCTIONS = deepFreeze({
   // One fixed read-only worker entrypoint; its protocol and full PG reader
   // remain in the ordinary authenticated source closure via require.resolve.
   "scripts/postgresWorkerReadProcess.cjs": ["1f5e8ec54ad4f7d599aa0866e6d2bd60b78fa1fbd42d6240f1440ff6e10f55c2"],
-  // Recovery adds only fixed journal and installed-source verification. Removing
-  // its added statement restores the prior main function byte for byte; the
-  // original commands, UID drop, FD inheritance and child deadline are exact.
-  "scripts/researchReleaseBroker.cjs": ["65c05b4386cb41ded4293b9d95146639d73f321101d87c936e5b76230f50fbff", "60b58fb8d3d04a6555ad4ebe52ba30d0395faced3a8baaa52f8e2f3d4916ded7", "a8797b66cd84e764199054fbf286d000c06d809a369a984407060fe862bd6f99", "9d028d8a183549f32ac3975e9a544c8cd170e5b4d91f0dad5295f69f5bd148a6"],
+  // Recovery adds fixed journal and installed-source verification. The latest
+  // main also extracts the unchanged prior journal replay/refusal into a helper;
+  // commands, UID drop, FD inheritance and the child deadline stay exact.
+  "scripts/researchReleaseBroker.cjs": ["65c05b4386cb41ded4293b9d95146639d73f321101d87c936e5b76230f50fbff", "60b58fb8d3d04a6555ad4ebe52ba30d0395faced3a8baaa52f8e2f3d4916ded7", "a8797b66cd84e764199054fbf286d000c06d809a369a984407060fe862bd6f99", "9d028d8a183549f32ac3975e9a544c8cd170e5b4d91f0dad5295f69f5bd148a6", "08c539b3288353a0ecd4de6a35356b4e8f8681661c849b83cca4648e5ed7cb42"],
   "scripts/syncDailyPrematchApi.cjs": ["91da78aabb2c925254c42abec031be710d4f9a5316a2ba059533b60189b3bedf"],
   "server/index.cjs": ["209dac00faf2eb81c7c6348cacd5c273dd31dfc8ef913d9f77e0cf2fd4a621b6"],
   "server/relayFastResultWatcher.cjs": ["dbea20508195f9cafdb058ff0e4242448cac19a914c163ef961cfa5d16243567"],

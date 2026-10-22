@@ -201,3 +201,42 @@ for(const [label,change]of [
  ['extra missing record',v=>v.observed.gap.push({...v.observed.gap[0],sourceMatchId:'999'})],['different error',v=>v.observed.journal[0].message='other error'],
  ['skipped cycle',v=>v.worker.status.lastCycle.skipped=true],['changed DB',v=>v.observed.publication.databaseOid='1'],['pending recovery',v=>v.observed.recoveryPending=true]
 ])test('r909 display preparation rejects '+label,()=>{const v=displayFixture();change(v);a.equal(p.evaluate(v.auth,v.worker,v.observed).preparationAllowed,false);});
+
+function freshnessFixture(){
+ const v=displayFixture(),shift=Date.parse('2026-10-22T08:20:00.000Z')-Date.parse(v.worker.checkedAt),clock=s=>new Date(Date.parse(s)+shift).toISOString();
+ Object.assign(v.auth,{version:p.FRESH_VERSION,reason:'restore-official-publication-freshness-preserving-r910-original-gap',baseRuntimeSha256:p.FRESH_BASE,createdAt:clock(v.auth.createdAt),expiresAt:clock(v.auth.expiresAt)});
+ Object.assign(v.auth.incident,{workerMainPid:'623688',workerStartedAt:'2026-10-22T02:37:06.000Z',cycleStartedAt:clock(v.auth.incident.cycleStartedAt),cycleFinishedAt:clock(v.auth.incident.cycleFinishedAt),journalTimestampUs:String(BigInt(v.auth.incident.journalTimestampUs)+BigInt(shift)*1000n)});
+ for(const path of p.FRESH_FILES)v.auth.files.push({path,beforeSha256:null,afterSha256:'b'.repeat(64)});
+ v.auth.files.sort((x,y)=>x.path<y.path?-1:1);v.observed.files=v.auth.files.map(r=>({path:r.path,sha256:r.beforeSha256}));
+ for(const service of [v.worker.serviceBefore,v.worker.serviceAfter])Object.assign(service,{MainPID:'623688',ExecMainStartTimestamp:'Thu 2026-10-22 02:37:06 UTC'});
+ v.worker.status.pid=623688;v.worker.checkedAt=clock(v.worker.checkedAt);v.worker.status.checkedAt=v.worker.checkedAt;
+ v.worker.status.lastCycle.startedAt=clock(v.worker.status.lastCycle.startedAt);v.worker.status.lastCycle.finishedAt=clock(v.worker.status.lastCycle.finishedAt);
+ Object.assign(v.observed,{runtimeSha256:p.FRESH_BASE,completeSha256:p.FRESH_BASE,completedAt:v.worker.checkedAt});v.observed.journal[0].timestampUs=v.auth.incident.journalTimestampUs;
+ return v;
+}
+
+test('r910 publication freshness preparation preserves original29 custody and grants no publication or recovery authority',()=>{
+ const v=freshnessFixture(),before=JSON.stringify(v),report=p.evaluate(v.auth,v.worker,v.observed);
+ a.equal(report.preparationAllowed,true);a.equal(report.workerReport.ok,false);a.equal(report.workerHealthy,false);a.equal(report.readyToCutover,false);a.equal(report.productionWrites,0);a.equal(JSON.stringify(v),before);
+ a.equal(report.ok,undefined);a.equal(report.committedGenerationRepairAuthorizationHash,undefined);a.equal(report.repairCapturePolicy,undefined);
+ const original=Date.now;Date.now=()=>Date.parse(v.worker.checkedAt);
+ try{const source=p.buildProbe(v.auth);new(require('node:vm').Script)(source);a(source.includes(p.FRESH_VERSION));a(source.includes(p.FRESH_BASE));a(source.includes(JSON.stringify(p.FRESH_FILES)));a(Buffer.byteLength(source)<120000);}finally{Date.now=original;}
+});
+for(const name of p.FRESH_FILES)test('r910 preparation requires exact publication source binding '+name,()=>{
+ const v=freshnessFixture();v.auth.files=v.auth.files.filter(r=>r.path!==name);v.observed.files=v.observed.files.filter(r=>r.path!==name);a.equal(p.evaluate(v.auth,v.worker,v.observed).preparationAllowed,false);
+});
+for(const [label,change]of [
+ ['r909 version reused',v=>v.auth.version=p.DISPLAY_VERSION],['r909 reason reused',v=>v.auth.reason='restore-official-analysis-display-preserving-r909-original-gap'],
+ ['r909 authorization baseline',v=>v.auth.baseRuntimeSha256=p.DISPLAY_BASE],['r909 runtime marker',v=>v.observed.runtimeSha256=p.DISPLAY_BASE],['incomplete release marker',v=>v.observed.completeSha256=p.DISPLAY_BASE],
+ ['old909 worker',v=>v.auth.incident.workerMainPid='485456'],['wrong authorization start',v=>v.auth.incident.workerStartedAt='2026-10-22T02:37:07.000Z'],
+ ['changed service incarnation',v=>v.worker.serviceAfter.ExecMainStartTimestamp='Thu 2026-10-22 02:37:07 UTC'],['stale worker status',v=>v.worker.status.checkedAt='2026-10-22T08:00:00.000Z'],
+ ['expired scope',v=>v.auth.expiresAt=v.worker.checkedAt],['extended scope',v=>v.auth.expiresAt='2026-10-22T12:00:00.000Z'],['expiry during collection',v=>v.observed.completedAt=v.auth.expiresAt],
+ ['changed candidate source observation',v=>v.observed.files[0].sha256='0'.repeat(64)],['changed reader closure',v=>v.observed.baselineClosure[0].sha256='0'.repeat(64)],
+ ['changed data contract',v=>v.observed.dataContract[0].sha256='0'.repeat(64)],['changed original current',v=>v.observed.current.sha256='0'.repeat(64)],['changed warehouse',v=>v.observed.warehouse.sha256='0'.repeat(64)],
+ ['missing original29',v=>v.observed.gap.pop()],['rewritten original record',v=>v.observed.gap[0].recordSha256='0'.repeat(64)],['invented companion',v=>v.observed.indexMatches=1],
+ ['different failed cycle',v=>v.worker.status.lastCycle.error='other failure'],['skipped cycle',v=>v.worker.status.lastCycle.skipped=true],['healthy cycle disguised',v=>v.worker.status.lastCycle.ok=true],
+ ['absent original failure',v=>v.observed.journal=[]],['different child failure',v=>v.observed.journal[0].message='REVIEWED_ANALYSIS_OFFICIAL_EVENT_FRESH_CLOCK'],
+ ['additional child failure',v=>v.observed.journal.push({...v.observed.journal[0],pid:'999999',message:'Error: another failure'})],
+ ['changed DB affinity',v=>v.observed.ordinaryPointerAffinity=false],['health failure',v=>v.observed.servingHealthAccepted=false],['archive failure',v=>v.observed.globalArchiveAccepted=false],
+ ['pending recovery',v=>v.observed.recoveryPending=true],['legacy repair authorization',v=>v.observed.oldAuthorizationPresent=true]
+])test('r910 freshness preparation refuses '+label,()=>{const v=freshnessFixture();change(v);a.equal(p.evaluate(v.auth,v.worker,v.observed).preparationAllowed,false);});
