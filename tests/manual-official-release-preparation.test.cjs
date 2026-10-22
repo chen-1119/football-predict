@@ -174,3 +174,30 @@ test('new r906 CLI probe includes version and fixed baseline in its isolated rea
  const v=scheduleFixture(),original=Date.now;Date.now=()=>Date.parse(v.worker.checkedAt);
  try{const source=p.buildProbe(v.auth);new(require('node:vm').Script)(source);a(source.includes('const AUTH_ENTRY='));a(source.includes(p.SCHEDULE_BASE));a(source.includes(p.SCHEDULE_VERSION));}finally{Date.now=original;}
 });
+
+function displayFixture(){
+ const v=scheduleFixture(),shift=Date.parse('2026-10-22T01:07:51.000Z')-Date.parse(v.worker.checkedAt),clock=s=>new Date(Date.parse(s)+shift).toISOString();
+ Object.assign(v.auth,{version:p.DISPLAY_VERSION,reason:'restore-official-analysis-display-preserving-r909-original-gap',baseRuntimeSha256:p.DISPLAY_BASE,createdAt:clock(v.auth.createdAt),expiresAt:clock(v.auth.expiresAt)});
+ Object.assign(v.auth.incident,{workerMainPid:'485456',workerStartedAt:'2026-10-21T19:49:58.000Z',cycleStartedAt:clock(v.auth.incident.cycleStartedAt),cycleFinishedAt:clock(v.auth.incident.cycleFinishedAt),journalTimestampUs:String(BigInt(v.auth.incident.journalTimestampUs)+BigInt(shift)*1000n)});
+ for(const path of ['src/components/recommendations/OfficialSchedule.css','src/components/recommendations/OfficialEditorialReferences.tsx','src/pages/BestTips.tsx'])v.auth.files.push({path,beforeSha256:null,afterSha256:'b'.repeat(64)});
+ v.auth.files.sort((x,y)=>x.path<y.path?-1:1);v.observed.files=v.auth.files.map(r=>({path:r.path,sha256:r.beforeSha256}));
+ for(const service of [v.worker.serviceBefore,v.worker.serviceAfter])Object.assign(service,{MainPID:'485456',ExecMainStartTimestamp:'Wed 2026-10-21 19:49:58 UTC'});
+ v.worker.status.pid=485456;v.worker.checkedAt=clock(v.worker.checkedAt);v.worker.status.checkedAt=v.worker.checkedAt;
+ v.worker.status.lastCycle.startedAt=clock(v.worker.status.lastCycle.startedAt);v.worker.status.lastCycle.finishedAt=clock(v.worker.status.lastCycle.finishedAt);
+ Object.assign(v.observed,{runtimeSha256:p.DISPLAY_BASE,completeSha256:p.DISPLAY_BASE,completedAt:v.worker.checkedAt});v.observed.journal[0].timestampUs=v.auth.incident.journalTimestampUs;
+ return v;
+}
+test('r909 display preparation has independent runtime identity and never asserts worker recovery',()=>{
+ const v=displayFixture(),before=JSON.stringify(v),result=p.evaluate(v.auth,v.worker,v.observed);
+ a.equal(result.preparationAllowed,true);a.equal(result.workerHealthy,false);a.equal(result.readyToCutover,false);a.equal(JSON.stringify(v),before);
+ const original=Date.now;Date.now=()=>Date.parse(v.worker.checkedAt);
+ try{const source=p.buildProbe(v.auth);new(require('node:vm').Script)(source);a(source.includes(p.DISPLAY_VERSION));a(source.includes(p.DISPLAY_BASE));}finally{Date.now=original;}
+});
+for(const [label,change]of [
+ ['r906 version',v=>v.auth.version=p.SCHEDULE_VERSION],['r906 runtime',v=>v.observed.runtimeSha256=p.SCHEDULE_BASE],
+ ['r906 worker',v=>v.auth.incident.workerMainPid='397815'],['changed incarnation',v=>v.worker.serviceAfter.ExecMainStartTimestamp='Wed 2026-10-21 19:49:59 UTC'],
+ ['missing stylesheet binding',v=>v.auth.files=v.auth.files.filter(r=>r.path!=='src/components/recommendations/OfficialSchedule.css')],
+ ['expired authorization',v=>v.auth.expiresAt=v.worker.checkedAt],['modified original',v=>v.observed.current.sha256='0'.repeat(64)],
+ ['extra missing record',v=>v.observed.gap.push({...v.observed.gap[0],sourceMatchId:'999'})],['different error',v=>v.observed.journal[0].message='other error'],
+ ['skipped cycle',v=>v.worker.status.lastCycle.skipped=true],['changed DB',v=>v.observed.publication.databaseOid='1'],['pending recovery',v=>v.observed.recoveryPending=true]
+])test('r909 display preparation rejects '+label,()=>{const v=displayFixture();change(v);a.equal(p.evaluate(v.auth,v.worker,v.observed).preparationAllowed,false);});

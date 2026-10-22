@@ -1,4 +1,5 @@
 import type { ReviewedAnalysisRecord } from '../../services/recommendationCenterView';
+import './OfficialSchedule.css';
 import { useEffect, useState } from 'react';
 import { ReviewedMatchPick, ReviewedMatchStatus } from './ReviewedAnalysis';
 import { reviewedLatestRecord } from '../../services/publishedMatchRecommendation';
@@ -6,11 +7,11 @@ import { officialReferenceRoute, parseOfficialReferenceRoute } from '../../servi
 import { useOfficialEditorialReferences } from '../../hooks/useOfficialEditorialReferences';
 const beijing=(at:string)=>new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(at));
 export function OfficialReferenceCard({record,onSelect,now}:{record:ReviewedAnalysisRecord;onSelect:(id:string)=>void;now:number}){
- return <article className="card rc-paper__record" data-official-event-reference={record.eventId}>
-  <header><button type="button" className="btn btn-secondary" onClick={()=>onSelect(officialReferenceRoute(record))}>
-   {record.matchNum} {record.homeTeamName} — {record.awayTeamName}</button></header>
-  <p>{beijing(record.eventVersion)} 北京时间 · <ReviewedMatchStatus record={record} now={now} language="zh"/></p>
+ return <article className="card official-schedule-card official-reference-card" data-official-event-reference={record.eventId}>
+  <header><h3>{record.homeTeamName}<span aria-label="对阵">vs</span>{record.awayTeamName}</h3><span className="official-schedule-analysis-state">分析已发布</span></header>
+  <p className="official-schedule-meta">{record.matchNum} · {beijing(record.eventVersion)} 北京时间 · <ReviewedMatchStatus record={record} now={now} language="zh"/></p>
   <ReviewedMatchPick record={record} now={now}/>
+  <footer><span>保留发布时官方 SP</span><button type="button" className="official-schedule-link" onClick={()=>onSelect(officialReferenceRoute(record))}>查看完整分析 <span aria-hidden="true">→</span></button></footer>
  </article>;
 }
 export function OfficialEditorialReferenceDetail({referenceId,onBack}:{referenceId:string;onBack:()=>void}){
@@ -20,7 +21,7 @@ export function OfficialEditorialReferenceDetail({referenceId,onBack}:{reference
  const state=useOfficialEditorialReferences(identity?.businessDate??'invalid');
  const first=identity&&state.data?.records.find(r=>r.eventId===identity.eventId);
  const record=first?reviewedLatestRecord(first,state.data?.revisions):null;
- return <section className="match-detail-shell" data-official-event-detail={identity?.eventId??'invalid'}>
+ return <section className="match-detail-shell official-schedule-detail official-reference-card" data-official-event-detail={identity?.eventId??'invalid'}>
   <button type="button" className="btn btn-secondary" onClick={onBack}>返回列表</button>
   {record?<><header className="card" style={{padding:'1.25rem'}}>
    <h1>{record.homeTeamName} — {record.awayTeamName}</h1>

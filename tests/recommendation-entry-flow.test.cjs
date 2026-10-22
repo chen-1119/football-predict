@@ -12,6 +12,9 @@ test('BestTips honors login return tab, keeps query state through tab changes an
   if(id==='react/jsx-runtime')return jsx;
   if(id==='react')return{useState:initial=>[initial(),()=>{}],useEffect:()=>{}};
   if(id.endsWith('/useOfficialSchedule'))return{useOfficialSchedule:()=>({data:null,loading:false,failed:true})};
+  if(id.endsWith('/useOfficialEditorialReferences'))return{useOfficialEditorialReferences:()=>({data:null,loading:false,failed:true})};
+  if(id.endsWith('/OfficialEditorialReferences'))return{OfficialReferenceCard:'official-reference'};
+  if(id.endsWith('/publishedMatchRecommendation'))return{reviewedLatestRecord:record=>record};
   if(id.endsWith('/OfficialSchedule'))return{OfficialScheduleCard:'official-card'};
   if(id==='react-router-dom')return{useSearchParams:()=>[new URLSearchParams(search),p=>{search='?'+p.toString();}]};
   if(id.endsWith('/AppContextCore'))return{useApp:()=>({language:'zh'})};
