@@ -50,11 +50,11 @@ test('V4 revision identity keeps official ordered IDs and refuses authority down
  a.equal(same(first,{...first,eventAuthority:{...first.eventAuthority,officialOrderedTeamIds:[20,21]}}),false);
  const downgraded={...first};delete downgraded.eventAuthority;a.equal(same(first,downgraded),false);a.equal(same(downgraded,first),false);a.equal(same(downgraded,downgraded),true);
 });
-function runtime(v){
+function runtime(v,{onSnapshotRead=()=>{}}={}){
  const filename=path.resolve(__dirname,'../scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs'),native=Module.createRequire(filename),m={exports:{}};
  vm.runInNewContext(fs.readFileSync(filename,'utf8'),{module:m,exports:m.exports,process,Buffer,Date,__dirname:path.dirname(filename),require:id=>{
   if(id.endsWith('collectorAttestation.cjs'))return {loadCollectorTrustRegistry:()=>v.trustRegistry};
-  if(id==='./liveOfficialHandicap.cjs')return {readLiveOfficialSnapshot:()=>v.snapshot};return native(id);
+  if(id==='./liveOfficialHandicap.cjs')return {readLiveOfficialSnapshot:()=>{const snapshot=v.snapshot;onSnapshotRead(snapshot);return snapshot;}};return native(id);
  }});return m.exports;
 }
 function database({loseCommit=false,onQuery=()=>{}}={}){
@@ -92,18 +92,20 @@ test('V4 unknown COMMIT preserves the original freeze without inventing an ACK o
 });
 
 test('V4 rereads after passive readiness and refuses a now-stale source inside its single write transaction',async()=>{
- const v=f.setup(),r=runtime(v),db=database({onQuery(sql){if(sql.includes('pg_advisory'))for(const e of v.snapshot.endpoints){
-  e.requestedAt=f.stamp(f.NOW-31000);e.receivedAt=f.stamp(f.NOW-31000);f.resign(e,v.pair);
+ const v=f.setup(),initial=v.snapshot,original=JSON.stringify(initial),reads=[],r=runtime(v,{onSnapshotRead:snapshot=>reads.push(snapshot)}),db=database({onQuery(sql){if(sql.includes('pg_advisory')){
+  v.snapshot=structuredClone(v.snapshot);for(const e of v.snapshot.endpoints){e.requestedAt=f.stamp(f.NOW-31000);e.receivedAt=f.stamp(f.NOW-31000);f.resign(e,v.pair);}
  }}});
  await a.rejects(r.publish(v.draft,{pool:db.pool,expectedDraftHash:p.hash(v.draft)}),{code:'REVIEWED_ANALYSIS_OFFICIAL_EVENT_FRESH_CLOCK'});
+ a(reads.length>=2);a.equal(reads[0],initial);a.equal(reads.at(-1),v.snapshot);a.notEqual(initial,v.snapshot);a.equal(JSON.stringify(initial),original);
  a.equal(db.log[0],'SELECT clock_timestamp() AS now');a.equal(db.log.filter(x=>x.startsWith('BEGIN')).length,1);
  a.equal(db.log.filter(x=>x==='ROLLBACK').length,1);a.equal(db.log.filter(x=>x.startsWith('INSERT')).length,0);a.equal(db.rows().size,0);
 });
 
 test('V4 transaction rejects newly closed sale after readiness without reusing a previously verified snapshot',async()=>{
- const v=f.setup(),r=runtime(v),db=database({onQuery(sql){if(sql.includes('pg_advisory'))for(const e of v.snapshot.endpoints){
-  rows(e)[0].sellStatus=2;f.resign(e,v.pair);
+ const v=f.setup(),initial=v.snapshot,original=JSON.stringify(initial),reads=[],r=runtime(v,{onSnapshotRead:snapshot=>reads.push(snapshot)}),db=database({onQuery(sql){if(sql.includes('pg_advisory')){
+  v.snapshot=structuredClone(v.snapshot);for(const e of v.snapshot.endpoints){rows(e)[0].sellStatus=2;f.resign(e,v.pair);}
  }}});
  await a.rejects(r.publish(v.draft,{pool:db.pool,expectedDraftHash:p.hash(v.draft)}),{code:'REVIEWED_ANALYSIS_OFFICIAL_EVENT_SALE'});
+ a(reads.length>=2);a.equal(reads[0],initial);a.equal(reads.at(-1),v.snapshot);a.notEqual(initial,v.snapshot);a.equal(JSON.stringify(initial),original);
  a.equal(db.log.filter(x=>x.startsWith('BEGIN')).length,1);a.equal(db.log.filter(x=>x.startsWith('INSERT')).length,0);a.equal(db.rows().size,0);
 });
