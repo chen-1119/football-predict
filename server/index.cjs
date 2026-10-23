@@ -6,7 +6,7 @@ const { spawn } = require("node:child_process");
 const { Worker } = require("node:worker_threads");
 const crypto = require("node:crypto");
 const { createAccounts } = require("./accounts.cjs");
-const { publicFixture, publicOverview } = require("./publicProduct.cjs");
+const { publicFixture, publicOverview, publicOfficialCurrent, resolvePublicScheduleIdentity } = require("./publicProduct.cjs");
 const zlib = require("node:zlib");
 const { readStorageMode, retiredSqliteStatus } = require("./storageMode.cjs");
 const storageMode = readStorageMode();
@@ -11449,6 +11449,12 @@ const readAccountResultEvent = async (identity) => {
 const accountSystem = postgresPool ? createAccounts({
   pool: postgresPool,
   readMatch: async (id) => {
+    if (/^schedule_\d{8}_[1-9]\d{0,19}$/.test(id)) {
+      const match=await resolvePublicScheduleIdentity(id,{readNative:readMatchById,readOfficial:require('./officialScheduleRead.cjs').read});
+      const event=await readAccountResultEvent(match);
+      return match?{match,result:event?{verified:true,state:event.state==='FINAL'?'FINISHED':event.state,
+        score:event.state==='FINAL'?`${event.scoreHome}-${event.scoreAway}`:null,source:event.source,asOf:event.observedAt}:null}:null;
+    }
     const match=await readMatchById(id);
     const event=await readAccountResultEvent(match);
     return match ? {match,result:event?{verified:true,state:event.state==='FINAL'?'FINISHED':event.state,
@@ -11498,7 +11504,19 @@ const buildPublicProduct = async () => {
         recommendationAuthorityPolicy: currentRecommendationPolicy,
       }),
     ]);
-    const value=publicOverview(current,centerPayload);
+    const maxSourceAgeMinutes=boundedRuntimeEnv(process.env,"SOURCE_MAX_AGE_MINUTES",{
+      fallback:20,min:1,max:30*24*60,
+    });
+    const now=Date.now();
+    let fixtureCurrent=current;
+    try {
+      const day=new Date(now+8*3600000).toISOString().slice(0,10);
+      fixtureCurrent=publicOfficialCurrent(require('./officialScheduleRead.cjs').read(day),Date.now());
+    } catch {
+      // A failed signed read must not present a retained native snapshot as live.
+      fixtureCurrent={...current,stale:true};
+    }
+    const value=publicOverview(fixtureCurrent,centerPayload,Date.now(),maxSourceAgeMinutes*60000);
     publicProductCache={at:Date.now(),value};
     return value;
   })();
@@ -11526,9 +11544,12 @@ const handleApi = async (req, res, url) => {
       if (url.pathname === "/api/public/overview") return sendJsonCached(req,res,overview,{maxAgeSeconds:5});
       const id=decodeURIComponent(url.pathname.slice("/api/public/matches/".length));
       if (!/^[a-zA-Z0-9_-]{1,120}$/.test(id)) return sendJson(res,{ok:false,error:"invalid match"},400);
-      const match=overview.matches.find(row=>row.id===id)||publicFixture(await readMatchById(id));
+      const currentMatch=overview.matches.find(row=>row.id===id);
+      const match=currentMatch||publicFixture(/^schedule_/.test(id)
+        ?await resolvePublicScheduleIdentity(id,{readNative:readMatchById,readOfficial:require('./officialScheduleRead.cjs').read})
+        :await readMatchById(id));
       if (!match) return sendJson(res,{ok:false,error:"match not found"},404);
-      return sendJsonCached(req,res,{ok:true,match,sourceUpdatedAt:overview.sourceUpdatedAt,stale:overview.stale,example:overview.review.example?.matchId===id?overview.review.example:null,referenceOnly:true},{maxAgeSeconds:5});
+      return sendJsonCached(req,res,{ok:true,match,sourceUpdatedAt:currentMatch?overview.sourceUpdatedAt:null,stale:currentMatch?overview.stale:true,example:overview.review.example?.matchId===id?overview.review.example:null,referenceOnly:true},{maxAgeSeconds:5});
     } catch {return sendJson(res,{ok:false,error:"public data temporarily unavailable"},503);}
   }
 

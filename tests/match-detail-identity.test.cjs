@@ -139,7 +139,10 @@ test('both detail entrypoints use dedicated admission while publisher/accounts k
   const src=fs.readFileSync(require.resolve('../server/index.cjs'),'utf8');
   assert.match(src,/const buildV1MatchPayload[\s\S]*?readMatchDetailById\(decodedId, \{ basePublication, recommendationAuthorityPolicy: currentRecommendationPolicy \}\)/);
   assert.match(src,/if \(matchDetailRoute\)[\s\S]*?readMatchDetailById\(matchDetailRoute\[1\], \{ recommendationAuthorityPolicy: currentRecommendationPolicy \}\)/);
-  assert.match(src,/readMatch: async \(id\) => \{\s*const match=await readMatchById\(id\)/);
+  const accountReader=src.slice(src.indexOf('  readMatch: async (id) => {'),src.indexOf('  readDecision: async (id) => {'));
+  assert.match(accountReader,/const match=await readMatchById\(id\)/);
+  assert.doesNotMatch(accountReader,/readMatchDetailById/);
+  assert.match(accountReader,/resolvePublicScheduleIdentity\(id,\{readNative:readMatchById,readOfficial:require\('\.\/officialScheduleRead\.cjs'\)\.read\}\)/);
   const page=fs.readFileSync(require.resolve('../src/pages/MatchDetail.tsx'),'utf8');
   assert.match(page,/response.status === 304 && cached[\s\S]*?await acceptMatchDetail\(matchId,cached.match\)/);
   assert.match(page,/response.ok && await acceptMatchDetail\(matchId,matchPayload\)/);

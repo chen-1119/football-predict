@@ -240,3 +240,33 @@ for(const [label,change]of [
  ['changed DB affinity',v=>v.observed.ordinaryPointerAffinity=false],['health failure',v=>v.observed.servingHealthAccepted=false],['archive failure',v=>v.observed.globalArchiveAccepted=false],
  ['pending recovery',v=>v.observed.recoveryPending=true],['legacy repair authorization',v=>v.observed.oldAuthorizationPresent=true]
 ])test('r910 freshness preparation refuses '+label,()=>{const v=freshnessFixture();change(v);a.equal(p.evaluate(v.auth,v.worker,v.observed).preparationAllowed,false);});
+
+function publicCurrentFixture(){
+ const v=freshnessFixture(),shift=Date.parse('2026-10-23T01:20:00.000Z')-Date.parse(v.worker.checkedAt),clock=s=>new Date(Date.parse(s)+shift).toISOString();
+ Object.assign(v.auth,{version:p.PUBLIC_CURRENT_VERSION,reason:'restore-public-current-schedule-and-staleness-preserving-r911-original-gap',baseRuntimeSha256:p.PUBLIC_CURRENT_BASE,createdAt:clock(v.auth.createdAt),expiresAt:clock(v.auth.expiresAt)});
+ Object.assign(v.auth.incident,{workerMainPid:'763458',workerStartedAt:'2026-10-22T09:33:55.000Z',cycleStartedAt:clock(v.auth.incident.cycleStartedAt),cycleFinishedAt:clock(v.auth.incident.cycleFinishedAt),journalTimestampUs:String(BigInt(v.auth.incident.journalTimestampUs)+BigInt(shift)*1000n)});
+ for(const path of p.PUBLIC_CURRENT_FILES)v.auth.files.push({path,beforeSha256:null,afterSha256:'b'.repeat(64)});
+ v.auth.files.sort((x,y)=>x.path<y.path?-1:1);v.observed.files=v.auth.files.map(r=>({path:r.path,sha256:r.beforeSha256}));
+ for(const s of[v.worker.serviceBefore,v.worker.serviceAfter])Object.assign(s,{MainPID:'763458',ExecMainStartTimestamp:'Thu 2026-10-22 09:33:55 UTC'});
+ v.worker.status.pid=763458;v.worker.checkedAt=clock(v.worker.checkedAt);v.worker.status.checkedAt=v.worker.checkedAt;
+ v.worker.status.lastCycle.startedAt=clock(v.worker.status.lastCycle.startedAt);v.worker.status.lastCycle.finishedAt=clock(v.worker.status.lastCycle.finishedAt);
+ Object.assign(v.observed,{runtimeSha256:p.PUBLIC_CURRENT_BASE,completeSha256:p.PUBLIC_CURRENT_BASE,completedAt:v.worker.checkedAt});v.observed.journal[0].timestampUs=v.auth.incident.journalTimestampUs;return v;
+}
+test('r911 public current preparation preserves original29 and false worker with no cutover authority',()=>{
+ const v=publicCurrentFixture(),before=JSON.stringify(v),result=p.evaluate(v.auth,v.worker,v.observed);
+ a.equal(result.preparationAllowed,true);a.equal(result.workerHealthy,false);a.equal(result.readyToCutover,false);a.equal(result.productionWrites,0);a.equal(JSON.stringify(v),before);
+ const old=Date.now;Date.now=()=>Date.parse(v.worker.checkedAt);try{const text=p.buildProbe(v.auth);new(require('node:vm').Script)(text);a(text.includes(p.PUBLIC_CURRENT_VERSION));a(text.includes(p.PUBLIC_CURRENT_BASE));a(text.includes(JSON.stringify(p.PUBLIC_CURRENT_FILES)));a(Buffer.byteLength(text)<120000);}finally{Date.now=old;}
+});
+for(const name of [...p.PUBLIC_CURRENT_FILES,...p.FRESH_FILES])test('r911 public current requires inherited and new source '+name,()=>{
+ const v=publicCurrentFixture();v.auth.files=v.auth.files.filter(r=>r.path!==name);v.observed.files=v.observed.files.filter(r=>r.path!==name);a.equal(p.evaluate(v.auth,v.worker,v.observed).preparationAllowed,false);
+});
+for(const[label,change]of[
+ ['old version',v=>v.auth.version=p.FRESH_VERSION],['old base',v=>v.auth.baseRuntimeSha256=p.FRESH_BASE],['old reason',v=>v.auth.reason='restore-official-publication-freshness-preserving-r910-original-gap'],
+ ['old marker',v=>v.observed.runtimeSha256=p.FRESH_BASE],['incomplete marker',v=>v.observed.completeSha256=p.FRESH_BASE],['old PID',v=>v.auth.incident.workerMainPid='623688'],
+ ['changed incarnation',v=>v.worker.serviceAfter.ExecMainStartTimestamp='Thu 2026-10-22 09:33:56 UTC'],['wrong start',v=>v.auth.incident.workerStartedAt='2026-10-22T09:34:25.000Z'],
+ ['expired',v=>v.auth.expiresAt=v.worker.checkedAt],['extended',v=>v.auth.expiresAt='2026-10-23T06:00:00.000Z'],['freshness failure reused as incident',v=>v.observed.journal[0].message='REVIEWED_ANALYSIS_OFFICIAL_EVENT_FRESH_CLOCK'],
+ ['original current changed',v=>v.observed.current.sha256='0'.repeat(64)],['original warehouse changed',v=>v.observed.warehouse.sha256='0'.repeat(64)],['gap omitted',v=>v.observed.gap.pop()],
+ ['record changed',v=>v.observed.gap[0].recordSha256='0'.repeat(64)],['invented companion',v=>v.observed.indexMatches=1],['schema changed',v=>v.observed.dataContract=[]],
+ ['reader closure changed',v=>v.observed.baselineClosure[0].sha256='0'.repeat(64)],['normal serving health false',v=>v.observed.servingHealthAccepted=false],['global archive false',v=>v.observed.globalArchiveAccepted=false],
+ ['PG pointer mismatch',v=>v.observed.ordinaryPointerAffinity=false],['skipped',v=>v.worker.status.lastCycle.skipped=true],['healthy ordinary route',v=>v.worker.status.lastCycle.ok=true],['pending recovery',v=>v.observed.recoveryPending=true]
+])test('r911 public current refuses '+label,()=>{const v=publicCurrentFixture();change(v);a.equal(p.evaluate(v.auth,v.worker,v.observed).preparationAllowed,false);});
