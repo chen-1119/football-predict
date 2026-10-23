@@ -22,6 +22,27 @@ async function harness({data=overview(),failure=false,matchId,route={pathname:'/
  const render=()=>{cursor=0;const tree=mod.PublicBrowse();while(effects.length)effects.shift()();return tree;};let tree=render();assert.match(words(tree),/正在读取/);await flush();return{render,fetches,requests,document,window,timers,flush,setResponder:fn=>{responder=fn;},route:next=>{requestedId=next;route.pathname='/match/'+next;return render();},async advance(ms){const end=now+ms;for(;;){const due=[...timers].filter(([,job])=>job.at<=end).sort((a,b)=>a[1].at-b[1].at||a[0]-b[0])[0];if(!due)break;now=due[1].at;timers.delete(due[0]);due[1].fn();await flush();}now=end;await flush();},unmount(){for(const cell of cells)cell?.cleanup?.();},get search(){return search;}};
 }
 const cards=t=>nodes(t,n=>n.type==='article'&&n.props.className==='public-fixture');
+
+test('public schedule preserves stopped sale state and detail has its own stale clock',async()=>{
+ const data=overview();data.matches[0].saleState='closed';
+ const list=await harness({data});assert.match(words(list.render()),/官方当前停售/);
+ const u=await harness({data,matchId:'sporttery_a',route:{pathname:'/match/sporttery_a',search:'',hash:'',state:null}});
+ u.setResponder(url=>response(url.includes('/matches/')?{match:data.matches[0],sourceUpdatedAt:null,stale:true}:data));
+ await u.advance(30000);const text=words(u.render());
+ assert.match(text,/赛程更新滞后/);assert.match(text,/赛程源更新.*待更新/);
+ assert.match(text,/官方当前停售/);
+});
+
+test('stale fixture warning is visible once on list, detail and review without replacing saved data',async()=>{
+ for(const pathname of ['/fixtures','/match/sporttery_a','/review']){
+  const data=overview();data.stale=true;
+  const u=await harness({data,matchId:pathname.startsWith('/match/')?'sporttery_a':undefined,route:{pathname,search:'',hash:'',state:null}});
+  const t=u.render(),warnings=nodes(t,n=>n.type==='p'&&words(n)==='赛程更新滞后，当前展示最近一次快照。');
+  assert.equal(warnings.length,1,pathname);assert.equal(warnings[0].props.role,'status');
+  if(pathname!=='/review')assert.match(words(cards(t)[0]),/阿森纳/);
+  u.unmount();
+ }
+});
 test('public fixtures select current business date and keep search/date in URL',async()=>{const u=await harness();let t=u.render();assert.equal(cards(t).length,1);assert.match(words(cards(t)[0]),/阿森纳/);nodes(t,n=>n.type==='select')[0].props.onChange({target:{value:'2026-09-23'}});t=u.render();assert.equal(cards(t).length,2);assert.match(words(cards(t)[0]),/乌迪内斯/);assert.match(u.search,/date=2026-09-23/);nodes(t,n=>n.type==='input')[0].props.onChange({target:{value:'  博洛尼亚  '}});assert.equal(cards(u.render()).length,1);assert.match(u.search,/q=/);});
 test('case-insensitive English search and clear-filter empty action are usable',async()=>{const u=await harness();let t=u.render();nodes(t,n=>n.type==='input')[0].props.onChange({target:{value:' ARSENAL '}});assert.equal(cards(u.render()).length,1);nodes(u.render(),n=>n.type==='input')[0].props.onChange({target:{value:'不存在'}});t=u.render();assert.equal(cards(t).length,0);assert.match(words(t),/没有匹配的比赛/);nodes(t,n=>n.type==='button'&&words(n)==='清除搜索')[0].props.onClick();assert.equal(cards(u.render()).length,1);});
 test('public quote snapshots distinguish missing prices from unverified time without exposing providers or inventing odds',async()=>{const u=await harness(),t=u.render(),c=cards(t)[0];assert.match(words(c),/胜平负 SP 有缺项/);assert.match(words(c),/报价记录 09\/22 13:55/);assert.match(words(c),/1\.80/);assert.match(words(c),/客胜—/);assert.doesNotMatch(words(c),/500-sp|报价来源|官方赔率/);nodes(t,n=>n.type==='select')[0].props.onChange({target:{value:'2026-09-23'}});const dayCards=cards(u.render());const missing=words(dayCards[0]),unverified=words(dayCards[1]);assert.match(missing,/胜平负 SP 有缺项/);assert.match(missing,/平局—/);assert.doesNotMatch(missing,/来源未标注/);assert.match(unverified,/赛程胜平负 SP 已取得，报价时间未核验/);assert.match(unverified,/主胜1\.90平局3\.20客胜4\.10/);assert.doesNotMatch(unverified,/报价记录|胜平负 SP 有缺项/);});
