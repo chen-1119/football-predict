@@ -1,356 +1,13 @@
 {
   "version": 1,
   "source": "pre-match-signal-layer",
-  "updatedAt": "2026-10-28T00:58:18.308Z",
-  "count": 28,
+  "updatedAt": "2026-10-28T01:03:09.925Z",
+  "count": 27,
   "matches": {
-    "2042241": {
-      "version": "sync-pre-match-signals-v53-temporal-evidence",
-      "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
-      "sourceMatchId": "2042241",
-      "matchId": "fivehundred_2042241",
-      "matchNo": "周日029",
-      "kickoffTime": "2026-10-26T09:00:00+08:00",
-      "homeTeamName": "洛杉矶FC",
-      "awayTeamName": "洛杉矶银河",
-      "quality": {
-        "version": "pre-match-quality-v53-temporal-evidence",
-        "evidenceCoverage": {
-          "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
-          "cutoff": null,
-          "sides": {
-            "home": {
-              "lineupStatus": "unknown",
-              "confirmedPlayers": 0,
-              "projectedPlayers": 0,
-              "lineupSource": null,
-              "injuryStatus": "unknown",
-              "injuryPlayers": null,
-              "conflicts": null
-            },
-            "away": {
-              "lineupStatus": "unknown",
-              "confirmedPlayers": 0,
-              "projectedPlayers": 0,
-              "lineupSource": null,
-              "injuryStatus": "unknown",
-              "injuryPlayers": null,
-              "conflicts": null
-            }
-          },
-          "windows": {
-            "confirmed": "unknown",
-            "projected": "cutoff-unknown",
-            "injuries": "unknown"
-          },
-          "confirmedBoth": false,
-          "projectedAny": false,
-          "degraded": true,
-          "missingInjuriesMean": "unknown-not-healthy",
-          "numericProbabilityAdjustment": null,
-          "identityScope": "caller-bound-event;display-names-never-create-player-mappings",
-          "modelPolicy": "use-only-a-validated-model-whose-required-features-are-known;never-redistribute-missing-weights",
-          "formalEligible": false
-        },
-        "score": 28,
-        "sourceQuality": "low",
-        "recommendationUsable": true,
-        "analysisComplete": false,
-        "severeMissingCount": 0,
-        "trustPenalty": 7,
-        "components": {
-          "referee": {
-            "key": "referee",
-            "label": {
-              "zh": "裁判牌数",
-              "en": "Referee cards"
-            },
-            "status": "missing",
-            "score": 0,
-            "source": "missing",
-            "note": {
-              "zh": "未接入真实裁判牌数",
-              "en": "No verified referee card profile"
-            },
-            "evidenceType": "official-referee-assignment",
-            "availabilityState": "missing_overdue",
-            "eligibleAtCutoff": false,
-            "cutoffTime": "2026-10-25T15:00:00.000Z",
-            "kickoffTime": "2026-10-26T01:00:00.000Z",
-            "sourceObservedAt": "2026-10-25T13:36:45.346Z",
-            "expectedPublishedAt": "2026-10-25T01:00:00.000Z"
-          },
-          "teamCards": {
-            "key": "teamCards",
-            "label": {
-              "zh": "球队牌数历史",
-              "en": "Team card history"
-            },
-            "status": "missing",
-            "score": 0,
-            "source": "missing",
-            "note": {
-              "zh": "未形成可用球队黄红牌样本",
-              "en": "No usable team card sample"
-            }
-          },
-          "lineup": {
-            "key": "lineup",
-            "label": {
-              "zh": "确认首发/预计阵容",
-              "en": "Confirmed/projected lineup"
-            },
-            "status": "not_yet_publishable",
-            "score": 0,
-            "source": "missing",
-            "note": {
-              "zh": "正式首发尚未到常规发布时间，不计为数据缺口",
-              "en": "Confirmed XI is not normally published yet and is not counted as a gap"
-            },
-            "evidenceType": "confirmed-lineup",
-            "confirmed": false,
-            "availabilityState": "not_yet_publishable",
-            "eligibleAtCutoff": false,
-            "cutoffTime": "2026-10-25T15:00:00.000Z",
-            "kickoffTime": "2026-10-26T01:00:00.000Z",
-            "sourceObservedAt": "2026-10-25T13:36:45.346Z",
-            "expectedPublishedAt": "2026-10-25T23:45:00.000Z"
-          },
-          "injuries": {
-            "key": "injuries",
-            "label": {
-              "zh": "伤停",
-              "en": "Injuries"
-            },
-            "status": "not_yet_publishable",
-            "score": 0,
-            "source": "missing",
-            "note": {
-              "zh": "赛前伤停名单尚未到常规发布时间，不计为数据缺口",
-              "en": "Squad availability is not normally published yet and is not counted as a gap"
-            },
-            "evidenceType": "squad-availability",
-            "availabilityState": "not_yet_publishable",
-            "eligibleAtCutoff": false,
-            "cutoffTime": "2026-10-25T15:00:00.000Z",
-            "kickoffTime": "2026-10-26T01:00:00.000Z",
-            "sourceObservedAt": "2026-10-25T13:36:45.346Z",
-            "expectedPublishedAt": "2026-10-25T19:00:00.000Z"
-          },
-          "xg": {
-            "key": "xg",
-            "label": {
-              "zh": "xG/xGA",
-              "en": "xG/xGA"
-            },
-            "status": "not_yet_publishable",
-            "score": 0,
-            "source": "missing",
-            "note": {
-              "zh": "缺少历史xG或明确标注的赛前估算",
-              "en": "No historical xG or explicitly labelled pre-match estimate"
-            },
-            "evidenceType": "pre-match-xg-estimate",
-            "availabilityState": "not_yet_publishable",
-            "eligibleAtCutoff": false,
-            "cutoffTime": "2026-10-25T15:00:00.000Z",
-            "kickoffTime": "2026-10-26T01:00:00.000Z",
-            "sourceObservedAt": "2026-10-25T15:00:00.000Z",
-            "expectedPublishedAt": "2026-10-26T01:00:00.000Z"
-          },
-          "weather": {
-            "key": "weather",
-            "label": {
-              "zh": "天气/场地",
-              "en": "Weather/pitch"
-            },
-            "status": "missing",
-            "score": 0,
-            "source": "missing",
-            "note": {
-              "zh": "未接入天气/场地",
-              "en": "No weather or pitch signal"
-            }
-          },
-          "market": {
-            "key": "market",
-            "label": {
-              "zh": "盘口校验",
-              "en": "Market validation"
-            },
-            "status": "verified",
-            "score": 100,
-            "source": "sporttery",
-            "note": {
-              "zh": "已有胜平负/让球盘口校验源",
-              "en": "Market validation source available"
-            }
-          },
-          "motivation": {
-            "key": "motivation",
-            "label": {
-              "zh": "排名/战意",
-              "en": "Table/motivation"
-            },
-            "status": "estimated",
-            "score": 62,
-            "source": "rank-stage-context",
-            "note": {
-              "zh": "已接入排名或赛程阶段信息",
-              "en": "Rank or stage context loaded"
-            }
-          },
-          "strength": {
-            "key": "strength",
-            "label": {
-              "zh": "Elo球队强度",
-              "en": "Elo team strength"
-            },
-            "status": "missing",
-            "score": 0,
-            "source": "missing",
-            "note": {
-              "zh": "未形成可审计Elo强度",
-              "en": "No auditable Elo strength"
-            }
-          },
-          "form": {
-            "key": "form",
-            "label": {
-              "zh": "近期状态",
-              "en": "Recent form"
-            },
-            "status": "missing",
-            "score": 0,
-            "source": "missing",
-            "note": {
-              "zh": "未形成近期状态样本",
-              "en": "No recent-form sample"
-            }
-          }
-        },
-        "missing": [
-          {
-            "key": "referee",
-            "zh": "缺少裁判牌数",
-            "en": "Missing Referee cards",
-            "severity": "low",
-            "weight": 4
-          },
-          {
-            "key": "teamCards",
-            "zh": "缺少球队牌数历史",
-            "en": "Missing Team card history",
-            "severity": "medium",
-            "weight": 4
-          },
-          {
-            "key": "weather",
-            "zh": "缺少天气/场地",
-            "en": "Missing Weather/pitch",
-            "severity": "low",
-            "weight": 2
-          },
-          {
-            "key": "strength",
-            "zh": "缺少Elo球队强度",
-            "en": "Missing Elo team strength",
-            "severity": "medium",
-            "weight": 18
-          },
-          {
-            "key": "form",
-            "zh": "缺少近期状态",
-            "en": "Missing Recent form",
-            "severity": "medium",
-            "weight": 16
-          }
-        ],
-        "lowQuality": [
-          "motivation"
-        ],
-        "notYetPublishable": [
-          {
-            "key": "lineup",
-            "zh": "确认首发/预计阵容尚未到正常发布时间",
-            "en": "Confirmed/projected lineup is not normally published yet",
-            "expectedPublishedAt": "2026-10-25T23:45:00.000Z",
-            "weight": 0
-          },
-          {
-            "key": "injuries",
-            "zh": "伤停尚未到正常发布时间",
-            "en": "Injuries is not normally published yet",
-            "expectedPublishedAt": "2026-10-25T19:00:00.000Z",
-            "weight": 0
-          },
-          {
-            "key": "xg",
-            "zh": "xG/xGA尚未到正常发布时间",
-            "en": "xG/xGA is not normally published yet",
-            "expectedPublishedAt": "2026-10-26T01:00:00.000Z",
-            "weight": 0
-          }
-        ],
-        "postCutoffOnly": [],
-        "weights": {
-          "referee": 4,
-          "teamCards": 4,
-          "lineup": 0,
-          "injuries": 0,
-          "xg": 12,
-          "weather": 2,
-          "market": 18,
-          "motivation": 8,
-          "strength": 18,
-          "form": 16
-        },
-        "connected": {
-          "referee": false,
-          "teamCards": false,
-          "lineup": false,
-          "injuries": false,
-          "xg": false,
-          "weather": false,
-          "market": true,
-          "motivation": true,
-          "strength": false,
-          "form": false
-        },
-        "advisory": {
-          "webConsensus": {
-            "version": "web-consensus-advisory-v1",
-            "available": false,
-            "eligibleForRiskDisplay": false,
-            "eligibleForNumericModel": false,
-            "eligibleForFormalQuality": false,
-            "weight": 0,
-            "source": "missing",
-            "confidence": 0,
-            "conflictFreeze": false,
-            "blockers": [],
-            "summary": {
-              "zh": "未接入网络观点；不影响正式质量分",
-              "en": "No web consensus; formal quality is unchanged"
-            }
-          }
-        },
-        "summary": {
-          "zh": "赛前数据质量 28/100，缺口偏多；3项尚未到发布时间且不扣分。",
-          "en": "Pre-match data quality 28/100, low coverage; 3 not-yet-publishable items carry no penalty."
-        }
-      },
-      "qualitySummary": {
-        "zh": "赛前数据质量 28/100，缺口偏多；3项尚未到发布时间且不扣分。",
-        "en": "Pre-match data quality 28/100, low coverage; 3 not-yet-publishable items carry no penalty."
-      }
-    },
     "2042242": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042242",
       "matchId": "fivehundred_2042242",
       "matchNo": "周一001",
@@ -361,7 +18,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -706,7 +363,7 @@
     "2042243": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042243",
       "matchId": "fivehundred_2042243",
       "matchNo": "周一002",
@@ -717,7 +374,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -1062,7 +719,7 @@
     "2042244": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042244",
       "matchId": "fivehundred_2042244",
       "matchNo": "周一003",
@@ -1073,7 +730,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -1418,7 +1075,7 @@
     "2042245": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042245",
       "matchId": "fivehundred_2042245",
       "matchNo": "周一004",
@@ -1429,7 +1086,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -1761,7 +1418,7 @@
     "2042291": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042291",
       "matchId": "fivehundred_2042291",
       "matchNo": "周二001",
@@ -1772,7 +1429,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -2103,7 +1760,7 @@
     "2042292": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042292",
       "matchId": "fivehundred_2042292",
       "matchNo": "周二002",
@@ -2114,7 +1771,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -2439,7 +2096,7 @@
     "2042293": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042293",
       "matchId": "fivehundred_2042293",
       "matchNo": "周二003",
@@ -2450,7 +2107,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -2781,7 +2438,7 @@
     "2042294": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042294",
       "matchId": "fivehundred_2042294",
       "matchNo": "周二004",
@@ -2792,7 +2449,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -3124,7 +2781,7 @@
     "2042295": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042295",
       "matchId": "fivehundred_2042295",
       "matchNo": "周二005",
@@ -3135,7 +2792,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -3480,7 +3137,7 @@
     "2042296": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042296",
       "matchId": "fivehundred_2042296",
       "matchNo": "周二006",
@@ -3491,7 +3148,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -3823,7 +3480,7 @@
     "2042297": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042297",
       "matchId": "fivehundred_2042297",
       "matchNo": "周二007",
@@ -3834,7 +3491,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -4166,7 +3823,7 @@
     "2042298": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042298",
       "matchId": "fivehundred_2042298",
       "matchNo": "周二008",
@@ -4177,7 +3834,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -4509,7 +4166,7 @@
     "2042299": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042299",
       "matchId": "fivehundred_2042299",
       "matchNo": "周二009",
@@ -4520,7 +4177,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -4865,7 +4522,7 @@
     "2042300": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042300",
       "matchId": "fivehundred_2042300",
       "matchNo": "周二010",
@@ -4876,7 +4533,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -5221,7 +4878,7 @@
     "2042301": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042301",
       "matchId": "fivehundred_2042301",
       "matchNo": "周三001",
@@ -5232,7 +4889,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -5293,7 +4950,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T10:00:00.000Z",
             "kickoffTime": "2026-10-28T10:00:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-27T10:00:00.000Z"
           },
           "teamCards": {
@@ -5329,7 +4986,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T10:00:00.000Z",
             "kickoffTime": "2026-10-28T10:00:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T08:45:00.000Z"
           },
           "injuries": {
@@ -5350,7 +5007,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T10:00:00.000Z",
             "kickoffTime": "2026-10-28T10:00:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T04:00:00.000Z"
           },
           "xg": {
@@ -5563,7 +5220,7 @@
     "2042302": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042302",
       "matchId": "fivehundred_2042302",
       "matchNo": "周三002",
@@ -5574,7 +5231,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -5635,7 +5292,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T10:00:00.000Z",
             "kickoffTime": "2026-10-28T10:00:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:53.336Z",
+            "sourceObservedAt": "2026-10-28T01:02:51.225Z",
             "expectedPublishedAt": "2026-10-27T10:00:00.000Z"
           },
           "teamCards": {
@@ -5671,7 +5328,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T10:00:00.000Z",
             "kickoffTime": "2026-10-28T10:00:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:53.336Z",
+            "sourceObservedAt": "2026-10-28T01:02:51.225Z",
             "expectedPublishedAt": "2026-10-28T08:45:00.000Z"
           },
           "injuries": {
@@ -5692,7 +5349,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T10:00:00.000Z",
             "kickoffTime": "2026-10-28T10:00:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:53.336Z",
+            "sourceObservedAt": "2026-10-28T01:02:51.225Z",
             "expectedPublishedAt": "2026-10-28T04:00:00.000Z"
           },
           "xg": {
@@ -5899,7 +5556,7 @@
     "2042303": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042303",
       "matchId": "fivehundred_2042303",
       "matchNo": "周三003",
@@ -5910,7 +5567,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -5971,7 +5628,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T10:00:00.000Z",
             "kickoffTime": "2026-10-28T10:00:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-27T10:00:00.000Z"
           },
           "teamCards": {
@@ -6007,7 +5664,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T10:00:00.000Z",
             "kickoffTime": "2026-10-28T10:00:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T08:45:00.000Z"
           },
           "injuries": {
@@ -6028,7 +5685,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T10:00:00.000Z",
             "kickoffTime": "2026-10-28T10:00:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T04:00:00.000Z"
           },
           "xg": {
@@ -6241,7 +5898,7 @@
     "2042304": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042304",
       "matchId": "fivehundred_2042304",
       "matchNo": "周三004",
@@ -6252,7 +5909,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -6313,7 +5970,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T17:00:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-27T17:00:00.000Z"
           },
           "teamCards": {
@@ -6349,7 +6006,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T17:00:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T15:45:00.000Z"
           },
           "injuries": {
@@ -6370,7 +6027,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T17:00:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T11:00:00.000Z"
           },
           "xg": {
@@ -6584,7 +6241,7 @@
     "2042305": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042305",
       "matchId": "fivehundred_2042305",
       "matchNo": "周三005",
@@ -6595,7 +6252,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -6656,7 +6313,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T17:30:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-27T17:30:00.000Z"
           },
           "teamCards": {
@@ -6692,7 +6349,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T17:30:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T16:15:00.000Z"
           },
           "injuries": {
@@ -6713,7 +6370,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T17:30:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T11:30:00.000Z"
           },
           "xg": {
@@ -6946,7 +6603,7 @@
     "2042306": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042306",
       "matchId": "fivehundred_2042306",
       "matchNo": "周三006",
@@ -6957,7 +6614,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -7018,7 +6675,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T17:30:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-27T17:30:00.000Z"
           },
           "teamCards": {
@@ -7054,7 +6711,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T17:30:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T16:15:00.000Z"
           },
           "injuries": {
@@ -7075,7 +6732,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T17:30:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T11:30:00.000Z"
           },
           "xg": {
@@ -7308,7 +6965,7 @@
     "2042307": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042307",
       "matchId": "fivehundred_2042307",
       "matchNo": "周三007",
@@ -7319,7 +6976,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -7380,7 +7037,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T17:30:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-27T17:30:00.000Z"
           },
           "teamCards": {
@@ -7416,7 +7073,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T17:30:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T16:15:00.000Z"
           },
           "injuries": {
@@ -7437,7 +7094,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T17:30:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T11:30:00.000Z"
           },
           "xg": {
@@ -7670,7 +7327,7 @@
     "2042310": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042310",
       "matchId": "fivehundred_2042310",
       "matchNo": "周三010",
@@ -7681,7 +7338,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -7742,7 +7399,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T19:45:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-27T19:45:00.000Z"
           },
           "teamCards": {
@@ -7778,7 +7435,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T19:45:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T18:30:00.000Z"
           },
           "injuries": {
@@ -7799,7 +7456,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T19:45:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T13:45:00.000Z"
           },
           "xg": {
@@ -8032,7 +7689,7 @@
     "2042311": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042311",
       "matchId": "fivehundred_2042311",
       "matchNo": "周三011",
@@ -8043,7 +7700,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -8104,7 +7761,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T19:45:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-27T19:45:00.000Z"
           },
           "teamCards": {
@@ -8140,7 +7797,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T19:45:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T18:30:00.000Z"
           },
           "injuries": {
@@ -8161,7 +7818,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T19:45:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T13:45:00.000Z"
           },
           "xg": {
@@ -8375,7 +8032,7 @@
     "2042312": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042312",
       "matchId": "fivehundred_2042312",
       "matchNo": "周三012",
@@ -8386,7 +8043,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -8447,7 +8104,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T19:45:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-27T19:45:00.000Z"
           },
           "teamCards": {
@@ -8483,7 +8140,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T19:45:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T18:30:00.000Z"
           },
           "injuries": {
@@ -8504,7 +8161,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T19:45:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T13:45:00.000Z"
           },
           "xg": {
@@ -8737,7 +8394,7 @@
     "2042313": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042313",
       "matchId": "fivehundred_2042313",
       "matchNo": "周三013",
@@ -8748,7 +8405,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -8809,7 +8466,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T19:45:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-27T19:45:00.000Z"
           },
           "teamCards": {
@@ -8845,7 +8502,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T19:45:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T18:30:00.000Z"
           },
           "injuries": {
@@ -8866,7 +8523,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T19:45:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T13:45:00.000Z"
           },
           "xg": {
@@ -9099,7 +8756,7 @@
     "2042314": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042314",
       "matchId": "fivehundred_2042314",
       "matchNo": "周三014",
@@ -9110,7 +8767,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -9171,7 +8828,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T19:45:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-27T19:45:00.000Z"
           },
           "teamCards": {
@@ -9207,7 +8864,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T19:45:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T18:30:00.000Z"
           },
           "injuries": {
@@ -9228,7 +8885,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T19:45:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T13:45:00.000Z"
           },
           "xg": {
@@ -9461,7 +9118,7 @@
     "2042315": {
       "version": "sync-pre-match-signals-v53-temporal-evidence",
       "source": "pre-match-signal-layer",
-      "updatedAt": "2026-10-28T00:58:18.308Z",
+      "updatedAt": "2026-10-28T01:03:09.925Z",
       "sourceMatchId": "2042315",
       "matchId": "fivehundred_2042315",
       "matchNo": "周三015",
@@ -9472,7 +9129,7 @@
         "version": "pre-match-quality-v53-temporal-evidence",
         "evidenceCoverage": {
           "version": "prematch-evidence-coverage-v1",
-          "asOf": "2026-10-28T00:58:18.308Z",
+          "asOf": "2026-10-28T01:03:09.925Z",
           "cutoff": null,
           "sides": {
             "home": {
@@ -9533,7 +9190,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T20:00:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-27T20:00:00.000Z"
           },
           "teamCards": {
@@ -9569,7 +9226,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T20:00:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T18:45:00.000Z"
           },
           "injuries": {
@@ -9590,7 +9247,7 @@
             "eligibleAtCutoff": false,
             "cutoffTime": "2026-10-28T14:00:00.000Z",
             "kickoffTime": "2026-10-28T20:00:00.000Z",
-            "sourceObservedAt": "2026-10-28T00:57:44.437Z",
+            "sourceObservedAt": "2026-10-28T01:02:41.776Z",
             "expectedPublishedAt": "2026-10-28T14:00:00.000Z"
           },
           "xg": {
@@ -9822,19 +9479,19 @@
     }
   },
   "summary": {
-    "rows": 28,
+    "rows": 27,
     "high": 0,
     "medium": 0,
-    "low": 28,
-    "recommendationUsable": 28,
+    "low": 27,
+    "recommendationUsable": 27,
     "analysisComplete": 0,
     "coverageByComponent": {
       "referee": {
-        "rows": 28,
+        "rows": 27,
         "verified": 0,
         "partial": 0,
         "estimated": 0,
-        "missing": 28,
+        "missing": 27,
         "not_yet_publishable": 0,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
@@ -9843,25 +9500,25 @@
         "nextSource": "official-league-or-association-match-report"
       },
       "teamCards": {
-        "rows": 28,
+        "rows": 27,
         "verified": 0,
         "partial": 0,
         "estimated": 14,
-        "missing": 14,
+        "missing": 13,
         "not_yet_publishable": 0,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
         "connected": 14,
-        "coverage": 0.5,
+        "coverage": 0.5185,
         "nextSource": "signed-football-data-discipline-history"
       },
       "lineup": {
-        "rows": 28,
+        "rows": 27,
         "verified": 0,
         "partial": 0,
         "estimated": 0,
         "missing": 6,
-        "not_yet_publishable": 22,
+        "not_yet_publishable": 21,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
         "connected": 0,
@@ -9869,12 +9526,12 @@
         "nextSource": "official-club-or-league-match-centre"
       },
       "injuries": {
-        "rows": 28,
+        "rows": 27,
         "verified": 0,
         "partial": 0,
         "estimated": 0,
         "missing": 26,
-        "not_yet_publishable": 2,
+        "not_yet_publishable": 1,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
         "connected": 0,
@@ -9882,12 +9539,12 @@
         "nextSource": "official-club-squad-report"
       },
       "xg": {
-        "rows": 28,
+        "rows": 27,
         "verified": 0,
         "partial": 0,
         "estimated": 0,
         "missing": 6,
-        "not_yet_publishable": 22,
+        "not_yet_publishable": 21,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
         "connected": 0,
@@ -9895,50 +9552,50 @@
         "nextSource": "licensed-or-auditable-public-match-statistics"
       },
       "weather": {
-        "rows": 28,
+        "rows": 27,
         "verified": 0,
         "partial": 0,
         "estimated": 8,
-        "missing": 20,
+        "missing": 19,
         "not_yet_publishable": 0,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
         "connected": 8,
-        "coverage": 0.2857,
+        "coverage": 0.2963,
         "nextSource": "open-meteo-venue-forecast"
       },
       "market": {
-        "rows": 28,
-        "verified": 28,
+        "rows": 27,
+        "verified": 27,
         "partial": 0,
         "estimated": 0,
         "missing": 0,
         "not_yet_publishable": 0,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
-        "connected": 28,
+        "connected": 27,
         "coverage": 1,
         "nextSource": "sporttery-had-hhad"
       },
       "motivation": {
-        "rows": 28,
+        "rows": 27,
         "verified": 0,
         "partial": 0,
-        "estimated": 28,
+        "estimated": 27,
         "missing": 0,
         "not_yet_publishable": 0,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
-        "connected": 28,
+        "connected": 27,
         "coverage": 1,
         "nextSource": "official-league-standings-and-schedule"
       },
       "strength": {
-        "rows": 28,
+        "rows": 27,
         "verified": 0,
         "partial": 0,
         "estimated": 0,
-        "missing": 28,
+        "missing": 27,
         "not_yet_publishable": 0,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
@@ -9947,11 +9604,11 @@
         "nextSource": "signed-local-elo-history"
       },
       "form": {
-        "rows": 28,
+        "rows": 27,
         "verified": 0,
         "partial": 0,
         "estimated": 0,
-        "missing": 28,
+        "missing": 27,
         "not_yet_publishable": 0,
         "published_after_cutoff": 0,
         "stale_or_unverified": 0,
@@ -9963,25 +9620,25 @@
     "gapPriorities": [
       {
         "key": "form",
-        "missing": 28,
+        "missing": 27,
         "estimated": 0,
-        "rows": 28,
+        "rows": 27,
         "coverage": 0,
         "nextSource": "signed-local-rolling-form"
       },
       {
         "key": "referee",
-        "missing": 28,
+        "missing": 27,
         "estimated": 0,
-        "rows": 28,
+        "rows": 27,
         "coverage": 0,
         "nextSource": "official-league-or-association-match-report"
       },
       {
         "key": "strength",
-        "missing": 28,
+        "missing": 27,
         "estimated": 0,
-        "rows": 28,
+        "rows": 27,
         "coverage": 0,
         "nextSource": "signed-local-elo-history"
       },
@@ -9989,31 +9646,31 @@
         "key": "injuries",
         "missing": 26,
         "estimated": 0,
-        "rows": 28,
+        "rows": 27,
         "coverage": 0,
         "nextSource": "official-club-squad-report"
       },
       {
         "key": "weather",
-        "missing": 20,
+        "missing": 19,
         "estimated": 8,
-        "rows": 28,
-        "coverage": 0.2857,
+        "rows": 27,
+        "coverage": 0.2963,
         "nextSource": "open-meteo-venue-forecast"
       },
       {
         "key": "teamCards",
-        "missing": 14,
+        "missing": 13,
         "estimated": 14,
-        "rows": 28,
-        "coverage": 0.5,
+        "rows": 27,
+        "coverage": 0.5185,
         "nextSource": "signed-football-data-discipline-history"
       },
       {
         "key": "lineup",
         "missing": 6,
         "estimated": 0,
-        "rows": 28,
+        "rows": 27,
         "coverage": 0,
         "nextSource": "official-club-or-league-match-centre"
       },
@@ -10021,33 +9678,20 @@
         "key": "xg",
         "missing": 6,
         "estimated": 0,
-        "rows": 28,
+        "rows": 27,
         "coverage": 0,
         "nextSource": "licensed-or-auditable-public-match-statistics"
       },
       {
         "key": "motivation",
         "missing": 0,
-        "estimated": 28,
-        "rows": 28,
+        "estimated": 27,
+        "rows": 27,
         "coverage": 1,
         "nextSource": "official-league-standings-and-schedule"
       }
     ],
     "warnings": [
-      {
-        "matchId": "fivehundred_2042241",
-        "sourceMatchId": "2042241",
-        "homeTeamName": "洛杉矶FC",
-        "awayTeamName": "洛杉矶银河",
-        "score": 28,
-        "missing": [
-          "referee",
-          "teamCards",
-          "weather",
-          "strength"
-        ]
-      },
       {
         "matchId": "fivehundred_2042242",
         "sourceMatchId": "2042242",
@@ -10287,6 +9931,19 @@
         "sourceMatchId": "2042305",
         "homeTeamName": "威尼斯",
         "awayTeamName": "国际米兰",
+        "score": 27,
+        "missing": [
+          "referee",
+          "injuries",
+          "weather",
+          "strength"
+        ]
+      },
+      {
+        "matchId": "fivehundred_2042306",
+        "sourceMatchId": "2042306",
+        "homeTeamName": "AC米兰",
+        "awayTeamName": "博洛尼亚",
         "score": 27,
         "missing": [
           "referee",
