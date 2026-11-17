@@ -1,10 +1,10 @@
 {
   "version": 1,
   "source": "sporttery",
-  "sourceCycleId": "sporttery-full-sync:2026-11-17T17:01:50.883Z",
-  "updatedAt": "2026-11-17T17:01:50.883Z",
-  "capturedAt": "2026-11-17T17:01:50.883Z",
-  "lastAttemptAt": "2026-11-17T17:01:50.883Z",
+  "sourceCycleId": "sporttery-full-sync:2026-11-17T17:06:47.855Z",
+  "updatedAt": "2026-11-17T17:06:47.855Z",
+  "capturedAt": "2026-11-17T17:06:47.855Z",
+  "lastAttemptAt": "2026-11-17T17:06:47.855Z",
   "fastResultObservations": {
     "version": "fast-result-observations-v2",
     "limit": 100000,
@@ -23,17 +23,17 @@
     "currentFreshnessTime": "2026-09-04T09:57:12.096Z",
     "resultFreshnessTime": "2026-07-01T06:02:58.003Z",
     "historyFreshnessTime": "2026-07-01T06:02:58.003Z",
-    "sourceAgeSeconds": 12049151,
-    "currentAgeSeconds": 6419097,
-    "resultAgeSeconds": 12049151,
-    "historyAgeSeconds": 12049151,
-    "fallbackReason": "fresh Sporttery odds unavailable; keeping existing 2979 matches"
+    "sourceAgeSeconds": 12049449,
+    "currentAgeSeconds": 6419395,
+    "resultAgeSeconds": 12049449,
+    "historyAgeSeconds": 12049449,
+    "fallbackReason": "fresh Sporttery odds unavailable; keeping existing 2978 matches"
   },
   "sourceAttempt": {
-    "capturedAt": "2026-11-17T17:01:50.883Z",
+    "capturedAt": "2026-11-17T17:06:47.855Z",
     "openingProjection": {
       "version": "sporttery-current-opening-projection-v1",
-      "evaluatedAt": "2026-11-17T17:01:55.741Z",
+      "evaluatedAt": "2026-11-17T17:06:53.428Z",
       "policyWaiting": false,
       "waitingMatches": 0,
       "openingReachedMatches": 0,
@@ -62,7 +62,7 @@
     "servingMode": "fallback-degraded",
     "usable": true,
     "primaryStale": true,
-    "reason": "fresh Sporttery odds unavailable; keeping existing 2979 matches",
+    "reason": "fresh Sporttery odds unavailable; keeping existing 2978 matches",
     "fiveHundredFallbackMatches": 27,
     "referenceOddsMatches": 21,
     "officialOddsMatches": 0,
@@ -72,7 +72,7 @@
     "active": false,
     "reason": null,
     "historyFreshnessTime": "2026-07-01T06:02:58.003Z",
-    "historyAgeSeconds": 12049132
+    "historyAgeSeconds": 12049429
   },
   "api": {
     "source": "sporttery",
@@ -80,49 +80,49 @@
     "relaySnapshot": null,
     "errors": [
       {
-        "at": "2026-11-17T17:01:52.231Z",
+        "at": "2026-11-17T17:06:49.176Z",
         "stage": "relay",
         "method": "current-overlay",
         "url": "sporttery-relay",
         "error": "no fresh trusted Sporttery current lane"
       },
       {
-        "at": "2026-11-17T17:01:53.795Z",
+        "at": "2026-11-17T17:06:51.404Z",
         "stage": "direct",
         "method": "calculator",
         "url": "https://webapi.sporttery.cn/gateway/uniform/football/getMatchCalculatorV1.qry?channel=c&poolCode=hhad,had",
         "error": "https://webapi.sporttery.cn/gateway/uniform/football/getMatchCalculatorV1.qry?channel=c&poolCode=hhad,had -> HTTP 567 <!doctype html><html lang=zh-CN><meta charset=UTF-8><meta content=\"width=device-width,initial-scale=1\" name=viewport><title></title><style>*{margin:0;padding:0;"
       },
       {
-        "at": "2026-11-17T17:01:54.654Z",
+        "at": "2026-11-17T17:06:52.242Z",
         "stage": "direct",
         "method": "current",
         "url": "https://webapi.sporttery.cn/gateway/uniform/football/getMatchListV1.qry?clientCode=3001",
         "error": "https://webapi.sporttery.cn/gateway/uniform/football/getMatchListV1.qry?clientCode=3001 -> HTTP 567 <!doctype html><html lang=zh-CN><meta charset=UTF-8><meta content=\"width=device-width,initial-scale=1\" name=viewport><title></title><style>*{margin:0;padding:0;"
       },
       {
-        "at": "2026-11-17T17:01:55.740Z",
+        "at": "2026-11-17T17:06:53.427Z",
         "stage": "direct",
         "method": "concern",
         "url": "https://webapi.sporttery.cn/gateway/uniform/fb/getMatchDataPageListV1.qry?method=concern&pageSize=80",
         "error": "https://webapi.sporttery.cn/gateway/uniform/fb/getMatchDataPageListV1.qry?method=concern&pageSize=80 -> HTTP 567 <!doctype html><html lang=zh-CN><meta charset=UTF-8><meta content=\"width=device-width,initial-scale=1\" name=viewport><title></title><style>*{margin:0;padding:0;"
       },
       {
-        "at": "2026-11-17T17:01:55.740Z",
+        "at": "2026-11-17T17:06:53.428Z",
         "stage": "direct",
         "method": "live",
         "url": "https://webapi.sporttery.cn/gateway/uniform/fb/getMatchDataPageListV1.qry?method=live&pageSize=80",
         "error": "https://webapi.sporttery.cn/gateway/uniform/fb/getMatchDataPageListV1.qry?method=live&pageSize=80 -> HTTP 567 <!doctype html><html lang=zh-CN><meta charset=UTF-8><meta content=\"width=device-width,initial-scale=1\" name=viewport><title></title><style>*{margin:0;padding:0;"
       },
       {
-        "at": "2026-11-17T17:01:55.740Z",
+        "at": "2026-11-17T17:06:53.428Z",
         "stage": "direct",
         "method": "result",
         "url": "https://webapi.sporttery.cn/gateway/uniform/football/getUniformMatchResultV1.qry?matchPage=0",
         "error": "https://webapi.sporttery.cn/gateway/uniform/football/getUniformMatchResultV1.qry?matchPage=0 -> HTTP 567 <!doctype html><html lang=zh-CN><meta charset=UTF-8><meta content=\"width=device-width,initial-scale=1\" name=viewport><title></title><style>*{margin:0;padding:0;"
       },
       {
-        "at": "2026-11-17T17:01:55.740Z",
+        "at": "2026-11-17T17:06:53.428Z",
         "stage": "direct",
         "method": "all",
         "url": "https://webapi.sporttery.cn/gateway/uniform/fb/getMatchDataPageListV1.qry?method=all&pageSize=80",
@@ -133,12 +133,12 @@
     "currentFreshnessTime": "2026-09-04T09:57:12.096Z",
     "resultFreshnessTime": "2026-07-01T06:02:58.003Z",
     "historyFreshnessTime": "2026-07-01T06:02:58.003Z",
-    "sourceUpdatedAt": "2026-11-17T17:01:50.883Z",
-    "lastAttemptAt": "2026-11-17T17:01:50.883Z",
-    "ageSeconds": 12049151,
-    "currentAgeSeconds": 6419097,
-    "resultAgeSeconds": 12049151,
-    "historyAgeSeconds": 12049151,
+    "sourceUpdatedAt": "2026-11-17T17:06:47.855Z",
+    "lastAttemptAt": "2026-11-17T17:06:47.855Z",
+    "ageSeconds": 12049449,
+    "currentAgeSeconds": 6419395,
+    "resultAgeSeconds": 12049449,
+    "historyAgeSeconds": 12049449,
     "stale": true,
     "currentStale": true,
     "resultStale": true,
@@ -166,9 +166,9 @@
       "officialOddsCoverage": 0,
       "officialOddsCoveragePercent": 0,
       "officialOddsStale": true,
-      "fallbackReason": "fresh Sporttery odds unavailable; keeping existing 2979 matches"
+      "fallbackReason": "fresh Sporttery odds unavailable; keeping existing 2978 matches"
     },
-    "fallbackReason": "fresh Sporttery odds unavailable; keeping existing 2979 matches"
+    "fallbackReason": "fresh Sporttery odds unavailable; keeping existing 2978 matches"
   },
   "officialOddsMatches": 0,
   "officialHandicapOddsMatches": 0,
@@ -193,7 +193,7 @@
   },
   "currentListPolicy": {
     "version": "kickoff-retention-v1",
-    "evaluatedAt": "2026-11-17T17:01:50.883Z",
+    "evaluatedAt": "2026-11-17T17:06:47.855Z",
     "unsettledRetentionHours": 48,
     "archivedUnsettled": 8,
     "behavior": "old-unsettled-exits-current-without-fabricated-settlement"
@@ -209,7 +209,7 @@
     "llmReviews": 0,
     "llmReviewsRemoved": 0,
     "externalSignals": 8229,
-    "preMatchSignals": 22,
+    "preMatchSignals": 21,
     "webConsensusSignals": 0
   },
   "refreshPolicy": {
@@ -219,7 +219,7 @@
     "note": "GitHub Pages serves static JSON. The page checks for newer JSON regularly; GitHub Actions refreshes the source files on schedule."
   },
   "attempt": {
-    "capturedAt": "2026-11-17T17:01:50.883Z",
+    "capturedAt": "2026-11-17T17:06:47.855Z",
     "officialOddsMatches": 0,
     "officialHandicapOddsMatches": 0,
     "officialResultMatches": 0,
@@ -233,7 +233,7 @@
     "rows": 33,
     "appended": 0,
     "updated": 0,
-    "skipped": "fresh Sporttery odds unavailable; keeping existing 2979 matches"
+    "skipped": "fresh Sporttery odds unavailable; keeping existing 2978 matches"
   },
   "predictionSnapshots": {
     "total": 5000,
@@ -341,7 +341,7 @@
       "repeatedProbabilityThreshold": 0.35,
       "dominantMarketConflictThreshold": 0.2
     },
-    "checkedAt": "2026-11-17T17:01:50.883Z",
+    "checkedAt": "2026-11-17T17:06:47.855Z",
     "cohort": "prospective-pre-persistence"
   },
   "predictionExecutionCapture": {
@@ -357,7 +357,7 @@
   },
   "liveRecommendations": {
     "version": "live-model-recommendation-v2",
-    "checkedAt": "2026-11-17T17:01:50.883Z",
+    "checkedAt": "2026-11-17T17:06:47.855Z",
     "qualifiedCount": 0,
     "rows": []
   },
@@ -371,14 +371,14 @@
   },
   "externalSignals": {
     "source": "external-signals",
-    "updatedAt": "2026-11-17T17:01:50.070Z",
+    "updatedAt": "2026-11-17T17:06:47.047Z",
     "matches": 8229,
     "webConsensusMatches": 0
   },
   "preMatchSignals": {
     "source": "pre-match-signal-layer",
-    "updatedAt": "2026-11-17T16:57:18.579Z",
-    "matches": 22
+    "updatedAt": "2026-11-17T17:02:10.111Z",
+    "matches": 21
   },
   "modelCalibration": {
     "version": "rolling-calibration-v1",
@@ -2470,7 +2470,7 @@
   "postgresTeamHistory": null,
   "teamEvidenceResearch": {
     "version": "prematch-stored-team-research-cycle-v1",
-    "asOf": "2026-11-17T17:01:56.559Z",
+    "asOf": "2026-11-17T17:06:54.242Z",
     "businessDate": "2026-11-18",
     "sourceInputMatches": 27,
     "currentDayMatches": 0,
@@ -2519,8 +2519,8 @@
   "fallback": {
     "keptExisting": true,
     "mergedPartialFresh": true,
-    "reason": "fresh Sporttery odds unavailable; keeping existing 2979 matches",
-    "existingMatches": 2979,
+    "reason": "fresh Sporttery odds unavailable; keeping existing 2978 matches",
+    "existingMatches": 2978,
     "freshPublishableMatches": 27,
     "sportteryPublishableMatches": 0,
     "fiveHundredFallbackMatches": 27,
