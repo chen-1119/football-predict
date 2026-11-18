@@ -295,6 +295,9 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Ensure host PostgreSQL 16 tools are available
         run: |
           if ! test -x /usr/lib/postgresql/16/bin/initdb; then
@@ -302,9 +305,6 @@ jobs:
             sudo apt-get install -y --no-install-recommends postgresql-16
           fi
           /usr/lib/postgresql/16/bin/initdb --version
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22.22.1'
