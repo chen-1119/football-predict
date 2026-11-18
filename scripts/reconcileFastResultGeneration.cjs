@@ -42,20 +42,40 @@ const readJson = (filePath, fallback) => {
   }
 };
 
-const atomicWriteJson = (filePath, payload) => {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
-  try {
-    fs.writeFileSync(temporaryPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-    fs.renameSync(temporaryPath, filePath);
-  } finally {
-    try {
-      if (fs.existsSync(temporaryPath)) fs.rmSync(temporaryPath, { force: true });
-    } catch {
-      // A failed cleanup cannot change an already-committed target file.
-    }
+function revisionNumber(value, field) {
+  if (value == null) return 0;
+  if ((typeof value !== "number" && typeof value !== "string")
+      || !/^\d+$/.test(String(value)) || !Number.isSafeInteger(Number(value))) {
+    throw new Error(`invalid revision in ${field}`);
   }
-};
+  return Number(value);
+}
+
+function readSyncMeta(filePath) {
+  try {
+    const meta = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    if (!meta || typeof meta !== "object" || Array.isArray(meta)) {
+      throw new Error("sync metadata must be an object");
+    }
+    return meta;
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+// Prepare sibling files outside the lock so serializing history never holds up a receipt writer.
+function stageJson(staged, filePath, payload) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const temporaryPath = `${filePath}.${crypto.randomUUID()}.tmp`;
+  const fd = fs.openSync(temporaryPath, "wx");
+  staged.push({ temporaryPath, filePath });
+  try {
+    fs.writeFileSync(fd, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  } finally {
+    fs.closeSync(fd);
+  }
+}
 
 const asText = (value) => String(value || "").trim();
 const sourceMatchIdFor = (match) => asText(match?.sourceMatchId || match?.id).replace(/^sporttery_/, "");
@@ -993,23 +1013,19 @@ const reconcileFastResultGeneration = ({
     db?.close();
   }
 
-  const receiptRevision = Math.max(0, Number(receipt.revision || 0));
-  const initialSyncMeta = readJson(syncMetaPath, {});
-  const reconciledRevision = Math.max(
-    0,
-    Number(initialSyncMeta.fastResultGenerationRevision || 0),
-  );
-  if (receiptRevision <= reconciledRevision) {
-    return {
-      ok: true,
-      skipped: true,
-      reason: "fast-result-generation-current",
-      receiptRevision,
-      reconciledRevision,
-      startedAt,
-      finishedAt: new Date().toISOString(),
-    };
-  }
+  const receiptRevision = revisionNumber(receipt.revision, "receipt");
+  const initialSyncMeta = readSyncMeta(syncMetaPath);
+  const reconciledRevision = revisionNumber(initialSyncMeta?.fastResultGenerationRevision, "fastResultGenerationRevision");
+  const alreadyCurrent = (revision) => ({
+    ok: true,
+    skipped: true,
+    reason: "fast-result-generation-current",
+    receiptRevision,
+    reconciledRevision: revision,
+    startedAt,
+    finishedAt: new Date().toISOString(),
+  });
+  if (receiptRevision <= reconciledRevision) return alreadyCurrent(reconciledRevision);
 
   const currentPath = path.join(dataDir, "matches-current.json");
   const historyPath = path.join(dataDir, "matches-history.json");
@@ -1166,6 +1182,7 @@ const reconcileFastResultGeneration = ({
     ))
   ).size;
 
+  const outputs = [];
   traceStage("write-generation");
   if (quarantinedLegacyReviews.length) {
     const existingRows = existingQuarantine.rows;
@@ -1201,7 +1218,7 @@ const reconcileFastResultGeneration = ({
       });
     }
     const quarantineRows = Array.from(quarantineByIdentity.values());
-    atomicWriteJson(resolvedQuarantinePath, {
+    outputs.push([resolvedQuarantinePath, {
       version: "legacy-post-match-review-quarantine-v1",
       generatedAt: existingQuarantine?.generatedAt || startedAt,
       updatedAt: startedAt,
@@ -1211,13 +1228,13 @@ const reconcileFastResultGeneration = ({
         0,
       ),
       rows: quarantineRows,
-    });
+    }]);
   }
 
-  atomicWriteJson(currentPath, nextCurrent);
-  atomicWriteJson(historyPath, nextHistory);
+  outputs.push([currentPath, nextCurrent]);
+  outputs.push([historyPath, nextHistory]);
   if (reviews && typeof reviews === "object" && !Array.isArray(reviews)) {
-    atomicWriteJson(reviewsPath, {
+    outputs.push([reviewsPath, {
       ...reviews,
       rows: nextReviewRows,
       summary: reviewSummary(nextReviewRows),
@@ -1226,15 +1243,19 @@ const reconcileFastResultGeneration = ({
         generatedAt: startedAt,
       }),
       referencePerformance,
-    });
+    }]);
   }
 
-  traceStage("commit-sync-meta");
-  const metaLock = acquireSyncMetaCommitLock({ filePath: syncMetaPath });
+  const staged = [];
+  let metaLock;
   let committedSyncMeta;
   try {
-    const latestSyncMeta = readJson(syncMetaPath, {});
-    const latestFastRevision = Math.max(0, Number(latestSyncMeta.fastResultRevision || 0));
+    for (const [filePath, payload] of outputs) stageJson(staged, filePath, payload);
+    traceStage("commit-sync-meta");
+    metaLock = acquireSyncMetaCommitLock({ filePath: syncMetaPath });
+    const latestSyncMeta = readSyncMeta(syncMetaPath);
+    const latestGeneration = revisionNumber(latestSyncMeta?.fastResultGenerationRevision, "fastResultGenerationRevision");
+    const latestFastRevision = revisionNumber(latestSyncMeta?.fastResultRevision, "fastResultRevision");
     if (latestFastRevision > receiptRevision) {
       const error = new Error(
         `fast result receipt advanced during generation reconciliation: ${receiptRevision} < ${latestFastRevision}`
@@ -1242,11 +1263,17 @@ const reconcileFastResultGeneration = ({
       error.code = "FAST_RESULT_GENERATION_RECEIPT_ADVANCED";
       throw error;
     }
+    if (latestGeneration >= receiptRevision) return alreadyCurrent(latestGeneration);
+    if ((initialSyncMeta && !latestSyncMeta) || latestGeneration !== reconciledRevision) {
+      const error = new Error("generation baseline changed during reconciliation");
+      error.code = "FAST_RESULT_GENERATION_BASE_CHANGED";
+      throw error;
+    }
     const finishedAt = new Date().toISOString();
     committedSyncMeta = {
       ...latestSyncMeta,
       files: {
-        ...(latestSyncMeta.files || {}),
+        ...(latestSyncMeta?.files || {}),
         current: nextCurrent.length,
         history: nextHistory.length,
         ...(reviews && typeof reviews === "object" && !Array.isArray(reviews)
@@ -1276,9 +1303,15 @@ const reconcileFastResultGeneration = ({
         },
       },
     };
-    atomicWriteJson(syncMetaPath, committedSyncMeta);
+    stageJson(staged, syncMetaPath, committedSyncMeta);
+    // The quarantine ledger is published first when present, the revision marker last.
+    for (const { temporaryPath, filePath } of staged) fs.renameSync(temporaryPath, filePath);
   } finally {
-    metaLock.release();
+    try {
+      metaLock?.release();
+    } finally {
+      for (const { temporaryPath } of staged) fs.rmSync(temporaryPath, { force: true });
+    }
   }
   traceStage("generation-committed");
 

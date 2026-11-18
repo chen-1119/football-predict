@@ -157,6 +157,7 @@ on:
       - 'tests/postgres-generation-native.integration.cjs'
       - 'tests/postgres-source-memory.integration.cjs'
       - 'tests/reconcile-history-admission.test.cjs'
+      - 'tests/reconcile-generation-commit.test.cjs'
       - 'tests/football-data-lower-league-history.test.cjs'
       - 'tests/postgres-team-history*.test.cjs'
       - 'scripts/teamCategoryIdentity.cjs'
@@ -377,7 +378,7 @@ jobs:
       - run: node scripts/verifyProductionPlanSourceContracts.cjs
       - run: node --test tests/football-data-lower-league-history.test.cjs tests/postgres-team-history.test.cjs
       - run: node --test tests/postgres-model-input-paging.test.cjs
-      - run: node --test tests/reconcile-history-admission.test.cjs
+      - run: node --test tests/reconcile-history-admission.test.cjs tests/reconcile-generation-commit.test.cjs
       - run: node --test tests/postgres-reference-admission.test.cjs tests/postgres-external-generation-row.test.cjs
       - run: node --test tests/postgres-file-json-payload.test.cjs tests/streamed-public-reference-archive.test.cjs tests/reference-index-repair-boundary.test.cjs tests/reference-index-release-gate.test.cjs tests/generation-startup-streaming.test.cjs
       - run: node --test tests/postgres-reference-repair-policy.test.cjs tests/postgres-reference-repair-recovery.test.cjs
