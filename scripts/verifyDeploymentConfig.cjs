@@ -220,7 +220,6 @@ const run = () => {
   const cloudflareSportteryCollectorVerifier = readText(cloudflareSportteryCollectorVerifierPath);
   const collectorTrustRegistry = parseJsonFile(collectorTrustRegistryPath);
   const githubSyncWorkflow = readText(githubSyncWorkflowPath);
-  const githubPagesWorkflow = readText(githubPagesWorkflowPath);
   const cloudPush = readText(cloudPushPath);
   const cleanupRelayHardeningRun = spawnSync(process.execPath, [cleanupRelayHardeningVerifierPath], {
     cwd: rootDir,
@@ -2702,13 +2701,11 @@ const run = () => {
     cancelInProgressFalse: /cancel-in-progress:\s*false/.test(githubSyncWorkflow)
   });
 
-  const pagesBaseCheck = (workflow) => workflow.includes("Verify Pages API Base")
-    && workflow.includes("DATA_API_BASE repository variable is required")
-    && workflow.includes("https://*")
-    && !workflow.includes("http://*|https://*");
-  pushCheck(checks, "github pages builds require HTTPS protected API base", pagesBaseCheck(githubSyncWorkflow) && pagesBaseCheck(githubPagesWorkflow), {
-    syncWorkflowHasGate: pagesBaseCheck(githubSyncWorkflow),
-    pagesWorkflowHasGate: pagesBaseCheck(githubPagesWorkflow)
+  const pagesWorkflowPresent = fs.existsSync(githubPagesWorkflowPath);
+  const syncPublishesPages = /peaceiris\/actions-gh-pages|actions\/(?:deploy-pages|upload-pages-artifact)|npm run build/.test(githubSyncWorkflow);
+  pushCheck(checks, "data sync runs independently of retired GitHub Pages", !pagesWorkflowPresent && !syncPublishesPages, {
+    pagesWorkflowPresent,
+    syncPublishesPages
   });
 
   pushCheck(checks, "cloud data push keeps dist lightweight", cloudPush.includes("disabledDistPayloads")

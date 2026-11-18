@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write # 赋予 actions 写入与推送代码的权限
+      contents: write # 璧嬩簣 actions 鍐欏叆涓庢帹閫佷唬鐮佺殑鏉冮檺
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -97,34 +97,3 @@ jobs:
           else
             echo "No changes in predictions data."
           fi
-
-      - name: Verify Pages API Base
-        env:
-          DATA_API_BASE: ${{ vars.DATA_API_BASE }}
-        run: |
-          if [ -z "${DATA_API_BASE:-}" ]; then
-            echo "DATA_API_BASE repository variable is required for protected C-end Pages builds."
-            exit 1
-          fi
-          case "$DATA_API_BASE" in
-            https://*) ;;
-            *)
-              echo "DATA_API_BASE must be an absolute HTTPS URL, got: $DATA_API_BASE"
-              exit 1
-              ;;
-          esac
-
-      - name: Build Project
-        env:
-          VITE_BASE_PATH: /football-predict/
-          VITE_DATA_API_BASE: ${{ vars.DATA_API_BASE }}
-        run: npm run build
-
-      - name: Prepare SPA Fallback
-        run: cp dist/index.html dist/404.html
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist

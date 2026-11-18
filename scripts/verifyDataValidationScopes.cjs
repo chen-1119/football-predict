@@ -140,11 +140,10 @@ verify('valid empty server archive remains zero, not unavailable', () => {
   const r = run({ count: 0, archive: [] }); assert.equal(r.exitCode, 0, r.messages);
   assert.equal(r.payload.privateArchiveVerified, true); assert.equal(r.payload.currentListPolicy.archivedUnsettled, 0);
 });
-verify('Pages uses explicit public scope while default npm task stays strict', () => {
+verify('public distribution validation is explicit while default npm task stays strict', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
   assert.equal(pkg.scripts['validate:data'], 'node scripts/validateData.cjs');
   assert.equal(pkg.scripts['validate:data:public'], 'node scripts/validateData.cjs --public-distribution');
-  assert.match(fs.readFileSync(path.join(__dirname, '../.github/workflows/deploy.yml'), 'utf8'), /npm run validate:data:public/);
 });
 verify('complete actual public data still passes public-scope validation', () => {
   const r=run({publicOnly:true,fullPublicFiles:true});assert.equal(r.exitCode,0,r.messages);
