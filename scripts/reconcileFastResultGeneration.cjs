@@ -3,6 +3,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { debuglog } = require("node:util");
+const { performance } = require("node:perf_hooks");
+const debugReconciliation = debuglog("football-reconcile");
+// NODE_DEBUG=football-reconcile emits stage boundaries even if the worker times out.
+const traceStage = (stage) => debugReconciliation("%s processMs=%d", stage, Math.round(performance.now()));
 const {
   FAST_RESULT_IDENTITY_RESOLUTION_VERSION,
   findFastResultObservation,
@@ -516,8 +521,16 @@ const migrateLegacyReviewSurfaces = ({
     return { ...match, postMatchReview: rebuilt };
   });
 
+  // Preserve the first full identity match when a provider reuses a source id.
+  const historyBySourceId = new Map();
+  for (const row of migratedHistoryRows) {
+    const id = sourceMatchIdFor(row);
+    const bucket = historyBySourceId.get(id);
+    if (bucket) bucket.push(row);
+    else historyBySourceId.set(id, [row]);
+  }
   const migratedAuthorityRows = authorityHistoryRows.map((match) => (
-    migratedHistoryRows.find((row) => sameStoredEvent(row, match)) || match
+    historyBySourceId.get(sourceMatchIdFor(match))?.find((row) => sameStoredEvent(row, match)) || match
   ));
   const migratedReviewRows = reviewRows.map((review) => {
     if (eventVersionOf(review)) return review;
@@ -1001,6 +1014,7 @@ const reconcileFastResultGeneration = ({
   const currentPath = path.join(dataDir, "matches-current.json");
   const historyPath = path.join(dataDir, "matches-history.json");
   const reviewsPath = path.join(dataDir, "post-match-reviews.json");
+  traceStage("read-generation");
   const current = readJson(currentPath, null);
   const history = readJson(historyPath, null);
   const reviews = readJson(reviewsPath, null);
@@ -1019,6 +1033,7 @@ const reconcileFastResultGeneration = ({
     throw error;
   }
   const existingQuarantine = readValidatedQuarantine(resolvedQuarantinePath);
+  traceStage("resolve-finals");
   const receiptDb = nativeSource ? null : new DatabaseSync(dbPath, { readOnly: true });
   let receiptResolution;
   try {
@@ -1028,6 +1043,7 @@ const reconcileFastResultGeneration = ({
   }
   const finals = receiptResolution.finals;
 
+  traceStage("match-history");
   const authorityHistoryRows = [...history];
   for (const finalMatch of finals) {
     if (!authorityHistoryRows.some((row) => sameStoredEvent(row, finalMatch))) {
@@ -1133,6 +1149,7 @@ const reconcileFastResultGeneration = ({
       upsertedReviewRows += 1;
     }
   }
+  traceStage("validate-reviews-and-reference");
   assertPostMatchReviewSurfaceParity({ historyRows: nextHistory, reviewRows: nextReviewRows });
   // Validate the complete paired ledger before any publication or quarantine
   // files are written. Missing legacy evidence remains excluded; corrupt
@@ -1149,6 +1166,7 @@ const reconcileFastResultGeneration = ({
     ))
   ).size;
 
+  traceStage("write-generation");
   if (quarantinedLegacyReviews.length) {
     const existingRows = existingQuarantine.rows;
     const quarantineByIdentity = new Map();
@@ -1211,6 +1229,7 @@ const reconcileFastResultGeneration = ({
     });
   }
 
+  traceStage("commit-sync-meta");
   const metaLock = acquireSyncMetaCommitLock({ filePath: syncMetaPath });
   let committedSyncMeta;
   try {
@@ -1261,6 +1280,7 @@ const reconcileFastResultGeneration = ({
   } finally {
     metaLock.release();
   }
+  traceStage("generation-committed");
 
   return {
     ok: true,
@@ -1290,6 +1310,7 @@ const reconcileFastResultGeneration = ({
 };
 
 const reconcileFastResultGenerationPostgres = async (options = {}) => {
+  traceStage("open-postgres-session");
   const session = await require("./postgresRuntimeReadSession.cjs").openPostgresRuntimeReadSession({
     ...options, publicDataDir: options.dataDir || options.publicDataDir, protectReceipt: true,
   });
@@ -1298,6 +1319,7 @@ const reconcileFastResultGenerationPostgres = async (options = {}) => {
     // bound to the verified authority high-water may enter the generation.
     // Reuse the native projection's strict identity/score proof, not a clock
     // sort or filtered replacement receipt that would lose audit history.
+    traceStage("read-guarded-finals");
     const guard = await session.guardedFinals();
     const receipt = guard.receipt;
     return { ...reconcileFastResultGeneration({ ...options,
