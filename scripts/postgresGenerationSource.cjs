@@ -1,5 +1,6 @@
 "use strict";
 const crypto = require("node:crypto");
+const { externalGenerationRow } = require("./postgresExternalGenerationRow.cjs");
 const path = require("node:path");
 const fs = require("node:fs"), os = require("node:os");
 const {
@@ -242,9 +243,7 @@ function createPostgresGenerationSource(options = {}) {
     try {
     const rows = [{ id: "sync-meta:current", source: syncMeta.source || "sporttery",
       captured_at: syncMeta.updatedAt || syncMeta.capturedAt || null, payload: JSON.stringify(syncMeta) }];
-    const external = read("external-signals.json");
-    if (!external || typeof external !== "object" || Array.isArray(external)) throw new Error("native projection external signals missing");
-    rows.push({ id: "external-signals:current", source: external.source || "external-signals", captured_at: external.updatedAt || null, payload: JSON.stringify(external) });
+    rows.push(externalGenerationRow(active.context));
     const old = (await client.query("SELECT id FROM football.source_snapshots ORDER BY id")).rows;
     inventories.set("source_snapshots", [...new Set([...old.map(row => row.id).filter(id =>
       !id.startsWith("sync-meta:") && !id.startsWith("external-signals:") && id !== SOURCE_ID && id !== INDEX_ID && !id.startsWith(INDEX_PREFIX)), ...rows.map(row => row.id), ...(archive?.ids || [])])]);

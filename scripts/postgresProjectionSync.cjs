@@ -161,6 +161,10 @@ const inlineRowBytes = (row, columns, maxRowBytes) => {
     if (bytes > maxRowBytes) {
       const error = new Error("Projection row exceeds the inline byte limit; use an admitted source JSON file");
       error.code = "POSTGRES_INLINE_ROW_LIMIT";
+      error.rowIdentity = row.id ?? row.artifact_key ?? row.key ?? null;
+      error.column = column;
+      error.inlineBytes = bytes;
+      error.maxInlineBytes = maxRowBytes;
       throw error;
     }
   }
