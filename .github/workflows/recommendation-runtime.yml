@@ -127,6 +127,8 @@ on:
       - 'server/referencePairedBaseline.cjs'
       - 'server/streamedJsonObjectArrays.cjs'
       - 'scripts/postgresGenerationSource.cjs'
+      - 'scripts/postgresExternalGenerationRow.cjs'
+      - 'tests/postgres-external-generation-row.test.cjs'
       - 'scripts/postgresReceiptBarrier.cjs'
       - 'scripts/postgresRuntimeReadSession.cjs'
       - 'scripts/verifyReceiptBarrierPostgres.cjs'
@@ -155,6 +157,7 @@ on:
       - 'tests/postgres-generation-native.integration.cjs'
       - 'tests/postgres-source-memory.integration.cjs'
       - 'tests/reconcile-history-admission.test.cjs'
+      - 'tests/reconcile-generation-commit.test.cjs'
       - 'tests/football-data-lower-league-history.test.cjs'
       - 'tests/postgres-team-history*.test.cjs'
       - 'scripts/teamCategoryIdentity.cjs'
@@ -275,7 +278,8 @@ permissions:
   contents: read
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    # The peer-auth fixture starts its own PostgreSQL 16 cluster on the host.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
       postgres:
@@ -295,6 +299,13 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
+      - name: Ensure host PostgreSQL 16 tools are available
+        run: |
+          if ! test -x /usr/lib/postgresql/16/bin/initdb; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends postgresql-16
+          fi
+          /usr/lib/postgresql/16/bin/initdb --version
       - uses: actions/setup-node@v4
         with:
           node-version: '22.22.1'
@@ -367,8 +378,8 @@ jobs:
       - run: node scripts/verifyProductionPlanSourceContracts.cjs
       - run: node --test tests/football-data-lower-league-history.test.cjs tests/postgres-team-history.test.cjs
       - run: node --test tests/postgres-model-input-paging.test.cjs
-      - run: node --test tests/reconcile-history-admission.test.cjs
-      - run: node --test tests/postgres-reference-admission.test.cjs
+      - run: node --test tests/reconcile-history-admission.test.cjs tests/reconcile-generation-commit.test.cjs
+      - run: node --test tests/postgres-reference-admission.test.cjs tests/postgres-external-generation-row.test.cjs
       - run: node --test tests/postgres-file-json-payload.test.cjs tests/streamed-public-reference-archive.test.cjs tests/reference-index-repair-boundary.test.cjs tests/reference-index-release-gate.test.cjs tests/generation-startup-streaming.test.cjs
       - run: node --test tests/postgres-reference-repair-policy.test.cjs tests/postgres-reference-repair-recovery.test.cjs
       - run: node scripts/verifyPublicReferencePairs.cjs && node scripts/verifyReferencePairedBaseline.cjs

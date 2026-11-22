@@ -480,6 +480,7 @@ const requiredReleaseEntries = [
   "scripts/generationProjectionRows.cjs",
   "scripts/fastResultProjectionGuard.cjs",
   "scripts/postgresGenerationSource.cjs",
+  "scripts/postgresExternalGenerationRow.cjs",
   "scripts/runtimePostgresProjection.cjs",
   "server/storageMode.cjs",
   "scripts/modelInputRows.cjs",
