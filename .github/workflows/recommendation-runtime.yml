@@ -161,6 +161,7 @@ on:
       - 'scripts/entityResolutionRegistry.cjs'
       - 'tests/prematch*.test.cjs'
       - 'tests/api-football-scoped-coverage.test.cjs'
+      - 'tests/api-football-quota.test.cjs'
       - 'deploy/light-server/football-daily-prematch.*'
       - 'deploy/light-server/recommendation-schema-bridge.cjs'
       - 'deploy/light-server/release-native.sh'
@@ -390,6 +391,7 @@ jobs:
       - run: node --test tests/accounts*.test.cjs tests/account-frontend.test.cjs tests/account-admin.test.cjs tests/public-product.test.cjs tests/public-browse-flow.test.cjs
       - run: node --test tests/prematch*.test.cjs tests/api-football-scoped-coverage.test.cjs collectors/leisu-prematch/website-reader.test.cjs collectors/leisu-prematch/api-football-reference.test.cjs collectors/leisu-prematch/local-jingcai-scope.test.cjs
       - run: node scripts/verifyApiFootballHardening.cjs && node scripts/verifyTeamCategoryIdentity.cjs
+      - run: node --test tests/api-football-quota.test.cjs
       - run: node scripts/verifyPrematchPriorityPostgres.cjs
         env:
           PREMATCH_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
