@@ -570,6 +570,22 @@ if (bundleInspection.entries.some(entry => entry.replace(/^\.\//, '') === worker
         }
       }
     }
+    if (parsedAuthorization.version === 'worker-code-repair-v12') {
+      const repairPolicy = require('./releaseWorkerCodeRepair.cjs');
+      if (!Array.isArray(parsedAuthorization.addedSources)
+        || JSON.stringify(parsedAuthorization.addedSources.map(row => row.path)) !== JSON.stringify(repairPolicy.R942_RESULT_IDENTITY_ADDED)
+        || !Array.isArray(parsedAuthorization.unchangedSources)
+        || JSON.stringify(parsedAuthorization.unchangedSources.map(row => row.path)) !== JSON.stringify(repairPolicy.R942_RESULT_IDENTITY_UNCHANGED)) {
+        throw new Error('signed r942 result identity source inventory differs');
+      }
+      for (const row of [...parsedAuthorization.addedSources, ...parsedAuthorization.unchangedSources]) {
+        const bundled = inspectBundleEntryBytes(bundlePath, row.path);
+        const localHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(rootDir, row.path))).digest('hex');
+        if (!bundled.ok || bundled.sha256 !== localHash || row.sha256 !== localHash) {
+          throw new Error(`signed r942 result identity source differs: ${row.path}`);
+        }
+      }
+    }
     const repair = require('./releaseWorkerCodeRepair.cjs');
     const auth = repair.candidateAuthorization(rootDir, parsedAuthorization);
     for (const row of auth.files) {

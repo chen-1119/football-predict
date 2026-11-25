@@ -163,8 +163,10 @@ on:
       - 'scripts/streamedInlineObjectEntries.cjs'
       - 'scripts/inlineRowIncidentEvidence.cjs'
       - 'scripts/buildR941WorkerCodeRepairAuthorization.cjs'
+      - 'scripts/buildR942WorkerCodeRepairAuthorization.cjs'
       - 'tests/inline-map-evidence.test.cjs'
       - 'tests/r941-worker-code-repair-v11.test.cjs'
+      - 'tests/r942-worker-code-repair-v12.test.cjs'
       - 'scripts/releaseWorkerPreflight.cjs'
       - 'scripts/verifyReleaseWorkerPreflight.cjs'
       - 'tests/fixtures/worker-skipped-after-official-failure-20261015.json'
@@ -374,7 +376,7 @@ jobs:
           node scripts/verifyResearchPublicationRetryPostgres.cjs
           node --test tests/research-append-lock.test.cjs
           node --test tests/sync-meta-strategy-summary.test.cjs
-          node --test tests/sync-meta-incident-evidence.test.cjs tests/sync-meta-recovery-policy.test.cjs tests/inline-map-evidence.test.cjs tests/r941-worker-code-repair-v11.test.cjs
+          node --test tests/sync-meta-incident-evidence.test.cjs tests/sync-meta-recovery-policy.test.cjs tests/inline-map-evidence.test.cjs tests/r941-worker-code-repair-v11.test.cjs tests/r942-worker-code-repair-v12.test.cjs
           node scripts/verifyResearchAppendLockPostgres.cjs
           node scripts/verifyResearchPublicationFreshnessRetryPostgres.cjs
           node scripts/verifyResearchPublicationInputRecoveryPostgres.cjs

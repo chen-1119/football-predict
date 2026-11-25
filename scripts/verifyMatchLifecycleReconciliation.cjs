@@ -847,12 +847,39 @@ for (const [name, change] of [
   ["formal review status", (f) => { f.raw.postMatchReview.predictionReview.formalBestStatus = "WON"; }],
   ["review rows", (f) => { f.raw.postMatchReview.predictionReview.rows = [{}]; }],
   ["witness actual archive", (f) => { f.witness.archivedPreMatchPrediction = {}; }],
+  ["invalid publication clock gate reason", (f) => { f.witness.predictionMeta.publicationGate.reasonCode = "publication-clock-invalid"; }],
+  ["invalid publication clock no-pre-cutoff gate reason", (f) => { f.witness.predictionMeta.publicationGate.reasonCode = "invalid-publication-clock-no-trusted-pre-cutoff-decision"; }],
 ]) {
   check(`canonical result-only preservation rejects ${name}`, () => {
     const f = canonicalResultOnlyFixture();
     f.finals = [f.witness];
     change(f);
     assert.equal(preserveCanonicalResultOnlyIdentities([f.raw], f.receipt, f.finals)[0], f.raw);
+  });
+}
+
+for (const reasonCode of [
+  "cutoff",
+  "model-after-cutoff",
+  "cutoff-crossed-during-sync",
+  "kickoff",
+  "cutoff-crossed-during-sync-no-trusted-pre-cutoff-decision",
+  "sync-started-after-cutoff-no-trusted-pre-cutoff-decision",
+  "locked-no-trusted-pre-cutoff-decision",
+]) {
+  check(`canonical result-only preservation retains sporttery identity when witness gate reasonCode is ${reasonCode}`, () => {
+    const { raw, witness, receipt } = canonicalResultOnlyFixture();
+    witness.predictionMeta.publicationGate.reasonCode = reasonCode;
+    const before = structuredClone(raw);
+    const [result] = preserveCanonicalResultOnlyIdentities([raw], receipt, [witness]);
+    assert.equal(result.id, witness.id);
+    assert.equal(result.postMatchReview.matchId, witness.id);
+    assert.equal(result.predictionMeta.publicationGate.reasonCode, before.predictionMeta.publicationGate.reasonCode);
+    assert.deepEqual(result, {
+      ...before,
+      id: witness.id,
+      postMatchReview: { ...before.postMatchReview, matchId: witness.id },
+    });
   });
 }
 

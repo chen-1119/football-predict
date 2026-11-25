@@ -32,7 +32,7 @@ function runLiveWorkerPreflight() {
     const stat=fs.lstatSync(repairFile);assert(stat.isFile()&&!stat.isSymbolicLink()&&stat.nlink===1&&stat.size<=16384);
     const auth=repair.candidateAuthorization(rootDir,JSON.parse(fs.readFileSync(repairFile)));
     source=repair.buildWorkerCodeRepairProbe(auth);
-    if(auth.version==='worker-code-repair-v9' || auth.version==='worker-code-repair-v10' || auth.version==='worker-code-repair-v11') {
+    if(auth.version==='worker-code-repair-v9' || auth.version==='worker-code-repair-v10' || auth.version==='worker-code-repair-v11' || auth.version==='worker-code-repair-v12') {
       // Shared observation only. The actual root entrypoint keeps its original exclusive FD 9.
       args.splice(args.indexOf('/opt/node-v22.22.1/bin/node'),0,
         '/usr/bin/flock','-s','-w','2','/run/lock/football-release.lock');

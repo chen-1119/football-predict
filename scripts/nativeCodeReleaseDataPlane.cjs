@@ -6,6 +6,11 @@ const LIVE = '/opt/football-predict', STORE = '/var/lib/football-predict';
 const pool = (s, name, oid) => new NativeReleasePostgresPool({ database: name, databaseOid: oid, clusterId: s.clusterId });
 const driver = () => require('./nativeReleaseDataPlane.cjs');
 function requiresFreshRepairCapture(auth) {
+  if (auth.version === 'worker-code-repair-v12') {
+    assert.equal(auth.baseRuntimeSha256, 'd4a33ddf3636dc30a5742a0c7d9a1645e5765f289e741908527470b548365990');
+    assert.equal(auth.bindingPolicy, 'fresh-r942-result-identity-incident-before-lease-v1');
+    return true;
+  }
   if (auth.version === 'worker-code-repair-v11') {
     assert.equal(auth.baseRuntimeSha256, 'd922357040c5f5fbedc19ec9d5a49a7bd5c3c674089df88b7037f6b98cf64db5');
     assert.equal(auth.bindingPolicy, 'fresh-r941-stability-incident-before-lease-v1');

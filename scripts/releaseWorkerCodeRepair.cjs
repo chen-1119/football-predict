@@ -45,6 +45,33 @@ const R941_STABILITY_UNCHANGED=[
   'deploy/light-server/football-release',
   'deploy/light-server/release-native.sh',
 ];
+const R942_BASE_RUNTIME_SHA256='d4a33ddf3636dc30a5742a0c7d9a1645e5765f289e741908527470b548365990';
+const R942_BINDING_POLICY='fresh-r942-result-identity-incident-before-lease-v1';
+const R942_RESULT_IDENTITY_TARGETS=[
+  'scripts/syncData.cjs',
+  'scripts/verifyMatchLifecycleReconciliation.cjs',
+  'scripts/releaseWorkerCodeRepair.cjs',
+  'scripts/nativeCodeReleaseDataPlane.cjs',
+  'scripts/runReleaseWorkerPreflight.cjs',
+  'scripts/deployReleaseBundle.cjs',
+  'scripts/createReleaseBundle.cjs',
+  'scripts/verifyReleaseBundleSafety.cjs',
+  'scripts/verifyReleaseVerifierContracts.cjs',
+];
+const R942_RESULT_IDENTITY_ADDED=[
+  'scripts/buildR942WorkerCodeRepairAuthorization.cjs',
+  'tests/r942-worker-code-repair-v12.test.cjs',
+];
+const R942_RESULT_IDENTITY_UNCHANGED=[
+  'scripts/postgresProjectionSync.cjs',
+  'scripts/postgresGenerationSource.cjs',
+  'scripts/releaseWorkerPreflight.cjs',
+  'scripts/verifyNativeCodeServing.cjs',
+  'scripts/committedGenerationRecoveryServingCore.cjs',
+  'scripts/releaseDataPlanePolicy.cjs',
+  'deploy/light-server/football-release',
+  'deploy/light-server/release-native.sh',
+];
 function validateR941StabilityIncident(incident) {
   const assert=require('node:assert/strict');
   assert(incident && typeof incident==='object' && !Array.isArray(incident));
@@ -143,19 +170,27 @@ function validateWorkerCodeRepairAuthorization(auth, now) {
   const sha = value => assert.match(value || '', /^[a-f0-9]{64}$/);
   const writer = auth.version === 'worker-code-repair-v3';
   const snapshot = auth.version === 'worker-code-repair-v4';
+  const r942ResultIdentity = auth.version === 'worker-code-repair-v12';
   const r941Stability = auth.version === 'worker-code-repair-v11';
   const timeoutRepair = auth.version === 'worker-code-repair-v10';
   const syncMeta = auth.version === 'worker-code-repair-v9';
   const canonicalReference = auth.version === 'worker-code-repair-v8';
   const referenceIndex = auth.version === 'worker-code-repair-v7';
-  const freshCapture = auth.version === 'worker-code-repair-v6' || referenceIndex || canonicalReference || syncMeta || timeoutRepair || r941Stability;
-  const resultIdentity = auth.version === 'worker-code-repair-v5' || auth.version === 'worker-code-repair-v6' || canonicalReference;
+  const freshCapture = auth.version === 'worker-code-repair-v6' || referenceIndex || canonicalReference || syncMeta || timeoutRepair || r941Stability || r942ResultIdentity;
+  const resultIdentity = auth.version === 'worker-code-repair-v5' || auth.version === 'worker-code-repair-v6' || canonicalReference || r942ResultIdentity;
   const pair = auth.version === 'worker-code-repair-v2' || writer || snapshot || resultIdentity || referenceIndex || syncMeta || timeoutRepair || r941Stability;
-  assert.deepEqual(Object.keys(auth).sort(), ['version','reason','createdAt','expiresAt','baseRuntimeSha256','files','dataContract',...(pair?['publication']:[]),...(resultIdentity||referenceIndex||syncMeta||timeoutRepair||r941Stability?['incident']:[]),...(freshCapture?['bindingPolicy']:[]),...(referenceIndex?['referenceIndex','indexSources']:[]),...(canonicalReference?['canonicalReference','canonicalReferenceSources']:[]),...(syncMeta||timeoutRepair||r941Stability?['addedSources','unchangedSources']:[]),...(timeoutRepair?['replayReceiptSha256']:[])].sort());
-  assert.equal(auth.version, r941Stability ? 'worker-code-repair-v11' : timeoutRepair ? 'worker-code-repair-v10' : syncMeta ? 'worker-code-repair-v9' : canonicalReference ? 'worker-code-repair-v8' : referenceIndex ? 'worker-code-repair-v7' : freshCapture ? 'worker-code-repair-v6' : resultIdentity ? 'worker-code-repair-v5' : snapshot ? 'worker-code-repair-v4' : writer ? 'worker-code-repair-v3' : pair ? 'worker-code-repair-v2' : 'worker-code-repair-v1');
-  if(freshCapture) assert.equal(auth.bindingPolicy, r941Stability ? R941_BINDING_POLICY : timeoutRepair ? 'fresh-r938-timeout-incident-before-lease-v1' : syncMeta ? 'fresh-sync-meta-size-incident-before-lease-v1' : canonicalReference ? 'fresh-exact-identity-failure-and-unchanged-reference-before-lease-v1' : referenceIndex ? 'fresh-reference-index-limit-and-exact-corpus-before-lease-v1' : 'fresh-raw-and-repeated-exact-failure-before-lease-v1');
-  assert.equal(auth.reason, (timeoutRepair || r941Stability) ? auth.incident.kind : syncMeta ? 'sync-meta-strategy-summary-size' : canonicalReference ? 'official-result-canonical-identity-with-preserved-reference' : referenceIndex ? 'reference-decision-index-limit' : resultIdentity ? 'official-result-canonical-identity-regression' : snapshot ? 'model-artifact-generation-snapshot-race' : writer ? 'postgres-source-file-assembly-timeout' : pair ? 'postgres-committed-generation-pairing' : 'reference-array-string-limit');
+  assert.deepEqual(Object.keys(auth).sort(), ['version','reason','createdAt','expiresAt','baseRuntimeSha256','files','dataContract',...(pair?['publication']:[]),...(resultIdentity||referenceIndex||syncMeta||timeoutRepair||r941Stability?['incident']:[]),...(freshCapture?['bindingPolicy']:[]),...(referenceIndex?['referenceIndex','indexSources']:[]),...(canonicalReference?['canonicalReference','canonicalReferenceSources']:[]),...(syncMeta||timeoutRepair||r941Stability||r942ResultIdentity?['addedSources','unchangedSources']:[]),...(timeoutRepair?['replayReceiptSha256']:[])].sort());
+  assert.equal(auth.version, r942ResultIdentity ? 'worker-code-repair-v12' : r941Stability ? 'worker-code-repair-v11' : timeoutRepair ? 'worker-code-repair-v10' : syncMeta ? 'worker-code-repair-v9' : canonicalReference ? 'worker-code-repair-v8' : referenceIndex ? 'worker-code-repair-v7' : freshCapture ? 'worker-code-repair-v6' : resultIdentity ? 'worker-code-repair-v5' : snapshot ? 'worker-code-repair-v4' : writer ? 'worker-code-repair-v3' : pair ? 'worker-code-repair-v2' : 'worker-code-repair-v1');
+  if(freshCapture) assert.equal(auth.bindingPolicy, r942ResultIdentity ? R942_BINDING_POLICY : r941Stability ? R941_BINDING_POLICY : timeoutRepair ? 'fresh-r938-timeout-incident-before-lease-v1' : syncMeta ? 'fresh-sync-meta-size-incident-before-lease-v1' : canonicalReference ? 'fresh-exact-identity-failure-and-unchanged-reference-before-lease-v1' : referenceIndex ? 'fresh-reference-index-limit-and-exact-corpus-before-lease-v1' : 'fresh-raw-and-repeated-exact-failure-before-lease-v1');
+  assert.equal(auth.reason, r942ResultIdentity ? 'official-result-post-cutoff-gate-identity-regression' : (timeoutRepair || r941Stability) ? auth.incident.kind : syncMeta ? 'sync-meta-strategy-summary-size' : canonicalReference ? 'official-result-canonical-identity-with-preserved-reference' : referenceIndex ? 'reference-decision-index-limit' : resultIdentity ? 'official-result-canonical-identity-regression' : snapshot ? 'model-artifact-generation-snapshot-race' : writer ? 'postgres-source-file-assembly-timeout' : pair ? 'postgres-committed-generation-pairing' : 'reference-array-string-limit');
   if(pair) validateRepairPublication(auth.publication,snapshot || writer || resultIdentity || referenceIndex || syncMeta || timeoutRepair || r941Stability);
+  if(r942ResultIdentity) {
+    assert.equal(auth.baseRuntimeSha256,R942_BASE_RUNTIME_SHA256);
+    for(const [key,names] of [['addedSources',R942_RESULT_IDENTITY_ADDED],['unchangedSources',R942_RESULT_IDENTITY_UNCHANGED]]) {
+      assert.deepEqual(auth[key].map(row=>row.path),names);
+      for(const row of auth[key]) {assert.deepEqual(Object.keys(row).sort(),['path','sha256']);sha(row.sha256);}
+    }
+  }
   if(r941Stability) {
     assert.equal(auth.baseRuntimeSha256,R941_BASE_RUNTIME_SHA256);
     validateR941StabilityIncident(auth.incident);
@@ -204,7 +239,7 @@ function validateWorkerCodeRepairAuthorization(auth, now) {
   const start = Date.parse(auth.createdAt), end = Date.parse(auth.expiresAt);
   assert(Number.isFinite(now) && Number.isFinite(start) && Number.isFinite(end)
     && start <= now + 5000 && now < end && end > start && end - start <= 2 * 3600000, 'repair authorization clock');
-  assert.deepEqual(auth.files.map(row => row.path), r941Stability ? R941_STABILITY_TARGETS : timeoutRepair ? [...timeoutPaths(auth.incident.kind).patch,...TIMEOUT_POLICY_TARGETS] : syncMeta ? SYNC_META_TARGETS : canonicalReference ? CANONICAL_REFERENCE_TARGETS : referenceIndex ? REFERENCE_INDEX_TARGETS : resultIdentity ? RESULT_IDENTITY_TARGETS : snapshot ? SNAPSHOT_TARGETS : writer ? WRITER_TARGETS : pair ? PAIR_TARGETS : TARGETS);
+  assert.deepEqual(auth.files.map(row => row.path), r942ResultIdentity ? R942_RESULT_IDENTITY_TARGETS : r941Stability ? R941_STABILITY_TARGETS : timeoutRepair ? [...timeoutPaths(auth.incident.kind).patch,...TIMEOUT_POLICY_TARGETS] : syncMeta ? SYNC_META_TARGETS : canonicalReference ? CANONICAL_REFERENCE_TARGETS : referenceIndex ? REFERENCE_INDEX_TARGETS : resultIdentity ? RESULT_IDENTITY_TARGETS : snapshot ? SNAPSHOT_TARGETS : writer ? WRITER_TARGETS : pair ? PAIR_TARGETS : TARGETS);
   for (const row of auth.files) {
     assert.deepEqual(Object.keys(row).sort(), ['afterSha256','beforeSha256','path']);
     sha(row.beforeSha256); sha(row.afterSha256);
@@ -281,7 +316,7 @@ function repeatedRepairIncident(auth,worker,journal,meta) {
   if(auth.version==='worker-code-repair-v10') return timeoutIncidentProof(auth,worker,journal,meta);
   if(auth.version==='worker-code-repair-v9') return verifyRepeatedIncident(auth.incident,{worker,journal,meta});
   if(auth.version==='worker-code-repair-v7')return repeatedReferenceIndexIncident(auth.incident,worker,journal);
-  assert(['worker-code-repair-v6','worker-code-repair-v8'].includes(auth.version));
+  assert(['worker-code-repair-v6','worker-code-repair-v8','worker-code-repair-v12'].includes(auth.version));
   return repeatedResultIdentityIncident(auth.incident,worker,journal);
 }
 function validateCanonicalReferenceProof(proof,incident) {
@@ -471,7 +506,7 @@ function evaluateWorkerCodeRepair(auth, worker, observed) {
   try {
     const now = Date.parse(worker.checkedAt);
     validateWorkerCodeRepairAuthorization(auth, now);
-    if (['worker-code-repair-v8','worker-code-repair-v9','worker-code-repair-v10','worker-code-repair-v11'].includes(auth.version) && report.blockers.length === 2) {
+    if (['worker-code-repair-v8','worker-code-repair-v9','worker-code-repair-v10','worker-code-repair-v11','worker-code-repair-v12'].includes(auth.version) && report.blockers.length === 2) {
       assert.deepEqual(report.blockers, ['worker-latest-official-cycle-failed','worker-official-recovery-unproven']);
       assert.equal(worker.status.ok, false);
       assert.equal(worker.status.phase, 'failed');
@@ -484,6 +519,7 @@ function evaluateWorkerCodeRepair(auth, worker, observed) {
     const cycle = worker.status.lastCycle;
     const start = Date.parse(cycle?.startedAt), end = Date.parse(cycle?.finishedAt);
     assert.equal(cycle?.ok, false); assert.equal(cycle?.phase, 'official-result-failed');
+    const r942ResultIdentity = auth.version === 'worker-code-repair-v12';
     const r941Stability = auth.version === 'worker-code-repair-v11';
     const r941Deadline = r941Stability && auth.incident.kind === 'deadline-recovery';
     const r941Inline = r941Stability && auth.incident.kind === 'external-inline-row-limit';
@@ -498,8 +534,8 @@ function evaluateWorkerCodeRepair(auth, worker, observed) {
     const syncMeta = auth.version === 'worker-code-repair-v9';
     const canonicalReference = auth.version === 'worker-code-repair-v8';
     const referenceIndex = auth.version === 'worker-code-repair-v7';
-    const freshCapture = auth.version === 'worker-code-repair-v6' || referenceIndex || canonicalReference || syncMeta || timeoutRepair || r941Stability;
-    const resultIdentity = auth.version === 'worker-code-repair-v5' || auth.version === 'worker-code-repair-v6' || canonicalReference;
+    const freshCapture = auth.version === 'worker-code-repair-v6' || referenceIndex || canonicalReference || syncMeta || timeoutRepair || r941Stability || r942ResultIdentity;
+    const resultIdentity = auth.version === 'worker-code-repair-v5' || auth.version === 'worker-code-repair-v6' || canonicalReference || r942ResultIdentity;
     if(!timeoutRepair && !r941Deadline) assert.equal(cycle?.error, syncMeta ? 'npm run validate:data exited with 1' : referenceIndex ? 'npm run reconcile:fast-results-generation exited with 1' : snapshot ? 'npm run datastore:generation exited with 1' : writer || resultIdentity || r941Inline ? 'npm run postgres:sync exited with 1' : 'node scripts/syncData.cjs exited with 1');
     assert(Number.isFinite(start) && Number.isFinite(end) && start <= end && end <= now
       && now - end <= 3600000 && start >= Date.parse(worker.serviceAfter.ExecMainStartTimestamp), 'failed cycle clock');
@@ -523,6 +559,10 @@ function evaluateWorkerCodeRepair(auth, worker, observed) {
         if(after.committedAt===before.committedAt) assert.deepEqual(after,before);
       }
       repeatedRepairIncident(auth,worker,observed.journal,observed.meta);
+      if(r942ResultIdentity) {
+        assert.deepEqual(observed.unchangedSources,auth.unchangedSources);
+        assert.deepEqual(observed.addedSourcesAbsent,R942_RESULT_IDENTITY_ADDED);
+      }
       if(r941Stability) {
         assert.deepEqual(observed.unchangedSources,auth.unchangedSources);
         assert.deepEqual(observed.addedSourcesAbsent,R941_STABILITY_ADDED);
@@ -605,16 +645,22 @@ function collectWorkerCodeRepair(auth, worker) {
   const migrationNames = Array.from(fs.readdirSync(root+'/server/postgres/migrations')).sort();
   const cycle = worker.status.lastCycle;
   const canonicalReference=auth.version==='worker-code-repair-v8';
+  const r942ResultIdentity=auth.version==='worker-code-repair-v12';
   const r941Stability=auth.version==='worker-code-repair-v11';
   const r941Inline=r941Stability&&auth.incident.kind==='external-inline-row-limit';
   const r941Deadline=r941Stability&&auth.incident.kind==='deadline-recovery';
   const timeoutRepair=auth.version==='worker-code-repair-v10';
   const syncMeta=auth.version==='worker-code-repair-v9';
   const referenceIndex=auth.version==='worker-code-repair-v7';
-  const freshCapture=auth.version==='worker-code-repair-v6'||referenceIndex||canonicalReference||syncMeta||timeoutRepair||r941Stability;
-  const resultIdentity=auth.version==='worker-code-repair-v5'||auth.version==='worker-code-repair-v6'||canonicalReference;
+  const freshCapture=auth.version==='worker-code-repair-v6'||referenceIndex||canonicalReference||syncMeta||timeoutRepair||r941Stability||r942ResultIdentity;
+  const resultIdentity=auth.version==='worker-code-repair-v5'||auth.version==='worker-code-repair-v6'||canonicalReference||r942ResultIdentity;
   const completeIncident=resultIdentity||referenceIndex||syncMeta||timeoutRepair||r941Stability;
   let meta,unchangedSources,addedSourcesAbsent;
+  if(r942ResultIdentity) {
+    unchangedSources=auth.unchangedSources.map(row=>({path:row.path,sha256:hash(plain(row.path))}));
+    assert.deepEqual(unchangedSources,auth.unchangedSources);
+    addedSourcesAbsent=R942_RESULT_IDENTITY_ADDED.map(name=>{assert.equal(present(path.join(root,name)),false);return name;});
+  }
   if(r941Stability) {
     unchangedSources=auth.unchangedSources.map(row=>({path:row.path,sha256:hash(plain(row.path))}));
     assert.deepEqual(unchangedSources,auth.unchangedSources);
@@ -678,7 +724,7 @@ function collectWorkerCodeRepair(auth, worker) {
     // Read the exact located microsecond for v7; keep the 64-row truncation
     // rejection and complete-frame check instead of admitting a clipped window.
     const epoch=us=>'@'+(us/1000000n).toString()+'.'+(us%1000000n).toString().padStart(6,'0');
-    const journalArgs=referenceIndex||canonicalReference||syncMeta||r941Inline
+    const journalArgs=referenceIndex||canonicalReference||syncMeta||r941Inline||r942ResultIdentity
       ? ['--unit=football-sync-worker.service','--since='+epoch(BigInt(journalTimestampUs)),'--until='+epoch(BigInt(journalTimestampUs)+1n),'--lines=64','--output=json','--no-pager']
       : completeIncident
       ? ['--unit=football-sync-worker.service','--since=@'+journalSecond,'--until=@'+(journalSecond+1),'--lines=64','--output=json','--no-pager']
@@ -697,9 +743,9 @@ function collectWorkerCodeRepair(auth, worker) {
     }
   }
   let publication;
-  if(['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5','worker-code-repair-v6','worker-code-repair-v7','worker-code-repair-v8','worker-code-repair-v9','worker-code-repair-v10','worker-code-repair-v11'].includes(auth.version)) {
+  if(['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5','worker-code-repair-v6','worker-code-repair-v7','worker-code-repair-v8','worker-code-repair-v9','worker-code-repair-v10','worker-code-repair-v11','worker-code-repair-v12'].includes(auth.version)) {
     const keys=['data_publication_mode','data_generation_id','manifest_hash','data_generation_source_cycle_id','committed_at'];
-    const sql="BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; "+(syncMeta||timeoutRepair||r941Stability?"SET LOCAL statement_timeout='8s'; SET LOCAL lock_timeout='2s'; ":'')+"SELECT json_build_object('databaseOid',(SELECT oid::text FROM pg_database WHERE datname=current_database()),'readOnly',current_setting('transaction_read_only'),'meta',(SELECT json_object_agg(key,value) FROM football.projection_meta WHERE key IN ('data_publication_mode','data_generation_id','manifest_hash','data_generation_source_cycle_id','committed_at'))); ROLLBACK;";
+    const sql="BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; "+(syncMeta||timeoutRepair||r941Stability||r942ResultIdentity?"SET LOCAL statement_timeout='8s'; SET LOCAL lock_timeout='2s'; ":'')+"SELECT json_build_object('databaseOid',(SELECT oid::text FROM pg_database WHERE datname=current_database()),'readOnly',current_setting('transaction_read_only'),'meta',(SELECT json_object_agg(key,value) FROM football.projection_meta WHERE key IN ('data_publication_mode','data_generation_id','manifest_hash','data_generation_source_cycle_id','committed_at'))); ROLLBACK;";
     const output=cp.execFileSync('/usr/sbin/runuser',['-u','postgres','--','/usr/bin/psql','-X','-qAt','-v','ON_ERROR_STOP=1','-d','football','-c',sql],
       {encoding:'utf8',timeout:10000,maxBuffer:16384,env:{PATH:'/usr/bin:/bin',PGHOST:'/var/run/postgresql',PGUSER:'postgres',PGCONNECT_TIMEOUT:'5'}});
     const pg=JSON.parse(output.trim()); assert.equal(pg.readOnly,'on');
@@ -707,7 +753,7 @@ function collectWorkerCodeRepair(auth, worker) {
     const pointer=name=>{const file='/var/lib/football-predict/data-generations/'+name+'.json';
       assert.equal(fs.realpathSync(path.dirname(file)),path.dirname(file));const fd=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
       try {const s=fs.fstatSync(fd);assert(s.isFile()&&s.nlink===1&&s.size<8192);const bytes=fs.readFileSync(fd),after=fs.fstatSync(fd);assert(s.ino===after.ino&&s.size===bytes.length&&s.mtimeMs===after.mtimeMs);const row=JSON.parse(bytes);assert.equal(row.schemaVersion,1);return {mode:'active-generation',...Object.fromEntries(['generationId','manifestHash','sourceCycleId','committedAt'].map(k=>[k,row[k]]))};}finally{fs.closeSync(fd);}};
-    publication=validateRepairPublication({databaseOid:pg.databaseOid,committed,rawCurrent:pointer('current'),rawPrevious:pointer('previous')},['worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5','worker-code-repair-v6','worker-code-repair-v7','worker-code-repair-v8','worker-code-repair-v9','worker-code-repair-v10','worker-code-repair-v11'].includes(auth.version));
+    publication=validateRepairPublication({databaseOid:pg.databaseOid,committed,rawCurrent:pointer('current'),rawPrevious:pointer('previous')},['worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5','worker-code-repair-v6','worker-code-repair-v7','worker-code-repair-v8','worker-code-repair-v9','worker-code-repair-v10','worker-code-repair-v11','worker-code-repair-v12'].includes(auth.version));
     if(r941Inline) assertInlineSourceContinuity(auth.incident.source,meta,publication);
   }
   assert.deepEqual(identity(), before, 'runtime identity changed during incident read');
@@ -723,6 +769,11 @@ function collectWorkerCodeRepair(auth, worker) {
   if(canonicalReference) {
     assert.deepEqual(auth.canonicalReferenceSources.map(row=>({path:row.path,sha256:hash(plain(row.path))})),canonicalReferenceSources);
     assert.deepEqual(collectCanonicalReferenceProof(root,auth.incident),canonicalReferenceProof);
+  }
+  if(r942ResultIdentity) {
+    assert.deepEqual(auth.unchangedSources.map(row=>({path:row.path,sha256:hash(plain(row.path))})),unchangedSources);
+    assert.deepEqual(auth.files.map(row=>({path:row.path,sha256:hash(plain(row.path))})),files);
+    for(const name of R942_RESULT_IDENTITY_ADDED) assert.equal(present(path.join(root,name)),false);
   }
   if(r941Stability) {
     if(r941Inline) assert.deepEqual(readInlineSource(root),meta,'inline source changed during incident read');
@@ -743,7 +794,7 @@ function collectWorkerCodeRepair(auth, worker) {
     assert.deepEqual(auth.files.map(row=>({path:row.path,sha256:hash(plain(row.path))})),files);
     for(const name of SYNC_META_ADDED) assert.equal(present(path.join(root,name)),false);
   }
-  return {...before,files,dataContract,migrationNames,journal,...(publication?{publication}:{}),...(referenceIndex?{indexSources,referenceIndex:referenceProof}:{}),...(canonicalReference?{canonicalReferenceSources,canonicalReference:canonicalReferenceProof}:{}),...(syncMeta||timeoutRepair||r941Stability?{meta,unchangedSources,addedSourcesAbsent}:{})};
+  return {...before,files,dataContract,migrationNames,journal,...(publication?{publication}:{}),...(referenceIndex?{indexSources,referenceIndex:referenceProof}:{}),...(canonicalReference?{canonicalReferenceSources,canonicalReference:canonicalReferenceProof}:{}),...(syncMeta||timeoutRepair||r941Stability?{meta,unchangedSources,addedSourcesAbsent}:{}),...(r942ResultIdentity?{unchangedSources,addedSourcesAbsent}:{})};
 }
 
 function candidateAuthorization(root, auth) {
@@ -752,7 +803,7 @@ function candidateAuthorization(root, auth) {
   for (const row of auth.files) {
     if (sha(fs.readFileSync(path.join(root,row.path))) !== row.afterSha256) throw Error('candidate repair file differs');
   }
-  if(['worker-code-repair-v9','worker-code-repair-v10','worker-code-repair-v11'].includes(auth.version)) for(const row of [...auth.addedSources,...auth.unchangedSources]) {
+  if(['worker-code-repair-v9','worker-code-repair-v10','worker-code-repair-v11','worker-code-repair-v12'].includes(auth.version)) for(const row of [...auth.addedSources,...auth.unchangedSources]) {
     if(sha(fs.readFileSync(path.join(root,row.path)))!==row.sha256) throw Error('candidate sync-meta source differs');
   }
   if(auth.version==='worker-code-repair-v7')for(const row of auth.indexSources) {
@@ -772,6 +823,7 @@ function buildWorkerCodeRepairProbe(auth) {
     + 'const SYNC_META_TARGETS='+JSON.stringify(SYNC_META_TARGETS)+',SYNC_META_ADDED='+JSON.stringify(SYNC_META_ADDED)+',SYNC_META_UNCHANGED='+JSON.stringify(SYNC_META_UNCHANGED)+';\n'
     + 'const TIMEOUT_POLICY_TARGETS='+JSON.stringify(TIMEOUT_POLICY_TARGETS)+',TIMEOUT_ADDED='+JSON.stringify(TIMEOUT_ADDED)+',TIMEOUT_UNCHANGED='+JSON.stringify(TIMEOUT_UNCHANGED)+',TIMEOUT_RUNTIME='+JSON.stringify(TIMEOUT_RUNTIME)+',TIMEOUT_REPLAYS='+JSON.stringify(TIMEOUT_REPLAYS)+';\n'
     + 'const R941_BASE_RUNTIME_SHA256='+JSON.stringify(R941_BASE_RUNTIME_SHA256)+',R941_BINDING_POLICY='+JSON.stringify(R941_BINDING_POLICY)+',R941_STABILITY_TARGETS='+JSON.stringify(R941_STABILITY_TARGETS)+',R941_STABILITY_ADDED='+JSON.stringify(R941_STABILITY_ADDED)+',R941_STABILITY_UNCHANGED='+JSON.stringify(R941_STABILITY_UNCHANGED)+';\n'
+    + 'const R942_BASE_RUNTIME_SHA256='+JSON.stringify(R942_BASE_RUNTIME_SHA256)+',R942_BINDING_POLICY='+JSON.stringify(R942_BINDING_POLICY)+',R942_RESULT_IDENTITY_TARGETS='+JSON.stringify(R942_RESULT_IDENTITY_TARGETS)+',R942_RESULT_IDENTITY_ADDED='+JSON.stringify(R942_RESULT_IDENTITY_ADDED)+',R942_RESULT_IDENTITY_UNCHANGED='+JSON.stringify(R942_RESULT_IDENTITY_UNCHANGED)+';\n'
     + [streamInlineObjectEntries,inlineFailure,validateInlineAnchor,inlineIncidentAnchor,repeatedInlineIncident,validateInlineSource,assertInlineSourceContinuity,canonicalMapValuesLowerBound,readInlineSource,validateR941StabilityIncident,timeoutPaths,validateTimeoutAnchor,verifyTimeoutFrame,packTimeoutJournal,unpackTimeoutJournal,currentTimeoutAnchor,timeoutIncidentProof,collectTimeoutJournal,readCurrentTimeoutJournal,readTimeoutAttempt,evaluateWorkerPreflight,collectWorkerPreflight,readStableMeta,verifySyncMetaFailure,incidentAnchor,verifyRepeatedIncident,validateSyncMetaAnchor,validateRepairPublication,validateResultIdentityIncident,assertResultIdentityJournal,repeatedResultIdentityIncident,validateReferenceIndexIncident,assertReferenceIndexJournal,repeatedReferenceIndexIncident,repeatedRepairIncident,validateReferenceIndexProof,assertReferenceIndexCorpus,measureReferenceIndexProof,collectReferenceIndexProof,validateCanonicalReferenceProof,collectCanonicalReferenceProof,validateWorkerCodeRepairAuthorization,evaluateWorkerCodeRepair,collectWorkerCodeRepair,selectWorkerCodeRepairPreparation].map(fn=>fn.toString()).join('\n')
     + '\ntry {const auth='+JSON.stringify(auth)+';const worker=collectWorkerPreflight();'
     + 'const {report}=selectWorkerCodeRepairPreparation(auth,worker,collectWorkerCodeRepair);console.log(JSON.stringify(report));if(!report.ok)process.exitCode=1;}'
@@ -783,6 +835,7 @@ Object.assign(module.exports,{CANONICAL_REFERENCE_SOURCES,CANONICAL_REFERENCE_TA
 Object.assign(module.exports,{TIMEOUT_POLICY_TARGETS,TIMEOUT_ADDED,TIMEOUT_UNCHANGED,TIMEOUT_RUNTIME,TIMEOUT_REPLAYS,timeoutPaths});
 Object.assign(module.exports,{SYNC_META_TARGETS,SYNC_META_ADDED,SYNC_META_UNCHANGED,validateSyncMetaAnchor});
 Object.assign(module.exports,{R941_BASE_RUNTIME_SHA256,R941_BINDING_POLICY,R941_STABILITY_TARGETS,R941_STABILITY_ADDED,R941_STABILITY_UNCHANGED,validateR941StabilityIncident});
+Object.assign(module.exports,{R942_BASE_RUNTIME_SHA256,R942_BINDING_POLICY,R942_RESULT_IDENTITY_TARGETS,R942_RESULT_IDENTITY_ADDED,R942_RESULT_IDENTITY_UNCHANGED});
 if(require.main===module) {
   try {
     if(process.argv.length!==3)throw Error('exact signed source root required');

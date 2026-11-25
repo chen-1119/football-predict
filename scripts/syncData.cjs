@@ -14696,6 +14696,16 @@ function buildLiveRecommendationAuditSummary(matches, capturedAt) {
 
 // Called only with the receipt/history from the verified PostgreSQL same-RR
 // reader. Display odds do not replace an already committed official event ID.
+const RESULT_ONLY_BLOCKED_GATE_REASON_CODES = Object.freeze([
+  "cutoff",
+  "model-after-cutoff",
+  "cutoff-crossed-during-sync",
+  "kickoff",
+  "cutoff-crossed-during-sync-no-trusted-pre-cutoff-decision",
+  "sync-started-after-cutoff-no-trusted-pre-cutoff-decision",
+  "locked-no-trusted-pre-cutoff-decision",
+]);
+
 function preserveCanonicalResultOnlyIdentities(matches, receipt, runtimeFinals) {
   if (receipt?.version !== "sqlite-fast-result-receipt-v2" || !Array.isArray(receipt.observations)) return matches;
   const iso = (value) => Number.isFinite(Date.parse(value || "")) ? new Date(value).toISOString() : null;
@@ -14709,7 +14719,7 @@ function preserveCanonicalResultOnlyIdentities(matches, receipt, runtimeFinals) 
       || match.archivedPreMatchPrediction != null
       || gate?.version !== "prediction-publication-cutoff-gate-v1"
       || gate.status !== "blocked" || gate.trustedExistingPreCutoffDecision !== false
-      || !["cutoff", "model-after-cutoff"].includes(gate.reasonCode)
+      || !RESULT_ONLY_BLOCKED_GATE_REASON_CODES.includes(gate.reasonCode)
       || !summary || !Array.isArray(summary.rows) || summary.rows.length
       || ![match.id, canonicalReviewId].includes(review.matchId)
       || review.sourceMatchId !== match.sourceMatchId
