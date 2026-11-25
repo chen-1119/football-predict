@@ -49,6 +49,7 @@ function compactReferencePairedBaseline(value, summary) {
 }
 
 function buildReferencePerformanceWithPairs({ matches, snapshotPayload, trustRegistry, generatedAt, startDate } = {}) {
+  require("./referenceIntegrityPartition.cjs").validateSnapshotIntegrity(snapshotPayload, snapshotPayload?.publicReferenceIntegrity);
   const workspace = require("./boundedPredictionSnapshots.cjs").workspaceFor(snapshotPayload);
   if (workspace) return buildReferencePerformanceFromOriginalPairs({
     matches, records: snapshotPayload.publicReferenceDecisions, getPair: workspace.getOriginalPair,
@@ -158,10 +159,17 @@ function buildReferencePerformanceFromSnapshotFile({matches,filePath,trustRegist
     records.set(record.contentHash,{compressed,bytes:raw.length,requiresEvidence:Boolean(record.evidenceBinding)});
   }});
   const byEvent=new Map(),byReference=new Map(),results=new Map();
+  const metadata = require("./selectedJsonObjectFile.cjs").readSelectedJsonObjectFile({ filePath,
+    expectedBytes: first.bytes, expectedSha256: first.sha256,
+    keys: ["version", "publicReferenceIntegrity"], maxSelectedChars: 512 * 1024 }).value;
+  const partition = require("./referenceIntegrityPartition.cjs");
+  const integrity = partition.readSnapshotIntegrity(filePath, metadata);
+  if (integrity?.records.some(record => records.has(record.contentHash))) throw new Error("REFERENCE_PARTITION_ACTIVE_OVERLAP");
   const referenceHash=match=>match?.postMatchReview?.predictionReview?.rows?.find(row=>row.marketType==='BEST'&&row.performanceTrack==='reference')?.frozenVersion?.referenceHash;
   for(const match of matches){const identity=matchIdentity(match);if(identity){const copies=byEvent.get(identity)||[];copies.push(match);byEvent.set(identity,copies);}const hash=referenceHash(match),copies=byReference.get(hash)||[];copies.push(match);byReference.set(hash,copies);}
   const seenEvidence=new Map();
   streamJsonObjectArrays(filePath,{keys:['publicReferenceEvidence'],allowNonArrays:true,expectedBytes:first.bytes,expectedSha256:first.sha256,onItem:(_key,entry)=>{
+    if (integrity?.records.some(record => record.contentHash === entry?.referenceHash)) throw new Error("REFERENCE_PARTITION_EXPLICIT_RESOLUTION_REQUIRED");
     const record=readRecord(entry?.referenceHash);if(!record)return; // Original retention ignores raw orphan entries.
     if(!verifyPublicReferenceEvidence(entry,record))throw new Error('PUBLIC_REFERENCE_EVIDENCE_BINDING_INVALID');
     const entryHash=digest(entry),previous=seenEvidence.get(entry.referenceHash);
@@ -205,10 +213,12 @@ function readReferenceSnapshotFile(filePath) {
     if (total !== stat.size) throw new Error("Reference snapshot shrank during hashing");
   }
   finally { fs.closeSync(fd); }
-  return require("./selectedJsonObjectFile.cjs").readSelectedJsonObjectFile({ filePath, expectedBytes: stat.size,
+  const snapshot = require("./selectedJsonObjectFile.cjs").readSelectedJsonObjectFile({ filePath, expectedBytes: stat.size,
     // The verified live reference ledger exceeds 64 MiB even after removing
     // formatting whitespace. Use the reader's bounded 128 MiB admission limit;
     // unrelated candidate data is still streamed and never materialized.
-    expectedSha256: hash.digest("hex"), keys: ["publicReferenceDecisions", "publicReferenceEvidence"], maxSelectedChars: 128 * 1024 * 1024 }).value;
+    expectedSha256: hash.digest("hex"), keys: ["version", "publicReferenceIntegrity", "publicReferenceDecisions", "publicReferenceEvidence"], maxSelectedChars: 128 * 1024 * 1024 }).value;
+  require("./referenceIntegrityPartition.cjs").readSnapshotIntegrity(filePath, snapshot);
+  return snapshot;
 }
 module.exports = { VERSION, POLICY, FIELDS, compactReferencePairedBaseline, buildReferencePerformanceWithPairs, buildReferencePerformanceFromSnapshotFile, readReferenceSnapshotFile };

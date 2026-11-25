@@ -144,6 +144,10 @@ verify('public distribution validation is explicit while default npm task stays 
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
   assert.equal(pkg.scripts['validate:data'], 'node scripts/validateData.cjs');
   assert.equal(pkg.scripts['validate:data:public'], 'node scripts/validateData.cjs --public-distribution');
+  const deployWorkflowPath = path.join(__dirname, '../.github/workflows/deploy.yml');
+  if (fs.existsSync(deployWorkflowPath)) {
+    assert.match(fs.readFileSync(deployWorkflowPath, 'utf8'), /npm run validate:data:public/);
+  }
 });
 verify('complete actual public data still passes public-scope validation', () => {
   const r=run({publicOnly:true,fullPublicFiles:true});assert.equal(r.exitCode,0,r.messages);

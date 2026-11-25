@@ -21,7 +21,8 @@ async function load(client,asOf){
   return {packets,receipts,asOf,storage:'postgres',formalEligible:false};
 }
 async function put(client,key,payload,{replace=false,updatedAt}={}){
-  model.check(/^league-(?:baseline-(?:br1|fi1)(?:-history-[a-f0-9]{64})?|forecast-[a-f0-9]{64}(?:-ack)?)$/.test(key)
+  model.check((model.LEAGUES.some(league=>key===model.KEY(league)||key.startsWith(model.KEY(league)+'-history-')&&/^[a-f0-9]{64}$/.test(key.slice((model.KEY(league)+'-history-').length)))
+    ||/^league-forecast-[a-f0-9]{64}(?:-ack)?$/.test(key))
     &&(!replace||model.LEAGUES.some(l=>model.KEY(l)===key)),'WRITE_KEY_SCOPE');
   const json=JSON.stringify(payload),digest=model.sha(json);model.check(Buffer.byteLength(json)<=16*1024*1024,'PAYLOAD_SIZE');
   const rows=(await client.query(SELECT+' FOR UPDATE',[key])).rows;

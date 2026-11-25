@@ -250,8 +250,10 @@ const manifestProjection = (manifest) => ({
 const generationIdForManifestHash = (manifestHash) => `g-${manifestHash}`;
 
 const buildManifest = ({ sourceCycleId, files, coreFiles }) => {
+  const partitioned = files.some(entry => entry.relativePath === "reference-integrity.json");
+  if (partitioned) coreFiles = [...new Set([...coreFiles, "reference-integrity.json"])].sort();
   const projection = {
-    schemaVersion: STORE_SCHEMA_VERSION,
+    schemaVersion: partitioned ? 2 : STORE_SCHEMA_VERSION,
     sourceCycleId,
     coreFiles,
     files: files.map((entry) => ({
@@ -336,12 +338,17 @@ const validateGenerationDirectory = ({
     "MANIFEST_MISSING",
     "MANIFEST_INVALID",
   );
-  if (manifest?.schemaVersion !== STORE_SCHEMA_VERSION
+  if (![STORE_SCHEMA_VERSION, 2].includes(manifest?.schemaVersion)
       || !Array.isArray(manifest.coreFiles) || manifest.coreFiles.length === 0
       || !Array.isArray(manifest.files) || manifest.files.length === 0
       || !HASH_PATTERN.test(String(manifest.manifestHash || ""))
       || !GENERATION_ID_PATTERN.test(String(manifest.generationId || ""))) {
     fail("MANIFEST_INVALID", `invalid manifest structure: ${resolvedDir}`);
+  }
+  const partitioned = manifest.files.some(entry => entry.path === "reference-integrity.json");
+  if ((manifest.schemaVersion === 2) !== partitioned
+    || (partitioned && !manifest.coreFiles.includes("reference-integrity.json"))) {
+    fail("MANIFEST_INVALID", "reference partition requires schema version 2 and core membership");
   }
   const computedHash = sha256(stableStringify(manifestProjection(manifest)));
   if (computedHash !== manifest.manifestHash) {

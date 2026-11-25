@@ -121,7 +121,7 @@ function collectInEntryRealm(change){
  };
  fakeRequire.resolve=file=>file;
  if(change)change({fakeFs,files,root,stat,v,calls});
- const code='const OLD_AUTH='+JSON.stringify(p.OLD_AUTH)+',PRELUDE='+JSON.stringify(p.PRELUDE)+',READER_ROOTS='+JSON.stringify(p.READER_ROOTS)+';'
+ const code='const OLD_AUTH='+JSON.stringify(p.OLD_AUTH)+',PRELUDE='+JSON.stringify(p.PRELUDE)+',READER_ROOTS='+JSON.stringify(p.READER_ROOTS)+',COMPATIBILITY_VERSION='+JSON.stringify(p.COMPATIBILITY_VERSION)+';'
   +'const auth='+JSON.stringify(v.auth)+',worker='+JSON.stringify(v.worker)+';'
   +p.hash.toString()+'\nfunction collectWorkerPreflight(){return JSON.parse('+JSON.stringify(JSON.stringify(v.worker))+');}\n'
   +p.collect.toString()+'\ncollect(auth,worker);';
@@ -270,3 +270,76 @@ for(const[label,change]of[
  ['reader closure changed',v=>v.observed.baselineClosure[0].sha256='0'.repeat(64)],['normal serving health false',v=>v.observed.servingHealthAccepted=false],['global archive false',v=>v.observed.globalArchiveAccepted=false],
  ['PG pointer mismatch',v=>v.observed.ordinaryPointerAffinity=false],['skipped',v=>v.worker.status.lastCycle.skipped=true],['healthy ordinary route',v=>v.worker.status.lastCycle.ok=true],['pending recovery',v=>v.observed.recoveryPending=true]
 ])test('r911 public current refuses '+label,()=>{const v=publicCurrentFixture();change(v);a.equal(p.evaluate(v.auth,v.worker,v.observed).preparationAllowed,false);});
+
+function compatibilityFixture(repeat=false){
+ const value=fixture(),shift=Date.parse('2026-10-23T10:20:00.000Z')-Date.parse(value.worker.checkedAt),clock=instant=>new Date(Date.parse(instant)+shift).toISOString();
+ const workerPid=repeat?'1234567':'1080936',workerStartedAt=repeat?'2026-10-23T09:30:00.000Z':'2026-10-23T01:30:39.000Z';
+ Object.assign(value.auth,{version:p.COMPATIBILITY_VERSION,reason:'install-backward-compatible-original-partition-readers-with-writer-disabled',baseRuntimeSha256:repeat?'1'.repeat(64):p.COMPATIBILITY_BASE,createdAt:clock(value.auth.createdAt),expiresAt:clock(value.auth.expiresAt)});
+ Object.assign(value.auth.incident,{workerMainPid:workerPid,workerStartedAt,cycleStartedAt:clock(value.auth.incident.cycleStartedAt),cycleFinishedAt:clock(value.auth.incident.cycleFinishedAt),journalTimestampUs:String(BigInt(value.auth.incident.journalTimestampUs)+BigInt(shift)*1000n)});
+ for(const path of p.COMPATIBILITY_FILES)value.auth.files.push({path,beforeSha256:null,afterSha256:'b'.repeat(64)});
+ value.auth.files.sort((left,right)=>left.path<right.path?-1:1);
+ if(repeat)for(const record of value.auth.files)record.beforeSha256=record.afterSha256;
+ value.observed.files=value.auth.files.map(record=>({path:record.path,sha256:record.beforeSha256}));
+ for(const service of [value.worker.serviceBefore,value.worker.serviceAfter])Object.assign(service,{MainPID:workerPid,ExecMainStartTimestamp:new Date(workerStartedAt).toUTCString()});
+ value.worker.status.pid=Number(workerPid);value.worker.checkedAt=clock(value.worker.checkedAt);value.worker.status.checkedAt=value.worker.checkedAt;
+ value.worker.status.lastCycle.startedAt=clock(value.worker.status.lastCycle.startedAt);value.worker.status.lastCycle.finishedAt=clock(value.worker.status.lastCycle.finishedAt);
+ Object.assign(value.observed,{runtimeSha256:value.auth.baseRuntimeSha256,completeSha256:value.auth.baseRuntimeSha256,completedAt:value.worker.checkedAt,partitionWriterDisabled:true});
+ value.observed.journal[0].timestampUs=value.auth.incident.journalTimestampUs;
+ return value;
+}
+for(const repeat of [false,true])test('partition compatibility '+(repeat?'repeat':'initial')+' preparation never activates a writer or asserts worker recovery',()=>{
+ const value=compatibilityFixture(repeat),before=JSON.stringify(value),report=p.evaluate(value.auth,value.worker,value.observed);
+ a.equal(report.preparationAllowed,true);a.equal(report.workerHealthy,false);a.equal(report.readyToCutover,false);a.equal(report.productionWrites,0);a.equal(JSON.stringify(value),before);
+ const original=Date.now;Date.now=()=>Date.parse(value.worker.checkedAt);
+ try{const source=p.buildProbe(value.auth);new(require('node:vm').Script)(source);a(source.includes(p.COMPATIBILITY_VERSION));a(source.includes(JSON.stringify(p.COMPATIBILITY_FILES)));a(Buffer.byteLength(source)<120000);}finally{Date.now=original;}
+});
+for(const repeat of [false,true])for(const [label,change]of[
+ ['enabled partition writer',value=>value.observed.partitionWriterDisabled=false],
+ ['unobserved writer flag',value=>delete value.observed.partitionWriterDisabled],
+ ['different runtime',value=>value.observed.runtimeSha256='0'.repeat(64)],
+ ['different completion',value=>value.observed.completeSha256='0'.repeat(64)],
+ ['different process incarnation',value=>value.worker.serviceAfter.ExecMainStartTimestamp='Fri, 23 Oct 2026 09:30:01 GMT'],
+ ['different process ID',value=>value.worker.serviceBefore.MainPID='888888'],
+ ['changed original',value=>value.observed.current.sha256='0'.repeat(64)],
+ ['changed warehouse',value=>value.observed.warehouse.sha256='0'.repeat(64)],
+ ['changed original29',value=>value.observed.gap.pop()],
+ ['invented companion',value=>value.observed.indexMatches=1],
+ ['unhealthy archive',value=>value.observed.globalArchiveAccepted=false],
+ ['unhealthy service',value=>value.observed.servingHealthAccepted=false],
+ ['different publication',value=>value.observed.ordinaryPointerAffinity=false],
+ ['expired ticket',value=>value.auth.expiresAt=value.worker.checkedAt],
+ ['additional child error',value=>value.observed.journal.push({...value.observed.journal[0],message:'Error: another failure'})],
+ ['changed schema',value=>value.observed.dataContract=[]],
+ ['missing reader closure',value=>value.auth.files=value.auth.files.filter(record=>record.path!=='server/referenceIntegrityPartition.cjs')]
+])test('partition compatibility '+(repeat?'repeat':'initial')+' refuses '+label,()=>{const value=compatibilityFixture(repeat);change(value);a.equal(p.evaluate(value.auth,value.worker,value.observed).preparationAllowed,false);});
+for(const name of p.COMPATIBILITY_FILES)test('partition repeat refuses changed already installed source '+name,()=>{
+ const value=compatibilityFixture(true);value.auth.files.find(record=>record.path===name).afterSha256='a'.repeat(64);a.equal(p.evaluate(value.auth,value.worker,value.observed).preparationAllowed,false);
+});
+test('partition repeat refuses a new source even when all required reader files are unchanged',()=>{
+ const value=compatibilityFixture(true);value.auth.files.push({path:'src/unrelated.cjs',beforeSha256:null,afterSha256:'a'.repeat(64)});value.auth.files.sort((left,right)=>left.path<right.path?-1:1);a.equal(p.evaluate(value.auth,value.worker,value.observed).preparationAllowed,false);
+});
+test('only compatibility preparation admits the exact top-level vite configuration binding',()=>{
+ for(const path of ['vite.other.ts','package.json','../vite.config.ts']){
+  const value=compatibilityFixture();value.auth.files.push({path,beforeSha256:null,afterSha256:'b'.repeat(64)});value.auth.files.sort((left,right)=>left.path<right.path?-1:1);a.equal(p.evaluate(value.auth,value.worker,value.observed).preparationAllowed,false);
+ }
+ const legacy=fixture();legacy.auth.files.push({path:'vite.config.ts',beforeSha256:null,afterSha256:'b'.repeat(64)});a.equal(p.evaluate(legacy.auth,legacy.worker,legacy.observed).preparationAllowed,false);
+});
+
+function writerStateFixture(adjust=()=>{}){
+ const files=new Map([['/proc/1080936/environ',Buffer.from('PATH=/usr/bin\0')],['/etc/football-predict/env',Buffer.from('CURRENT_MATCH_SOURCE=postgres\n')],['/etc/football-predict/worker-memory.env',Buffer.from('NODE_OPTIONS=--max-old-space-size=768\n')]]);
+ const state={files,environment:'SYNC_WORKER_LOOP=1\n',environmentFiles:'/etc/football-predict/env (ignore_errors=no) /etc/football-predict/worker-memory.env (ignore_errors=no)\n',mutate:false};adjust(state);
+ const stat=()=>({dev:1,ino:1,size:16,mtimeMs:1,ctimeMs:1,nlink:1,uid:0,mode:0o640,isFile:()=>true,isSymbolicLink:()=>false});
+ const fakeFs={readFileSync:descriptor=>files.get(descriptor),lstatSync:stat,fstatSync:()=>({...stat(),mtimeMs:state.mutate?2:1}),openSync:file=>file,closeSync(){},constants:{O_RDONLY:0,O_NOFOLLOW:1}};
+ const fakeRequire=name=>name==='node:fs'?fakeFs:name==='node:child_process'?{execFileSync(_program,args){return args.includes('--property=Environment')?state.environment:state.environmentFiles;}}:require(name);
+ return new(require('node:vm').Script)('const hash='+p.hash.toString()+';('+p.collectCompatibilityWriterState.toString()+')({serviceAfter:{MainPID:"1080936"}})').runInNewContext({require:fakeRequire});
+}
+test('partition compatibility checks process, effective service environment and every configured environment file',()=>{const state=writerStateFixture();a.equal(state.partitionWriterDisabled,true);a.equal(state.configured.length,2);});
+for(const [label,adjust]of[
+ ['process flag',state=>state.files.set('/proc/1080936/environ',Buffer.from('ORIGINAL_REFERENCE_PARTITION=1\0'))],
+ ['service flag',state=>state.environment='ORIGINAL_REFERENCE_PARTITION=1'],
+ ['secondary environment flag',state=>state.files.set('/etc/football-predict/worker-memory.env',Buffer.from('ORIGINAL_REFERENCE_PARTITION=1\n'))],
+ ['unknown environment source',state=>state.environmentFiles+='/tmp/extra.env (ignore_errors=no)'],
+ ['optional environment source',state=>state.environmentFiles=state.environmentFiles.replace('ignore_errors=no','ignore_errors=yes')],
+ ['duplicate environment source',state=>state.environmentFiles+='/etc/football-predict/env (ignore_errors=no)'],
+ ['mutable environment file',state=>state.mutate=true]
+])test('partition compatibility environment observer rejects '+label,()=>a.throws(()=>writerStateFixture(adjust),{code:'ERR_ASSERTION'}));

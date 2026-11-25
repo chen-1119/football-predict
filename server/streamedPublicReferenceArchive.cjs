@@ -23,7 +23,12 @@ function buildStreamedPublicReferenceArchive(context, options = {}) {
     || !Number.isSafeInteger(inlineBytes) || inlineBytes < 0 || inlineBytes > INLINE_BYTES) fail("invalid streamed reference admission bound");
   const name = "prediction-snapshots.json";
   // Admit the path and immutable manifest before creating scratch files.
-  const { value: metadata } = readGenerationSelectedObject(context, name, { keys: ["updatedAt", "retentionDays"], maxSelectedChars: 64 * 1024 });
+  const { value: metadata } = readGenerationSelectedObject(context, name, {
+    keys: ["updatedAt", "retentionDays", "version", "publicReferenceIntegrity"], maxSelectedChars: 512 * 1024 });
+  const partition = require("./referenceIntegrityPartition.cjs");
+  const integrity = context.manifest.files.some(item => item.path === partition.FILE_NAME)
+    ? require("./dataGenerationStore.cjs").readGenerationFile(context, partition.FILE_NAME, { parseJson: true }) : null;
+  partition.validateSnapshotIntegrity(metadata, integrity);
   const input = path.join(context.generationDir, name), entry = context.manifest.files.find(item => item.path === name);
   const base = fs.realpathSync(options.tempDir || os.tmpdir());
   const directory = fs.mkdtempSync(path.join(base, "football-pg-reference-"));
@@ -64,6 +69,7 @@ function buildStreamedPublicReferenceArchive(context, options = {}) {
       expectedBytes: entry.bytes, expectedSha256: entry.sha256, maxItemChars: MAX_ITEM_CHARS,
       onItem(_key, value) { if (++itemCount > maxItems) fail("reference item count exceeds bounded admission"); onItem(value); } });
     const result = scan("publicReferenceDecisions", record => {
+      if (integrity && partition.isOriginalUnresolvedRecord(record)) throw new Error("REFERENCE_PARTITION_ACTIVE_OVERLAP");
       if (!validReferenceHash(record?.contentHash) || byHash.has(record.contentHash) || !attestPublicReferenceDecision(record, record)) throw new Error("REFERENCE_INDEX_RECORD_INVALID");
       const item = appendItem(record);
       rowHash.update(records.length ? "," : "").update(itemBytes(item));
@@ -78,6 +84,9 @@ function buildStreamedPublicReferenceArchive(context, options = {}) {
     }
     const contentHash = rowHash.update("]").digest("hex");
     scan("publicReferenceEvidence", value => {
+      if (integrity?.records.some(record => record.contentHash === value?.referenceHash)) {
+        throw new Error("REFERENCE_PARTITION_EXPLICIT_RESOLUTION_REQUIRED");
+      }
       const descriptor = byHash.get(value?.referenceHash);
       if (!descriptor) return; // Exact existing collectPublicReferenceEvidence retention semantics.
       const record = itemValue(descriptor);

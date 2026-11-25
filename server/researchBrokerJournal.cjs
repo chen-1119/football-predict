@@ -12,14 +12,24 @@ function checkBudget(entries,availableBytes,reserveBytes){
  }
  return {files:entries.length,bytes:total,reserveBytes};
 }
+function isJournalFileName(name){
+ if(typeof name!=='string')return false;
+ if(/^[a-f0-9]{64}(?:-read-[a-f0-9]{24})?\.(?:intent|receipt)\.json$/.test(name))return true;
+ // The series publisher claims one immutable journal per business day. Count
+ // these original files too; their presence grants no retry or write authority.
+ const match=/^combo-series-day-(\d{4}-\d{2}-\d{2})\.(?:intent|receipt)\.json$/.exec(name);
+ if(!match)return false;
+ const at=Date.parse(match[1]+'T00:00:00.000Z');
+ return Number.isFinite(at)&&new Date(at).toISOString().slice(0,10)===match[1];
+}
 function journalBudget(directory,reserveBytes){
  const names=fs.readdirSync(directory);if(names.length+2>MAX_FILES)fail('RESEARCH_JOURNAL_CAPACITY');
  const entries=names.map(name=>{
-  if(!/^[a-f0-9]{64}(?:-read-[a-f0-9]{24})?\.(?:intent|receipt)\.json$/.test(name))fail('RESEARCH_JOURNAL_FILE_IDENTITY');
+  if(!isJournalFileName(name))fail('RESEARCH_JOURNAL_FILE_IDENTITY');
   const s=fs.lstatSync(directory+'/'+name);
   if(!s.isFile()||s.isSymbolicLink()||s.uid!==0||s.nlink!==1||(s.mode&0o077))fail('RESEARCH_JOURNAL_FILE_IDENTITY');
   return {bytes:s.size};
  });
  const s=fs.statfsSync(directory);return checkBudget(entries,s.bavail*s.bsize,reserveBytes);
 }
-module.exports={MAX_FILES,MAX_TOTAL_BYTES,MIN_FREE_BYTES,checkBudget,journalBudget};
+module.exports={MAX_FILES,MAX_TOTAL_BYTES,MIN_FREE_BYTES,checkBudget,isJournalFileName,journalBudget};

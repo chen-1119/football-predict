@@ -236,7 +236,7 @@ async function verifyStaticFileResponseIdentity() {
     await check("actual static routing keeps SPA fallback, blocked sources, path decoding and protected-data decisions", async () => {
       await fixture({}, async ({ directory, request }) => {
         write(directory, "index.html", "shell"); write(directory, "data/private.json", '{"private":true}');
-        for (const [pathname, status] of [["/missing-page", 200], ["/.env", 404], ["/package.json", 404], ["/%2e%2e/secret", 404], ["/%GG", 400], ["/data/matches-current.json", 410], ["/data/private.json", 401]]) {
+        for (const [pathname, status] of [["/missing-page", 200], ["/.env", 404], ["/package.json", 404], ["/%2e%2e/secret", 404], ["/%GG", 400], ["/data/matches-current.json", 410], ["/data/reference-integrity.json", 410], ["/data/private.json", 401]]) {
           const response = await request(pathname); assert.equal(response.status, status, pathname);
           if (status === 200) assert.equal(response.body.toString(), "shell");
         }

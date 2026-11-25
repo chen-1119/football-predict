@@ -5,7 +5,7 @@ const crypto=require('node:crypto');
 const {stableStringify}=require('../../scripts/modelLearningLedger.cjs');
 const {epochNanoseconds:clock}=require('./prematchV3Clock.cjs');
 const VERSION='league-trained-baseline-v1',FORECAST_VERSION='league-trained-forecast-v1';
-const LEAGUES=['br1','fi1'],KEY=l=>'league-baseline-'+l;
+const {LEAGUES}=require('./leagueBaselineScope.cjs'),KEY=l=>'league-baseline-'+l;
 const hash=v=>crypto.createHash('sha256').update(stableStringify(v)).digest('hex');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 const seal=v=>({...v,contentHash:hash(v)});

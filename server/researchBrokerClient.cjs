@@ -58,7 +58,7 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
       || typeof result.originalReceiptBase64 !== 'string'
       || typeof result.deliveredAt !== 'string' || !Number.isFinite(Date.parse(result.deliveredAt))
       || new Date(result.deliveredAt).toISOString() !== result.deliveredAt || Date.parse(result.deliveredAt) < startedAt
-      || Date.parse(result.deliveredAt) > finishedBy || !['archive','publish','revision-publish','combo-revision-publish','publication-retry','archive-retry','publication-input-recovery','publication-freshness-retry'].includes(decodeRequest(raw).action)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+      || Date.parse(result.deliveredAt) > finishedBy || !['archive','publish','revision-publish','combo-revision-publish','combo-series-publish','publication-retry','archive-retry','publication-input-recovery','publication-freshness-retry','evidence-archive'].includes(decodeRequest(raw).action)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
     const saved = Buffer.from(result.originalReceiptBase64,'base64');
     if(saved.toString('base64')!==result.originalReceiptBase64||saved.length>3*1024*1024-4096
       ||sha(saved)!==result.originalReceiptSha256||!Buffer.from(saved.toString()).equals(saved)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
@@ -80,7 +80,15 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
   if(archiveRetry&&(value.explicitRetry!==true||value.originalRequestSha256!==envelopeRequest.originalRequestSha256
     ||typeof value.submitted!=='boolean'||typeof value.inserted!=='boolean'
     ||(value.submitted===false&&value.inserted!==false)))fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
-  if (request.action.startsWith('archive')) {
+  if(request.action==='evidence-archive'||request.action==='evidence-read'){
+    const packet=request.action==='evidence-archive'?JSON.parse(request.json):null,key=packet?'team-evidence-'+packet.contentHash:request.key;
+    const verified=value.state==='committed-readback-verified';
+    if(value.key!==key||!['not-observed','committed-readback-verified'].includes(value.state)||value.verified!==verified
+      ||value.archiveOnly!==true||value.published!==false||(packet&&(!verified||typeof value.submitted!=='boolean'))
+      ||(verified&&(value.payloadSha256!==request.sha256||value.contentHash!==key.slice('team-evidence-'.length)||value.commitAcknowledged!==true
+        ||![value.archivedAt,value.observedAt].every(at=>typeof at==='string'&&Number.isFinite(Date.parse(at))&&new Date(at).toISOString()===at)
+        ||Date.parse(value.archivedAt)>Date.parse(value.observedAt)||Date.parse(value.observedAt)>Date.parse(result.finishedAt))))fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
+  } else if (request.action.startsWith('archive')) {
     const original = request.action === 'archive' ? JSON.parse(request.json) : request;
     const key = reportKey(original.businessDate, original.reportKind);
     if (value.key !== key || !['report-archived', 'not-observed'].includes(value.state)
@@ -97,6 +105,8 @@ function decodeBrokerResponse(bytes, raw, context, startedAt, finishedBy) {
         || Date.parse(value.receivedAt) < Date.parse(exact.generatedAt)
         || Date.parse(value.receivedAt) > Date.parse(result.finishedAt)) fail('RESEARCH_BROKER_RESPONSE_UNVERIFIED');
     }
+  } else if(request.action.startsWith('combo-series-')) {
+    require('./researchComboSeries.cjs').validateResponse(JSON.parse(request.json),value,result.finishedAt);
   } else if(request.action.startsWith('combo-revision-')) {
     const r=JSON.parse(request.json),key=require('./researchComboRevision.cjs').validate(r);
     if(value.key!==key||!['not-observed','record-present-ack-missing','committed-and-acknowledged'].includes(value.state)

@@ -7,6 +7,16 @@ const SOURCE_ID = "public-reference-decisions:current";
 // Preserve the independent, already-recorded public reference ledger. It must
 // not be folded into candidate snapshots or reconstructed from current picks.
 const buildPublicReferenceArchive = (snapshot) => {
+  const partition = require("./referenceIntegrityPartition.cjs");
+  partition.validateSnapshotIntegrity(snapshot, snapshot?.publicReferenceIntegrity);
+  if (snapshot?.publicReferenceIntegrity) {
+    if (snapshot.publicReferenceDecisions?.some(record => partition.isOriginalUnresolvedRecord(record))) {
+      throw new Error("REFERENCE_PARTITION_ACTIVE_OVERLAP");
+    }
+    if (snapshot.publicReferenceEvidence?.some(entry => snapshot.publicReferenceIntegrity.records.some(record => record.contentHash === entry?.referenceHash))) {
+      throw new Error("REFERENCE_PARTITION_EXPLICIT_RESOLUTION_REQUIRED");
+    }
+  }
   if (!Array.isArray(snapshot?.publicReferenceDecisions)) return null;
   const rows = snapshot.publicReferenceDecisions;
   const evidence = collectPublicReferenceEvidence(rows, snapshot.publicReferenceEvidence);

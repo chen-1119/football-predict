@@ -39,6 +39,8 @@ const R941_BASELINE_TARGET_HASHES = Object.freeze({
   'scripts/deployReleaseBundle.cjs': 'c627eb5fe3d41e05ff3b72e072747a32c40b3842e933706c210569257be9ea12',
   'scripts/staticVerificationReceipts.cjs': '5ac706e8552c9573b4e90441053898b36d75c889f5b5e75cbc13e34ea4d1db59',
   'scripts/verifyStaticVerificationReceipts.cjs': '53121dc7a6a31816a072450791272d39e75562c17c877bf5399a8a2b4d426a42',
+  'scripts/verifyDataValidationScopes.cjs': '84aa5e95eec23078dbc7793591c3e8fd1dcdbf639b76a1258169d04504dc75f7',
+  'scripts/verifyDeploymentConfig.cjs': '28ce944ed4128cc7487bf9ac1ec1365b0de3a029298545457b2d585dbd6b4d7a',
 });
 
 const sha256File = (filePath) => crypto

@@ -5,7 +5,7 @@ const {SELECT}=require('../leagueBaselineRegistry.cjs');
 const {transaction}=require('./leagueBaselineRuntime.cjs');
 const {loadCollectorTrustRegistry}=require('../../src/services/collectorAttestation.cjs');
 const {readLiveOfficialSnapshot}=require('./liveOfficialHandicap.cjs');
-const key=d=>[3,4].includes(d.version)?'reviewed-analysis-'+d.businessDate+'-batch-'+p.hash(d):'reviewed-analysis-'+d.businessDate+'-selected-two';
+const key=d=>[3,4,5].includes(d.version)?'reviewed-analysis-'+d.businessDate+'-batch-'+p.hash(d):'reviewed-analysis-'+d.businessDate+'-selected-two';
 async function keys(c,businessDate){
  p.check(/^\d{4}-\d{2}-\d{2}$/.test(businessDate),'BUSINESS_DAY');
  const rows=(await c.query("SELECT artifact_key FROM football.private_model_artifacts WHERE artifact_key=$1 OR (artifact_key LIKE $2 AND artifact_version=$3) ORDER BY artifact_key LIMIT 33",
@@ -23,15 +23,16 @@ async function insert(c,k,v,at){
 }
 async function publish(draft,{pool,expectedDraftHash}){
  p.check(p.hash(draft)===expectedDraftHash,'DRAFT_CHANGED');const registry=trust(),k=key(draft);
- if(draft.version===4)await require('./reviewedOfficialFreshness.cjs').waitForFreshOfficialDraft(draft,{pool,trustRegistry:registry,readSnapshot:readLiveOfficialSnapshot});
+ if([4,5].includes(draft.version))await require('./reviewedOfficialFreshness.cjs').waitForFreshOfficialDraft(draft,{pool,trustRegistry:registry,readSnapshot:readLiveOfficialSnapshot});
  const stored=await transaction(pool,false,async c=>{
-  await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',['football-postgres-projection-sync-v1']);
+  await require('../../server/researchAppendLock.cjs').acquireResearchAppendLock(c,{independentOfficial:[4,5].includes(draft.version)});
   p.check(!(await c.query(SELECT,[k])).rows.length,'ALREADY_PUBLISHED_READ_FIRST');
   const prior=await projection(c,draft.businessDate,await dbNow(c));
   p.check(prior.records.length+draft.singles.length<=32,'DAILY_RECORD_BOUND');
   p.check(draft.singles.every(r=>!prior.records.some(v=>v.eventId===r.eventId)),'EVENT_ALREADY_FROZEN');
-  const allMatches=draft.version===4?[]:(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(r=>r.payload);p.check(allMatches.length<=512,'MATCH_BOUND');
-  const snapshot=readLiveOfficialSnapshot(),asOf=await dbNow(c),evidenceByEvent={};
+  const allMatches=[4,5].includes(draft.version)?[]:(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(r=>r.payload);p.check(allMatches.length<=512,'MATCH_BOUND');
+  const snapshot=readLiveOfficialSnapshot(),asOf=await dbNow(c);
+  const evidenceByEvent=draft.version===5?await require('./reviewedResearchEvidence.cjs').loadForDraft(c,draft,asOf):{};
   p.validateDraft(draft,asOf);
   // Freeze only this batch's events. Keep the complete signed source and every
   // matching candidate so identity, duplicates and the existing 8 MiB bound
@@ -44,7 +45,7 @@ async function publish(draft,{pool,expectedDraftHash}){
   }}
   const record=p.make(draft,{matches,snapshot,trustRegistry:registry,asOf,evidenceByEvent});
   const inputs={matches:matches.filter(m=>record.records.some(r=>r.eventId===String(m.sourceMatchId||'').replace(/^sporttery_/,''))),snapshot,
-   ...(draft.version===2?{evidenceByEvent}:{})};
+   ...([2,5].includes(draft.version)?{evidenceByEvent}:{})};
   const storedAt=await dbNow(c);deadline(record,storedAt);
   const payload=p.seal({version:'reviewed-analysis-freeze-v1',createdAt:record.createdAt,record,draft,inputs,storedAt});
   const row=await insert(c,k,payload,storedAt);deadline(record,await dbNow(c));return row;
@@ -83,7 +84,7 @@ async function projection(c,businessDate,asOf,{historical=false}={}){
   publications.push(publication);}
  // History recovers frozen singles only. No combo was independently frozen in
  // these records, so never backdate a clock or create a purported original combo.
- const combos=(records,size)=>historical?[]:p.combinations(records.filter(r=>Date.parse(asOf)<Date.parse(r.cutoffAt)),size);
+ const combos=(records,size)=>historical?[]:p.combinations(records.filter(r=>Date.parse(asOf)<Date.parse(r.cutoffAt)),size,asOf);
  if(publications.length===1){const {v,ack}=publications[0];return p.seal({version:'reviewed-analysis-view-v1',businessDate,updatedAt:asOf,createdAt:v.record.createdAt,commitObservedAt:ack.createdAt,
   publicationHash:v.record.contentHash,draftHash:v.record.draftHash,originalFrozenAt:v.record.originalFrozenAt,
   records:v.record.records,combos:combos(v.record.records,2),

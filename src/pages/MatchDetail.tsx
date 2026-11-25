@@ -1,4 +1,5 @@
 import { OfficialScheduleDetail } from '../components/recommendations/OfficialSchedule';
+import { NeutralSportsData } from '../components/NeutralSportsData';
 import { detailPublishedRecommendation, detailLineupAvailability } from '../services/matchDetailPublication';
 import { DetailPublicationEvidence } from '../components/recommendations/DetailPublicationEvidence';
 import { reviewedMatchRecommendation } from '../services/publishedMatchRecommendation';
@@ -58,6 +59,7 @@ import {
   isFormalPresentationAllowed
 } from '../services/predictionPresentation';
 import { getArchivedPreMatchPrediction } from '../services/archivedPreMatchPrediction';
+import { LegacyArchiveGap } from '../components/LegacyArchiveGap';
 import { getProvisionalArchivedOutcome } from '../services/provisionalResultPresentation';
 import { liveRecommendationCutoffIso } from '../services/liveRecommendationEligibility';
 import '../styles/match-detail.css';
@@ -3104,7 +3106,7 @@ const CanonicalMatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, ini
                 </span>
               </div>
             )}
-            {useUnified ? <div className="card recommendation-overview-card recommendation-outcome-card"><section className="recommendation-overview-panel is-outcome">{((reviewedRecord || trainedRecord || (published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)))) ? <TrainedMatchPick record={trainedRecord} reviewed={reviewedRecord} now={nowMs} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} />)}</section></div> : <div className="card recommendation-overview-card recommendation-outcome-card">
+            {useUnified ? <div className="card recommendation-overview-card recommendation-outcome-card"><section className="recommendation-overview-panel is-outcome">{((reviewedRecord || trainedRecord || (published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)))) ? <TrainedMatchPick record={trainedRecord} reviewed={reviewedRecord} now={nowMs} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} />)}</section></div> : isPreMatchRecordSettling ? <LegacyArchiveGap match={match} language={language}/> : <div className="card recommendation-overview-card recommendation-outcome-card">
               <section className="recommendation-overview-panel is-outcome">
                 <small>{language === 'zh' ? '旧版赛前归档' : 'Legacy pre-match archive'}</small>
                 <div className="recommendation-overview-head">
@@ -3228,7 +3230,7 @@ const CanonicalMatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, ini
             </div>
 
             }
-            {detailPublication ? <div className="card"><DetailPublicationEvidence data={detailPublication} language={language}/></div> : (hasScoreDistribution || unifiedRow) && <details className="published-match-pick__basis recommendation-detail-secondary-evidence">
+            {detailPublication ? <div className="card"><DetailPublicationEvidence data={detailPublication} language={language}/></div> : !isPreMatchRecordSettling && (hasScoreDistribution || unifiedRow) && <details className="published-match-pick__basis recommendation-detail-secondary-evidence">
               <summary>{language === 'zh' ? '查看分析依据' : 'View analysis evidence'}</summary>
             {hasScoreDistribution && <div className="card recommendation-score-card">
               <section className="recommendation-overview-panel is-score">
@@ -4590,7 +4592,8 @@ const CanonicalMatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, ini
         )}
 
         {(activeTab === 'overview' || activeTab === 'evidence') && (
-          <PrematchCollectionPanel matchId={match.id} language={language} homeName={homeTeam.name[language]} awayName={awayTeam.name[language]} kickoffTime={match.kickoffTime} />
+          <>{match.businessDate && /^sporttery_\d+$/.test(match.id) && <NeutralSportsData eventId={match.id.slice(10)} businessDate={match.businessDate} kickoff={match.kickoffTime} names={[homeTeam.name.zh,awayTeam.name.zh]}/>}
+          <PrematchCollectionPanel matchId={match.id} language={language} homeName={homeTeam.name[language]} awayName={awayTeam.name[language]} kickoffTime={match.kickoffTime} /></>
         )}
         <details className="card detail-missing-notes" data-testid="detail-missing-notes">
           <summary>{language === 'zh' ? '资料缺项说明' : 'Missing-data notes'}</summary>

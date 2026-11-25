@@ -25,6 +25,7 @@ async function mount(role = 'admin') {
       if (id === 'react-router-dom') return { Link: 'a' };
       if (id === '../context/AccountContext') return { useAccount: () => account };
       if (id === '../services/accountApi') return { accountRequest: async path => { requests.push({ path }); return { ok: true, rows }; } };
+      if (id === '../components/ResearchEvidenceArchive') return { ResearchEvidenceArchive: 'research-evidence-archive' };
       if (id.endsWith('.css')) return {};
       throw Error(id);
     }

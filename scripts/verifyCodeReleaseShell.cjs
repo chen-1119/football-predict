@@ -19,13 +19,14 @@ const stubs=['log','release_stage_observe','wait_for_health','prepare_managed_tr
   'quiesce_native_auxiliary_writers',
   'assert_native_cutover_processes_drained','sync_model_artifact_mirrors','restart_service_if_needed',
   'stop_release_candidate_heartbeat_keeper','cleanup_release_static_attestations',
-  'native_code_verify_cutover_lease','verify_post_swap_transition_window',
+  'native_code_verify_cutover_lease','verify_post_swap_transition_window','validate_reference_snapshot_pair',
   'cp','rm','install','chown','mv','sync','systemctl'];
 const cases=[
   {name:'code-success',mode:1},{name:'database-success',mode:0},
   {name:'unsigned-dist',mode:1,prebuilt:0},{name:'closed-code-lease',mode:1,leaseRejected:true},{name:'seed-failed',mode:1,fail:'native_data:seed'},
   {name:'reader-failed',mode:1,fail:'native_data:candidate-access'},
   {name:'candidate-failed',mode:1,fail:'run_trusted_candidate_verifier'},
+  {name:'reference-pair-failed',mode:1,fail:'validate_reference_snapshot_pair'},
   {name:'final-failed',mode:1,fail:'native_data:final'},
   {name:'reader-retire-failed',mode:1,fail:'native_data:drop-candidate-access'},
   {name:'foreign-pause-rejected',mode:1,foreignPause:true},

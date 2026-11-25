@@ -12,7 +12,7 @@ function decodeRequest(raw) {
   const text = raw.toString('utf8');
   if (!Buffer.from(text).equals(raw)) fail('RESEARCH_REQUEST_UTF8');
   let r; try { r = JSON.parse(text); } catch { fail('RESEARCH_REQUEST_JSON'); }
-  if (!r || r.version !== 'research-broker-request-v1' || !['archive', 'archive-read', 'publish', 'publication-read','revision-publish','revision-read','combo-revision-publish','combo-revision-read','publication-retry','archive-retry','publication-input-recovery','publication-freshness-retry'].includes(r.action)) fail('RESEARCH_REQUEST_ACTION');
+  if (!r || r.version !== 'research-broker-request-v1' || !['archive', 'archive-read', 'publish', 'publication-read','revision-publish','revision-read','combo-revision-publish','combo-revision-read','combo-series-publish','combo-series-read','publication-retry','archive-retry','publication-input-recovery','publication-freshness-retry','evidence-archive','evidence-read'].includes(r.action)) fail('RESEARCH_REQUEST_ACTION');
   if(r.action==='publication-freshness-retry'){
     const input=require('./researchPublicationFreshnessRetry.cjs').original(r);
     decodeRequest(Buffer.from(r.originalRequestJson));
@@ -37,10 +37,15 @@ function decodeRequest(raw) {
     if(input.action!=='publish')fail('RESEARCH_REQUEST_ACTION');
     return r;
   }
-  const fields = r.action === 'publication-read' ? 'action,draftHash,recordKey,version'
+  const fields = r.action === 'evidence-read' ? 'action,key,sha256,version'
+    : r.action === 'publication-read' ? 'action,draftHash,recordKey,version'
     : r.action === 'archive-read' ? 'action,businessDate,reportKind,sha256,version'
-      : r.action === 'archive' || r.action.includes('revision-') ? 'action,json,sha256,version' : 'action,draftHash,json,sha256,version';
+      : r.action === 'archive' || r.action === 'evidence-archive' || (r.action.includes('revision-') || r.action.startsWith('combo-series-')) ? 'action,json,sha256,version' : 'action,draftHash,json,sha256,version';
   if (Object.keys(r).sort().join(',') !== fields) fail('RESEARCH_REQUEST_FIELDS');
+  if(r.action==='evidence-read'){
+    require('./researchEvidenceArchive.cjs').identity(r.key,r.sha256);
+    return r;
+  }
   if (r.action === 'archive-read') {
     reports.reportKey(r.businessDate,r.reportKind);
     if (!/^[a-f0-9]{64}$/.test(r.sha256 || '')) fail('RESEARCH_REQUEST_HASH');
@@ -53,13 +58,20 @@ function decodeRequest(raw) {
     return r;
   }
   if (typeof r.json !== 'string' || !/^[a-f0-9]{64}$/.test(r.sha256 || '') || sha(r.json) !== r.sha256) fail('RESEARCH_REQUEST_HASH');
-  if (r.action.includes('revision-')) {
+  if(r.action==='evidence-archive'){
+    let packet;try{packet=JSON.parse(r.json);}catch{fail('RESEARCH_DRAFT_JSON');}
+    require('../scripts/recommendationPlatform/reviewedResearchEvidence.cjs').validate(packet,packet.reviewedAt);
+    if(JSON.stringify(packet)!==r.json)fail('RESEARCH_EVIDENCE_CANONICAL');
+  } else if (r.action.startsWith('combo-series-')) {
+    let input;try{input=JSON.parse(r.json);}catch{fail('RESEARCH_DRAFT_JSON');}
+    require('./researchComboSeries.cjs').validate(input);
+  } else if (r.action.includes('revision-')) {
     let request; try { request=JSON.parse(r.json); } catch { fail('RESEARCH_DRAFT_JSON'); }
     (r.action.startsWith('combo-')?require('./researchComboRevision.cjs'):require('./researchReviewedRevision.cjs')).validate(request);
   } else if (r.action === 'archive') reports.prepare(Buffer.from(r.json), r.sha256);
   else {
     let draft; try { draft = JSON.parse(r.json); } catch { fail('RESEARCH_DRAFT_JSON'); }
-    if (![3,4].includes(draft?.version) || !/^[a-f0-9]{64}$/.test(r.draftHash || '') || policy.hash(draft) !== r.draftHash) fail('RESEARCH_DRAFT_HASH');
+    if (![3,4,5].includes(draft?.version) || !/^[a-f0-9]{64}$/.test(r.draftHash || '') || policy.hash(draft) !== r.draftHash) fail('RESEARCH_DRAFT_HASH');
   }
   return r;
 }
@@ -68,6 +80,7 @@ function createResearchWriteService({ pool, runExclusive } = {}) {
   const store = reports.createResearchReportStore({ pool, runExclusive });
   const revisions = require('./researchReviewedRevision.cjs').createRevisionStore({ pool, runExclusive });
   const combos = require('./researchComboRevision.cjs').createComboRevisionStore({ pool, runExclusive });
+  const series = require('./researchComboSeries.cjs').createStore({ pool, runExclusive });
   async function observe(key, draftHash) {
     const c = await pool.connect(); let broken;
     try {
@@ -98,6 +111,8 @@ function createResearchWriteService({ pool, runExclusive } = {}) {
     const inputRecovery=input.action==='publication-input-recovery',freshnessRetry=input.action==='publication-freshness-retry';
     const prior=inputRecovery?require('./researchPublicationInputRecovery.cjs').prior(input):null;
     const r=inputRecovery?decodeRequest(Buffer.from(prior.originalRequestJson)):retry||archiveRetry||freshnessRetry?decodeRequest(Buffer.from(input.originalRequestJson)):input;
+    if(r.action==='combo-series-publish')return series.publish(JSON.parse(r.json));
+    if(r.action==='combo-series-read')return runExclusive(()=>series.read(JSON.parse(r.json)));
     if(r.action==='combo-revision-publish')return combos.publish(JSON.parse(r.json));
     if(r.action==='combo-revision-read')return runExclusive(()=>combos.read(JSON.parse(r.json)));
     if(r.action==='revision-publish')return revisions.publish(JSON.parse(r.json));
@@ -112,6 +127,8 @@ function createResearchWriteService({ pool, runExclusive } = {}) {
       return archiveRetry?{...archived,submitted:true,explicitRetry:true,originalRequestSha256:input.originalRequestSha256}:archived;
     }
     const result=await runExclusive(async () => {
+      if(r.action==='evidence-read')return require('./researchEvidenceArchive.cjs').observe(pool,r.key,r.sha256);
+      if(r.action==='evidence-archive')return require('./researchEvidenceArchive.cjs').archive(pool,JSON.parse(r.json),r.sha256);
       if (r.action === 'archive-read') return store.read(r.businessDate,r.reportKind,r.sha256);
       if (r.action === 'publication-read') return observe(r.recordKey, r.draftHash);
       const draft = JSON.parse(r.json), key = 'reviewed-analysis-' + draft.businessDate + '-batch-' + r.draftHash;

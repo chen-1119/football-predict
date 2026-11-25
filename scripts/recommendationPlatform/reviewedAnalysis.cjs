@@ -10,6 +10,7 @@ const safeUrl=v=>{try{const u=new URL(v);return u.protocol==='https:'&&!u.userna
 const draftSupportsHandicap=d=>d.version===3||d.version===4;
 const scoreDirection=(s,line)=>s[0]+line===s[1]?'d':s[0]+line>s[1]?'h':'a';
 function validateDraft(d,asOf){
+ if(d?.version===5)return require('./reviewedResearchDecision.cjs').validateDraft(d,asOf);
  check((d?.version===1&&d.reportKind==='weekday-2000-selected-two'&&d.predictionScope==='chat-only research')
   ||(d?.version===2&&d.reportKind==='evidence-backed-prematch'&&d.predictionScope==='reviewed-online-reference')
   ||([3,4].includes(d?.version)&&d.reportKind==='manual-prematch-batch'&&d.predictionScope==='reviewed-online-reference'),'DRAFT_KIND');
@@ -42,6 +43,7 @@ function validateDraft(d,asOf){
  return true;
 }
 function make(draft,{matches,snapshot,trustRegistry,asOf,evidenceByEvent={}}){
+ if(draft?.version===5)return require('./reviewedResearchDecision.cjs').make(draft,{matches,snapshot,trustRegistry,asOf,evidenceByEvent});
  if(draft?.version===4)return require('./reviewedOfficialEvent.cjs').make(draft,{matches,snapshot,trustRegistry,asOf,evidenceByEvent});
  validateDraft(draft,asOf);check(Buffer.byteLength(JSON.stringify({draft,matches,snapshot,evidenceByEvent}))<=8*1024*1024,'BOUND');
  const endpoints=snapshot?.endpoints?.filter(e=>e.method==='current');check(endpoints?.length===1,'ENDPOINT');
@@ -84,7 +86,8 @@ function make(draft,{matches,snapshot,trustRegistry,asOf,evidenceByEvent={}}){
  return seal({version:'reviewed-analysis-publication-v1',createdAt:asOf,businessDate:draft.businessDate,
   draftHash:hash(draft),originalFrozenAt:draft.frozenAt,records,modelProbability:null,formalEligible:false});
 }
-function combinations(records,size=2){
+function combinations(records,size=2,asOf=null){
+ if(Array.isArray(records)&&records.some(record=>record?.research!==undefined))return require('./reviewedResearchCombos.cjs').combinations(records,size,asOf);
  check((size===2||size===3)&&Array.isArray(records)&&records.length<=32,'COMBO_BOUND');
  check(new Set(records.map(r=>r.eventId)).size===records.length&&records.every(r=>Number.isFinite(r.sp)&&r.sp>1&&r.sp<1000&&['高','中','低'].includes(r.confidence)),'COMBO_INPUT');
  const options=[];

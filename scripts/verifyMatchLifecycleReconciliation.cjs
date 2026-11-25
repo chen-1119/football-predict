@@ -732,6 +732,58 @@ const canonicalResultOnlyFixture = () => {
   return { raw, witness, receipt };
 };
 
+const canonicalReferenceFixture = () => {
+  const fixture = canonicalResultOnlyFixture();
+  const reference = {
+    version: "public-reference-decision-v2", sourceMatchId: fixture.raw.sourceMatchId,
+    kickoffTime: fixture.raw.kickoffTime, eventVersion: fixture.raw.eventVersion,
+    cutoffTime: fixture.raw.kickoffTime, recordedAt: "2026-10-12T15:00:00.000Z",
+    decisionAt: "2026-10-12T14:59:00.000Z", decisionId: "reference-original",
+    revision: 1, previousHash: null,
+    prediction: { marketType: "BEST", oddsPoolCode: "HAD", tipCode: "2", odds: 2.32, recommendationAction: "reference" },
+    dataGaps: null, evidenceBinding: {
+      version: "public-reference-evidence-v1", evidenceHash: "a".repeat(64), featureHash: "b".repeat(64),
+      modelHash: "c".repeat(64), modelVersion: "original-model", policyVersion: "original-policy",
+    },
+  };
+  reference.contentHash = require("node:crypto").createHash("sha256").update(JSON.stringify(reference)).digest("hex");
+  fixture.raw.predictionMeta.publicReferenceDecision = reference;
+  fixture.witness.predictionMeta.publicReferenceDecision = structuredClone(reference);
+  return fixture;
+};
+
+check("identical validated public reference survives canonical identity preservation byte for byte", () => {
+  const { raw, witness, receipt } = canonicalReferenceFixture();
+  const before = structuredClone(raw), referenceBytes = JSON.stringify(raw.predictionMeta.publicReferenceDecision);
+  const [result] = preserveCanonicalResultOnlyIdentities([raw], receipt, [witness]);
+  assert.equal(result.id, witness.id);
+  assert.equal(JSON.stringify(result.predictionMeta.publicReferenceDecision), referenceBytes);
+  assert.equal(result.predictionMeta.publicReferenceDecision, raw.predictionMeta.publicReferenceDecision);
+  assert.deepEqual(result, { ...before, id: witness.id, postMatchReview: { ...before.postMatchReview, matchId: witness.id } });
+  assert.deepEqual(raw, before);
+});
+
+for (const [name, change] of [
+  ["one-sided reference", (fixture) => { delete fixture.witness.predictionMeta.publicReferenceDecision; }],
+  ["different reference bytes", (fixture) => { fixture.witness.predictionMeta.publicReferenceDecision.integrityVerified = true; }],
+  ["tampered identical references", (fixture) => {
+    fixture.raw.predictionMeta.publicReferenceDecision.prediction.odds = 9;
+    fixture.witness.predictionMeta.publicReferenceDecision.prediction.odds = 9;
+  }],
+  ["missing evidence binding", (fixture) => {
+    fixture.raw.predictionMeta.publicReferenceDecision.evidenceBinding = null;
+    fixture.witness.predictionMeta.publicReferenceDecision.evidenceBinding = null;
+  }],
+  ["formal archive alongside reference", (fixture) => { fixture.raw.archivedPreMatchPrediction = {}; }],
+  ["root reference alongside metadata", (fixture) => { fixture.raw.publicReferenceDecision = fixture.raw.predictionMeta.publicReferenceDecision; }],
+  ["different receipt score with reference", (fixture) => { fixture.receipt.observations[0].scoreHome = 9; }],
+]) {
+  check(`canonical reference preservation rejects ${name}`, () => {
+    const fixture = canonicalReferenceFixture();change(fixture);
+    assert.equal(preserveCanonicalResultOnlyIdentities([fixture.raw], fixture.receipt, [fixture.witness])[0], fixture.raw);
+  });
+}
+
 check("verified canonical result-only identity survives 500 display odds without changing payloads", () => {
   const { raw, witness, receipt } = canonicalResultOnlyFixture();
   const before = structuredClone(raw);

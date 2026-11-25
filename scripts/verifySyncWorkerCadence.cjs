@@ -3,6 +3,7 @@ const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const vm = require("node:vm");
 const { DatabaseSync } = require("node:sqlite");
 const {
   acquireSyncLockInterruptibly,
@@ -76,6 +77,191 @@ const remotePublicReadinessSource = fs.readFileSync(
   path.join(__dirname, "verifyRemotePublicReadiness.cjs"),
   "utf8",
 );
+const heartbeatGateStart = remotePublicReadinessSource.indexOf(
+  "  const candidateCaptureHeartbeat = publicCandidateProspective?.captureHeartbeat || null;",
+);
+const heartbeatGateEnd = remotePublicReadinessSource.indexOf(
+  '  const modelAdmin = await request("GET", "/api/v1/model/evaluation?detail=admin");',
+  heartbeatGateStart,
+);
+assert.ok(heartbeatGateStart >= 0 && heartbeatGateEnd > heartbeatGateStart);
+const publicHeartbeatGate = (candidate, status = 200) => {
+  let result = null;
+  vm.runInNewContext(remotePublicReadinessSource.slice(heartbeatGateStart, heartbeatGateEnd), {
+    publicCandidateProspective: candidate,
+    modelEvaluation: { status },
+    checks: [],
+    shadowObservationAuditValid:
+      require("../src/services/candidateCaptureState.cjs").shadowObservationAuditValid,
+    pushCheck: (_checks, name, ok, details) => { result = { name, ok: Boolean(ok), details }; },
+  });
+  assert.equal(result?.name, "candidate prospective cutoff heartbeat is live and unblocked");
+  return result;
+};
+const publicHeartbeatFixture = ({ attempt = 45_000, recovery = attempt, age = 37_257,
+  recoveryAttempt = false } = {}) => {
+  const evaluatedAt = "2026-08-01T12:00:00.000Z";
+  const scheduleOptions = { evaluatedAt, nowMs: Date.parse(evaluatedAt) + age,
+    freshnessLimitMs: 180_000, attemptTimeoutMs: attempt, retryMs: 5_000,
+    recoveryCaptureMs: recovery, safetyMarginMs: 10_000 };
+  const schedule = candidateHeartbeatPreemptiveSchedule(scheduleOptions);
+  const budget = candidateHeartbeatNextAttempt({ ...scheduleOptions,
+    attempt: recoveryAttempt ? { finishedAt: evaluatedAt, statusAdvanced: false } : null });
+  return { state: "ACTIVE", chainValid: true, captureHeartbeat: {
+    version: "prospective-deadline-heartbeat-v2", evaluatedAt,
+    fresh: true, captureDurationMs: 32_628.078, heartbeatAgeMs: age,
+    freshnessLimitMs: schedule.freshnessLimitMs, scheduleVersion: schedule.version,
+    scheduleMode: "preemptive-evaluated-at", preemptiveRefreshAgeMs: schedule.refreshAgeMs,
+    preemptiveReserveMs: schedule.requiredReserveMs, attemptTimeoutLimitMs: schedule.attemptTimeoutMs,
+    retryDelayMs: schedule.retryMs, recoveryCaptureBudgetMs: schedule.recoveryCaptureMs,
+    preemptiveSafetyMarginMs: schedule.safetyMarginMs,
+    projectedWorstCaseCompletionAgeMs: schedule.projectedWorstCaseCompletionAgeMs,
+    preemptiveBudgetFits: schedule.budgetFits, nextPreemptiveRefreshAt: schedule.dueAt,
+    preemptiveRefreshDue: schedule.due, nextAttemptBudgetVersion: budget.version,
+    nextAttemptType: budget.attemptType, nextAttemptTimeoutMs: budget.timeoutMs,
+    nextAttemptProjectedCompletionAgeMs: budget.projectedCompletionAgeMs,
+    nextAttemptBudgetFits: budget.budgetFits, ok: true, skipped: false,
+    intervalSeconds: schedule.refreshAgeMs / 1_000, reason: "settlement-heartbeat",
+    dueMatches: 0, eventsAdded: 0, dueCaptureEventsAdded: 0, dueDecisionEventsAdded: 0,
+    dueExclusionEventsAdded: 0, dueAtomicDecisionEventsAdded: 0,
+    dueCaptureComplete: true, dueAtomicComplete: true,
+    readiness: { version: "candidate-prospective-readiness-preview-v2",
+      captureFinalizationPolicyVersion: "deadline-evidence-grace-v1",
+      captureFinalizationGraceSeconds: 120, previewLimit: 16, evaluatedMatches: 1,
+      detailedMatches: 1, rowsTruncated: 0, upcomingMatches: 1, readyNow: 1, atomicReadyNow: 1,
+      awaitingMarket: 0, blocked: 0, excluded: 0, readyInvariantOk: true,
+      blockerCounts: {}, excludedReasonCounts: {}, awaitingReasonCounts: {},
+      marketCoverage: { version: "candidate-official-market-coverage-preview-v1",
+        evaluatedMatches: 1, officialHadPublishedMatches: 1, strictMarketEvidenceCompleteMatches: 1,
+        atomicReadyMatches: 1, awaitingUnpublishedMatches: 0, awaitingSnapshotMissingMatches: 0,
+        awaitingClassifiedMatches: 0, awaitingClassificationComplete: true, publishedChainGapMatches: 0 },
+      admission: { version: "candidate-prospective-admission-summary-v1", registryAvailable: true,
+        reconciled: true, captureGap: false, dueUnrecorded: 0, expectedRows: 1, admitted: 0,
+        excluded: 0, pendingDeadline: 1 },
+      nearestDeadlineAt: "2026-08-01T12:35:00.000Z", nearestFinalizationAt: "2026-08-01T12:37:00.000Z",
+      nearestStatus: "ready-now", nearestDeadlineBatch: {
+        deadlineAt: "2026-08-01T12:35:00.000Z", pendingMatches: 1, invariantOk: true },
+    },
+  } };
+};
+let publicHeartbeatContractCases = 0;
+for (const options of [{}, { attempt: 80_000, age: 1_000 }, { attempt: 100_000, recovery: 55_000, age: 1_000 },
+  { recoveryAttempt: true }, { age: 80_000 }]) {
+  assert.equal(publicHeartbeatGate(publicHeartbeatFixture(options)).ok, true, JSON.stringify(options));
+  publicHeartbeatContractCases++;
+}
+assert.equal(publicHeartbeatFixture().captureHeartbeat.intervalSeconds, 75);
+assert.equal(publicHeartbeatFixture({ attempt: 80_000 }).captureHeartbeat.intervalSeconds, 5);
+const capturedDueFixture = publicHeartbeatFixture();
+Object.assign(capturedDueFixture.captureHeartbeat, { reason: "deadline-cohort-evaluated",
+  dueMatches: 1, eventsAdded: 2, dueCaptureEventsAdded: 1, dueDecisionEventsAdded: 1,
+  dueAtomicDecisionEventsAdded: 1 });
+assert.equal(publicHeartbeatGate(capturedDueFixture).ok, true);
+capturedDueFixture.captureHeartbeat.reason = "settlement-heartbeat";
+assert.equal(publicHeartbeatGate(capturedDueFixture).ok, false);
+publicHeartbeatContractCases += 2;
+const completedAdmissionFixture = publicHeartbeatFixture();
+const completedReadiness = completedAdmissionFixture.captureHeartbeat.readiness;
+Object.assign(completedReadiness.admission, { admitted: 1, pendingDeadline: 0 });
+Object.assign(completedReadiness, { nearestDeadlineAt: null, nearestFinalizationAt: null,
+  nearestStatus: null, nearestDeadlineBatch: null });
+assert.equal(publicHeartbeatGate(completedAdmissionFixture).ok, true);
+completedReadiness.nearestDeadlineBatch = { pendingMatches: 1 };
+assert.equal(publicHeartbeatGate(completedAdmissionFixture).ok, false);
+publicHeartbeatContractCases += 2;
+const shadowFixture = publicHeartbeatFixture();
+const shadowState = require("../src/services/candidateCaptureState.cjs");
+Object.assign(shadowFixture, { version: "candidate-prospective-audit-v1", state: "SHADOW",
+  onlineEffect: false, activationAt: null, promotionReviewReady: false, formalPromotionEligible: false,
+  candidateRevisionId: "synthetic-shadow", rootHash: "a".repeat(64),
+  evaluatedAt: "2026-08-01T12:00:00.000Z", frozenAt: "2026-07-31T12:00:00.000Z",
+  cohort: { formal: { denominatorReconciled: true,
+    ...Object.fromEntries(shadowState.FORMAL_COUNTS.map(key => [key, 0])) } },
+  metrics: { formalRows: 0, windowEvaluation: { registeredWindows: 0 }, windows: [] } });
+shadowFixture.captureState = shadowState.buildShadowObservationState(shadowFixture);
+assert.equal(publicHeartbeatGate(shadowFixture).ok, true);
+shadowFixture.captureState.formalRecommendationAllowed = true;
+assert.equal(publicHeartbeatGate(shadowFixture).ok, false);
+publicHeartbeatContractCases += 2;
+const negativeHeartbeatCases = [
+  ["future heartbeat", heartbeat => { heartbeat.heartbeatAgeMs = -1; }],
+  ["expired heartbeat", heartbeat => { heartbeat.heartbeatAgeMs = 180_001; }],
+  ["false freshness", heartbeat => { heartbeat.fresh = false; }],
+  ["altered TTL", heartbeat => { heartbeat.freshnessLimitMs = 181_000; }],
+  ["negative duration", heartbeat => { heartbeat.captureDurationMs = -1; }],
+  ["nonfinite duration", heartbeat => { heartbeat.captureDurationMs = NaN; }],
+  ["old schedule", heartbeat => { heartbeat.scheduleVersion = "old"; }],
+  ["wrong schedule mode", heartbeat => { heartbeat.scheduleMode = "interval"; }],
+  ["nonfinite refresh", heartbeat => { heartbeat.preemptiveRefreshAgeMs = Infinity; }],
+  ["forged reserve", heartbeat => { heartbeat.preemptiveReserveMs = 104_000; }],
+  ["nonfinite attempt", heartbeat => { heartbeat.attemptTimeoutLimitMs = NaN; }],
+  ["missing retry reserve", heartbeat => { heartbeat.retryDelayMs = 0; }],
+  ["missing recovery reserve", heartbeat => { heartbeat.recoveryCaptureBudgetMs = 0; }],
+  ["negative safety margin", heartbeat => { heartbeat.preemptiveSafetyMarginMs = -1; }],
+  ["forged worst case with true flag", heartbeat => { heartbeat.projectedWorstCaseCompletionAgeMs = 1; }],
+  ["false schedule budget", heartbeat => { heartbeat.preemptiveBudgetFits = false; }],
+  ["wrong next refresh", heartbeat => { heartbeat.nextPreemptiveRefreshAt = heartbeat.evaluatedAt; }],
+  ["wrong due clock", heartbeat => { heartbeat.preemptiveRefreshDue = true; }],
+  ["invalid evaluated clock", heartbeat => { heartbeat.evaluatedAt = "invalid"; }],
+  ["wrong attempt protocol", heartbeat => { heartbeat.nextAttemptBudgetVersion = "old"; }],
+  ["unknown attempt kind", heartbeat => { heartbeat.nextAttemptType = "unknown"; }],
+  ["oversized attempt", heartbeat => { heartbeat.nextAttemptTimeoutMs = 45_001; }],
+  ["forged next completion", heartbeat => { heartbeat.nextAttemptProjectedCompletionAgeMs = 1; }],
+  ["false attempt budget", heartbeat => { heartbeat.nextAttemptBudgetFits = false; }],
+  ["failed capture", heartbeat => { heartbeat.ok = false; }],
+  ["skipped capture", heartbeat => { heartbeat.skipped = true; }],
+  ["string interval", heartbeat => { heartbeat.intervalSeconds = "75"; }],
+  ["nonfinite interval", heartbeat => { heartbeat.intervalSeconds = Infinity; }],
+  ["fixed sixty interval", heartbeat => { heartbeat.intervalSeconds = 60; }],
+  ["larger interval", heartbeat => { heartbeat.intervalSeconds = 76; }],
+  ["due capture gap", heartbeat => { heartbeat.dueMatches = 1; }],
+  ["missing atomic decision", heartbeat => { heartbeat.dueAtomicComplete = false; }],
+  ["missing cohort completion", heartbeat => { heartbeat.dueCaptureComplete = false; }],
+  ["wrong full denominator", heartbeat => { heartbeat.readiness.evaluatedMatches = 2; }],
+  ["wrong preview total", heartbeat => { heartbeat.readiness.rowsTruncated = 1; }],
+  ["atomic readiness gap", heartbeat => { heartbeat.readiness.atomicReadyNow = 0; }],
+  ["published chain gap", heartbeat => { heartbeat.readiness.marketCoverage.publishedChainGapMatches = 1; }],
+  ["unpublished strict evidence", heartbeat => { heartbeat.readiness.marketCoverage.officialHadPublishedMatches = 0; }],
+  ["unclassified awaiting market", heartbeat => { heartbeat.readiness.marketCoverage.awaitingClassificationComplete = false; }],
+  ["blocked event", heartbeat => { heartbeat.readiness.blocked = 1; }],
+  ["missing admission", heartbeat => { heartbeat.readiness.admission.registryAvailable = false; }],
+  ["unreconciled ledger", heartbeat => { heartbeat.readiness.admission.reconciled = false; }],
+  ["admission capture gap", heartbeat => { heartbeat.readiness.admission.captureGap = true; }],
+  ["due unrecorded", heartbeat => { heartbeat.readiness.admission.dueUnrecorded = 1; }],
+  ["missing expected rows", heartbeat => { delete heartbeat.readiness.admission.expectedRows; }],
+  ["wrong pending partition", heartbeat => { heartbeat.readiness.admission.pendingDeadline = 2; }],
+  ["wrong finalization window", heartbeat => { heartbeat.readiness.nearestFinalizationAt = heartbeat.readiness.nearestDeadlineAt; }],
+  ["missing nearest batch", heartbeat => { heartbeat.readiness.nearestDeadlineBatch = null; }],
+  ["mismatched nearest batch", heartbeat => { heartbeat.readiness.nearestDeadlineBatch.deadlineAt = heartbeat.evaluatedAt; }],
+  ["broken nearest batch", heartbeat => { heartbeat.readiness.nearestDeadlineBatch.invariantOk = false; }],
+];
+for (const [name, mutate] of negativeHeartbeatCases) {
+  const candidate = publicHeartbeatFixture();
+  mutate(candidate.captureHeartbeat);
+  assert.equal(publicHeartbeatGate(candidate).ok, false, name);
+  publicHeartbeatContractCases++;
+}
+const lateForgedBudget = publicHeartbeatFixture({ age: 160_000, recoveryAttempt: true });
+lateForgedBudget.captureHeartbeat.nextAttemptBudgetFits = true;
+assert.equal(publicHeartbeatGate(lateForgedBudget).ok, false);
+publicHeartbeatContractCases++;
+const impossibleForgedBudget = publicHeartbeatFixture({ attempt: 90_000 });
+impossibleForgedBudget.captureHeartbeat.preemptiveBudgetFits = true;
+impossibleForgedBudget.captureHeartbeat.nextAttemptBudgetFits = true;
+assert.equal(publicHeartbeatGate(impossibleForgedBudget).ok, false);
+publicHeartbeatContractCases++;
+for (const mutate of [candidate => { candidate.state = "SHADOW"; }, candidate => { candidate.chainValid = false; }]) {
+  const candidate = publicHeartbeatFixture();
+  mutate(candidate);
+  assert.equal(publicHeartbeatGate(candidate).ok, false);
+  publicHeartbeatContractCases++;
+}
+assert.equal(publicHeartbeatGate(publicHeartbeatFixture(), 503).ok, false);
+publicHeartbeatContractCases++;
+const heartbeatDiagnostics = publicHeartbeatGate(publicHeartbeatFixture()).details;
+assert.equal(heartbeatDiagnostics.readiness.admission.expectedRows, 1);
+assert.equal(heartbeatDiagnostics.readiness.nearestDeadlineBatch.pendingMatches, 1);
+assert.equal(heartbeatDiagnostics.shadowObservationValid, false);
 
 const now = Date.parse("2026-07-13T12:00:00.000Z");
 const kickoff = (minutesFromNow) => new Date(now + minutesFromNow * 60_000).toISOString();
@@ -2433,6 +2619,7 @@ verifyRelayWake().then(({
     candidateDeadlineHeartbeatTimeoutSeconds: candidateDeadlineCaptureTimeoutMs / 1000,
     modelCandidateRegistryLockTimeoutSeconds: modelCandidateRegistryLockTimeoutMs / 1000,
     candidateDeadlineHeartbeatTicks: heartbeatTicks,
+    publicHeartbeatContractCases,
     candidateDeadlineHeartbeatPausesForModelBacktest: false,
     candidateDeadlineAttemptTelemetry: true,
     stages,

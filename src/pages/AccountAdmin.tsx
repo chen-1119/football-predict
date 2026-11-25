@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAccount } from '../context/AccountContext';
 import { accountRequest, type AccountUser } from '../services/accountApi';
+import { ResearchEvidenceArchive } from '../components/ResearchEvidenceArchive';
 import '../styles/account.css';
 
 type UserRow = AccountUser & { createdAt: string };
@@ -77,5 +78,6 @@ export function AccountAdmin() {
         <button type="submit" className="account-primary" disabled={busy || loading || !selected || forbiddenSelf || !reason.trim() || !currentPassword || (effectiveOperation === 'grant' && !validDays)}>{busy ? '正在处理…' : '确认执行'}</button>
       </form></section>
     </div>
+    <ResearchEvidenceArchive userId={account.user!.id} />
   </div>;
 }

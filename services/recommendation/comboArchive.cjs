@@ -22,6 +22,7 @@ function verifyView(view, observedAt) {
       const bound = combo.legs.map(leg => {
         const record = view.records.find(r => r.eventId === leg.eventId); check(record && record.businessDate === view.businessDate, 'EVENT');
         const exact = { eventId: record.eventId, matchNum: record.matchNum, market: record.market, ...(record.market === 'HHAD' ? { handicap: record.handicap } : {}), selection: record.selection, sp: record.sp };
+        if (record.research !== undefined || record.strategy === 'evidence-first-editorial-v1') Object.assign(exact, { singleHash: require('../../scripts/recommendationPlatform/reviewedResearchCombos.cjs').coreHash(record), quoteHash: record.quoteHash });
         check(p.hash(leg) === p.hash(exact) && stamp(observedAt) < stamp(record.cutoffAt) && stamp(record.cutoffAt) <= stamp(record.eventVersion), 'LEG_BINDING'); return record;
       });
       const group = bound.map(r => r.eventId).sort().join('/');
@@ -29,6 +30,10 @@ function verifyView(view, observedAt) {
       const product = require('../../scripts/recommendationPlatform/reviewedComboHistory.cjs').exactProduct(combo.legs);
       const confidence = bound.some(r => r.confidence === '低') ? '低' : bound.some(r => r.confidence === '中') ? '中' : '高';
       check(combo.product === product && product >= combo.band && combo.confidence === confidence, 'PRODUCT');
+      if (combo.strategy !== undefined || bound.some(record => record.research !== undefined || record.strategy === 'evidence-first-editorial-v1')) {
+        const expected = require('../../scripts/recommendationPlatform/reviewedResearchCombos.cjs').combinations(bound, size, observedAt).find(candidate => candidate.legs.length === size);
+        check(expected && p.hash(combo) === p.hash({ ...expected, band: combo.band }), 'RESEARCH_POLICY');
+      }
     }
   }
   check(populated > 0, 'NO_SAVED_COMBO'); return true;

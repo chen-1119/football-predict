@@ -58,6 +58,8 @@ const React=require('react'),render=require('react-dom/server').renderToStaticMa
 function load(ts,filename,overrides={}){
  const native=createRequire(filename),m={exports:{}},local=id=>{
   if(Object.hasOwn(overrides,id))return overrides[id];
+  if(id.endsWith('/runtimeUrls'))return {buildApiUrl:value=>value};
+  if(id.endsWith('/accessControl'))return {getAccessAuthHeaders:()=>({})};
   if(id.endsWith('.css'))return {};
   if(id.startsWith('.')){const base=path.resolve(path.dirname(filename),id),target=[base,base+'.tsx',base+'.ts'].find(file=>fs.existsSync(file)&&fs.statSync(file).isFile());if(target&&/\.tsx?$/.test(target))return load(ts,target,overrides);}
   return native(id);
@@ -77,7 +79,8 @@ test('actual cards and detail render signed facts and stopped status, without fa
  a.doesNotMatch(card,/模型概率|确认首发|信心|正式推荐/);
  const originalNow=Date.now;Date.now=()=>f.NOW;
  try{const detail=render(React.createElement(ui.OfficialScheduleDetail,{referenceId:ui.officialScheduleRoute(view.events[0]),onBack(){}}));
-  a.match(detail,/本场尚未发布赛前推荐及参考比分/);a.match(detail,/尚未完成本场核实/);a.match(detail,/1\.80/);
+  a.match(detail,/本场尚未发布赛前推荐及参考比分/);a.match(detail,/完整证据核验尚未完成/);a.match(detail,/1\.80/);
+  a.match(detail,/球队资料 · 免费与官方来源/);a.match(detail,/正在读取本场真实采集资料/);
  }finally{Date.now=originalNow;}
 });
 test('schedule card never presents unavailable analysis as confirmed unpublished',()=>{

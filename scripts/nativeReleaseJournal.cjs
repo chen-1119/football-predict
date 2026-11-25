@@ -17,8 +17,8 @@ const NATIVE_SELECTORS = Object.freeze({ FOOTBALL_STORAGE_MODE: "postgres-only",
   DATASTORE_READ_SOURCE: "postgres", CURRENT_MATCH_SOURCE: "postgres", ENABLE_SQLITE_EXPORT: "0",
   PRIVATE_MODEL_ARTIFACT_STORAGE: "postgres", POSTGRES_PROJECTION_SOURCE: "native-generation" });
 const NATIVE_CAPTURE_BUDGETS = Object.freeze({
-  CANDIDATE_PROSPECTIVE_CAPTURE_TIMEOUT_MS: "80000",
-  CANDIDATE_PROSPECTIVE_CAPTURE_RECOVERY_BUDGET_MS: "80000",
+  CANDIDATE_PROSPECTIVE_CAPTURE_TIMEOUT_MS: "45000",
+  CANDIDATE_PROSPECTIVE_CAPTURE_RECOVERY_BUDGET_MS: "45000",
 });
 const digest = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
 // Bind the actual old executable, source and static public tree independently

@@ -220,6 +220,7 @@ const run = () => {
   const cloudflareSportteryCollectorVerifier = readText(cloudflareSportteryCollectorVerifierPath);
   const collectorTrustRegistry = parseJsonFile(collectorTrustRegistryPath);
   const githubSyncWorkflow = readText(githubSyncWorkflowPath);
+  const githubPagesWorkflow = fs.existsSync(githubPagesWorkflowPath) ? readText(githubPagesWorkflowPath) : null;
   const cloudPush = readText(cloudPushPath);
   const cleanupRelayHardeningRun = spawnSync(process.execPath, [cleanupRelayHardeningVerifierPath], {
     cwd: rootDir,
@@ -525,10 +526,12 @@ const run = () => {
   const proxiedLocations = [runtimeConfig, data, events, relaySnapshotUpload, admin, api];
   pushCheck(checks, "nginx upstream keepalive to node API routes", nginx.includes("upstream football_node")
     && nginx.includes("keepalive 64")
+    && nginxHttpCommon.includes("keepalive_timeout 4s;")
     && proxiedLocations.every((location) => location.includes("proxy_pass http://football_node"))
     && proxiedLocations.every((location) => location.includes("proxy_set_header Connection \"\"")), {
       hasUpstream: nginx.includes("upstream football_node"),
       hasKeepalive: nginx.includes("keepalive 64"),
+      upstreamIdleTimeoutBelowNodeDefault: nginxHttpCommon.includes("keepalive_timeout 4s;"),
       locationsUseUpstream: proxiedLocations.filter((location) => location.includes("proxy_pass http://football_node")).length,
       locationsClearConnection: proxiedLocations.filter((location) => location.includes("proxy_set_header Connection \"\"")).length
     });
@@ -2701,12 +2704,23 @@ const run = () => {
     cancelInProgressFalse: /cancel-in-progress:\s*false/.test(githubSyncWorkflow)
   });
 
-  const pagesWorkflowPresent = fs.existsSync(githubPagesWorkflowPath);
+  const pagesBaseCheck = (workflow) => workflow.includes("Verify Pages API Base")
+    && workflow.includes("DATA_API_BASE repository variable is required")
+    && workflow.includes("https://*")
+    && !workflow.includes("http://*|https://*");
   const syncPublishesPages = /peaceiris\/actions-gh-pages|actions\/(?:deploy-pages|upload-pages-artifact)|npm run build/.test(githubSyncWorkflow);
-  pushCheck(checks, "data sync runs independently of retired GitHub Pages", !pagesWorkflowPresent && !syncPublishesPages, {
-    pagesWorkflowPresent,
-    syncPublishesPages
-  });
+  pushCheck(
+    checks,
+    githubPagesWorkflow === null
+      ? "data sync runs independently of retired GitHub Pages"
+      : "github pages builds require HTTPS protected API base",
+    githubPagesWorkflow === null
+      ? !syncPublishesPages
+      : (pagesBaseCheck(githubSyncWorkflow) && pagesBaseCheck(githubPagesWorkflow)),
+    githubPagesWorkflow === null
+      ? { pagesWorkflowPresent: false, syncPublishesPages }
+      : { syncWorkflowHasGate: pagesBaseCheck(githubSyncWorkflow), pagesWorkflowHasGate: pagesBaseCheck(githubPagesWorkflow) }
+  );
 
   pushCheck(checks, "cloud data push keeps dist lightweight", cloudPush.includes("disabledDistPayloads")
     && cloudPush.includes("lightweightDistDataFiles")

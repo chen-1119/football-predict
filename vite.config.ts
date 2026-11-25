@@ -20,6 +20,7 @@ const largeStaticPayloads = [
   'data/five-hundred-details.json',
   'data/pre-match-signals.json',
   'data/prediction-snapshots.json',
+  'data/reference-integrity.json',
   'data/model-calibration.json',
   'data/model-strategy.json',
   'data/api-football-cache.json',

@@ -28,7 +28,9 @@ class Sequence {
   }
 }
 
-function openWorkspace(publicDir, { cutoff, rowMetadata, acceptHistoryRow }) {
+function openWorkspace(publicDir, { cutoff, rowMetadata, acceptHistoryRow, referencePartition = null }) {
+  const partition = require("./referenceIntegrityPartition.cjs");
+  const unresolved = referencePartition ? partition.originalRecordsForContext(referencePartition) : null;
   const temporaryRoot = fs.realpathSync(os.tmpdir());
   const directory = fs.mkdtempSync(path.join(temporaryRoot, "football-sync-snapshots-"));
   fs.chmodSync(directory, 0o700);
@@ -110,6 +112,7 @@ function openWorkspace(publicDir, { cutoff, rowMetadata, acceptHistoryRow }) {
   const records = makeMap(record => ({ referenceHash: record.contentHash }));
   const entries = [], present = new Set();
   const acceptRecord = record => {
+    if (unresolved && partition.isOriginalUnresolvedRecord(record)) return;
     if (Date.parse(record.recordedAt) >= cutoff) records.set(record.contentHash, record);
   };
   const workspace = {
@@ -139,6 +142,9 @@ function openWorkspace(publicDir, { cutoff, rowMetadata, acceptHistoryRow }) {
       }
       const retained = makeMap(entry => ({ referenceHash: entry.referenceHash, entryHash: digest(entry) }));
       const acceptEntry = entry => {
+        if (unresolved?.some(record => record.contentHash === entry?.referenceHash)) {
+          fail("REFERENCE_PARTITION_EXPLICIT_RESOLUTION_REQUIRED");
+        }
         const record = records.get(entry?.referenceHash);
         if (!record) return;
         if (!verifyPublicReferenceEvidence(entry, record)) fail("PUBLIC_REFERENCE_EVIDENCE_BINDING_INVALID");
@@ -162,7 +168,8 @@ function openWorkspace(publicDir, { cutoff, rowMetadata, acceptHistoryRow }) {
         if (record.evidenceBinding && !retained.has(record.contentHash)) fail("PUBLIC_REFERENCE_EVIDENCE_BINDING_MISSING");
       }
       workspace.getOriginalPair = hash => ({ record: records.get(hash), entry: retained.get(hash) });
-      return { publicReferenceDecisions: records.values(), publicReferenceEvidence: retained.values() };
+      return { publicReferenceDecisions: records.values(), publicReferenceEvidence: retained.values(),
+        ...(unresolved ? { publicReferenceIntegrity: partition.buildReferenceIntegrity(unresolved) } : {}) };
     },
     attach(payload) { payloads.set(payload, workspace); return payload; },
     close: owner.close,
@@ -187,7 +194,10 @@ function openWorkspace(publicDir, { cutoff, rowMetadata, acceptHistoryRow }) {
     // Second complete strict/hash pass binds the scalar metadata to the same
     // original bytes. No output, custody import or publication uses a prefix.
     const metadata = readSelectedJsonObjectFile({ filePath: source, expectedBytes: first.bytes,
-      expectedSha256: first.sha256, keys: ["updatedAt"], maxSelectedChars: 64 * 1024 }).value;
+      expectedSha256: first.sha256, keys: ["updatedAt", "version", "publicReferenceIntegrity"], maxSelectedChars: 512 * 1024 }).value;
+    const integrity = partition.readSnapshotIntegrity(source, metadata);
+    if (integrity && !referencePartition) fail("REFERENCE_PARTITION_DOWNGRADE_FORBIDDEN");
+    if (integrity) workspace.history.publicReferenceIntegrity = integrity;
     workspace.history.updatedAt = metadata.updatedAt || null;
     return workspace;
   } catch (cause) {

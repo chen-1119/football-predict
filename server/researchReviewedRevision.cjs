@@ -8,7 +8,7 @@ const {SELECT}=require('../scripts/leagueBaselineRegistry.cjs');
 const {loadCollectorTrustRegistry}=require('../src/services/collectorAttestation.cjs');
 const {readLiveOfficialSnapshot}=require('../scripts/recommendationPlatform/liveOfficialHandicap.cjs');
 const {epochNanoseconds:ns}=require('../src/services/prematchV3Clock.cjs');
-const {reviewDisposition}=require('./researchRevisionPolicy.cjs');
+const {reviewDisposition,requireResearchContinuity}=require('./researchRevisionPolicy.cjs');
 const {sameOfficialEventIdentity}=require('../scripts/recommendationPlatform/reviewedOfficialEvent.cjs');
 const fail=code=>{throw Object.assign(Error(code),{code,retryWriteAutomatically:false});};
 const VERSION='reviewed-single-revision-v1',ACK_VERSION='reviewed-single-revision-ack-v1',MAX_REVISIONS=16;
@@ -20,7 +20,7 @@ function revisionKey(day,eventId,revision){
 function validate(r){
  if(!r||Object.keys(r).sort().join(',')!=='basePayloadSha256,baseRecordKey,draft,draftHash,eventId,previousRevisionHash,revision,version'||r.version!=='reviewed-single-request-v1'
   ||!/^reviewed-analysis-\d{4}-\d{2}-\d{2}-batch-[a-f0-9]{64}$/.test(r.baseRecordKey||'')
-  ||['basePayloadSha256','draftHash'].some(k=>!/^[a-f0-9]{64}$/.test(r[k]||''))||![3,4].includes(r.draft?.version)||p.hash(r.draft)!==r.draftHash
+  ||['basePayloadSha256','draftHash'].some(k=>!/^[a-f0-9]{64}$/.test(r[k]||''))||![3,4,5].includes(r.draft?.version)||p.hash(r.draft)!==r.draftHash
   ||r.draft.singles?.length!==1||r.draft.singles[0].eventId!==r.eventId
   ||(r.revision===1?r.previousRevisionHash!==null:!/^[a-f0-9]{64}$/.test(r.previousRevisionHash||'')))fail('REVIEW_REVISION_REQUEST');
  const key=revisionKey(r.draft.businessDate,r.eventId,r.revision);
@@ -52,7 +52,7 @@ async function insert(c,key,value,at){
 async function base(c,request,asOf){
  const saved=await row(c,request.baseRecordKey);if(!saved||saved.payloadSha256!==request.basePayloadSha256)fail('REVIEW_REVISION_BASE_CHANGED');
  const old=await original.readPublication(c,request.baseRecordKey,asOf);
- const first=old.v.record.records.filter(r=>r.eventId===request.eventId);if(first.length!==1)fail('REVIEW_REVISION_BASE_EVENT');return first[0];
+ const first=old.v.record.records.filter(r=>r.eventId===request.eventId);if(first.length!==1)fail('REVIEW_REVISION_BASE_EVENT');requireResearchContinuity(first,request.draft);return first[0];
 }
 async function verifyCommitted(c,key,asOf,depth=0){
  if(depth>=MAX_REVISIONS)fail('REVIEW_REVISION_CHAIN_BOUND');
@@ -64,6 +64,7 @@ async function verifyCommitted(c,key,asOf,depth=0){
  if(v.request.revision>1){
   const previous=await verifyCommitted(c,revisionKey(v.record.businessDate,v.request.eventId,v.request.revision-1),asOf,depth+1);
   if(!previous.verified||previous.payloadSha256!==v.request.previousRevisionHash||previous.basePayloadSha256!==v.request.basePayloadSha256||previous.baseRecordKey!==v.request.baseRecordKey||ns(previous.commitObservedAt)>=ns(v.createdAt))fail('REVIEW_REVISION_CHAIN');
+  requireResearchContinuity([previous.latestDecision],v.request.draft);
  }
  const replay=p.make(v.request.draft,{...v.inputs,trustRegistry:trust(),asOf:v.createdAt});if(p.hash(replay)!==p.hash(v.record))fail('REVIEW_REVISION_REPLAY');
  const decision=v.record.records[0];if(decision.eventVersion!==first.eventVersion||decision.homeTeamId!==first.homeTeamId||decision.awayTeamId!==first.awayTeamId||decision.homeTeamName!==first.homeTeamName||decision.awayTeamName!==first.awayTeamName||!sameOfficialEventIdentity(first,decision))fail('REVIEW_REVISION_EVENT_CHANGED');
@@ -84,18 +85,19 @@ function createRevisionStore({pool,runExclusive}={}){
  async function publish(request){const key=validate(request);return runExclusive(async()=>{
   const before=await read(request);if(before.state!=='not-observed')return {...before,submitted:false};
   const stored=await transaction(pool,false,async c=>{
-   await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',['football-postgres-projection-sync-v1']);
+   await require('./researchAppendLock.cjs').acquireResearchAppendLock(c,{independentOfficial:[4,5].includes(request.draft.version)});
    if(await row(c,key)||await row(c,key+'-ack'))fail('REVIEW_REVISION_EXISTS_READ_FIRST');
    const at=await now(c),first=await base(c,request,at);
-   if(request.revision>1){const previous=await verifyCommitted(c,revisionKey(request.draft.businessDate,request.eventId,request.revision-1),at);if(!previous.verified||previous.payloadSha256!==request.previousRevisionHash||previous.basePayloadSha256!==request.basePayloadSha256||previous.baseRecordKey!==request.baseRecordKey||ns(previous.commitObservedAt)>=ns(at))fail('REVIEW_REVISION_PREDECESSOR');}
-   const all=request.draft.version===4?[]:(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(r=>r.payload);if(all.length>512)fail('REVIEW_REVISION_MATCH_BOUND');
+   if(request.revision>1){const previous=await verifyCommitted(c,revisionKey(request.draft.businessDate,request.eventId,request.revision-1),at);if(!previous.verified||previous.payloadSha256!==request.previousRevisionHash||previous.basePayloadSha256!==request.basePayloadSha256||previous.baseRecordKey!==request.baseRecordKey||ns(previous.commitObservedAt)>=ns(at))fail('REVIEW_REVISION_PREDECESSOR');requireResearchContinuity([previous.latestDecision],request.draft);}
+   const all=[4,5].includes(request.draft.version)?[]:(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(r=>r.payload);if(all.length>512)fail('REVIEW_REVISION_MATCH_BOUND');
    const matches=all.filter(m=>String(m.sourceMatchId||'').replace(/^sporttery_/,'')===request.eventId),snapshot=readLiveOfficialSnapshot();
-   const record=p.make(request.draft,{matches,snapshot,trustRegistry:trust(),asOf:at}),decision=record.records[0];
+   const evidenceByEvent=request.draft.version===5?await require('../scripts/recommendationPlatform/reviewedResearchEvidence.cjs').loadForDraft(c,request.draft,at):{};
+   const record=p.make(request.draft,{matches,snapshot,trustRegistry:trust(),asOf:at,evidenceByEvent}),decision=record.records[0];
    if(['eventVersion','homeTeamId','awayTeamId','homeTeamName','awayTeamName'].some(k=>decision[k]!==first[k])||!sameOfficialEventIdentity(first,decision))fail('REVIEW_REVISION_EVENT_CHANGED');
-   const observed={...decision,status:request.draft.version===4?'SCHEDULED':matches[0]?.status,isOnSale:true,observedAt:decision.quoteObservedAt};
+   const observed={...decision,status:[4,5].includes(request.draft.version)?'SCHEDULED':matches[0]?.status,isOnSale:true,observedAt:decision.quoteObservedAt};
    if(!reviewDisposition(first,observed,at).canRevisePrematch)fail('REVIEW_REVISION_NOT_OPEN');
    const storedAt=await now(c);deadline(record,storedAt);
-   const value=p.seal({version:VERSION,createdAt:record.createdAt,storedAt,request,record,inputs:{matches,snapshot},originalDecisionHash:p.hash(first)});
+   const value=p.seal({version:VERSION,createdAt:record.createdAt,storedAt,request,record,inputs:{matches,snapshot,...(request.draft.version===5?{evidenceByEvent}:{})},originalDecisionHash:p.hash(first)});
    const saved=await insert(c,key,value,storedAt);deadline(record,await now(c));return saved;
   });
   await transaction(pool,false,async c=>{

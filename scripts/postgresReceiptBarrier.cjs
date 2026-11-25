@@ -1,8 +1,5 @@
 "use strict";
 const KEY = "football-postgres-projection-sync-v1";
-// Preparation owns a pre-existing 600s contention budget. Keep one bounded
-// FIFO position through ordinary 20s+ view transactions, without starting a
-// snapshot or changing the default nonblocking worker admission.
 const MAX_WAIT_MS = 60000;
 function receiptBarrierState() { return { held: false, acquisitionUncertain: false, configurationUncertain: false }; }
 function validateReceiptWait(waitMs) {
@@ -21,9 +18,6 @@ async function acquireReceiptReadBarrier(client, state, waitMs = 0) {
     state.held = true;
     return;
   }
-  // Only deployment preparation opts into this bounded server-side queue.
-  // BEGIN remains after lock acquisition: never pin a pre-writer RR snapshot.
-  // Every ordinary worker retains its original nonblocking behavior.
   const previous = (await client.query("SHOW lock_timeout")).rows[0]?.lock_timeout;
   if (typeof previous !== "string" || previous.length > 100) throw new Error("receipt read timeout state unavailable");
   state.configurationUncertain = true;
