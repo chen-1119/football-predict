@@ -16,7 +16,7 @@ function member(entry,bytes=Buffer.alloc(0)){
  header.write(header.reduce((sum,value)=>sum+value,0).toString(8).padStart(6,'0')+'\0 ',148,8,'ascii');
  return Buffer.concat([header,bytes,Buffer.alloc((512-bytes.length%512)%512)]);
 }
-function put(file,bytes){fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,bytes,{flag:'wx'});}
+function put(file,bytes,mode){fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,bytes,mode===undefined?{flag:'wx'}:{flag:'wx',mode});}
 async function fixture({directoryMode,differentTool=false}={}){
  const directory=fs.mkdtempSync(path.join(temporary,'case-')),sourceRoot=path.join(directory,'source'),bundlePath=path.join(directory,'release.tgz');fs.mkdirSync(sourceRoot);
  const seen=new Set();
@@ -32,7 +32,7 @@ async function fixture({directoryMode,differentTool=false}={}){
  put(bundlePath,zlib.gzipSync(Buffer.concat([...parts,Buffer.alloc(1024)])));
  const evidence=await archive.captureReleaseArchiveSourceEvidence(bundlePath),now=Date.now();
  const publicKeyPath=path.join(directory,'existing-trust.pem'),privateKeyPath=path.join(directory,'fixture-private.pem');
- put(publicKeyPath,keypair.publicKey.export({type:'spki',format:'pem'}));put(privateKeyPath,keypair.privateKey.export({type:'pkcs8',format:'pem'}));
+ put(publicKeyPath,keypair.publicKey.export({type:'spki',format:'pem'}));put(privateKeyPath,keypair.privateKey.export({type:'pkcs8',format:'pem'}),0o600);
  const manifest={ok:true,manifestVersion:3,site:'football-predict',channel:'production',releaseSequence:1000,createdAt:new Date(now-1000).toISOString(),expiresAt:new Date(now+3600000).toISOString(),
   sha256:evidence.archiveSha256,bytes:evidence.archiveBytes,entries:evidence.archiveEntryCount,archiveSourceEvidence:evidence,
   signature:{algorithm:'rsa-sha256-pkcs1-v1_5',keyId:sha(keypair.publicKey.export({type:'spki',format:'der'})),format:'detached-binary'}};
