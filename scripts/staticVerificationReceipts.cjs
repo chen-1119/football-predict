@@ -39,12 +39,12 @@ const PROFILES = Object.freeze({
     // These CJS modules execute; pin their audited code as well as hashing
     // actual input bytes. A newly introduced dependency requires a new audit.
     auditedModules: Object.freeze({
-      // Audited 2026-10-18: sync parser retains its full hash comparison. The
-      // private deferred path is available only to the two-pass owned reader,
-      // which validates the independent digest and real thread exit first.
-      "server/selectedJsonObjectFile.cjs": "7746ceea113d0135fa73e4889754772f763f4bceb8982a07379d3276128b2d96",
+      // Re-audited 2026-11-25: SIMD node:buffer isUtf8 (with 1-3 byte chunk carry)
+      // and single-byte latin1 skipped-token scan retain complete JSON grammar,
+      // UTF-8/size/hash checks and the two-pass owned full-hash worker contract.
+      "server/selectedJsonObjectFile.cjs": "678efdb2c68e0436a5695ba42c4bc170140fb01b399f847e55a56c82a619b053",
       "server/selectedJsonFullHashWorker.cjs": "95d7da747a18362bea6b457c2da1531c831afa6eceb98b55e5e4ad4a2b788b5c",
-      "server/dataGenerationStore.cjs": "d4560309af14336d90fc24903b321c8374c1574a492e4cb8f27bfe2cb71875fb",
+      "server/dataGenerationStore.cjs": "aa682894ffc3d010d4c5aed5728c5d5bd500cbb7adb8845a607a35b6ee56e27e",
       "server/chunkedJsonFile.cjs": "da65cde36f12868209d29f830d49c2ba37c27e6931e3a46dfac1a02d799705c3",
     }),
     absentEnvironment: ["VERIFY_SELECTED_JSON_SKIP_LARGE"],

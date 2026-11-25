@@ -103,7 +103,7 @@ async function verifyStaticVerificationReceipts() {
     check("audited fixture import inventory includes the new bounded reader", () => {
       const expected = {
         "scripts/verifySelectedJsonObjectFile.cjs": ["node:assert/strict", "node:fs", "node:os", "node:path", "node:crypto", "node:child_process", "../server/selectedJsonObjectFile.cjs", "../server/dataGenerationStore.cjs"],
-        "server/selectedJsonObjectFile.cjs": ["node:fs", "node:crypto", "node:worker_threads"],
+        "server/selectedJsonObjectFile.cjs": ["node:fs", "node:crypto", "node:worker_threads", "node:buffer"],
         "server/selectedJsonFullHashWorker.cjs": ["node:fs", "node:crypto", "node:worker_threads"],
         "server/dataGenerationStore.cjs": ["node:crypto", "node:fs", "node:os", "node:path", "./chunkedJsonFile.cjs", "./selectedJsonObjectFile.cjs"],
         "server/chunkedJsonFile.cjs": ["node:fs", "node:crypto"],
