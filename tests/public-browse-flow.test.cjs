@@ -48,6 +48,17 @@ test('case-insensitive English search and clear-filter empty action are usable',
 test('public quote snapshots distinguish missing prices from unverified time without exposing providers or inventing odds',async()=>{const u=await harness(),t=u.render(),c=cards(t)[0];assert.match(words(c),/胜平负 SP 有缺项/);assert.match(words(c),/报价记录 09\/22 13:55/);assert.match(words(c),/1\.80/);assert.match(words(c),/客胜—/);assert.doesNotMatch(words(c),/500-sp|报价来源|官方赔率/);nodes(t,n=>n.type==='select')[0].props.onChange({target:{value:'2026-09-23'}});const dayCards=cards(u.render());const missing=words(dayCards[0]),unverified=words(dayCards[1]);assert.match(missing,/胜平负 SP 有缺项/);assert.match(missing,/平局—/);assert.doesNotMatch(missing,/来源未标注/);assert.match(unverified,/赛程胜平负 SP 已取得，报价时间未核验/);assert.match(unverified,/主胜1\.90平局3\.20客胜4\.10/);assert.doesNotMatch(unverified,/报价记录|胜平负 SP 有缺项/);});
 test('network failure has retry and does not announce zero fixtures as a successful empty day',async()=>{const u=await harness({failure:true}),text=words(u.render());assert.match(text,/内容更新失败，已读取内容可能滞后，请重试/);assert.doesNotMatch(text,/这个竞彩日暂无比赛/);assert.equal(nodes(u.render(),n=>n.type==='button'&&words(n)==='重试').length,1);});
 test('public historical sample reports actual loss and auditable quote fields; missing totals stay unknown',async()=>{const data=overview();data.review.summary=null;const u=await harness({data,route:{pathname:'/review',search:'',hash:'',state:null}}),t=u.render(),text=words(t);assert.equal(cards(t).length,0);assert.match(text,/未命中/);assert.match(text,/official-archived-sp/);assert.match(text,/decision_saved/);assert.match(text,/历史命中率—/);assert.doesNotMatch(text,/历史命中率0\.0%/);});
+test('archived detail links render the verified final without requesting the live overview or showing market fields',async()=>{
+ const u=await harness({matchId:'sporttery_2042949',route:{pathname:'/match/sporttery_2042949',search:'?date=2026-11-23',hash:'',state:null}});
+ const archived={...fixtures[0],id:'sporttery_2042949',businessDate:'2026-11-23',status:'FINISHED',archiveResult:true,
+   scoreHome:3,scoreAway:2,homeTeamName:'圣路易斯城',awayTeamName:'洛杉矶FC'};
+ const before=u.fetches.length;
+ u.setResponder(url=>url.includes('/matches/')?response({match:archived}):{ok:false,status:503});
+ await u.advance(30000);
+ assert.deepEqual(u.fetches.slice(before),['/api/public/matches/sporttery_2042949?date=2026-11-23']);
+ const text=words(u.render());assert.match(text,/圣路易斯城3 : 2洛杉矶FC/);assert.match(text,/全场比分/);
+ assert.doesNotMatch(text,/胜平负 SP|赛程赔率快照|旧策略单场/);u.unmount();
+});
 test('unknown requested date stays visible in picker and yields genuine no-fixture state',async()=>{const u=await harness({route:{pathname:'/fixtures',search:'?date=2026-10-01',hash:'',state:null}}),t=u.render();assert.equal(cards(t).length,0);assert.match(words(t),/2026-10-01 · 暂无赛程/);assert.match(words(t),/这个竞彩日暂无比赛/);});
 test('public detail drops unsafe back path and preserves its route as the sign-in return',async()=>{const u=await harness({matchId:'sporttery_a',route:{pathname:'/match/sporttery_a',search:'?tab=history',hash:'#evidence',state:{fromPath:'/\\evil.example'}}}),t=u.render();assert.equal(nodes(t,n=>n.type==='a'&&n.props.className==='public-back')[0].props.to,'/fixtures');assert.equal(nodes(t,n=>n.type==='a'&&n.props.className==='public-cta')[0].props.to,'/auth?returnTo=%2Fmatch%2Fsporttery_a%3Ftab%3Dhistory%23evidence');assert.equal(u.fetches.length,2);});
 
@@ -139,4 +150,30 @@ test('15-second request timeout aborts acquisition; unmount removes timers/liste
  nodes(u.render(),n=>n.type==='button'&&words(n)==='刷新资料')[0].props.onClick();await u.flush();u.unmount();
  assert.equal(stoppedSignal.aborted,true);assert.equal(u.timers.size,0);assert.equal(u.document.count(),0);assert.equal(u.window.count(),0);
  const next=overview();next.matches[0].odds.home=9.99;pending.resolve(response(next));await u.flush();assert.doesNotMatch(words(u.render()),/主胜9\.99/);
+});
+
+test('review shows public cohort rates separately and exposes no additional match records',async()=>{
+ const data=overview(),base={published:4,settled:3,won:2,lost:1,pending:1,unknown:0,void:0,disputed:0,hitRate:2/3};
+ const empty={published:1,settled:0,won:0,lost:0,pending:1,unknown:0,void:0,disputed:0,hitRate:null};
+ data.review.tracks={asOf:data.review.updatedAt,manual:base,trained:empty,legacy:{...base,won:1,lost:2,hitRate:1/3}};
+ const u=await harness({data,route:{pathname:'/review',search:'',hash:'',state:null}}),t=u.render(),text=words(t);
+ assert.match(text,/人工审核66.7%命中 \/ 已结算 2 \/ 3/);
+ assert.match(text,/训练模型参考暂无已结算/);
+ assert.match(text,/旧策略归档33.3%/);
+ assert.equal(nodes(t,n=>n.props?.className==='public-example').length,1);
+ assert.deepEqual(u.fetches,['/api/public/overview']);
+ u.unmount();
+});
+test('guest can reach review from the main page, and a malformed track cannot supply an apparent hit rate',async()=>{
+ const data=overview();data.review.tracks={asOf:data.review.updatedAt,manual:{settled:0,hitRate:1}};
+ const u=await harness({data,route:{pathname:'/best',search:'',hash:'',state:null}}),t=u.render();
+ assert(nodes(t,n=>n.type==='a'&&n.props.to==='/review'&&words(n).includes('历史推荐与命中率')).length);
+ assert.match(words(t),/旧策略单场/);assert.doesNotMatch(words(t),/人工审核100.0%/);
+ assert.deepEqual(u.fetches,['/api/public/overview']);u.unmount();
+});
+test('unavailable fixture and public overview cannot present a verified empty history',async()=>{
+ const data=overview();data.scheduleAvailable=false;data.stale=true;data.matches=[];
+ const u=await harness({data});assert.match(words(u.render()),/未取得赛程数据/);
+ assert.doesNotMatch(words(u.render()),/这个竞彩日暂无比赛|正在展示最近一次快照/);u.unmount();
+ const fail=await harness({failure:true});assert.doesNotMatch(words(fail.render()),/暂时没有可核验的已结算样例|暂无比赛/);fail.unmount();
 });

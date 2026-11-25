@@ -86,3 +86,15 @@ test('historical list subscriptions isolate days, retain request cancellation, a
  controllers[0].options.onError({status:403});a.equal(stores[0].getSnapshot().data,null);a.equal(stores[1].getSnapshot().data.reviewedAnalysisHistory.businessDate,'2026-10-15');
  unsubs[0]();a.equal(controllers[0].stopped,true);a.equal(controllers[1].stopped,false);unsubs[1]();a.equal(controllers[1].stopped,true);a.equal(stores[1].getSnapshot().data,null);
 });
+
+test('historical review selects only the requested archived day and keeps load errors distinct from empty results',()=>{
+ const f=fixture(),React=require('react'),render=require('react-dom/server').renderToStaticMarkup;
+ const ui=require('../scripts/lib/loadReviewTsForVerification.cjs')(ts,path.resolve(__dirname,'../src/components/recommendations/ReviewedAnalysis.tsx'));
+ const props={selectedDay:f.day,onSelectDay(){},history:f.original,now:Date.parse(f.updatedAt)+86400000,tab:'single',language:'zh',failed:false,loading:false,retry(){}};
+ const html=patch=>render(React.createElement(ui.ReviewedHistoryPanel,{...props,...patch}));
+ a.match(html({}),/Synthetic original/);
+ a.doesNotMatch(html({selectedDay:'2026-01-01'}),/Synthetic original/);
+ a.match(html({history:undefined,loading:true}),/正在读取已发布推荐/);
+ a.match(html({history:undefined,failed:true}),/历史推荐读取失败/);
+ a.match(html({history:undefined}),/该竞彩日未返回可核验的发布记录/);
+});

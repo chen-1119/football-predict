@@ -1,5 +1,6 @@
 "use strict";
 const crypto = require("node:crypto");
+const { externalGenerationRow } = require("./postgresExternalGenerationRow.cjs");
 const path = require("node:path");
 const fs = require("node:fs"), os = require("node:os");
 const {
@@ -57,8 +58,14 @@ function readPostgresReferenceSnapshot(context, { maxRetainedChars = MAX_REFEREN
   const name = "prediction-snapshots.json";
   // Reuse context/path admission and retain only tiny top-level metadata.
   const { value: metadata } = readGenerationSelectedObject(context, name, {
-    keys: ["updatedAt", "retentionDays"], maxSelectedChars: 64 * 1024,
+    keys: ["updatedAt", "retentionDays", "version", "publicReferenceIntegrity"], maxSelectedChars: 512 * 1024,
   });
+  const partition = require("../server/referenceIntegrityPartition.cjs");
+  const integrityEntry = context.manifest.files.find(item => item.path === partition.FILE_NAME);
+  if (integrityEntry && integrityEntry.bytes > 512 * 1024) throw new Error("REFERENCE_PARTITION_FILE");
+  const integrity = integrityEntry
+    ? require("../server/dataGenerationStore.cjs").readGenerationFile(context, partition.FILE_NAME, { parseJson: true }) : null;
+  partition.validateSnapshotIntegrity(metadata, integrity);
   const entry = context.manifest.files.find(item => item.path === name);
   const arrays = { publicReferenceDecisions: [], publicReferenceEvidence: [] };
   let retainedChars = 0, items = 0;
@@ -88,6 +95,11 @@ function spoolGenerationRows(context, name, limitRows, tempDir, complete = false
     || !Number.isSafeInteger(limitRows) || limitRows < 1 || limitRows > 1000000) throw new Error("invalid native row spool options");
   const entry = context?.manifest?.files?.find(item => item.path === name);
   if (!entry || !context.generationDir) throw new Error("native row spool missing immutable manifest");
+  const sourcePath = path.join(context.generationDir, name);
+  const sourceBefore = fs.lstatSync(sourcePath, { bigint: true });
+  const sameSource = stat => stat.isFile() && !stat.isSymbolicLink()
+    && stat.dev === sourceBefore.dev && stat.ino === sourceBefore.ino
+    && stat.size === sourceBefore.size && stat.mtimeNs === sourceBefore.mtimeNs && stat.ctimeNs === sourceBefore.ctimeNs;
   const base = fs.realpathSync(tempDir || os.tmpdir());
   const directory = fs.mkdtempSync(path.join(base, "football-pg-states-"));
   let fd = null, closed = false, bytes = 0, count = 0;
@@ -114,17 +126,39 @@ function spoolGenerationRows(context, name, limitRows, tempDir, complete = false
     if (crypto.createHash("sha256").update(buffer).digest("hex") !== item.sha256) throw new Error("native state scratch integrity invalid");
     return JSON.parse(buffer.toString("utf8"));
   };
+  const assertSourceUnchanged = () => {
+    if (closed) throw new Error("native state scratch is closed");
+    if (!sameSource(fs.lstatSync(sourcePath, { bigint: true }))) throw new Error("native row spool source changed");
+    const sourceFd = fs.openSync(sourcePath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+    try {
+      if (!sameSource(fs.fstatSync(sourceFd, { bigint: true }))) throw new Error("native row spool source changed");
+      const hash = crypto.createHash("sha256"), buffer = Buffer.allocUnsafe(256 * 1024);
+      let total = 0, size;
+      while ((size = fs.readSync(sourceFd, buffer, 0, buffer.length, null)) > 0) {
+        total += size;
+        if (total > entry.bytes) throw new Error("native row spool source changed");
+        hash.update(buffer.subarray(0, size));
+      }
+      if (total !== entry.bytes || hash.digest("hex") !== entry.sha256
+        || !sameSource(fs.fstatSync(sourceFd, { bigint: true }))
+        || !sameSource(fs.lstatSync(sourcePath, { bigint: true }))) throw new Error("native row spool source changed");
+    } finally { fs.closeSync(sourceFd); }
+  };
   try {
     fs.chmodSync(directory, 0o700);
     fd = fs.openSync(path.join(directory, "states.json"), "wx+", 0o600);
-    const result = streamJsonObjectArrays(path.join(context.generationDir, name), { keys: ["rows"], expectedBytes: entry.bytes, expectedSha256: entry.sha256,
+    const result = streamJsonObjectArrays(sourcePath, { keys: ["rows"], expectedBytes: entry.bytes, expectedSha256: entry.sha256,
       onItem(_key, value) {
         if (complete && count >= limitRows) throw new Error("complete native archive row inventory exceeds bounded count");
         tail[count++ % limitRows] = { ...append(value), sourceKey: archiveSourceKey(value) };
       } });
     if (!result.fields.includes("rows")) throw new Error("native projection missing rows array");
-    return { append, read, close, directory,
-      *rows() { for (let index = Math.max(0, count - limitRows); index < count; index++) yield read(tail[index % limitRows]); },
+    if (!sameSource(fs.lstatSync(sourcePath, { bigint: true }))) throw new Error("native row spool source changed");
+    return { append, read, close, directory, assertSourceUnchanged,
+      *rows(tailLimit = limitRows) {
+        if (!Number.isSafeInteger(tailLimit) || tailLimit < 1 || tailLimit > limitRows) throw new Error("invalid native row spool tail limit");
+        for (let index = Math.max(0, count - tailLimit); index < count; index++) yield read(tail[index % limitRows]);
+      },
       *rowsForSource(sourceKey) { for (let index = Math.max(0, count - limitRows); index < count; index++) {
         const item = tail[index % limitRows]; if (item.sourceKey === sourceKey) yield read(item);
       } } };
@@ -140,13 +174,16 @@ function createPostgresGenerationSource(options = {}) {
   const publicDataDir = path.resolve(options.publicDataDir || path.join(root, "public/data"));
   const active = resolveActivePublication({ storeDir, publicDataDir });
   if (active.mode !== "active-generation") throw new Error("native PostgreSQL projection requires a validated immutable generation");
+  const partition = require("../server/referenceIntegrityPartition.cjs");
+  const hasIntegrity = active.context.manifest.files.some(entry => entry.path === partition.FILE_NAME);
   const publication = Object.fromEntries(["mode", "generationId", "manifestHash", "sourceCycleId", "committedAt"].map(key => [key, active.identity[key]]));
   const oddsLimit = limit(options.oddsLimit ?? process.env.SQLITE_EXPORT_ODDS_LIMIT, 50000, 1000);
   const predictionLimit = limit(options.predictionLimit ?? process.env.SQLITE_EXPORT_PREDICTION_LIMIT, 10000, 500);
   const oddsStateLimit = limit(options.oddsStateLimit ?? process.env.SQLITE_ODDS_STATE_LIMIT, Math.max(50000, oddsLimit), 1000);
   const predictionStateLimit = limit(options.predictionStateLimit ?? process.env.SQLITE_PREDICTION_STATE_LIMIT, Math.max(50000, predictionLimit), 500);
   const policy = { version: "postgres-native-generation-v2-streamed-reference", oddsLimit, predictionLimit, oddsStateLimit, predictionStateLimit,
-    publicReferenceArchive: VERSION, publicReferenceIndex: INDEX_VERSION };
+    publicReferenceArchive: VERSION, publicReferenceIndex: INDEX_VERSION,
+    ...(hasIntegrity ? { publicReferenceIntegrity: partition.VERSION } : {}) };
   const now = new Date().toISOString();
   const meta = {};
   const put = (key, value) => { meta[key] = { key, value: String(value ?? ""), updated_at: now }; };
@@ -158,7 +195,7 @@ function createPostgresGenerationSource(options = {}) {
   const fingerprint = crypto.createHash("sha256").update(JSON.stringify({ publication, policy })).digest("hex");
   const lease = acquireGenerationReadLease({ storeDir, generationId: publication.generationId, context: active.context,
     owner: "postgres-native-projection", ttlMs: 30 * 60 * 1000 });
-  let closed = false, client = null, pointerLock = null, guard = null, syncMeta = null;
+  let closed = false, client = null, pointerLock = null, guard = null, syncMeta = null, referenceIntegrity = null, archiveRows = null;
   const scratch = new Set();
   const inventories = new Map();
   const assertOpen = () => { if (closed) throw new Error("native projection source is closed"); };
@@ -182,6 +219,24 @@ function createPostgresGenerationSource(options = {}) {
     client = pgClient;
     syncMeta = read("sync-meta.json");
     if (!syncMeta || typeof syncMeta !== "object" || Array.isArray(syncMeta)) throw new Error("native projection sync metadata missing");
+    const previousIntegrity = (await client.query("SELECT payload FROM football.source_snapshots WHERE id=$1", [partition.SOURCE_ID])).rows[0];
+    const previousPartitionMeta = new Map((await client.query("SELECT key,value FROM football.projection_meta WHERE key IN ('reference_integrity_content_hash','data_generation_id')")).rows.map(row => [row.key, row.value]));
+    const priorIntegrityHash = previousPartitionMeta.get("reference_integrity_content_hash");
+    if ((previousIntegrity || priorIntegrityHash) && !hasIntegrity) throw new Error("REFERENCE_PARTITION_DOWNGRADE_FORBIDDEN");
+    if (hasIntegrity) {
+      referenceIntegrity = partition.validateReferenceIntegrity(read(partition.FILE_NAME));
+      if (!previousIntegrity && (priorIntegrityHash || previousPartitionMeta.get("data_generation_id") === publication.generationId)) {
+        throw new Error("REFERENCE_PARTITION_DATABASE_MISSING");
+      }
+      if (previousIntegrity) {
+        const previous = partition.validateStoredReferenceIntegrity(typeof previousIntegrity.payload === "string"
+          ? JSON.parse(previousIntegrity.payload) : previousIntegrity.payload);
+        if (previous.contentHash !== referenceIntegrity.contentHash || (priorIntegrityHash && priorIntegrityHash !== previous.contentHash)) {
+          throw new Error("REFERENCE_PARTITION_DATABASE_BYTES");
+        }
+      }
+      put("reference_integrity_content_hash", referenceIntegrity.contentHash);
+    }
     put("sync_meta_updated_at", syncMetaDataVersion(syncMeta));
     put("fast_result_generation_reconciliation", fastResultGenerationReconciliationStamp(syncMeta));
     const rows = (await client.query("SELECT key, value, updated_at FROM football.projection_meta WHERE key LIKE 'fast_result_%' ORDER BY key")).rows.map(normalizeStoredRow);
@@ -200,7 +255,6 @@ function createPostgresGenerationSource(options = {}) {
     for (const row of rows) if (row.key !== "fast_result_generation_reconciliation") meta[row.key] = row;
   };
   async function* matchRows() {
-    let archiveRows = null;
     const snapshots = match => {
       assertUnchanged();
       // The selector only looks up this provider match ID. Index every row on
@@ -233,7 +287,10 @@ function createPostgresGenerationSource(options = {}) {
       }
     }
     for (const row of sorted(result.values())) yield row;
-    } finally { if (archiveRows) { archiveRows.close(); scratch.delete(archiveRows); } }
+    } catch (error) {
+      if (archiveRows) { archiveRows.close(); scratch.delete(archiveRows); archiveRows = null; }
+      throw error;
+    }
   }
   async function* sourceRows() {
     assertUnchanged();
@@ -242,9 +299,12 @@ function createPostgresGenerationSource(options = {}) {
     try {
     const rows = [{ id: "sync-meta:current", source: syncMeta.source || "sporttery",
       captured_at: syncMeta.updatedAt || syncMeta.capturedAt || null, payload: JSON.stringify(syncMeta) }];
-    const external = read("external-signals.json");
-    if (!external || typeof external !== "object" || Array.isArray(external)) throw new Error("native projection external signals missing");
-    rows.push({ id: "external-signals:current", source: external.source || "external-signals", captured_at: external.updatedAt || null, payload: JSON.stringify(external) });
+    if (referenceIntegrity) {
+      rows.push({ id: partition.SOURCE_ID, source: partition.VERSION,
+        captured_at: syncMeta.updatedAt || syncMeta.capturedAt || null,
+        payload: JSON.stringify(partition.storedReferenceIntegrity(referenceIntegrity)) });
+    }
+    rows.push(externalGenerationRow(active.context));
     const old = (await client.query("SELECT id FROM football.source_snapshots ORDER BY id")).rows;
     inventories.set("source_snapshots", [...new Set([...old.map(row => row.id).filter(id =>
       !id.startsWith("sync-meta:") && !id.startsWith("external-signals:") && id !== SOURCE_ID && id !== INDEX_ID && !id.startsWith(INDEX_PREFIX)), ...rows.map(row => row.id), ...(archive?.ids || [])])]);
@@ -262,12 +322,14 @@ function createPostgresGenerationSource(options = {}) {
     const merge = kind === "odds" ? mergeCanonicalOddsStates : mergeCanonicalPredictionStates;
     const raw = kind === "odds" ? rawOddsRecord : rawPredictionRecord;
     assertUnchanged();
-    const input = spoolGenerationRows(active.context, kind === "odds" ? "odds-history.json" : "prediction-snapshots.json",
+    const reused = kind === "prediction" && archiveRows;
+    const input = reused || spoolGenerationRows(active.context, kind === "odds" ? "odds-history.json" : "prediction-snapshots.json",
       kind === "odds" ? oddsLimit : predictionLimit, options.referenceTempDir);
     scratch.add(input);
     try {
+    if (reused) input.assertSourceUnchanged();
     const candidates = new Map();
-    for (const row of input.rows()) {
+    for (const row of input.rows(kind === "odds" ? oddsLimit : predictionLimit)) {
       const candidate = canonical(row) || raw(row, "public");
       const previous = candidates.get(candidate.id);
       const merged = merge(previous ? input.read(previous.item) : undefined, candidate);
@@ -302,7 +364,7 @@ function createPostgresGenerationSource(options = {}) {
       // prior state is not promoted to a canonical forecast by migration.
       yield rowFromState(merge(canonical(normalizeStoredRow(stored)), state), kind);
     }
-    } finally { input.close(); scratch.delete(input); }
+    } finally { input.close(); scratch.delete(input); if (input === archiveRows) archiveRows = null; }
   }
   return {
     kind: "native-generation", path: active.context.generationDir || `generation:${publication.generationId}`,

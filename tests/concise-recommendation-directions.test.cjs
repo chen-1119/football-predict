@@ -46,7 +46,12 @@ function renderCenter(row,{now=NOW,language='zh',mode='recommendations',selected
   if(id==='./MarketComparison')return {MarketComparison:()=>null};
   if(id==='./PrdPaperDirections')return {PrdPaperDirections:()=>null};
   if(id==='lucide-react')return {RefreshCw:()=>null,ChevronDown:()=>null,Search:()=>null,ArrowUpRight:()=>null};
-  if(id.endsWith('.css'))return {};return native(id);
+  if(id.endsWith('.css'))return {};
+  if(id.startsWith('.')) for(const ext of ['.ts','.tsx']) {
+   const dependency=path.resolve(path.dirname(file),id+ext);
+   if(fs.existsSync(dependency)) return compile(dependency);
+  }
+  return native(id);
  }},{filename:file});
  return renderToStaticMarkup(React.createElement(module.exports.RecommendationCenter,{language,onSelectMatch:()=>{},mode}));
 }

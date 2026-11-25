@@ -18,3 +18,8 @@ test('missing coverage does not substitute legacy totals or a zero',()=>{const h
 test('incomplete coverage and refresh failure are explicit',()=>{const data=api.parsePublishedReviewCoverage(fixture());data.complete=false;const html=renderToStaticMarkup(React.createElement(PublishedReviewCoveragePanel,{data,failed:true}));a(html.includes('完整总数待核'));a(html.includes('保留上次统计'));});
 test('daily review uses Beijing previous date and published count despite missing results',()=>{const html=renderToStaticMarkup(React.createElement(DailyBulletinPanel,{now:Date.parse('2026-09-18T03:00:00Z'),failed:false,review:true,publishedCoverage:api.parsePublishedReviewCoverage(fixture())}));a(html.includes('2026-09-17'));a(html.includes('人工审核'));a(html.includes('已发布 1'));a(html.includes('已结算 0'));a(html.includes('待核验赛果 1'));a(!html.includes('信心'));});
 test('daily review without new coverage declares boundary',()=>{const html=renderToStaticMarkup(React.createElement(DailyBulletinPanel,{now:Date.parse('2026-09-18T03:00:00Z'),failed:false,review:true}));a(html.includes('不能将缺失数据记为零成绩'));});
+
+test('coverage initial load does not claim that the source is disconnected',()=>{
+ const html=renderToStaticMarkup(React.createElement(PublishedReviewCoveragePanel,{loading:true,failed:false}));
+ a.match(html,/正在读取历史命中率/);a.doesNotMatch(html,/尚未接入|累计独立比赛/);
+});

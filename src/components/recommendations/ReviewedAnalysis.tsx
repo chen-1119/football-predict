@@ -1,6 +1,7 @@
 import type { ReviewedAnalysis as Data, ReviewedAnalysisRecord, ReviewedRevisions } from '../../services/recommendationCenterView';
 import { reviewedLatestRecord, settlementResultLabel } from '../../services/publishedMatchRecommendation';
 import { reviewedLabel } from '../../services/reviewedPresentation';
+import type { PublishedReviewCoverage } from '../../services/publishedReviewCoverage';
 const reviewedSp=(sp:number)=>Number(sp.toFixed(2))===sp?sp.toFixed(2):String(sp);
 export function ReviewedMatchPrice({record,language}:{record:ReviewedAnalysisRecord;language:'zh'|'en'}){
  return <><strong className="compact-sp" data-publication-method="reviewed-editorial">{reviewedSp(record.sp)}</strong><small className="compact-sp-note">{language==='zh'?'发布时官方 SP · 非即时价':'Official SP at publication · Not live'}</small></>;
@@ -14,8 +15,33 @@ export function ReviewedMatchPick({record,now}:{record:ReviewedAnalysisRecord;no
   <small>{record.scores.map(s=>s.join('-')).join(' / ')}{typeof now==='number'&&now>=Date.parse(record.cutoffAt)?' · 已截止冻结':''}</small>
   <details><summary>依据</summary><p>{record.reason}</p><p>{record.limitations.join('；')}</p>
    {record.evidence&&<p>已绑定 {record.evidence.hashes.length} 份官方资料，仅单源；未核实：{record.evidence.missing.join('、')}。资料用于人工审核，未作为已训练的概率因子。</p>}
+   {record.research&&<p data-research-direction-hash={record.research.directionHash}>先研究球队、冻结方向，再核对官方 SP。独立来源 {record.research.sourceCount} 个；近况、积分及交锋：{record.research.coreComplete?'双源核对完整':'存在缺项'}；伤停：{record.research.availabilityComplete?'当前资料完整':'未完整核实'}；首发：{record.research.lineupsConfirmed?'已确认':'尚未确认，预计阵容不作确认'}。{record.comboEligible?'满足本流程串关资料条件，仍须核验在售状态。':'不纳入本流程串关。'}</p>}
+   {record.marketBaseline&&<p>该选项同市场去水报价占比 q：{(record.marketBaseline.probabilities[record.selection]*100).toFixed(1)}%。这是市场报价描述，不是模型命中概率；未报告模型 EV。</p>}
    <a href={record.analysisUrl} target="_blank" rel="noopener noreferrer">赛前分析来源</a><p>发布报价观察：{new Date(record.quoteObservedAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})}；原分析SP {reviewedSp(record.originalSp)}。比分为方向相容的人工选择，非模型概率前二。</p>
    {record.review&&<p>首版保留：{reviewedLabel(record.review.original)} · SP {reviewedSp(record.review.original.sp)} · 比分 {record.review.original.scores.map(s=>s.join('-')).join(' / ')}。复核版单独结算：{settlementResultLabel(record.review.settlement,'zh')}；不增加独立比赛样本。</p>}</details></div>;
+}
+interface HistoryPanelProps {
+ selectedDay:string; onSelectDay:(day:string)=>void; coverage?:PublishedReviewCoverage;
+ history?:Data; revisions?:ReviewedRevisions; loading:boolean; failed:boolean;
+ now:number; tab:string; language:'zh'|'en'; retry:()=>void;
+}
+export function ReviewedHistoryPanel({selectedDay,onSelectDay,coverage,history,revisions,loading,failed,now,tab,language,retry}:HistoryPanelProps) {
+ const zh=language==='zh',today=new Date(now+8*3600000).toISOString().slice(0,10);
+ const archive=history && history.businessDate<today && (!selectedDay || history.businessDate===selectedDay) ? history : undefined;
+ const day=selectedDay || archive?.businessDate || '';
+ const days=new Set(coverage?.tracks.manual.days.filter(row=>row.businessDate<today && row.publishedRecords>0).map(row=>row.businessDate));
+ if(day)days.add(day);
+ return <section className="rc-paper" aria-label={zh?'历史人工推荐':'Editorial pick history'}>
+  <header><h2>{zh?'历史人工推荐':'Editorial pick history'}</h2>
+   <label>{zh?'查看竞彩日':'Match day'} <select aria-label={zh?'历史推荐竞彩日':'Publication match day'} value={day} onChange={e=>onSelectDay(e.target.value)}>
+    <option value="">{zh?'最近发布日':'Latest published day'}</option>
+    {[...days].sort().reverse().map(d=><option key={d} value={d}>{d}</option>)}</select></label>
+  </header>
+  {loading&&!archive?<p role="status">{zh?'正在读取已发布推荐…':'Loading published picks…'}</p>
+   :failed&&!archive?<p role="alert">{zh?'历史推荐读取失败。':'Could not load the publication history.'} <button type="button" onClick={retry}>{zh?'重试':'Retry'}</button></p>
+   :archive?<>{failed&&<p role="status">{zh?'刷新失败，保留上次核验的记录。':'Refresh failed. Showing the last verified response.'}</p>}<ReviewedAnalysisPanel data={archive} revisions={revisions} tab={tab} now={now} failed={false}/></>
+   :<p role="status">{day ? (zh?'该竞彩日未返回可核验的发布记录。':'No verified publication was returned for this day.') : days.size ? (zh?'请选择有发布记录的竞彩日。':'Select a match day with published picks.') : (zh?'暂无可读取的历史发布记录。':'No verified publication history is available.')}</p>}
+ </section>;
 }
 export function ReviewedAnalysisPanel({data,revisions,tab,now,failed}:{data?:Data;revisions?:ReviewedRevisions;tab:string;now:number;failed:boolean}){
  const today=new Date(now+8*3600000).toISOString().slice(0,10);

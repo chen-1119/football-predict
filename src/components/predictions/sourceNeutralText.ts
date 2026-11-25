@@ -1,5 +1,7 @@
 type DisplayLanguage = 'zh' | 'en';
 
+const HOST_NAME_PATTERN = /\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:com|net|org|cn|io|co|uk|de|fr|es|it|ru|jp|kr|hk|tw|eu|us|info|biz|app|dev|cc|tv|me|xyz|top|site|ai|gov|edu)(?![\w-])(?::\d+)?(?:\/[^\s<>"'，。；、（）【】\])]+)?/gi;
+
 /** Presentation only: never pass the result back into evidence or prediction data. */
 export function formatSourceNeutralText(
   value: string | null | undefined,
@@ -26,7 +28,9 @@ export function formatSourceNeutralText(
       ({ 'pre-match data': 'pre-match data', data: 'pre-match data', 'recent form': 'recent form', 'market reference': 'market reference', reference: 'reference' } as Record<string, string>)[label.toLowerCase()]
     ))
     .replace(/(?:500\.com|500网|five[-_ ]?hundred|雷速(?:体育)?|纳米数据|竞彩官方(?:数据)?源|竞彩网(?:官方)?(?:数据)?源?)/gi, neutral)
-    .replace(/\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63}(?::\d+)?(?:\/[^\s<>"'，。；、（）【】\])]+)?/gi, neutral)
+    // Only real host names: a bare "label.label" pattern would also erase team
+    // names such as "1.FC Köln", "St.Pauli" or "A.C.Milan".
+    .replace(HOST_NAME_PATTERN, neutral)
     .replace(/\b(?:api[-_ ]?football|football[-_]data|leisu|nami|sofascore|flashscore|open[-_ ]?meteo|visualcrossing|wikidata)\b/gi, neutral)
     .replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?(?:\/[^\s<>"'，。；、（）【】\])]+)?/g, neutral)
     .replace(/[a-z]:[\\/][^\s<>"'，。；、（）【】\])]+/gi, neutral)

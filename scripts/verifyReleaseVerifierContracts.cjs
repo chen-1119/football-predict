@@ -7,6 +7,35 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('sync metadata incident recovery retains failed health, exact scope and final release gates',()=>{
+ const tests=['tests/sync-meta-incident-evidence.test.cjs','tests/sync-meta-recovery-policy.test.cjs'];
+ const result=require('node:child_process').spawnSync(process.execPath,['--test',...tests],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 42$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const f of [...tests,'scripts/syncMetaIncidentEvidence.cjs'])assert(read(entry).includes('"'+f+'"'));
+ for(const file of tests)assert(read('.github/workflows/recommendation-runtime.yml').includes(file));
+});
+check('sync metadata strategy summary preserves observations and health behind commit lock',()=>{
+ const file='tests/sync-meta-strategy-summary.test.cjs';
+ const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 4$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const f of [file,'scripts/syncMetaStrategySummary.cjs'])assert(read(entry).includes('"'+f+'"'));
+ assert(read('.github/workflows/recommendation-runtime.yml').includes('node --test '+file));
+});
+check('immutable independent research append keeps native exclusion and its own serialization',()=>{
+ const file='tests/research-append-lock.test.cjs';
+ const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 3$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const f of [file,'server/researchAppendLock.cjs','scripts/verifyResearchAppendLockPostgres.cjs','scripts/verifyResearchIndependentAppendPostgres.cjs'])assert(read(entry).includes('"'+f+'"'));
+ assert(read('.github/workflows/recommendation-runtime.yml').includes('node scripts/verifyResearchAppendLockPostgres.cjs'));
+});
+check('new immutable combo series preserves frozen originals and rejects duplicate claims',()=>{
+ const file='tests/research-combo-series.test.cjs';
+ const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:2*1024*1024});
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const file of ["server/researchComboSeries.cjs","src/services/comboSeriesView.ts","src/components/recommendations/EveningComboSeries.tsx","tests/research-combo-series.test.cjs","scripts/verifyResearchComboSeriesPostgres.cjs"])assert(read(entry).includes('"'+file+'"'));
+ assert.equal(pkg.scripts['verify:combo-series'],'node --test '+file);
+ assert(read('.github/workflows/recommendation-runtime.yml').includes('node scripts/verifyResearchComboSeriesPostgres.cjs'));
+});
 check('signed official schedule remains visible without admitting native predictions or missing originals',()=>{
  const file='tests/official-schedule-view.test.cjs';
  const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
@@ -19,7 +48,7 @@ check('signed official schedule remains visible without admitting native predict
 check('V4 official editorial publication keeps complete dual signatures, separate ACK and original worker failure',()=>{
  const tests=['tests/reviewed-official-event.test.cjs','tests/official-editorial-reference-view.test.cjs','tests/manual-official-release-preparation.test.cjs','tests/manual-official-public-carry-forward.test.cjs'];
  const result=require('node:child_process').spawnSync(process.execPath,['--test',...tests],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:2*1024*1024});
- assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 217$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 283$/m);assert.match(result.stdout,/^# skipped 0$/m);
  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
   for(const file of [...tests,'scripts/manualOfficialReleaseRecovery.cjs','scripts/manualOfficialPublicCarryForward.cjs','scripts/recommendationPlatform/reviewedOfficialEvent.cjs','server/researchOfficialEventRead.cjs','src/services/officialEditorialReferences.ts','src/hooks/useOfficialEditorialReferences.ts','src/components/recommendations/OfficialEditorialReferences.tsx','tests/fixtures/reviewed-official-event.cjs','scripts/verifyReviewedOfficialEventPostgres.cjs'])assert(read(entry).includes('"'+file+'"'));
  assert.equal(pkg.scripts['verify:reviewed-official-events'],'node --test '+tests.join(' '));
@@ -55,7 +84,7 @@ check('readiness retains exact per-event native snapshot bounds while both full 
 check('fast publication keeps complete validation in one fixed owned child until actual close',()=>{
  const file='tests/worker-fast-result-publisher.test.cjs';
  const result=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
- assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 16$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# tests 22$/m);assert.match(result.stdout,/^# skipped 0$/m);
  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])
   for(const required of [file,'scripts/workerFastResultPublisher.cjs','scripts/verifyWorkerFastPublisherIsolation.cjs'])assert(read(entry).includes('"'+required+'"'));
  assert.equal(pkg.scripts['verify:worker-fast-publisher'],'node --test '+file);
@@ -171,7 +200,7 @@ check('code releases separate PG migration and model work before signing',()=>{
   const child=require('node:child_process').spawnSync(process.execPath,['--test','tests/code-data-release.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
   assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# tests 65$/m);assert.match(child.stdout,/^# skipped 0$/m);
   const shell=require('node:child_process').spawnSync(process.execPath,['scripts/verifyCodeReleaseShell.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
-  assert.equal(shell.status,0,shell.stderr);const proof=JSON.parse(shell.stdout);assert.equal(proof.ok,true);assert.equal(proof.checks.length,11);assert(proof.checks.some(row=>row.name==='closed-code-lease'&&row.ok));assert.equal(proof.actualBashBranchExecution,true);
+  assert.equal(shell.status,0,shell.stderr);const proof=JSON.parse(shell.stdout);assert.equal(proof.ok,true);assert.equal(proof.checks.length,12);assert(proof.checks.some(row=>row.name==='closed-code-lease'&&row.ok));assert(proof.checks.some(row=>row.name==='reference-pair-failed'&&row.ok&&row.exit===1&&!row.events.includes('mv')));assert.equal(proof.actualBashBranchExecution,true);
   for(const file of ['scripts/releaseDataPlanePolicy.cjs','scripts/nativeCodeReleaseDataPlane.cjs','tests/code-data-release.test.cjs','scripts/verifyCodeReleaseShell.cjs','scripts/verifyCodeReleasePostgresIsolation.cjs'])
     for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])assert(read(entry).includes('"'+file+'"'));
 });
@@ -198,9 +227,10 @@ check('receipt reader queue keeps bounded waits, connection disposal and before-
 });
 check('explicit publication retry binds exact failed bytes and preserves unknown commit refusal',()=>{
   const file='tests/research-publication-retry.test.cjs';
-  const child=require('node:child_process').spawnSync(process.execPath,['--test',file],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+  const child=require('node:child_process').spawnSync(process.execPath,['--test',file,'tests/research-publish-readiness.test.cjs','tests/browser-research-publication.test.cjs'],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
   assert.equal(child.status,0,child.stderr||child.stdout);assert.match(child.stdout,/^# fail 0$/m);assert.match(child.stdout,/^# skipped 0$/m);
   for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const f of [file,'server/researchPublicationRetry.cjs','scripts/verifyResearchPublicationRetryPostgres.cjs'])assert(read(entry).includes('"'+f+'"'));
+  for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const f of ['tests/research-publish-readiness.test.cjs','tests/browser-research-publication.test.cjs','server/researchPublishReadiness.cjs','scripts/browserResearchPublication.cjs'])assert(read(entry).includes('"'+f+'"'));
   assert(read('.github/workflows/recommendation-runtime.yml').includes('node scripts/verifyResearchPublicationRetryPostgres.cjs'));
 });
 check('V4 freshness recovery preserves thirty-second source validation and the original failed journal',()=>{

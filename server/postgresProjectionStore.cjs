@@ -558,7 +558,36 @@ const readPostgresPublicReferenceEvidence = async (pool, options = {}) => {
   } catch { return { ok: false, reason: "evidence-store-unavailable" }; }
 };
 
+// Expand each stored JSON object once. Only public fixture fields and the fields
+// required by the existing official-result validators leave the database.
+const cachePublicFixtureRows = require('./publicFixtureHistory.cjs').createNativeCache();
+const readPublicFixtureHistoryRows = async (pool, publicationIdentity) => {
+  if (!publicationIdentity?.generationId || !publicationIdentity.manifestHash) return null;
+  const result = await withReadSnapshot(pool, publicationIdentity, async client => {
+    const revision = await client.query("SELECT value FROM football.projection_meta WHERE key = 'fast_result_revision'");
+    const version = JSON.stringify([publicationIdentity.generationId, publicationIdentity.manifestHash,
+      publicationIdentity.sourceCycleId, revision.rows[0]?.value ?? null]);
+    return cachePublicFixtureRows(version, async () => {
+      const result = await client.query(`
+        SELECT r.* FROM football.match_snapshots AS m
+        CROSS JOIN LATERAL jsonb_to_record(m.payload) AS r(
+          id text, "sourceMatchId" text, "businessDate" text, "matchNo" text, "leagueName" text,
+          "homeTeamName" text, "awayTeamName" text, "kickoffTime" text, "eventVersion" text,
+          status text, "effectiveStatus" text, "scoreHome" jsonb, "scoreAway" jsonb,
+          "resultProvenance" jsonb, "resultObservedAt" text, "resultDisposition" text,
+          "voidSource" text, "voidReason" text, "resultSource" text, "sourceUrl" text,
+          "resultUrl" text, official jsonb
+        )
+        WHERE m.dataset = 'history'
+      `);
+      return result.rows;
+    });
+  });
+  return result.available ? result.value : null;
+};
+
 module.exports = {
+  readPublicFixtureHistoryRows,
   readPostgresPublicReferenceEvidence,
   getPostgresProjectionStatus,
   publicationIdentityFromMeta,

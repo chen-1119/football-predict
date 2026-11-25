@@ -34,6 +34,7 @@ const {
   verifyRegistry,
   fixedGateSpec,
   assessWindowPerformance,
+  canonicalize,
   sha256,
   normalizedLeagueForMatch,
   atomicDecisionHashFor,
@@ -310,6 +311,30 @@ const check = (name, fn) => {
     checks.push({ name, ok: false, error: error.message });
   }
 };
+
+check("reusing canonical key order preserves complete values and legacy locale ordering", () => {
+  const legacy = (value) => {
+    if (Array.isArray(value)) return value.map(legacy);
+    if (typeof value === "number") return Number.isFinite(value) ? (Object.is(value, -0) ? 0 : value) : null;
+    if (!value || typeof value !== "object") return value;
+    return Object.fromEntries(Object.keys(value).sort((left, right) => left.localeCompare(right))
+      .filter((key) => value[key] !== undefined).map((key) => [key, legacy(value[key])]));
+  };
+  const first = JSON.parse('{"é":2,"é":3,"__proto__":{"z":0},"42":1,"2":2,"a-":6,"a_":7}');
+  first.optional = undefined;
+  first.extra = [-0, NaN, Infinity, null];
+  const second = structuredClone(first);
+  second["é"] = 12;
+  second.__proto__.z = 3;
+  const third = { "é": 1, "é": 2 };
+  for (const input of [first, second, third, first]) {
+    const actual = canonicalize(input);
+    assert.equal(JSON.stringify(actual), JSON.stringify(legacy(input)));
+    assert.equal(Object.getPrototypeOf(actual), Object.prototype);
+    assert.equal(Object.hasOwn(actual, "__proto__"), Object.hasOwn(input, "__proto__"));
+  }
+  assert.notEqual(sha256(first), sha256(second));
+});
 
 const sleepSync = (milliseconds) => {
   const buffer = new SharedArrayBuffer(4);

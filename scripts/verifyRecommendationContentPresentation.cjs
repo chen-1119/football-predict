@@ -70,12 +70,19 @@ async function main() {
   let vite;
   try {
     vite = await createServer({ root, configFile: false, cacheDir, plugins: [{ name: 'native-collector-diagnostics', enforce: 'pre',
-        resolveId(id) { if (id === 'football-collector-diagnostics') return '\0test-native-diagnostics'; },
+        resolveId(id, importer) {
+          let file;
+          if (id.endsWith('/useRecommendationCenter')) return '\0center-response-fixture';
+          if (id === 'football-collector-diagnostics') file = path.join(root, 'src/services/apiFootballDiagnostics.cjs');
+          else if (id.endsWith('.cjs') && id.startsWith('.') && importer) file = path.resolve(path.dirname(importer), id);
+          if (file && file.startsWith(path.join(root, 'src') + path.sep)) return '\0native-test-module:' + file;
+        },
         load(id) {
-          if (id !== '\0test-native-diagnostics') return;
-          const file = path.join(root, 'src/services/apiFootballDiagnostics.cjs');
-          const names = Object.keys(require(file));
-          return "import { createRequire } from 'node:module'; const mod = createRequire(" + JSON.stringify(__filename) + ")(" + JSON.stringify(file) + ");\n" + names.map(name => 'export const ' + name + ' = mod.' + name + ';').join('\n');
+          if (id === '\0center-response-fixture') return 'export const useRecommendationCenter = () => ({ data: null, loading: false, failed: false, authorizationRequired: false, refresh() {} });';
+          const prefix = '\0native-test-module:';
+          if (!id.startsWith(prefix)) return;
+          const file = id.slice(prefix.length), names = Object.keys(require(file));
+          return "import { createRequire } from 'node:module'; const mod = createRequire(" + JSON.stringify(__filename) + ")(" + JSON.stringify(file) + "); export default mod;\n" + names.map(name => 'export const ' + name + ' = mod.' + name + ';').join('\n');
         }
       }],
       appType: 'custom', logLevel: 'silent', server: { middlewareMode: true } });
@@ -84,19 +91,45 @@ async function main() {
     const { AppContext } = await vite.ssrLoadModule('/src/context/AppContextCore.ts');
     const { MemoryRouter } = await import('react-router-dom');
     const { sourceNeutralText } = await vite.ssrLoadModule('/src/components/predictions/sourceNeutralText.ts');
+    const { AccountProvider } = await vite.ssrLoadModule('/src/context/AccountContext.tsx');
     const fixtures = makeFixtures();
     const before = JSON.stringify(fixtures);
-    const render = (element, matches = fixtures, language = 'zh') => renderToStaticMarkup(
+    const render = (element, matches = fixtures, language = 'zh', sync = {}) => renderToStaticMarkup(
       React.createElement(MemoryRouter, null, React.createElement(AppContext.Provider, { value: {
         language, matches, dataSync: { currentLoaded: true, historyLoaded: true, historyLoading: false,
-          currentCount: matches.length, historyCount: 0, totalCount: matches.length, updatedAt: new Date().toISOString() },
-      } }, element))
+          currentCount: matches.length, historyCount: 0, totalCount: matches.length, updatedAt: new Date().toISOString(), ...sync },
+      } }, React.createElement(AccountProvider, null, element)))
     );
     fs.mkdirSync(output, { recursive: true });
     const listHtml = render(React.createElement(PredictionsList, { viewMode: 'analysis', onSelectMatch() {} }));
     const listText = visibleText(listHtml);
+    const listPage = React.createElement(PredictionsList, { viewMode: 'analysis', onSelectMatch() {} });
+    const day = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+    const archiveError = { historyError: 'history endpoint unavailable', historyLoaded: false };
+    check('history failure leaves the current fixture list usable', visibleText(render(listPage, fixtures, 'zh', archiveError)).includes(fixtures[0].homeTeamName));
+    // Restore yesterday through the same per-view session keys used on return from a match.
+    const previousWindow = global.window;
+    global.window = { sessionStorage: { getItem: () => JSON.stringify({ savedAt: Date.now(), selectedDate: day }) } };
+    try {
+      const failed = visibleText(render(listPage, [], 'zh', archiveError));
+      check('failed history shows neither zero fixtures nor a settled denominator',
+        failed.includes('历史比赛暂时无法完整加载') && !/0 场比赛|暂无比赛|正式命中/.test(failed));
+      const archived = fixtures.slice(1,3).map(match => ({ ...match, businessDate: day, matchDate: day, kickoffDate: day }));
+      const settledText = visibleText(render(listPage, archived));
+      check('won and lost reference recommendations remain visible on the archived day', archived.every(match => settledText.includes(match.homeTeamName)) && /命中/.test(settledText) && /未命中/.test(settledText) && /参考/.test(settledText));
+      const cached = { ...fixtures[1], businessDate: day };
+      const partial = visibleText(render(listPage, [cached], 'zh', { ...archiveError, historyLoaded: true }));
+      check('failed refresh retains known matches and labels partial history', partial.includes(cached.homeTeamName) && partial.includes('历史比赛暂时无法完整加载'));
+      const loading = visibleText(render(listPage, [], 'zh', { historyLoading: true }));
+      check('an older day still loading later pages does not flash zero fixtures',
+        loading.includes('比赛加载中') && !loading.includes('0 场比赛'));
+      const empty = visibleText(render(listPage, []));
+      check('successfully loaded empty history is distinct from failure', empty.includes('0 场比赛') && empty.includes('暂无比赛'));
+    } finally {
+      if (previousWindow === undefined) delete global.window;
+      else global.window = previousWindow;
+    }
     check('main list retains the fixture identities, selected SP and details action', fixtures.every(m => listText.includes(m.homeTeamName)) && listText.includes('2.45') && /详情/.test(listText));
-    check('won and lost reference recommendations remain visible', /命中/.test(listText) && /未命中/.test(listText) && /参考/.test(listText));
     check('list has no source labels, confidence evidence, or model and collection dashboards', !/数据源状态|系统与模型说明|采集切换策略|500数据|500\.com|证据完整度|校准样本|模型概率|来源：/.test(listText));
     check('list never renders collection addresses', !sourceAddress.test(listText));
     check('compact page preserves actionable date and league controls', /date-toolbar/.test(listHtml) && /filters-panel/.test(listHtml) && /league-stack/.test(listHtml));
@@ -111,9 +144,10 @@ async function main() {
       details[tab] = html;
       check(`detail ${tab} has no visible provider address`, !sourceAddress.test(visibleText(html)));
     }
-    check('confidence and freshness facts are in match analysis instead of its overview', details.evidence.includes('recommendation-evidence-breakdown') && !details.overview.includes('recommendation-evidence-breakdown') && visibleText(details.evidence).includes('数据与分析'));
+    check('confidence and freshness facts are in match analysis instead of its overview', details.evidence.includes('match-detail-data-analysis-heading') && details.evidence.includes('recommendation-evidence-facts') && !details.overview.includes('match-detail-data-analysis-heading') && visibleText(details.evidence).includes('数据与分析'));
     check('presentation changes leave raw provenance and frozen sample inputs unchanged', JSON.stringify(fixtures) === before && fixtures[0].sourceUrl.includes('audit-source.example'));
     if (typeof sourceNeutralText === 'function') {
+      check('team names with periods remain legible', ['1.FC Köln', 'St.Pauli', 'A.C.Milan'].every(team => sourceNeutralText(team, 'en') === team));
       for (const text of ['来自 https://audit-source.example/private；未公布阵容', '500.com 数据不足，SP 2.45', 'www.leisu.com 缺少伤停', '源路径 /srv/collector/feed.json，等待更新', String.raw`源路径 \\collector-host\private\evidence.json；未公布阵容，SP 2.45`]) {
         const result = sourceNeutralText(text, 'zh');
         check(`source text redaction: ${text.split(' ')[0]}`, !sourceAddress.test(result));

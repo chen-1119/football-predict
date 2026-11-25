@@ -96,11 +96,11 @@ test('review HAD baseline and explicit HHAD filter override the coherent primary
   assert.match(words(byClass(tree,'rc-stats-wrap')[0]),/胜平负归档统计（HAD）/);assert.match(words(byClass(tree,'rc-stats')[0]),/0\.0%.*0 \/ 1/);
   const coherentBreakdown=nodes(tree,node=>node.type==='article'&&words(node).includes('兼容策略 · HHAD方向'));
   assert.equal(coherentBreakdown.length,1);assert.match(words(coherentBreakdown[0]),/含主方向与伴随方向，不是主方向汇总/);assert.match(words(coherentBreakdown[0]),/100\.0%.*1 \/ 1/);
-  nodes(tree,node=>node.type==='select')[0].props.onChange({target:{value:'HHAD'}});tree=ui.render();card=byClass(tree,'rc-pick')[0];result=nodes(card,node=>Boolean(node.props?.['data-result-market']))[0];
+  nodes(byClass(tree,'rc-review-tools')[0],node=>node.type==='select')[0].props.onChange({target:{value:'HHAD'}});tree=ui.render();card=byClass(tree,'rc-pick')[0];result=nodes(card,node=>Boolean(node.props?.['data-result-market']))[0];
   assert.equal(result.props['data-result-market'],'HHAD');assert.equal(words(result),'让球 · 主方向：命中');assert.match(result.props.className,/rc-state--WON/);
   assert.equal(nodes(card,node=>Boolean(node.props?.['data-companion-result-market'])).length,0);
   assert.match(words(byClass(tree,'rc-stats-wrap')[0]),/归档让球方向诊断.*不是主方向汇总/);assert.match(words(byClass(tree,'rc-stats')[0]),/100\.0%.*1 \/ 1/);
-  nodes(tree,node=>node.type==='select')[2].props.onChange({target:{value:'LOST'}});tree=ui.render();assert.equal(byClass(tree,'rc-pick').length,0);
+  nodes(byClass(tree,'rc-review-tools')[0],node=>node.type==='select')[2].props.onChange({target:{value:'LOST'}});tree=ui.render();assert.equal(byClass(tree,'rc-pick').length,0);
   assert.match(words(byClass(tree,'rc-stats')[0]),/100\.0%.*1 \/ 1/,'result filters retain the HHAD cohort denominator');
   button(tree,'清除筛选').props.onClick();tree=ui.renderSettled();result=nodes(byClass(tree,'rc-pick')[0],node=>Boolean(node.props?.['data-result-market']))[0];
   assert.equal(result.props['data-result-market'],'HAD');assert.equal(words(result),'胜平负 · 条件分支：未命中');assert.equal(JSON.stringify(ui.data),before);
@@ -166,7 +166,7 @@ test('missing market probability says favorite unavailable, not that the publish
 
 test('HHAD review diagnostic does not inherit the HAD selection-quality label or EV',async()=>{
   const ui=await harness({withHandicap:true});
-  let tree=ui.render();nodes(tree,n=>n.type==='select')[0].props.onChange({target:{value:'HHAD'}});tree=ui.render();
+  let tree=ui.render();nodes(byClass(tree,'rc-review-tools')[0],n=>n.type==='select')[0].props.onChange({target:{value:'HHAD'}});tree=ui.render();
   const cards=byClass(tree,'rc-pick');assert.equal(cards.length,12);
   assert(cards.every(card=>card.props['data-selection-status']==='diagnostic'));
   assert.equal(byClass(tree,'selection-quality-note').length,0);
@@ -191,17 +191,17 @@ test('current match-day concentration warning disappears for mixed or too-small 
 });
 
 test('server-side team and result filters compose, retain the cohort denominator, and clear',async()=>{
-  const ui=await harness();let tree=ui.render();nodes(tree,n=>n.type==='input'&&n.props.type==='search')[0].props.onChange({target:{value:'目标球队'}});tree=ui.renderSettled();assert.equal(byClass(tree,'rc-pick').length,1);assert.match(words(tree),/共 1 条符合条件的明细/);assert.match(words(byClass(tree,'rc-stats')[0]),/35 \/ 69/);
-  nodes(tree,n=>n.type==='select')[2].props.onChange({target:{value:'LOST'}});tree=ui.render();assert.equal(byClass(tree,'rc-pick').length,0);assert.match(words(tree),/此条件暂无复盘记录/);assert.doesNotMatch(words(tree),/暂时没有可展示的推荐/);
-  button(tree,'清除筛选').props.onClick();tree=ui.renderSettled();assert.equal(byClass(tree,'rc-pick').length,12);assert.equal(nodes(tree,n=>n.type==='select')[2].props.value,'ALL');assert.equal(nodes(tree,n=>n.type==='input'&&n.props.type==='search')[0].props.value,'');
+  const ui=await harness();let tree=ui.render();nodes(byClass(tree,'rc-review-tools')[0],n=>n.type==='input'&&n.props.type==='search')[0].props.onChange({target:{value:'目标球队'}});tree=ui.renderSettled();assert.equal(byClass(tree,'rc-pick').length,1);assert.match(words(tree),/共 1 条符合条件的明细/);assert.match(words(byClass(tree,'rc-stats')[0]),/35 \/ 69/);
+  nodes(byClass(tree,'rc-review-tools')[0],n=>n.type==='select')[2].props.onChange({target:{value:'LOST'}});tree=ui.render();assert.equal(byClass(tree,'rc-pick').length,0);assert.match(words(tree),/此条件暂无复盘记录/);assert.doesNotMatch(words(tree),/暂时没有可展示的推荐/);
+  button(tree,'清除筛选').props.onClick();tree=ui.renderSettled();assert.equal(byClass(tree,'rc-pick').length,12);assert.equal(nodes(byClass(tree,'rc-review-tools')[0],n=>n.type==='select')[2].props.value,'ALL');assert.equal(nodes(byClass(tree,'rc-review-tools')[0],n=>n.type==='input'&&n.props.type==='search')[0].props.value,'');
 });
 
 test('match-day filter resets pagination and keeps seven/thirty-day summaries visible',async()=>{
   const ui=await harness();let tree=ui.render();button(tree,'下一页').props.onClick();tree=ui.render();assert.match(words(tree),/第 2 \/ 6 页/);
-  nodes(tree,n=>n.type==='input'&&n.props.type==='date')[0].props.onChange({target:{value:'2026-09-18'}});tree=ui.render();
+  nodes(byClass(tree,'rc-review-tools')[0],n=>n.type==='input'&&n.props.type==='date')[0].props.onChange({target:{value:'2026-09-18'}});tree=ui.render();
   assert.match(words(tree),/共 0 条符合条件的明细 · 第 1 页/);assert.equal(byClass(tree,'rc-pick').length,0);
   assert.match(words(tree),/近7日/);assert.match(words(tree),/近30日/);
-  assert.equal(nodes(tree,n=>n.type==='select').length,3);
+  assert.equal(nodes(byClass(tree,'rc-review-tools')[0],n=>n.type==='select').length,3);
 });
 
 test('failed review read with archived records never claims zero or no matching history',async()=>{
@@ -226,7 +226,7 @@ test('versioned performance and per-match probability details are closed by defa
 test('changing review kind resets pagination and searches archived combo legs',async()=>{
   const ui=await harness();const base=ui.data.previews.find(combo=>combo.size===2);ui.data.review.combos=Array.from({length:15},(_,index)=>({combo:{...base,id:'combo-ui-'+index,frozenAt:base.generatedAt,legs:base.legs.map((leg,i)=>({...leg,homeTeamName:index===14&&i===0?'指定串关球队':leg.homeTeamName}))},settlement:{state:index===14?'WON':'PENDING'}}));
   let tree=ui.render();button(tree,'下一页').props.onClick();tree=ui.render();button(tree,'2串1SP≥2.50').props.onClick();tree=ui.render();assert.equal(byClass(tree,'rc-combo').length,12);assert.match(words(tree),/共 15 条明细 · 第 1 页，每页 12 条/);
-  nodes(tree,n=>n.type==='input'&&n.props.type==='search')[0].props.onChange({target:{value:'指定串关球队'}});tree=ui.renderSettled();assert.equal(byClass(tree,'rc-combo').length,1);assert.match(words(tree),/指定串关球队/);assert.match(words(tree),/冻结/);
+  nodes(byClass(tree,'rc-review-tools')[0],n=>n.type==='input'&&n.props.type==='search')[0].props.onChange({target:{value:'指定串关球队'}});tree=ui.renderSettled();assert.equal(byClass(tree,'rc-combo').length,1);assert.match(words(tree),/指定串关球队/);assert.match(words(tree),/冻结/);
 });
 
 test('single and combo badges use frozen team names without substituting current fixture identities',async()=>{

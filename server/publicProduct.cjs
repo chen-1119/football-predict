@@ -23,6 +23,31 @@ function publicSummary(value){
  if(!value||!Number.isSafeInteger(value.settled)||value.settled<0||!Number.isSafeInteger(value.won)||value.won<0||value.won>value.settled)return null;
  return {published:Number.isSafeInteger(value.published)?value.published:null,settled:value.settled,won:value.won,lost:Number.isSafeInteger(value.lost)?value.lost:null,pending:Number.isSafeInteger(value.pending)?value.pending:null,void:Number.isSafeInteger(value.void)?value.void:null,disputed:Number.isSafeInteger(value.disputed)?value.disputed:null,hitRate:value.settled?value.won/value.settled:null};
 }
+// Only publish reconciled cumulative counts; event rows, selections, versions,
+// evidence and disputes remain available through the existing member routes.
+function publicTrackTotals(coverage, now) {
+ if (coverage?.version !== 'published-review-coverage-v1' || coverage.complete !== true ||
+     !iso(coverage.asOf) || Date.parse(coverage.asOf) > now) return null;
+ for (const key of ['rejected','identityConflicts','selectionConflicts']) {
+  if (!Array.isArray(coverage[key]) || coverage[key].length) return null;
+ }
+ const totals = {asOf:coverage.asOf};
+ let records = 0;
+ for (const key of ['manual','trained','legacy']) {
+  const row = coverage.tracks?.[key];
+  if (!row) return null;
+  const count = {published:row.publishedRecords, settled:row.settled, won:row.won, lost:row.lost,
+   pending:row.pending, unknown:row.unknown, void:row.void, disputed:row.disputed};
+  if (!Object.values(count).every(n=>Number.isSafeInteger(n) && n>=0) ||
+      count.published !== row.distinctEvents || count.settled !== count.won+count.lost ||
+      count.published !== count.settled+count.pending+count.unknown+count.void+count.disputed) return null;
+  const hitRate = count.settled ? count.won/count.settled : null;
+  if (hitRate === null ? row.hitRate !== null : !Number.isFinite(row.hitRate) || Math.abs(row.hitRate-hitRate)>1e-9) return null;
+  totals[key] = {...count,hitRate};
+  records += count.published;
+ }
+ return records===coverage.overall?.selectedTrackRecords ? totals : null;
+}
 function publicExample(row){
  const d=row?.decision,s=row?.settlement;
  if(!d||!['WON','LOST'].includes(s?.state)||!iso(d.publishedAt)||!iso(d.cutoffTime)||Date.parse(d.publishedAt)>=Date.parse(d.cutoffTime))return null;
@@ -37,7 +62,22 @@ function publicOverview(current,payload,now=Date.now(),maxSourceAgeMs=20*60000){
  const sourceUpdatedAt=iso(current?.sourceUpdatedAt);
  const sourceAgeMs=sourceUpdatedAt===null?NaN:now-Date.parse(sourceUpdatedAt);
  const sourceFresh=Number.isFinite(sourceAgeMs)&&sourceAgeMs>=0&&Number.isFinite(maxSourceAgeMs)&&maxSourceAgeMs>0&&sourceAgeMs<=maxSourceAgeMs;
- return {ok:true,version:'public-product-v1',businessDate:new Date(now+8*3600000).toISOString().slice(0,10),sourceUpdatedAt,stale:current?.stale!==false||!sourceFresh,matches:(current?.rows||[]).map(match=>publicFixture(match,now)).filter(Boolean),review:{updatedAt:iso(center?.resultAsOf),summary:publicSummary(center?.review?.statistics?.single),example:examples[0]||null},referenceOnly:true};
+ return {ok:true,version:'public-product-v1',businessDate:new Date(now+8*3600000).toISOString().slice(0,10),sourceUpdatedAt,stale:current?.stale!==false||!sourceFresh,scheduleAvailable:Array.isArray(current?.rows),matches:(current?.rows||[]).map(match=>publicFixture(match,now)).filter(Boolean),review:{updatedAt:iso(center?.resultAsOf),summary:publicSummary(center?.review?.statistics?.single),example:examples[0]||null,tracks:publicTrackTotals(center?.publishedCoverage,now)},referenceOnly:true};
+}
+async function readPublicOverview({readOfficial,readNative,readCenter,maxSourceAgeMs,clock=Date.now}) {
+ async function fixtures() {
+  const day=new Date(clock()+8*3600000).toISOString().slice(0,10);
+  try { return publicOfficialCurrent(await readOfficial(day),clock()); }
+  catch {
+   const native=await readNative();
+   return Array.isArray(native?.rows) ? {...native,stale:true} : null;
+  }
+ }
+ const [schedule,history]=await Promise.allSettled([fixtures(),Promise.resolve().then(readCenter)]);
+ const current=schedule.status==='fulfilled'?schedule.value:null;
+ const center=history.status==='fulfilled'?history.value:null;
+ if (!current && !center) throw Error('PUBLIC_DATA_UNAVAILABLE');
+ return publicOverview(current,center,clock(),maxSourceAgeMs);
 }
 // Consume only the installed reader's verified display view, never raw collector
 // payloads or editorial records. Schedule IDs use the existing detail route.
@@ -69,4 +109,4 @@ async function resolvePublicScheduleIdentity(id,{readNative,readOfficial,now=Dat
   &&(!signedMatch||(Date.parse(native.kickoffTime)===Date.parse(signedMatch.kickoffTime)
     &&native.homeTeamName===signedMatch.homeTeamName&&native.awayTeamName===signedMatch.awayTeamName))?{...native,id}:signedMatch;
 }
-module.exports={publicFixture,publicSummary,publicExample,publicOverview,publicOfficialCurrent,resolvePublicScheduleIdentity};
+module.exports={publicFixture,publicSummary,publicExample,publicOverview,readPublicOverview,publicOfficialCurrent,resolvePublicScheduleIdentity};

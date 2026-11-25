@@ -35,7 +35,18 @@ test('actual native source iterator emits exactly the original row bytes and pre
  const files={'matches-current.json':[],'matches-history.json':[],'sync-meta.json':meta,'external-signals.json':external,'odds-history.json':{rows:[]},'prediction-snapshots.json':p,'model-calibration.json':{version:'qa',generatedAt:auditAt}};
  for(const [name,value]of Object.entries(files))fs.writeFileSync(path.join(publicDataDir,name),JSON.stringify(value));commitCurrentDataGeneration({storeDir,publicDataDir,sourceCycleId:meta.sourceCycleId,committedAt:auditAt});
  const source=createPostgresGenerationSource({storeDir,publicDataDir});
- try{await source.prepare({query:async sql=>({rows:sql.includes('SELECT id FROM football.source_snapshots')?[{id:'independent:keep'},{id:INDEX_PREFIX+'stale'}]:[]})},{mode:'backfill'});const actual=[];for await(const row of source.tableRows('source_snapshots'))actual.push(row);
+ try{await source.prepare({query:async sql=>({rows:sql.includes('SELECT id FROM football.source_snapshots')?[{id:'independent:keep'},{id:INDEX_PREFIX+'stale'}]:[]})},{mode:'backfill'});
+  const actual = [];
+  for await (const row of source.tableRows('source_snapshots')) {
+    if (row.id === 'external-signals:current') {
+      const {fileJsonPayloadChunks} = require('../scripts/postgresFileJsonPayload.cjs');
+      let payload = '';
+      for await (const chunk of fileJsonPayloadChunks(row.payload)) payload += chunk;
+      actual.push({...row, payload});
+    } else {
+      actual.push(row);
+    }
+  }
   const archive=buildPublicReferenceArchive(p),index=buildPublicReferenceIndex(archive),expected=[{id:'sync-meta:current',source:'sporttery',captured_at:auditAt,payload:JSON.stringify(meta)},{id:'external-signals:current',source:'external',captured_at:auditAt,payload:JSON.stringify(external)},{id:SOURCE_ID,source:archive.source,captured_at:archive.lastRecordedAt,payload:JSON.stringify(archive)},...([{id:INDEX_ID,payload:index.manifest},...index.shards].map(row=>({id:row.id,source:'sporttery:public-reference-index',captured_at:archive.lastRecordedAt,payload:JSON.stringify(row.payload)})))].sort((a,b)=>Buffer.compare(Buffer.from(a.id),Buffer.from(b.id)));
   assert.deepEqual(actual,expected);assert.deepEqual(new Set(source.activeIds('source_snapshots')),new Set(['independent:keep',...expected.map(row=>row.id)]));source.beforeCommit();
  }finally{source.close();}

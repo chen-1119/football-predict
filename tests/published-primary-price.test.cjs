@@ -31,7 +31,7 @@ function find(node){
 }
 find(source);assert(expression,'the actual fixture SP cell exists');
 const moduleForCell={exports:{}};
-const cellCode=ts.transpileModule(`export function FixtureSpCell(props:any){const {useUnified,unifiedRow,language,nowMs,sp}=props;return (${expression});}`,
+const cellCode=ts.transpileModule(`export function FixtureSpCell(props:any){const {useUnified,unifiedRow,reviewedRow,language,nowMs,sp}=props;return (${expression});}`,
  {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX},fileName:'FixtureSpCell.tsx'}).outputText;
 vm.runInNewContext(cellCode,{module:moduleForCell,exports:moduleForCell.exports,PublishedPrimaryPrice,require:createRequire(listPath)});
 const render=(decision,props={})=>renderToStaticMarkup(React.createElement(moduleForCell.exports.FixtureSpCell,{useUnified:true,unifiedRow:decision?{decision}:null,language:'zh',nowMs:NOW,sp:'9.99',...props}));

@@ -11,6 +11,7 @@ test('BestTips honors login return tab, keeps query state through tab changes an
  const mod=compile('../src/pages/BestTips.tsx',id=>{
   if(id==='react/jsx-runtime')return jsx;
   if(id==='react')return{useState:initial=>[initial(),()=>{}],useEffect:()=>{}};
+  if(id.endsWith('/EveningComboSeries'))return {EveningComboSeries:'evening-combos'};
   if(id.endsWith('/useOfficialSchedule'))return{useOfficialSchedule:()=>({data:null,loading:false,failed:true})};
   if(id.endsWith('/useOfficialEditorialReferences'))return{useOfficialEditorialReferences:()=>({data:null,loading:false,failed:true})};
   if(id.endsWith('/OfficialEditorialReferences'))return{OfficialReferenceCard:'official-reference'};
@@ -22,7 +23,8 @@ test('BestTips honors login return tab, keeps query state through tab changes an
   throw Error(id);
  });
  const render=()=>nodes(mod.BestTips({onSelectMatch:()=>{}}),n=>n.type==='center')[0];
- assert.equal(render().props.selectedTab,'two');render().props.onTabChange('three');assert.equal(render().props.selectedTab,'three');assert.equal(new URLSearchParams(search).get('q'),'kept');
+ const comboSize=()=>nodes(mod.BestTips({onSelectMatch(){}}),n=>n.type==='evening-combos').map(n=>n.props.size);
+ assert.deepEqual(comboSize(),[2]);assert.equal(render().props.selectedTab,'two');render().props.onTabChange('three');assert.deepEqual(comboSize(),[3]);assert.equal(render().props.selectedTab,'three');assert.equal(new URLSearchParams(search).get('q'),'kept');
  search='?tab=two&q=kept';assert.equal(render().props.selectedTab,'two');render().props.onTabChange('single');assert.equal(new URLSearchParams(search).get('tab'),null);assert.equal(render().props.selectedTab,'single');
  search='?tab=not-a-tab';assert.equal(render().props.selectedTab,'single');
  assert.match(words(mod.BestTips({onSelectMatch:()=>{}})),/今日官方赛程暂时无法核验/);
@@ -31,12 +33,13 @@ async function center(){
  const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();
  const view=compile('../src/services/recommendationCenterView.ts',require),data=view.parseRecommendationCenter({recommendationCenter:p.state.view});
  const publishedResults=compile('../src/services/publishedMatchRecommendation.ts',require);
- let now=p.now,index=0,interval,cleanup,props={selectedTab:'two'};const state=[];let mounted=false;
+ let now=p.now,index=0,interval,props={selectedTab:'two'},readCenter=()=>({data,loading:false,failed:false,authorizationRequired:false,refresh(){}});
+ const state=[],effects=[],queued=[];
  class Clock extends Date{static now(){return now;}}
  const mod=compile('../src/components/recommendations/RecommendationCenter.tsx',id=>{
-  if(id==='react')return{useState:initial=>{const i=index++;if(!(i in state))state[i]=initial;return[state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v;}];},useEffect:fn=>{if(!mounted){cleanup=fn();mounted=true;}}};
+  if(id==='react')return{useState:initial=>{const i=index++;if(!(i in state))state[i]=initial;return[state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v;}];},useEffect:(fn,deps)=>{const i=index++,old=effects[i];if(!old||deps.some((v,k)=>v!==old.deps[k]))queued.push(()=>{old?.cleanup?.();effects[i]={deps,cleanup:fn()};});}};
   if(id==='react/jsx-runtime')return jsx;
-  if(id.endsWith('/useRecommendationCenter'))return{useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh(){}})};
+  if(id.endsWith('/useRecommendationCenter'))return{useRecommendationCenter:day=>readCenter(day)};
   if(id.endsWith('/useRecommendationReviewPage'))return{useRecommendationReviewPage:()=>({data:null,loading:false,failed:false})};
   if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
   if(id==='./DayCoverage')return{DayCoverage:()=>null};
@@ -47,10 +50,26 @@ async function center(){
   if(id.endsWith('/publishedMatchRecommendation'))return publishedResults;
   if(id.endsWith('/TeamBadge'))return{TeamBadge:()=>null};if(id.endsWith('/FollowButton'))return{FollowButton:()=>null};
   if(id==='lucide-react'||id.endsWith('.css'))return{};throw Error(id);
- },{Date:Clock,window:{setInterval:fn=>{interval=fn;return 1;},clearInterval:()=>{interval=null;}}});
- return{data,initialNow:p.now,setNow:value=>{now=value;},tick:()=>interval?.(),stop:()=>cleanup?.(),setProps:value=>{props={...props,...value};},render:()=>{index=0;return mod.RecommendationCenter({language:'zh',onSelectMatch:()=>{},...props});}};
+ },{Date:Clock,window:{setTimeout:()=>1,clearTimeout(){},setInterval:fn=>{interval=fn;return 1;},clearInterval:()=>{interval=null;}}});
+ return{data,initialNow:p.now,setNow:value=>{now=value;},tick:()=>interval?.(),stop:()=>effects.forEach(e=>e?.cleanup?.()),setProps:value=>{props={...props,...value};},setCenter:fn=>{readCenter=fn;},render:()=>{index=0;const tree=mod.RecommendationCenter({language:'zh',onSelectMatch:()=>{},...props});queued.splice(0).forEach(fn=>fn());return tree;}};
 }
 const combos=t=>nodes(t,n=>n.type?.name==='ComboCard');
+test('review date navigation survives a failed day read, preserves only that day\'s details, and clears the directory on access denial', async()=>{
+ const h=await center(),day1='2026-08-01',day2='2026-08-02',days=[day1,day2];
+ const coverage={tracks:{manual:{days:days.map(businessDate=>({businessDate,publishedRecords:1}))}}};
+ const history={businessDate:day1,records:[{eventId:'first-day-only'}]};
+ let status=503;
+ h.setProps({mode:'review',selectedTab:'single'});
+ h.setCenter(day=>day===day2?{data:null,loading:false,failed:true,authorizationRequired:status===403,refresh(){}}
+   :{data:{...h.data,publishedCoverage:coverage,reviewedAnalysisHistory:history},loading:false,failed:false,authorizationRequired:false,refresh(){}});
+ const panel=()=>nodes(h.render(),n=>n.type?.name==='ReviewedHistoryPanel')[0]?.props;
+ const first=panel();assert.equal(first.history,history);first.onSelectDay(day2);
+ const failed=panel();assert.equal(failed.failed,true);assert.equal(failed.history,undefined);
+ assert.deepEqual(failed.coverage.tracks.manual.days.map(row=>row.businessDate),days);
+ failed.onSelectDay(day1);assert.equal(panel().history,history);
+ panel().onSelectDay(day2);status=403;assert.equal(panel(),undefined);
+ status=503;assert.equal(panel().coverage,undefined);assert.equal(panel().history,undefined);h.stop();
+});
 test('controlled combo tab responds immediately to URL navigation and click callback',async()=>{
  const h=await center();let selected;h.setProps({onTabChange:value=>{selected=value;}});assert.equal(combos(h.render())[0].props.combo.size,2);
  h.setProps({selectedTab:'three'});assert.equal(combos(h.render())[0].props.combo.size,3);

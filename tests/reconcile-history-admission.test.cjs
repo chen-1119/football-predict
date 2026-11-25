@@ -70,6 +70,27 @@ test('more than 480 MiB of fully validated skipped objects preserves callbacks u
  assert.equal(child.status,0,child.stderr);const result=JSON.parse(child.stdout);assert(result.bytes>480*1024*1024);assert.equal(result.rows,3);
  console.log('native-stream-full-large-evidence '+child.stdout.trim());
 });
+test('native array items preserve nested keys, escapes, boundaries, and admission limits', () => {
+ const raw = String.raw`{"__proto__":{"ok":true},"same":1,"same":2,"text":"} ] \" \\ \u4e2d","items":[null,[1e3,-0]]}`;
+ const expected = JSON.parse(raw);
+ for (const chunkBytes of [1, 2, 13, 65536]) {
+  const rows = [];
+  const parse = (input, options = {}) => streamJsonObjectArrays(file(input), {
+   keys: ['keep'], chunkBytes, onItem: (_key, value) => rows.push(value), ...options,
+  });
+  const wrap = item => '{"keep":[' + item + ']}';
+  parse(wrap(raw), {maxItemChars: raw.length, maxDepth: 5});
+  assert.deepEqual(rows[0], expected);
+  assert(Object.hasOwn(rows[0], '__proto__'));
+  assert(Object.is(rows[0].items[1][1], -0));
+  assert.throws(() => parse(wrap(raw), {maxItemChars: raw.length - 1}), {code: 'STREAM_JSON_ITEM_LIMIT'});
+  assert.throws(() => parse(wrap(raw), {maxDepth: 4}), {code: 'STREAM_JSON_DEPTH_LIMIT'});
+  for (const bad of ['{"x":[1,]}', '[1}', '{"x":"\\q"}', '{"x":"\\u00zz"}', '{"x":01}', '[true false]']) {
+   assert.throws(() => parse(wrap(bad)), {code: 'FILE_JSON_INVALID'});
+  }
+  assert.throws(() => parse('{"keep":[{"x":"unterminated'), {code: 'FILE_JSON_INVALID'});
+ }
+});
 test('full paired summary is identical for HAD/HHAD, duplicate copies, exclusions, and trust revocation',()=>{
  const fixtures=[fixture({id:'88701'}),fixture({id:'88702',pool:'HHAD',scores:[2,1]}),fixture({id:'88703',quote:{odds1:3.4,oddsX:3.4,odds2:3.4}})],payload=snapshot(fixtures),p=file(payload);
  const normal=fixtures.map(f=>f.match),conflict=structuredClone(normal[0]);conflict.scoreHome=8;const untraced=structuredClone(normal[1]);delete untraced.postMatchReview.predictionReview.rows.find(row=>row.marketType==='BEST').frozenVersion;

@@ -36,6 +36,10 @@ function parseReviewQuery(url) {
   const q = (params.get('q') || '').trim().normalize('NFKC');
   const pageRaw = params.get('page') || '1';
   const pageSizeRaw = params.get('pageSize') || '12';
+  const coverageModes = params.getAll('coverage');
+  if (coverageModes.length && (coverageModes.length !== 1 || !['full','separate'].includes(coverageModes[0]))) {
+    throw badQuery('invalid coverage mode');
+  }
   if (!KINDS.has(kind) || !MARKETS.has(market) || (date && !dateKey(date))
     || (version && !/^[a-f0-9]{64}$/.test(version)) || !STATES.has(state)
     || q.length > 80 || !/^[1-9]\d{0,5}$/.test(pageRaw)
@@ -246,12 +250,18 @@ async function readRecommendationReviewPage(pool, url, now = Date.now(), {trustR
       resultEvents: results.rows.map(row => row.payload),
       boundDecisions: bindings.rows.map(row => row.payload),
     }, filters, now);
-    const coverageAdapter=require('../scripts/recommendationPlatform/publishedReviewCoverageRepository.cjs');
-    const observed=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
-    const asOf=observed instanceof Date?observed.toISOString():observed;
-    page.publishedCoverage=coverageAdapter.publicCoverage((await coverageAdapter.loadVerifiedCoverage(client,{
-      asOf,trustRegistry:trustRegistry||process.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH||require('node:path').resolve(__dirname,'../deploy/light-server/collector-trust-registry.json'),
-    })).coverage);
+    // Paging the legacy ledger uses exactly the same validated frozen decisions,
+    // combo bindings and result heads in both modes. The existing member center
+    // already carries separately timestamped cross-track statistics from its
+    // publication cycle; omit that second dataset when the client reads both.
+    if (url.searchParams.get('coverage') !== 'separate') {
+      const coverageAdapter=require('../scripts/recommendationPlatform/publishedReviewCoverageRepository.cjs');
+      const observed=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
+      const asOf=observed instanceof Date?observed.toISOString():observed;
+      page.publishedCoverage=coverageAdapter.publicCoverage((await coverageAdapter.loadVerifiedCoverage(client,{
+        asOf,trustRegistry:trustRegistry||process.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH||require('node:path').resolve(__dirname,'../deploy/light-server/collector-trust-registry.json'),
+      })).coverage);
+    }
     await client.query('COMMIT');
     return page;
   } catch (error) {

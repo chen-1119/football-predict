@@ -25,6 +25,7 @@ const Account = lazy(() => import('./pages/Account').then((module) => ({ default
 const AccountAdmin = lazy(() => import('./pages/AccountAdmin').then((module) => ({ default: module.AccountAdmin })));
 const Following = lazy(() => import('./pages/Following').then((module) => ({ default: module.Following })));
 const PublicBrowse = lazy(() => import('./pages/PublicBrowse').then((module) => ({ default: module.PublicBrowse })));
+const PublicFixtureHistory = lazy(() => import('./pages/PublicFixtureHistory'));
 const AccessCodeAdmin = lazy(() => import('./pages/AccessCodeAdmin').then((module) => ({ default: module.AccessCodeAdmin })));
 const MatchDetail = lazy(() => import('./pages/MatchDetail').then((module) => ({ default: module.MatchDetail })));
 const BigFiveLeagues = lazy(() => import('./pages/BigFiveLeagues').then((module) => ({ default: module.BigFiveLeagues })));
@@ -284,6 +285,14 @@ function RequireAccess({ children }: { children: ReactNode }) {
   const location = useLocation();
 
   if (account.loading) return <LoadingPanel />;
+  if (location.pathname.startsWith('/match/') && new URLSearchParams(location.search).has('date')) return <PublicBrowse />;
+  if (location.pathname === '/fixtures') {
+    const date = new URLSearchParams(location.search).get('date');
+    const today = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date) && date < today) {
+      return <Navigate to={'/fixtures/history' + location.search} replace />;
+    }
+  }
   if (!isAccessVerified) {
     if (['/best','/fixtures','/review','/predictions','/leagues'].includes(location.pathname) || location.pathname.startsWith('/match/')) return <PublicBrowse />;
     return <Navigate to={account.user ? '/account' : `/auth?returnTo=${encodeURIComponent(location.pathname + location.search)}`} replace state={{ from: location }} />;
@@ -304,6 +313,7 @@ function RoutedContent() {
     const routeLabels: Record<string, { zh: string; en: string }> = {
       '/predictions': { zh: '赛前分析', en: 'Pre-match Analysis' },
       '/fixtures': { zh: '赛程与赔率', en: 'Fixtures and Odds' },
+      '/fixtures/history': { zh: '历史比赛与赛果', en: 'Historical fixtures and results' },
       '/leagues': { zh: '五大联赛', en: 'Top Leagues' },
       '/review': { zh: '赛后复盘', en: 'Review' },
       '/best': { zh: '赛前推荐', en: 'Pre-match Picks' },
@@ -395,6 +405,7 @@ function RoutedContent() {
                   </RequireAccess>
                 )}
               />
+              <Route path="/fixtures/history" element={<PublicFixtureHistory />} />
               <Route path="/matches" element={<Navigate to="/fixtures" replace />} />
               <Route
                 path="/leagues"

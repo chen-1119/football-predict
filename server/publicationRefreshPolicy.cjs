@@ -38,4 +38,18 @@ const publicationTransitionHealth = (fallback, error) => {
   };
 };
 
-module.exports = { publicationRefreshBlocked, nativePublicationReadError, publicationTransitionHealth };
+// Only the generation supplying the displayed rows can date that publication.
+// Probing it, or importing it into a database again, does not advance its source clock.
+const currentPublicationAgeSeconds = (meta, nowMs) => {
+  // sourceUpdatedAt is the producer's observation persisted with the rows.
+  // currentFreshnessTime and fileUpdatedAt may also advance on a result-only write.
+  const clocks = [meta?.api?.sourceUpdatedAt];
+  if (String(meta?.sourceAttempt?.transport || meta?.api?.transport || "").startsWith("relay")) {
+    clocks.push(meta?.sourceAttempt?.relayCurrentLaneCapturedAt);
+  }
+  const times = clocks.map(clock => typeof clock === "string" ? Date.parse(clock) : NaN);
+  if (!Number.isFinite(nowMs) || times.some(time => !Number.isFinite(time) || time > nowMs)) return null;
+  return (nowMs - Math.min(...times)) / 1000;
+};
+
+module.exports = { publicationRefreshBlocked, nativePublicationReadError, publicationTransitionHealth, currentPublicationAgeSeconds };

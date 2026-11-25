@@ -73,6 +73,7 @@ const run = async () => {
   const predictionsList = readText("src/pages/PredictionsList.tsx");
   const matchDetail = readText("src/pages/MatchDetail.tsx");
   const publishedMatchPick = readText("src/components/recommendations/PublishedMatchPick.tsx");
+  const publishedResults = readText("src/services/publishedMatchRecommendation.ts");
   const recommendationCenter = readText("src/components/recommendations/RecommendationCenter.tsx");
   const reviewPageHook = readText("src/hooks/useRecommendationReviewPage.ts");
   const reviewPageParser = readText("src/services/recommendationReviewPage.ts");
@@ -150,8 +151,12 @@ const run = async () => {
     "primarySelectionSummary(d)",
     "data-record-hash={d.recordHash}",
     "row.selectionQuality",
-    "row.settlement.score"
-  ].every((needle) => publishedMatchPick.includes(needle)), {
+    "publishedResultProjection(row)",
+    "result.primary.settlement.score"
+  ].every((needle) => publishedMatchPick.includes(needle)) && [
+    "market==='HHAD'?row.handicapSettlement??null:row.settlement",
+    "const primary=resultFor(market)"
+  ].every((needle) => publishedResults.includes(needle)), {
     listUsesPublishedDecision: predictionsList.includes("usesPublishedRecommendation(match, unifiedRow, nowMs)"),
     detailBindsEvidence: matchDetail.includes("publishedDecision={unifiedRow?.decision || null}"),
     displaysFrozenHash: publishedMatchPick.includes("data-record-hash={d.recordHash}")

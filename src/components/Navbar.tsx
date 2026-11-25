@@ -75,7 +75,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     matchAnalysis: { zh: '赛前资料', en: 'Pre-match data' },
     fixtures: { zh: '赛程', en: 'Fixtures' },
     arena: { zh: '策略', en: 'Strategy' },
-    review: { zh: '复盘', en: 'Review' },
+    review: { zh: '历史复盘', en: 'History' },
     more: { zh: '更多', en: 'More' },
     moreMenu: { zh: '更多功能', en: 'More options' },
     tools: { zh: '分析工具', en: 'Analysis tools' },
@@ -92,15 +92,16 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     dataReady: { zh: '数据已同步', en: 'Up to date' },
     dataSyncing: { zh: '同步中', en: 'Syncing' },
     dataWatch: { zh: '数据待核', en: 'Data notice' },
-    dataError: { zh: '数据异常', en: 'Data issue' },
+    dataError: { zh: '赛程读取异常', en: 'Fixture data unavailable' },
     dataPublishing: { zh: '发布切换', en: 'Publishing' },
     dataRetrying: { zh: '同步重试', en: 'Retrying' },
     dataIntegrity: { zh: '完整性待核', en: 'Integrity check' },
     dataStale: { zh: '更新滞后', en: 'Delayed' },
+    scheduleExpired: { zh: '赛程快照已过期', en: 'Fixture snapshot expired' },
     dataEvidence: { zh: '参考模式', en: 'Reference' },
     dataFallback: { zh: '降级读取', en: 'Fallback' },
     dataLoading: { zh: '读取赛程', en: 'Loading' },
-    dataTime: { zh: '数据时间（北京）', en: 'Data time (Beijing)' },
+    dataTime: { zh: '赛程来源时间（北京）', en: 'Fixture source time (Beijing)' },
     checkedTime: { zh: '最近检查（北京）', en: 'Last checked (Beijing)' },
     connection: { zh: '更新连接', en: 'Update connection' },
     modelStatus: { zh: '推荐状态', en: 'Recommendation status' },
@@ -151,7 +152,9 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
   }[dataStatus];
 
   const dataStatusDetail = (() => {
+    if (dataStatus === 'locked') return '';
     if (publicationTransition || dataSync.serviceTransitioning) return t('dataPublishing');
+    if (dataSync.error?.includes('[CURRENT_SNAPSHOT_EXPIRED]')) return t('scheduleExpired');
     if (dataSync.error) return t('dataRetrying');
     if (dataSync.sourceHealthOk === false) return t('dataIntegrity');
     if (dataSync.serviceDataFresh === false || dataSync.sourceStale || dataSync.sourceDataFresh === false) return t('dataStale');
@@ -173,7 +176,10 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
       ? `${activityAgeSeconds}s`
       : `${Math.floor(activityAgeSeconds / 60)}m`;
   const dataStatusReadable = dataStatus !== 'ready' && dataStatus !== 'locked';
-  const dataStatusDisplayLabel = dataStatus === 'watch' && dataStatusDetail === t('dataEvidence') ? t('dataEvidence') : dataStatusLabel;
+  const showSpecificLabel = dataStatusDetail === t('scheduleExpired')
+    || (dataStatus === 'error' && (dataStatusDetail === t('dataIntegrity') || dataStatusDetail === t('dataStale')))
+    || (dataStatus === 'watch' && dataStatusDetail === t('dataEvidence'));
+  const dataStatusDisplayLabel = showSpecificLabel ? dataStatusDetail : dataStatusLabel;
   const formatTime = (value: string | undefined) => {
     const at = finiteDate(value);
     return at === null ? '—' : new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-GB', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Shanghai' }).format(at);

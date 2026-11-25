@@ -1,3 +1,4 @@
+import { Link, useNavigate } from 'react-router-dom';
 import { useOfficialSchedule } from '../hooks/useOfficialSchedule';
 import { OfficialScheduleCard, scheduleNeedsSeparateCard, scheduleMatchesReference } from '../components/recommendations/OfficialSchedule';
 import { reviewedMatchRecommendation } from '../services/publishedMatchRecommendation';
@@ -12,7 +13,7 @@ import { formatBeijingDateString, getDateStringOffset } from '../services/mockDa
 import type { Country, League, Match, PredictionDetail } from '../services/mockData';
 import { getOfficialMatchOdds, getPredictionMarketLabel, getPredictionTipDisplay, getResolvedMatchOdds, isPredictionOfficialResultPoolAvailable } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById } from '../services/entities';
-import { type MatchSignalCategory } from '../services/matchSignal';
+import type { MatchSignalCategory } from '../services/matchSignal';
 import { getVisiblePrediction } from '../services/predictionVisibility';
 import { buildPublicRecommendationCopy } from '../services/recommendationCopy';
 import { getDisplayRecommendation, getLiveDisplayRecommendation, getMatchDisplayTeam } from '../services/displayRecommendation';
@@ -499,6 +500,7 @@ const getOnSaleDisplayRecommendation = (
 
 export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch, viewMode, capturedDataByMatchId }) => {
   const { language, matches, dataSync } = useApp();
+  const navigate = useNavigate();
   const isAnalysisView = viewMode === 'analysis';
   const [clockNow, setClockNow] = useState(() => Date.now());
   React.useEffect(() => {
@@ -571,8 +573,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const handleDateSelect = React.useCallback((date: string) => {
     setAutomaticInitialDateResolved(true);
+    if (!isAnalysisView && date < todayStr && !matches.some(match => matchBelongsToDate(match, date))) {
+      navigate('/fixtures/history?date=' + encodeURIComponent(date));
+      return;
+    }
     setSelectedDate(date);
-  }, []);
+  }, [isAnalysisView, matches, navigate, todayStr]);
 
   React.useEffect(() => {
     try {
@@ -861,18 +867,40 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       ? { home: '主胜', draw: '平局', away: '客胜' }
       : { home: 'Home win', draw: 'Draw', away: 'Away win' })[capturedReference.outcome.code] : '';
     const tone = isFinished || isVoid ? 'archive' : !useUnified && isFormal ? 'formal' : hasPick || (!useUnified && capturedReference) ? 'analysis' : 'fixture';
+    const referenceTierLabel = language === 'zh' ? '参考' : 'Reference';
+    const pickCell = (
+      <div className="compact-pick">
+        <strong>{hasPick ? directionLabel : capturedReference ? capturedDirection : (language === 'zh' ? '暂无推荐' : 'No pick')}</strong>
+        {hasPick && pickedPrediction && (
+          <>
+            <span className={'compact-pick__tier ' + (isFormal ? 'is-formal' : 'is-reference')}>
+              {isFormal ? (language === 'zh' ? '正式' : 'Formal') : referenceTierLabel}
+            </span>
+            <small>{getPredictionMarketLabel(pickedPrediction, language)}</small>
+          </>
+        )}
+        {capturedReference && (
+          <>
+            <span className="compact-pick__tier is-reference">{referenceTierLabel}</span>
+            <small>{(capturedReference.outcome.probability * 100).toFixed(1)}% · {language === 'zh' ? '胜平负推导' : '1X2 estimate'}</small>
+            <small>{capturedReference.scores[0].home}-{capturedReference.scores[0].away} · {capturedReference.goalsPick.label}{language === 'zh' ? '球' : ' goals'}</small>
+          </>
+        )}
+      </div>
+    );
+    const sportteryMeta = getSportteryMeta(match);
     return (
       <MatchSummaryRow key={getMatchEventKey(match)} eventKey={getMatchEventKey(match)} tone={tone}
         timeLabel={language === 'zh' ? '时间' : 'Time'} teamsLabel={language === 'zh' ? '比赛' : 'Match'}
-        marketOddsLabel={language === 'zh' ? (match.status === 'SCHEDULED' ? '比赛赔率' : '比赛赔率快照') : 'Match odds snapshot'}
+        marketOddsLabel={match.status === 'SCHEDULED' ? (language === 'zh' ? '比赛赔率' : 'Match odds') : (language === 'zh' ? '比赛赔率快照' : 'Match odds snapshot')}
         pickLabel={language === 'zh' ? '推荐方向' : 'Pick'} oddsLabel="SP" resultLabel={language === 'zh' ? '结果' : 'Result'}
         detailsLabel={t('details')}
         detailsAriaLabel={language === 'zh' ? '查看' + homeTeam.name[language] + '对阵' + awayTeam.name[language] + '的详情' : 'View ' + homeTeam.name[language] + ' vs ' + awayTeam.name[language]}
         onOpen={() => onSelectMatch(match.id)}
         follow={<FollowButton matchId={match.id} decisionId={unifiedRow?.decision.decisionId} compact />}
-        time={<div className="time-stack"><strong className="kickoff-time">{getRowKickoffLabel(match, language)}</strong><span className="status-note">{statusLabel}</span>{getSportteryMeta(match) && <span className="status-note is-muted">{getSportteryMeta(match)}</span>}</div>}
+        time={<div className="time-stack"><strong className="kickoff-time">{getRowKickoffLabel(match, language)}</strong><span className="status-note">{statusLabel}</span>{sportteryMeta && <span className="status-note is-muted">{sportteryMeta}</span>}</div>}
         teams={<div className="team-stack"><div className="team-line"><TeamBadge team={homeTeam} size="sm" /><span className="team-name">{homeTeam.name[language]}</span></div><div className="team-line"><TeamBadge team={awayTeam} size="sm" /><span className="team-name">{awayTeam.name[language]}</span></div>{scoreText && <span className="match-score-summary">{scoreText}</span>}</div>}
-        pick={useUnified ? (reviewedRow ? <ReviewedMatchPick record={reviewedRow} now={nowMs}/> : published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)) ? <TrainedMatchPick record={trainedMatchRecommendation(published.data,match)} reviewed={reviewedRow} now={nowMs} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} compact now={nowMs} />) : <div className="compact-pick"><small>{language === 'zh' ? '旧版归档' : 'Legacy archive'}</small><strong>{hasPick ? directionLabel : capturedReference ? capturedDirection : (language === 'zh' ? '暂无推荐' : 'No pick')}</strong>{hasPick && pickedPrediction && <><span className={'compact-pick__tier ' + (isFormal ? 'is-formal' : 'is-reference')}>{isFormal ? (language === 'zh' ? '正式' : 'Formal') : (language === 'zh' ? '参考' : 'Reference')}</span><small>{getPredictionMarketLabel(pickedPrediction, language)}</small></>}{capturedReference && <><span className="compact-pick__tier is-reference">{language === 'zh' ? '参考' : 'Reference'}</span><small>{(capturedReference.outcome.probability * 100).toFixed(1)}% · {language === 'zh' ? '胜平负推导' : '1X2 estimate'}</small><small>{capturedReference.scores[0].home}-{capturedReference.scores[0].away} · {capturedReference.goalsPick.label}{language === 'zh' ? '球' : ' goals'}</small></>}</div>}
+        pick={useUnified ? (reviewedRow ? <ReviewedMatchPick record={reviewedRow} now={nowMs}/> : published.data?.strategySwitch && ['SCHEDULED','LIVE'].includes(String(match.status)) ? <TrainedMatchPick record={trainedMatchRecommendation(published.data,match)} reviewed={reviewedRow} now={nowMs} language={language}/> : <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} compact now={nowMs} />) : pickCell}
         marketOdds={<MatchMarketOdds match={match} language={language} capturedData={capturedDataByMatchId?.[match.id]} />}
         odds={useUnified ? reviewedRow ? <ReviewedMatchPrice record={reviewedRow} language={language}/> : <PublishedPrimaryPrice decision={unifiedRow?.decision ?? null} language={language} now={nowMs} /> : <><strong className="compact-sp">{sp}</strong><small className="compact-sp-note">{language === 'zh' ? '推荐方向' : 'Selected pick'}</small></>}
         result={<span className={'compact-result ' + (!reviewedRow&&displayedResultState === 'WON' ? 'is-hit' : !reviewedRow&&displayedResultState === 'LOST' ? 'is-miss' : 'is-pending')} data-result-market={reviewedRow?reviewedRow.market:unifiedResult?.primary.market}>{!reviewedRow&&unifiedResult?.coherent&&unifiedRow?`${primaryMarketLabel(unifiedRow.decision,unifiedResult.primary.market,language==='zh')}：`:''}{useUnified ? reviewedRow ? <ReviewedMatchStatus record={reviewedRow} now={nowMs} language={language}/> : publishedResultLabel(unifiedRow,language) : resultLabel}</span>}
@@ -906,13 +934,27 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const selectedHistoryDate = historyDateOptions.some((option) => option.date === effectiveSelectedDate) ? effectiveSelectedDate : '';
 
-  const isLoading = Boolean(officialSchedule.loading || dataSync.currentLoading || (!dataSync.currentLoaded && !dataSync.error) || (effectiveSelectedDate < todayStr && dataSync.historyLoading && !dataSync.historyLoaded));
-  const emptyStateText = officialSchedule.loading ? (language === 'zh' ? '正在读取官方赛程…' : 'Loading official fixtures…')
+  const historical = effectiveSelectedDate < todayStr;
+  const isLoading = historical
+    ? dataSync.historyLoading || (!dataSync.historyLoaded && !dataSync.historyError && !dataSync.error)
+    : dataSync.currentLoading || (!dataSync.currentLoaded && !dataSync.error);
+  const unavailable = historical ? dataSync.historyError || (!dataSync.historyLoaded && dataSync.error)
+    : !dataSync.currentLoaded && dataSync.error;
+  const unavailableText = historical
+    ? (language === 'zh' ? '历史比赛暂时无法完整加载，请稍后重试。' : 'Match history could not be fully loaded. Please try again shortly.')
+    : (language === 'zh' ? '暂时无法加载比赛，请稍后重试。' : 'Matches could not be loaded. Please try again shortly.');
+  const waitingForSchedule = !historical && officialSchedule.loading;
+  const emptyStateText = waitingForSchedule ? (language === 'zh' ? '正在读取官方赛程…' : 'Loading official fixtures…')
     : (!scheduleView && baseFilteredMatches.length === 0 && effectiveSelectedDate >= todayStr) ? (language === 'zh' ? '官方赛程暂时无法核验，请稍后重试。' : 'Official fixtures could not be verified. Please try again.')
     : isLoading ? (language === 'zh' ? '比赛加载中…' : 'Loading matches…')
-    : !dataSync.currentLoaded && dataSync.error ? (language === 'zh' ? '暂时无法加载比赛，请稍后重试。' : 'Matches could not be loaded. Please try again shortly.')
+    : unavailable ? unavailableText
     : normalizedSearch ? (language === 'zh' ? `没有找到“${searchQuery.trim()}”相关的比赛` : `No matches for “${searchQuery.trim()}”`)
     : (language === 'zh' ? '这个竞彩日暂无比赛' : 'No matches for this match day');
+  const visibleCount = baseFilteredMatches.length + orphanOfficialRecords.length + scheduleEvents.length;
+  const scopeUnavailable = !historical && !scheduleView;
+  const waitingForData = Boolean(waitingForSchedule || isLoading || unavailable || scopeUnavailable);
+  const matchSummary = visibleCount === 0 && waitingForData
+    ? emptyStateText : visibleCount + (language === 'zh' ? ' 场比赛' : ' matches');
   const filterLeagueSummary = effectiveSelectedLeagues.length === 0 ? (language === 'zh' ? '全部联赛' : 'All leagues')
     : effectiveSelectedLeagues.length + (language === 'zh' ? ' 个联赛' : ' leagues');
 
@@ -921,7 +963,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       <section className="dashboard-hero is-compact">
         <PredictionsPageHeader title={isAnalysisView ? (language === 'zh' ? '赛前推荐' : 'Match picks') : (language === 'zh' ? '赛程' : 'Fixtures')}
           description={language === 'zh' ? '按竞彩日查看赛程、SP 与赛后结果' : 'Fixtures, SP and results by match day'}
-          matchSummary={officialSchedule.loading && !baseFilteredMatches.length && !orphanOfficialRecords.length ? (language === 'zh' ? '加载中' : 'Loading') : baseFilteredMatches.length + orphanOfficialRecords.length + scheduleEvents.length + (language === 'zh' ? ' 场比赛' : ' matches')} />
+          matchSummary={matchSummary} />
+        {historical && dataSync.historyError && visibleCount > 0 && <p role="status">{unavailableText}</p>}
       </section>
       <section
         className="date-toolbar"
@@ -942,6 +985,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           historyLabel={language === 'zh' ? '竞彩历史日' : 'Sporttery history days'}
           onSelectDate={handleDateSelect}
         />
+        {!isAnalysisView && <Link to={effectiveSelectedDate < todayStr ? '/fixtures/history?date=' + effectiveSelectedDate : '/fixtures/history'}>{language === 'zh' ? '历史比赛与赛果' : 'Historical fixtures and results'}</Link>}
         <p className="date-scope-note">
           {language === 'zh'
             ? '按竞彩日查看，跨午夜比赛仍归属原竞彩日。'
@@ -971,7 +1015,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         </div>
         <div className="matchday-search-results" role="status" aria-live="polite" aria-atomic="true">
           <span>{normalizedSearch ? (language === 'zh' ? '搜索结果' : 'Search results') : (language === 'zh' ? '当前显示' : 'Showing')}
-            {' '}<strong>{filteredMatches.length + orphanOfficialRecords.length + scheduleEvents.length}</strong>{language === 'zh' ? ' 场比赛' : ' matches'}</span>
+            {' '}{visibleCount === 0 && waitingForData ? emptyStateText : <><strong>{filteredMatches.length + orphanOfficialRecords.length + scheduleEvents.length}</strong>{language === 'zh' ? ' 场比赛' : ' matches'}</>}</span>
           <span>{formatShortDate(effectiveSelectedDate, language)} · {filterLeagueSummary}</span>
         </div>
         <details className="panel filters-panel filters-details" aria-label={language === 'zh' ? '赛事筛选与排序' : 'Fixture filters and sorting'}>
@@ -1062,7 +1106,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         </section>
       )}
 
-      {baseFilteredMatches.length > 0 && (
+      {baseFilteredMatches.length > 0 && !(historical && (unavailable || isLoading)) && (
         <section className="compact-record" aria-label={language === 'zh' ? '当前日期已结算统计' : 'Settled record for this date'} data-formal-settled={dailyReviewStats.formalSettled}>
           <span>{language === 'zh' ? '正式命中 / 已结算' : 'Formal hits / settled'} <strong>{dailyReviewStats.formalWon}/{dailyReviewStats.formalSettled}</strong> <b>{formatDailyRate(dailyReviewStats.formalHitRate, language)}</b></span>
           {dailyReviewStats.referenceBestSettled > 0 && <span>{language === 'zh' ? '参考命中 / 已结算' : 'Reference hits / settled'} <strong>{dailyReviewStats.referenceBestWon}/{dailyReviewStats.referenceBestSettled}</strong></span>}

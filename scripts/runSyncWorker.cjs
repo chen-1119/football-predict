@@ -3352,12 +3352,19 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     const dataValidationStep = await runCommand(npmCommand, ["run", "validate:data"], {}, {
       timeoutMs: commandTimeouts.validation
     });
-    await onBeforeHeavyStep("datastore:generation:official");
-    const officialGenerationStep = await runOfficialArtifactGeneration({ isInterrupted, task: () => runOptional(true, "datastore:generation", {
-      SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
-    }, {
-      timeoutMs: commandTimeouts.sqlite
-    }) });
+    // Take the existing writer lock before draining captures. A later prematch
+    // tick then follows its normal contention path without starting collection.
+    const officialGenerationStep = await runOfficialArtifactGeneration({
+      isInterrupted,
+      task: async () => {
+        await onBeforeHeavyStep("datastore:generation:official");
+        return runOptional(true, "datastore:generation", {
+          SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
+        }, {
+          timeoutMs: commandTimeouts.sqlite
+        });
+      },
+    });
     await onBeforeHeavyStep(storageMode.postgresOnly ? "postgres:sync:official" : "datastore:sqlite:official");
     const sqliteStep = await runRuntimeProjectionOrReuse({
       enabled: runtimeProjectionEnabled,

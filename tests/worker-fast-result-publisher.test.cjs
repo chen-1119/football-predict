@@ -88,12 +88,80 @@ test('skipped and false results stay exact rather than becoming positive publica
     const f = fixture(), work = f.run(); f.output(value); f.close(); assert.deepEqual(await work, value); f.owner.dispose();
   }
 });
-test('the worker caller changes only the old inline publisher body, keeping all other worker bytes', () => {
-  const source = fs.readFileSync(path.join(root, 'scripts/runSyncWorker.cjs'), 'utf8').replace(/\r\n/g, '\n');
+const workerFile = path.join(root, 'scripts/runSyncWorker.cjs');
+const workerSource = fs.readFileSync(workerFile, 'utf8').replace(/\r\n/g, '\n');
+
+// The surrounding validation and projection calls place this one reviewed change.
+const validationBeforeGeneration = `    const dataValidationStep = await runCommand(npmCommand, ["run", "validate:data"], {}, {
+      timeoutMs: commandTimeouts.validation
+    });
+`;
+const projectionAfterGeneration = '    await onBeforeHeavyStep(storageMode.postgresOnly ? "postgres:sync:official" : "datastore:sqlite:official");';
+const previousGenerationOrder = `    await onBeforeHeavyStep("datastore:generation:official");
+    const officialGenerationStep = await runOfficialArtifactGeneration({ isInterrupted, task: () => runOptional(true, "datastore:generation", {
+      SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
+    }, {
+      timeoutMs: commandTimeouts.sqlite
+    }) });
+`;
+const reviewedGenerationOrder = `    // Take the existing writer lock before draining captures. A later prematch
+    // tick then follows its normal contention path without starting collection.
+    const officialGenerationStep = await runOfficialArtifactGeneration({
+      isInterrupted,
+      task: async () => {
+        await onBeforeHeavyStep("datastore:generation:official");
+        return runOptional(true, "datastore:generation", {
+          SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
+        }, {
+          timeoutMs: commandTimeouts.sqlite
+        });
+      },
+    });
+`;
+
+function restorePreviousGenerationOrder(source) {
+  const start = source.indexOf(reviewedGenerationOrder);
+  if (start === -1) return source;
+  assert.equal(start, source.lastIndexOf(reviewedGenerationOrder), 'duplicate reviewed generation block');
+  assert(!source.includes(previousGenerationOrder), 'mixed generation order');
+  const end = start + reviewedGenerationOrder.length;
+  assert(source.slice(0, start).endsWith(validationBeforeGeneration), 'generation block must follow validation');
+  assert(source.startsWith(projectionAfterGeneration, end), 'generation block must precede projection');
+  return source.slice(0, start) + previousGenerationOrder + source.slice(end);
+}
+
+function assertPublisherBoundary(input) {
+  const source = restorePreviousGenerationOrder(input);
   const begin = source.indexOf('        const result = await require("./workerFastResultPublisher.cjs")'), end = source.indexOf('\n      }\n    );', begin);
   assert(begin > 0 && end > begin);
-  // SHA of every other byte from merged cca7e238, with that single callback
-  // body replaced by this marker. It works in signed bundles without Git.
-  assert.equal(crypto.createHash('sha256').update(source.slice(0, begin) + '<fixed-fast-publisher-body>' + source.slice(end)).digest('hex'), '28f5e75f5891d2ca0f888c1916710bd408a6f5227ab7aa3d4eb8fde114de8a15');
+  // Keep the original cca7e238 digest and its single publisher-body exclusion.
+  const actual = crypto.createHash('sha256').update(source.slice(0, begin) + '<fixed-fast-publisher-body>' + source.slice(end)).digest('hex');
+  assert.equal(actual, '28f5e75f5891d2ca0f888c1916710bd408a6f5227ab7aa3d4eb8fde114de8a15');
   assert.match(source.slice(begin, end), /timeoutMs: commandTimeoutMs, terminateGraceMs: commandTerminateGraceMs/);
+}
+
+test('the installed worker preserves the original inline publisher boundary', () => assertPublisherBoundary(workerSource));
+
+const previousWorker = restorePreviousGenerationOrder(workerSource);
+const reviewedWorker = previousWorker.replace(previousGenerationOrder, () => reviewedGenerationOrder);
+test('the legacy ordering and the reviewed ordering both reconstruct the pinned original', () => {
+  assert.notEqual(previousWorker, reviewedWorker);
+  assert.equal(restorePreviousGenerationOrder(previousWorker), previousWorker);
+  assert.equal(restorePreviousGenerationOrder(reviewedWorker), previousWorker);
+  assertPublisherBoundary(previousWorker);
+  assertPublisherBoundary(reviewedWorker);
 });
+
+for (const [name, modify] of [
+  ['partial change to the reviewed block', s => s.replace(reviewedGenerationOrder, () => reviewedGenerationOrder.replace('commandTimeouts.sqlite', 'commandTimeouts.validation'))],
+  ['duplicate block', s => s + reviewedGenerationOrder],
+  ['reviewed block in the wrong position', s => s.replace(reviewedGenerationOrder, '') + reviewedGenerationOrder],
+  ['mix of reviewed and previous blocks', s => s + previousGenerationOrder],
+  ['change outside the publisher and generation blocks', s => s + '\n// changed outside the two reviewed regions\n'],
+]) {
+  test('the original publisher boundary rejects ' + name, () => {
+    const mutated = modify(reviewedWorker);
+    assert.notEqual(mutated, reviewedWorker);
+    assert.throws(() => assertPublisherBoundary(mutated), assert.AssertionError);
+  });
+}

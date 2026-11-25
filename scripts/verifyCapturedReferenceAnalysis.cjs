@@ -20,19 +20,15 @@ const service = {};
 new Function('require', 'exports', compiled.outputText)(name => { throw new Error('Unexpected runtime dependency: ' + name); }, service);
 const { buildCapturedReferenceAnalysis: analyze } = service;
 
-const sampleDir = path.join(root, 'collectors/leisu-prematch/samples');
-const saved = JSON.parse(fs.readFileSync(path.join(sampleDir, 'logged-in-validation.json'), 'utf8'));
-const fixtures = JSON.parse(fs.readFileSync(path.join(sampleDir, 'fixtures.2026-09-12.json'), 'utf8'));
-const fixture = fixtures.matches.find(row => row.id === 'sporttery_2041418');
-assert.ok(fixture);
-const match = { id: fixture.id, homeTeamName: fixture.homeTeamName, awayTeamName: fixture.awayTeamName,
-  kickoffTime: fixture.kickoffTime, status: 'SCHEDULED' };
+const match = { id: 'sporttery_100', homeTeamName: 'Home FC', awayTeamName: 'Away FC',
+  kickoffTime: '2026-09-12T14:00:00Z', status: 'SCHEDULED' };
+const observedAt = '2026-09-12T03:57:45Z';
 const capture = { matchId: match.id, homeName: match.homeTeamName, awayName: match.awayTeamName,
   kickoffTime: match.kickoffTime, predictionEligible: false,
-  injuries: { observedAt: saved.analysisPage.observedAt, players: [] },
+  injuries: { observedAt, players: [] },
   lineup: { status: 'unverified', observedAt: null, message: '' },
-  manualOdds: { observedAt: saved.oddsHistoryPage.observedAt, rowTimeAsDisplayed: '09-12 09:07',
-    values: saved.oddsHistoryPage.manualVisualReview.historyRowOdds.find(row => row.rowKey === 'history-1').winDrawLossAsDisplayed,
+  manualOdds: { observedAt, rowTimeAsDisplayed: '09-12 09:07',
+    values: ['2.25', '3.30', '3.30'],
     method: 'manual-visual-review' } };
 const NOW = Date.parse('2026-09-12T04:00:00.000Z');
 const withOdds = values => ({ ...structuredClone(capture), manualOdds: { ...capture.manualOdds, values } });
@@ -97,11 +93,11 @@ const reject = (m, c, now, reason) => {
   assert.deepEqual(result, { version: 'captured-1x2-independent-poisson-reference-v1', status: 'unavailable', reason });
 };
 
-check('real saved 2.25/3.30/3.30 observation produces only an explicitly labelled uncalibrated reference', () => {
+check('2.25/3.30/3.30 prices produce only an explicitly labelled uncalibrated reference', () => {
   assert.deepEqual(capture.manualOdds.values, ['2.25', '3.30', '3.30']);
   const result = invariants(analyze(match, capture, NOW));
   assert.deepEqual(result.inputOdds, [2.25, 3.30, 3.30]);
-  assert.equal(result.inputObservedAt, saved.oddsHistoryPage.observedAt);
+  assert.equal(Date.parse(result.inputObservedAt), Date.parse(observedAt));
   near(result.market.home, 11 / 26);
   near(result.market.draw, 15 / 52);
   near(result.market.away, 15 / 52);

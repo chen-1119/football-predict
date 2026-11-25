@@ -123,7 +123,9 @@ const COMMAND_CALLER_FUNCTIONS = deepFreeze({
     "a456e7ee291c58e36618e28abb1f272076b00d28a834f1d27fb86b65090a6826",
     // Only the inline fast publisher callback moves into its fixed child.
     // All other worker bytes and original four command calls are unchanged.
-    "facd991fc312ccab15e90b6ba1311c67a6ea569535138c307a8933fbc8df38ed"],
+    "facd991fc312ccab15e90b6ba1311c67a6ea569535138c307a8933fbc8df38ed",
+    // The official generation takes its existing writer lock before draining captures.
+    "e00ef7b88bffa2dd4b59987f1c64309468f5dbfede3a617bd19303609eaa317d"],
 });
 const UNIT_SOURCE_HASHES = Object.freeze({
   "football-daily-prematch.service": "9e6af93d56635ed0940590b4a027e02ab5310080e53b2873775b520f46796d8a",

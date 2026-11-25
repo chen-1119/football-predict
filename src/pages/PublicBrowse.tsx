@@ -11,9 +11,28 @@ import { createPollingController } from '../services/pollingController';
 import type { Team } from '../services/mockData';
 import '../styles/public-browse.css';
 
-interface Fixture {id:string;sourceMatchId:string;matchNo:string|null;businessDate:string|null;homeTeamName:string;awayTeamName:string;homeTeamNameEn?:string;awayTeamNameEn?:string;homeTeamLogo?:string;awayTeamLogo?:string;homeTeamId?:string;awayTeamId?:string;leagueName:string|null;status:string;effectiveStatus:string|null;kickoffTime:string|null;odds:{home:number|null;draw:number|null;away:number|null};sourceUpdatedAt?:string|null;saleState?:'open'|'closed'|'awaiting'|'unknown';quoteStatus?:'missing'|'unverified'|'recent'|'expired'|'archived'}
+interface Fixture {archiveResult?:boolean;scoreHome?:number|null;scoreAway?:number|null;id:string;sourceMatchId:string;matchNo:string|null;businessDate:string|null;homeTeamName:string;awayTeamName:string;homeTeamNameEn?:string;awayTeamNameEn?:string;homeTeamLogo?:string;awayTeamLogo?:string;homeTeamId?:string;awayTeamId?:string;leagueName:string|null;status:string;effectiveStatus:string|null;kickoffTime:string|null;odds:{home:number|null;draw:number|null;away:number|null};sourceUpdatedAt?:string|null;saleState?:'open'|'closed'|'awaiting'|'unknown';quoteStatus?:'missing'|'unverified'|'recent'|'expired'|'archived'}
 interface Example {decisionId:string;matchId:string;homeTeamName:string;awayTeamName:string;publishedAt:string;cutoffTime:string;tipCode:string;odds:number|null;state:string;score:string|null;quoteSource:string|null;quoteObservedAt?:string|null;probabilities?:Record<string,number|null>}
-interface Overview {businessDate:string;sourceUpdatedAt:string|null;stale:boolean;matches:Fixture[];review:{updatedAt:string|null;summary:{settled:number;won:number;pending:number|null;hitRate:number|null}|null;example:Example|null}}
+type TrackKey = 'manual'|'trained'|'legacy';
+interface TrackCounts {
+ published:number; settled:number; won:number; lost:number; pending:number;
+ unknown:number; void:number; disputed:number; hitRate:number|null;
+}
+type HistoricalTracks=Record<TrackKey,TrackCounts>&{asOf:string};
+const trackNames={manual:['人工审核','Editorial picks'],trained:['训练模型参考','Trained model'],legacy:['旧策略归档','Legacy picks']} as const;
+const trackKeys:TrackKey[]=['manual','trained','legacy'];
+function verifiedTrackTotals(tracks:HistoricalTracks|null|undefined):tracks is HistoricalTracks {
+ if(!tracks || !Number.isFinite(Date.parse(tracks.asOf)))return false;
+ return trackKeys.every(key=>{
+  const row=tracks[key];
+  if(!row)return false;
+  const counts=[row.published,row.settled,row.won,row.lost,row.pending,row.unknown,row.void,row.disputed];
+  return counts.every(n=>Number.isSafeInteger(n)&&n>=0) && row.won+row.lost===row.settled
+   && row.settled+row.pending+row.unknown+row.void+row.disputed===row.published
+   && (row.settled===0 ? row.hitRate===null : typeof row.hitRate==='number' && Math.abs(row.hitRate-row.won/row.settled)<1e-9);
+ });
+}
+interface Overview {scheduleAvailable?:boolean;businessDate:string;sourceUpdatedAt:string|null;stale:boolean;matches:Fixture[];review:{updatedAt:string|null;tracks?:HistoricalTracks|null;summary:{settled:number;won:number;pending:number|null;hitRate:number|null}|null;example:Example|null}}
 const time=(value:string|null|undefined)=>value&&Number.isFinite(Date.parse(value))?new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(value)):'待更新';
 function team(match:Fixture,side:'home'|'away'):Team {const name=match[`${side}TeamName`];return {id:match[`${side}TeamId`]||`${match.id}:${side}`,name:{zh:name,en:match[`${side}TeamNameEn`]||name},shortName:{zh:name,en:name},logo:match[`${side}TeamLogo`]||'',value:'',color:'#64748b'};}
 
@@ -22,45 +41,57 @@ export function PublicBrowse(){
  const [data,setData]=useState<Overview|null>(null),[detail,setDetail]=useState<{requestedId:string;match:Fixture}|null>(null),[failure,setFailure]=useState<{requestedId:string;message:string}|null>(null),[settledRoute,setSettledRoute]=useState<string|null>(null);
  const refreshRequest=useRef(()=>undefined);
  const zh=language==='zh',review=location.pathname==='/review',recommendations=location.pathname==='/best',query=params.get('q')||'',date=params.get('date')||'';
- const requestedId=matchId||'',loading=settledRoute!==requestedId,error=failure?.requestedId===requestedId?failure.message:'';
+ const archiveDate=matchId ? date : '';
+ const requestedId=(matchId||'')+(archiveDate?'@'+archiveDate:''),loading=settledRoute!==requestedId,error=failure?.requestedId===requestedId?failure.message:'';
  useEffect(()=>{
   let active=true;
   const controller=createPollingController<{overview:Overview;match:Fixture|null}>({
    intervalMs:30000,timeoutMs:15000,maxRetryMs:120000,isVisible:()=>document.visibilityState==='visible',
    request:async signal=>{
-    const response=await fetch(buildApiUrl('/api/public/overview'),{signal,cache:'no-store'});
-    if(!response.ok)throw Object.assign(new Error('Public overview unavailable'),{status:response.status});
-    const overview=await response.json() as Overview;
-    if(!overview||!Array.isArray(overview.matches)||!overview.review)throw new Error('Invalid public overview');
-    if(!matchId)return {overview,match:null};
-    const matchResponse=await fetch(buildApiUrl(`/api/public/matches/${encodeURIComponent(matchId)}`),{signal,cache:'no-store'});
+    async function readOverview():Promise<Overview> {
+      const response=await fetch(buildApiUrl('/api/public/overview'),{signal,cache:'no-store'});
+      if(!response.ok)throw Object.assign(new Error('Public overview unavailable'),{status:response.status});
+      const overview=await response.json() as Overview;
+      if(!overview||!Array.isArray(overview.matches)||!overview.review)throw new Error('Invalid public overview');
+      return overview;
+    }
+    if(!matchId)return {overview:await readOverview(),match:null};
+    const suffix=archiveDate?'?date='+encodeURIComponent(archiveDate):'';
+    const matchResponse=await fetch(buildApiUrl(`/api/public/matches/${encodeURIComponent(matchId)}`+suffix),{signal,cache:'no-store'});
     if(!matchResponse.ok)throw Object.assign(new Error('Public match unavailable'),{status:matchResponse.status});
     const result=await matchResponse.json();
     if(!result?.match||typeof result.match.id!=='string')throw new Error('Invalid public match');
+    if(result.match.archiveResult===true){
+      const overview:Overview={businessDate:result.match.businessDate,sourceUpdatedAt:null,stale:false,matches:[],review:{updatedAt:null,summary:null,example:null}};
+      return {overview,match:result.match};
+    }
+    const overview=await readOverview();
     return {overview:{...overview,sourceUpdatedAt:result.sourceUpdatedAt??null,stale:result.stale!==false},match:result.match};
    },
-   onData:result=>{if(!active)return;setData(result.overview);setDetail(matchId&&result.match?{requestedId:matchId,match:result.match}:null);setFailure(null);setSettledRoute(matchId||'');},
+   onData:result=>{if(!active)return;setData(result.overview);setDetail(matchId&&result.match?{requestedId,match:result.match}:null);setFailure(null);setSettledRoute(requestedId);},
    onError:failure=>{if(!active)return;const notFound=typeof failure==='object'&&failure!==null&&'status' in failure&&failure.status===404;
     if(notFound&&matchId)setDetail(null);
-    setFailure({requestedId:matchId||'',message:notFound&&matchId?(zh?'暂时没有这场比赛的资料。':'Match information is unavailable.'):(zh?'内容更新失败，已读取内容可能滞后，请重试。':'Refresh failed; previously loaded content may be delayed. Please retry.')});setSettledRoute(matchId||'');},
+    setFailure({requestedId,message:notFound&&matchId?(zh?'暂时没有这场比赛的资料。':'Match information is unavailable.'):(zh?'内容更新失败，已读取内容可能滞后，请重试。':'Refresh failed; previously loaded content may be delayed. Please retry.')});setSettledRoute(requestedId);},
   });
   refreshRequest.current=()=>{controller.refresh();return undefined;};
   const wake=()=>controller.visibilityChanged();
   document.addEventListener('visibilitychange',wake);window.addEventListener('focus',wake);controller.start();
   return()=>{active=false;controller.stop();document.removeEventListener('visibilitychange',wake);window.removeEventListener('focus',wake);refreshRequest.current=()=>undefined;};
- },[matchId,zh]);
- const activeDetail=detail&&detail.requestedId===matchId?detail.match:null;
+ },[matchId,zh,archiveDate,requestedId]);
+ const activeDetail=detail&&detail.requestedId===requestedId?detail.match:null;
  const update=(key:string,value:string)=>{const next=new URLSearchParams(params);if(value)next.set(key,value);else next.delete(key);setParams(next,{replace:true});};
  const days=[...new Set((data?.matches||[]).map(m=>m.businessDate).filter((d):d is string=>Boolean(d)))].sort();
  const selectedDay=/^\d{4}-\d{2}-\d{2}$/.test(date)?date:(days.includes(data?.businessDate||'')?data?.businessDate:days.at(-1));
  const search=query.trim().normalize('NFKC').toLocaleLowerCase();
  const matches=(data?.matches||[]).filter(m=>(!selectedDay||m.businessDate===selectedDay)&&(!search||`${m.homeTeamName} ${m.awayTeamName} ${m.homeTeamNameEn||''} ${m.awayTeamNameEn||''} ${m.matchNo||''} ${m.leagueName||''}`.normalize('NFKC').toLocaleLowerCase().includes(search)));
  const returnTo=location.pathname+location.search+location.hash,example=data?.review.example,summary=data?.review.summary;
+ const tracks=data?.review.tracks;
+ const hasTracks=verifiedTrackTotals(tracks);
  const cta=account.user?'/account':`/auth?returnTo=${encodeURIComponent(returnTo)}`;
  const accessExpired=Boolean(account.access.expiresAt)&&Date.parse(account.access.expiresAt!)<=Date.now();
  const accessLabel=!account.user?(zh?'尚未登录':'Sign in required'):account.access.trialAvailable?(zh?'尚未领取体验':'Trial not activated'):accessExpired?(zh?'内容权益已到期':'Content access expired'):(zh?'暂无有效内容权益':'No active content access');
  const accessAction=!account.user?(zh?'登录 / 注册后查看':'Sign in / Register'):account.access.trialAvailable?(zh?'领取3天体验':'Claim a 3-day trial'):(zh?'管理内容权益':'Manage content access');
- const card=(m:Fixture)=><article className="public-fixture" key={m.id}>
+ const card=(m:Fixture)=>m.archiveResult?<article className="public-fixture" key={m.id}><p className="public-fixture-meta">{m.businessDate} · {m.matchNo} · {m.leagueName}</p><div className="public-matchup"><span><strong>{m.homeTeamName}</strong></span><b>{m.status==='FINISHED'?m.scoreHome+' : '+m.scoreAway:'—'}</b><span><strong>{m.awayTeamName}</strong></span></div><p className="public-caption">{m.status==='FINISHED'?(zh?'全场比分':'Full time'):m.status==='VOID'?(zh?'官方作废':'Voided'):m.status==='CONFLICT'?(zh?'归档记录冲突，比分待核':'Conflicting records'):(zh?'终场比分待核':'Final score unverified')} · {time(m.kickoffTime)} {zh?'北京时间':'Beijing'}</p></article>:<article className="public-fixture" key={m.id}>
   <div className="public-fixture-meta"><span>{m.matchNo||'赛事'} · {m.leagueName||'联赛待更新'}</span><time>{time(m.kickoffTime)}</time></div>
   {m.saleState&&<p className="public-caption">{({open:zh?'官方当前在售 · 赛程展示不代表推荐已发布':'Currently on sale · Fixture only',closed:zh?'官方当前停售':'Official sales closed',awaiting:zh?'待开售':'Sales not open yet',unknown:zh?'售卖状态待核实':'Sale status unverified'})[m.saleState]}</p>}
   <Link className="public-matchup" to={`/match/${encodeURIComponent(m.id)}`} state={{openedFromList:true,fromPath:returnTo}}><span><TeamBadge team={team(m,'home')}/><strong>{m.homeTeamName}</strong></span><small>VS</small><span><TeamBadge team={team(m,'away')}/><strong>{m.awayTeamName}</strong></span></Link>
@@ -76,22 +107,40 @@ export function PublicBrowse(){
   <footer><span>{({SCHEDULED:zh?'未开赛':'Upcoming',LIVE:zh?'进行中':'Live',FINISHED:zh?'已结束':'Finished',PENDING_RESULT:zh?'待核实赛果':'Result pending',CANCELLED:zh?'已取消':'Cancelled'} as Record<string,string>)[m.effectiveStatus||m.status]|| (zh?'赛程记录':'Fixture')}</span><FollowButton matchId={m.id}/></footer>
  </article>;
  return <section className="public-browse">
-  <header className="public-hero"><div><span className="public-eyebrow">90 MINUTES · {zh?'公开预览':'PUBLIC PREVIEW'}</span><h1>{matchId?(zh?'比赛资料':'Match information'):review?(zh?'每一次判断，都有记录':'Every pick has a record'):(zh?'从今天的比赛开始':'Start with today’s matches')}</h1><p>{zh?'先看赛程与真实复盘。登录后关注比赛，在同一处追踪结果。':'Browse fixtures and recorded results. Sign in to follow matches and review them in one place.'}</p></div><Link className="public-cta" to={cta}>{account.user?(zh?'我的账号与体验':'My account & trial'):(zh?'登录 / 注册':'Sign in / Register')}<ArrowRight size={17}/></Link></header>
-  <nav className="public-journey" aria-label={zh?'使用流程':'Your journey'}><span>01 {zh?'看比赛':'Browse'}</span><span>02 {zh?'登录关注':'Sign in & follow'}</span><Link to="/following?tab=settled">03 {zh?'回来看结果':'Review results'} <ArrowRight size={14}/></Link></nav>
+  <header className="public-hero"><div><span className="public-eyebrow">90 MINUTES · {zh?'公开预览':'PUBLIC PREVIEW'}</span><h1>{matchId?(zh?'比赛资料':'Match information'):review?(zh?'历史推荐与命中率':'Recommendation history and hit rates'):(zh?'从今天的比赛开始':'Start with today’s matches')}</h1><p>{zh?'先看赛程与真实复盘。登录后关注比赛，在同一处追踪结果。':'Browse fixtures and recorded results. Sign in to follow matches and review them in one place.'}</p></div><Link className="public-cta" to={cta}>{account.user?(zh?'我的账号与体验':'My account & trial'):(zh?'登录 / 注册':'Sign in / Register')}<ArrowRight size={17}/></Link></header>
+  <nav className="public-journey" aria-label={zh?'复盘入口':'Review links'}>
+    <Link to="/fixtures/history">{zh?'历史比赛与赛果':'Historical fixtures and results'} <ArrowRight size={14}/></Link>
+    {!review&&<Link to="/review">{zh?'历史推荐与命中率':'Recommendation history and hit rates'} <ArrowRight size={14}/></Link>}
+    <Link to="/following?tab=settled"><Bookmark size={15}/>{zh?'我的关注复盘':'My followed results'}</Link>
+  </nav>
   {recommendations&&<section aria-label={zh?'每日串关入口':'Daily combo access'}><div className="public-section-title"><h2>{zh?'每日串关':'Daily combos'}</h2><small>{zh?'参考推荐 · 需有效内容权益':'Reference picks · Content access required'}</small></div><div className="public-grid">{(['two','three'] as const).map(tab=>{const target=`/best?tab=${tab}`,href=`${account.user?'/account':'/auth'}?returnTo=${encodeURIComponent(target)}`;return <article className="public-fixture" key={tab}><div className="public-section-title"><h3>{tab==='two'?(zh?'2串1':'2-leg combo'):(zh?'3串1':'3-leg combo')}</h3><strong>SP≥{tab==='two'?'2.50':'5.00'}</strong></div><p className="public-caption">{accessLabel}。{zh?'完整组合在有效体验或内容权益下查看；未登录或未开通权益不代表今天没有组合。':'Full combos require an active trial or content access. Restricted access does not mean there are no combos today.'}</p><Link className="public-cta" to={href} aria-label={`${accessAction} · ${tab==='two'?'2串1':'3串1'}`}>{accessAction}<ArrowRight size={17}/></Link></article>;})}</div><p className="public-caption">{zh?'领取体验后仍需等待合格报价；没有符合条件的比赛或报价过期时，会显示具体原因，不保证每天生成组合。':'Even with access, combos require eligible quotes. Insufficient matches or expired quotes are explained; combos are not guaranteed every day.'}</p></section>}
-  <div className="public-section-title"><small>{zh?'赛程源更新':'Fixture source updated'} · {time(data?.sourceUpdatedAt)} · {zh?'北京时间':'Beijing time'}</small><button type="button" onClick={()=>refreshRequest.current()}><RefreshCw size={15}/>{zh?'刷新资料':'Refresh data'}</button></div>
+  <div className="public-section-title"><small>{activeDetail?.archiveResult?(zh?'历史比赛归档':'Historical fixture archive'):zh?'赛程源更新':'Fixture source updated'}{!activeDetail?.archiveResult&&<> · {time(data?.sourceUpdatedAt)} · {zh?'北京时间':'Beijing time'}</>}</small><button type="button" onClick={()=>refreshRequest.current()}><RefreshCw size={15}/>{zh?'刷新资料':'Refresh data'}</button></div>
   {error&&<div className="public-notice" role="alert">{error}<button type="button" onClick={()=>refreshRequest.current()}><RefreshCw size={15}/>{zh?'重试':'Retry'}</button></div>}
-  {data?.stale&&<p className="public-notice" role="status">{zh?'赛程更新滞后，当前展示最近一次快照。':'Fixture updates are delayed; showing the latest available snapshot.'}</p>}
-  {loading&&!data?<div className="public-empty" role="status">{zh?'正在读取赛程与复盘…':'Loading fixtures and review…'}</div>:<>
-   {matchId?<><Link className="public-back" to={safeAccountReturnTo((location.state as {fromPath?:string}|null)?.fromPath,'/fixtures')}>← {zh?'返回赛程':'Back to fixtures'}</Link>{activeDetail?card(activeDetail):!loading&&!error&&<p className="public-empty">{zh?'暂时没有这场比赛的资料。':'Match information is unavailable.'}</p>}<p className="public-notice">{zh?'这里展示公开赛程与赔率快照。完整赛前分析可在“我的”领取体验后查看。':'This preview contains fixtures and odds snapshots. Claim a trial in My account to view full analysis.'}</p></>:
-   !review&&<section><div className="public-section-title"><h2>{zh?'竞彩日赛程':'Match-day fixtures'}</h2></div>
+  {data?.stale&&data.scheduleAvailable!==false&&<p className="public-notice" role="status">{zh?'赛程更新滞后，当前展示最近一次快照。':'Fixture updates are delayed; showing the latest available snapshot.'}</p>}
+  {!data?(loading?<div className="public-empty" role="status">{zh?'正在读取赛程与复盘…':'Loading fixtures and review…'}</div>:null):<>
+   {matchId?<><Link className="public-back" to={safeAccountReturnTo((location.state as {fromPath?:string}|null)?.fromPath,activeDetail?.archiveResult?'/fixtures/history?date='+activeDetail.businessDate:'/fixtures')}>← {zh?'返回赛程':'Back to fixtures'}</Link>{activeDetail?card(activeDetail):!loading&&!error&&<p className="public-empty">{zh?'暂时没有这场比赛的资料。':'Match information is unavailable.'}</p>}{!activeDetail?.archiveResult&&<p className="public-notice">{zh?'这里展示公开赛程与赔率快照。完整赛前分析可在“我的”领取体验后查看。':'This preview contains fixtures and odds snapshots. Claim a trial in My account to view full analysis.'}</p>}</>:
+   !review&&data.scheduleAvailable===false?<p className="public-notice" role="status">{zh?'本次未取得赛程数据，请稍后刷新。':'The fixture feed is unavailable. Refresh to try again.'}</p>:!review&&<section><div className="public-section-title"><h2>{zh?'竞彩日赛程':'Match-day fixtures'}</h2></div>
     <div className="public-filters"><label><span>{zh?'竞彩日':'Match day'}</span><select value={selectedDay||''} onChange={e=>update('date',e.target.value)}>{days.map(d=><option key={d}>{d}</option>)}{selectedDay&&!days.includes(selectedDay)&&<option value={selectedDay}>{selectedDay} · {zh?'暂无赛程':'No fixtures'}</option>}{!days.length&&<option value="">{zh?'暂无赛程':'No fixtures'}</option>}</select></label><label className="public-search"><Search size={17}/><input aria-label={zh?'搜索球队或比赛编号':'Search team or match number'} placeholder={zh?'搜索球队、联赛或编号':'Search team, league or number'} value={query} onChange={e=>update('q',e.target.value)}/></label></div>
     <div className="public-grid">{matches.map(card)}</div>{!matches.length&&!loading&&!error&&<div className="public-empty"><strong>{search?(zh?'没有匹配的比赛':'No matching fixtures'):(zh?'这个竞彩日暂无比赛':'No fixtures for this match day')}</strong><p>{zh?'可切换日期或清除搜索。数据更新后会在这里显示。':'Choose another date or clear the search. New data appears here when available.'}</p>{query&&<button onClick={()=>update('q','')}>{zh?'清除搜索':'Clear search'}</button>}</div>}
    </section>}
-   {!matchId&&<section className="public-review"><div className="public-section-title"><h2>{zh?'公开复盘':'Public review'}</h2><Link to="/following?tab=settled"><Bookmark size={15}/>{zh?'我的关注复盘':'My followed results'}</Link></div>
-    <div className="public-stats"><div><span>{zh?'已结算单场':'Settled singles'}</span><strong>{summary?.settled??'—'}</strong></div><div><span>{zh?'命中 / 已结算':'Won / settled'}</span><strong>{summary?`${summary.won} / ${summary.settled}`:'—'}</strong></div><div><span>{zh?'历史命中率':'Historical hit rate'}</span><strong>{typeof summary?.hitRate==='number'?`${(summary.hitRate*100).toFixed(1)}%`:'—'}</strong></div><div><span>{zh?'待结算':'Pending'}</span><strong>{summary?.pending??'—'}</strong></div></div>
-    <p className="public-caption">{zh?'统计按单场截止前最后发布版本计算；未结算不算未命中。模型仍为参考／影子状态，历史结果不代表未来表现。':'Statistics use the last published version before cutoff. Pending results are not losses. The model remains reference / shadow; historical results do not predict future performance.'}</p>
-    {example?<article className="public-example"><div><span className="public-eyebrow">{zh?'最近结算样例 · 按发布时间排序':'LATEST SETTLED EXAMPLE · BY PUBLICATION TIME'}</span><h3>{example.homeTeamName} <small>vs</small> {example.awayTeamName}</h3><p>{zh?'赛前方向':'Pre-match pick'}：{({1:zh?'主胜':'Home',X:zh?'平局':'Draw',2:zh?'客胜':'Away'} as Record<string,string>)[example.tipCode]} · SP {example.odds?.toFixed(2)||'—'} · {example.score||'—'} · {({WON:zh?'命中':'Won',LOST:zh?'未命中':'Lost',VOID:zh?'已作废':'Void',DISPUTED:zh?'赛果待核':'Disputed',PENDING:zh?'等待赛果':'Pending'} as Record<string,string>)[example.state]||(zh?'状态待核':'Unverified state')}</p><details><summary>{zh?'查看发布时间与冻结版本':'Publication time & frozen version'}</summary><p>{zh?'发布':'Published'} {time(example.publishedAt)} · {zh?'截止':'Cutoff'} {time(example.cutoffTime)}</p><p>{zh?'SP来源：':'SP source: '}{example.quoteSource||(zh?'来源未标注':'Source unavailable')} · {zh?'采集：':'Observed: '}{time(example.quoteObservedAt)}</p><p>{zh?'发布时胜平负模型概率（参考）':'Published model probabilities (reference)'}</p><div className="public-odds">{(['1','X','2'] as const).map((code,i)=><span key={code}>{(zh?['主胜','平局','客胜']:['Home','Draw','Away'])[i]}<strong>{typeof example.probabilities?.[code]==='number'&&Number.isFinite(example.probabilities[code])&&example.probabilities[code]!>=0&&example.probabilities[code]!<=1?`${(example.probabilities[code]!*100).toFixed(1)}%`:'—'}</strong></span>)}</div><code>{example.decisionId}</code></details></div><FollowButton matchId={example.matchId} decisionId={example.decisionId}/></article>:<div className="public-empty">{zh?'暂时没有可核验的已结算样例，数据到达后展示。':'No verifiable settled example is available yet.'}</div>}
+   {!matchId&&<section className="public-review"><div className="public-section-title"><h2>{hasTracks?(zh?'历史预测命中率':'Historical hit rates'):(zh?'旧策略单场 · 公开复盘':'Legacy single picks · Public review')}</h2><small>{zh?'赛果统计更新':'Results updated'} · {time(hasTracks?tracks.asOf:data.review.updatedAt)}</small></div>
+    {hasTracks?<div className="public-history-tracks">{trackKeys.map(key=>{
+      const row=tracks[key];
+      return <article key={key}><h3>{trackNames[key][zh?0:1]}</h3>
+        <strong>{row.hitRate===null?(zh?'暂无已结算':'No settled picks'):`${(row.hitRate*100).toFixed(1)}%`}</strong>
+        <p>{zh?'命中 / 已结算':'Wins / settled'} {row.won} / {row.settled}</p>
+        <small>{zh?'已发布':'Published'} {row.published} · {zh?'待结算':'Pending'} {row.pending}</small>
+        {(row.unknown+row.void+row.disputed)>0&&<p>{zh?'未核实':'Unknown'} {row.unknown} · {zh?'作废':'Void'} {row.void} · {zh?'争议':'Disputed'} {row.disputed}</p>}
+      </article>;
+    })}</div>:<div className="public-stats"><div><span>{zh?'已结算单场':'Settled singles'}</span><strong>{summary?.settled??'—'}</strong></div><div><span>{zh?'命中 / 已结算':'Won / settled'}</span><strong>{summary?`${summary.won} / ${summary.settled}`:'—'}</strong></div><div><span>{zh?'历史命中率':'Historical hit rate'}</span><strong>{typeof summary?.hitRate==='number'?`${(summary.hitRate*100).toFixed(1)}%`:'—'}</strong></div><div><span>{zh?'待结算':'Pending'}</span><strong>{summary?.pending??'—'}</strong></div></div>}
+    <p className="public-caption">{hasTracks ? (zh?'人工审核与训练模型按首个合资格赛前版本统计，旧策略按截止前最后发布版本统计。各组仅以已结算场次计算命中率。':'Editorial and trained records use the first eligible pre-match pick. Legacy records use the last publication before cutoff. Each rate uses its own settled picks.') : (zh?'旧策略按截止前最后发布的单场方向统计，命中率为命中场数除以已结算场数。':'Legacy outcomes use the last single pick published before cutoff. Hit rate is wins divided by settled picks.')}</p>
+    {!hasTracks&&!summary&&<p role="status">{zh?'旧策略历史统计暂不可用。':'Legacy statistics are currently unavailable.'}</p>}
+    {!hasTracks&&summary?.settled===0&&<p role="status">{zh?'尚无已结算单场可用于计算命中率。':'The hit rate will be available after a single pick has settled.'}</p>}
+    {review&&<p className="public-caption">
+      {zh?'公开预览展示一个旧策略已结算样例。开通内容权益后可按竞彩日查看已发布的人工推荐。':'The public preview shows one settled legacy example. Active content access includes editorial publication history by match day.'}
+      {' '}<Link to={account.user?'/account?returnTo=%2Freview':'/auth?returnTo=%2Freview'}>{accessAction}</Link>
+    </p>}
+    {example?<article className="public-example"><div><span className="public-eyebrow">{zh?'旧策略最近结算样例 · 按发布时间排序':'LATEST SETTLED LEGACY EXAMPLE · BY PUBLICATION TIME'}</span><h3>{example.homeTeamName} <small>vs</small> {example.awayTeamName}</h3><p>{zh?'赛前方向':'Pre-match pick'}：{({1:zh?'主胜':'Home',X:zh?'平局':'Draw',2:zh?'客胜':'Away'} as Record<string,string>)[example.tipCode]} · SP {example.odds?.toFixed(2)||'—'} · {example.score||'—'} · {({WON:zh?'命中':'Won',LOST:zh?'未命中':'Lost',VOID:zh?'已作废':'Void',DISPUTED:zh?'赛果待核':'Disputed',PENDING:zh?'等待赛果':'Pending'} as Record<string,string>)[example.state]||(zh?'状态待核':'Unverified state')}</p><details><summary>{zh?'查看发布时间与冻结版本':'Publication time & frozen version'}</summary><p>{zh?'发布':'Published'} {time(example.publishedAt)} · {zh?'截止':'Cutoff'} {time(example.cutoffTime)}</p><p>{zh?'SP来源：':'SP source: '}{example.quoteSource||(zh?'来源未标注':'Source unavailable')} · {zh?'采集：':'Observed: '}{time(example.quoteObservedAt)}</p><p>{zh?'发布时胜平负模型概率（参考）':'Published model probabilities (reference)'}</p><div className="public-odds">{(['1','X','2'] as const).map((code,i)=><span key={code}>{(zh?['主胜','平局','客胜']:['Home','Draw','Away'])[i]}<strong>{typeof example.probabilities?.[code]==='number'&&Number.isFinite(example.probabilities[code])&&example.probabilities[code]!>=0&&example.probabilities[code]!<=1?`${(example.probabilities[code]!*100).toFixed(1)}%`:'—'}</strong></span>)}</div><code>{example.decisionId}</code></details></div><FollowButton matchId={example.matchId} decisionId={example.decisionId}/></article>:<div className="public-empty">{zh?'暂时没有可核验的已结算样例，数据到达后展示。':'No verifiable settled example is available yet.'}</div>}
    </section>}
   </>}
  </section>;

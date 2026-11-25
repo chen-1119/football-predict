@@ -6,13 +6,13 @@ const { spawn } = require("node:child_process");
 const { Worker } = require("node:worker_threads");
 const crypto = require("node:crypto");
 const { createAccounts } = require("./accounts.cjs");
-const { publicFixture, publicOverview, publicOfficialCurrent, resolvePublicScheduleIdentity } = require("./publicProduct.cjs");
+const { publicFixture, readPublicOverview, resolvePublicScheduleIdentity } = require("./publicProduct.cjs");
 const zlib = require("node:zlib");
 const { readStorageMode, retiredSqliteStatus } = require("./storageMode.cjs");
 const storageMode = readStorageMode();
 const { TRAINED_ONLY_POLICY, isTrustedPolicy, isRetiredCurrentProjection, isTrustedCurrentAuthorityProjection } = require('./recommendationAuthority.cjs');
 const currentRecommendationPolicy = storageMode.postgresOnly ? TRAINED_ONLY_POLICY : null;
-const { publicationRefreshBlocked, nativePublicationReadError, publicationTransitionHealth } = require("./publicationRefreshPolicy.cjs");
+const { publicationRefreshBlocked, nativePublicationReadError, publicationTransitionHealth, currentPublicationAgeSeconds } = require("./publicationRefreshPolicy.cjs");
 const { sendStaticFileResponse } = require("./staticFileResponse.cjs");
 const { readRequestJson } = require("./readRequestJson.cjs");
 const { readFrontendReleaseIdentity } = require("./frontendReleaseIdentity.cjs");
@@ -4219,14 +4219,6 @@ const currentMetaTime = (meta) => {
   return Date.parse(latest || "");
 };
 
-const currentReadFreshnessTime = (currentRead) => {
-  for (const value of [currentRead?.dbUpdatedAt, currentRead?.fileUpdatedAt, currentRead?.checkedAt]) {
-    const time = Date.parse(value || "");
-    if (Number.isFinite(time)) return time;
-  }
-  return NaN;
-};
-
 const syncMetaDataVersionTime = (meta) => {
   const latest = latestIsoTime(
     meta?.api?.currentFreshnessTime,
@@ -6889,9 +6881,9 @@ const buildSourceHealth = async (generation) => {
     ...sportteryFreshnessBase,
     stale: sportteryCurrentStale
   };
-  const fiveHundredFreshness = sourceFreshness(source500.updatedAt || external?.updatedAt, maxAgeMinutes);
+  const fiveHundredFreshness = sourceFreshness(source500.updatedAt, maxAgeMinutes);
   const fiveHundredDetailsFreshness = sourceFreshness(
-    source500Details.updatedAt || source500.updatedAt || external?.updatedAt,
+    source500Details.updatedAt,
     Math.max(maxAgeMinutes, Number(source500Details.refreshMinutes || 0) || 0)
   );
   const weatherFreshness = sourceFreshness(
@@ -6959,7 +6951,7 @@ const buildSourceHealth = async (generation) => {
     referenceOddsCoverage: Number(ratio(currentWithReferenceOdds, Math.max(currentCount, 1)).toFixed(4)),
     referenceOddsCoveragePercent: percent(ratio(currentWithReferenceOdds, Math.max(currentCount, 1))),
     freshExternalSignals: !fiveHundredFreshness.stale,
-    updatedAt: source500.updatedAt || external?.updatedAt || null,
+    updatedAt: source500.updatedAt || null,
     detailsUpdatedAt: source500Details.updatedAt || null,
     fallbackReason: meta?.api?.fallbackReason || null,
     currentLaneFresh: !sportteryCurrentStale,
@@ -8517,7 +8509,6 @@ const buildPublicV1Health = async () => {
   const { health, modelEvaluationRaw } = await getPublicV1HealthBase();
   const recommendationCoverage = await buildCurrentRecommendationCoverage();
   const metaTime = currentMetaTime(health.meta);
-  const currentReadTime = currentReadFreshnessTime(health.currentRead);
   const maxAgeSeconds = boundedRuntimeEnv(process.env, "V1_HEALTH_STALE_AFTER_SECONDS", {
     fallback: 10 * 60, min: 60, max: 30 * 24 * 60 * 60,
   });
@@ -8525,7 +8516,8 @@ const buildPublicV1Health = async () => {
     fallback: 60 * 60, min: 300, max: 30 * 24 * 60 * 60,
   });
   const ageSeconds = Number.isFinite(metaTime) ? Math.max(0, Math.floor((Date.now() - metaTime) / 1000)) : null;
-  const currentAgeSeconds = Number.isFinite(currentReadTime) ? Math.max(0, Math.floor((Date.now() - currentReadTime) / 1000)) : null;
+  const publicationAge = currentPublicationAgeSeconds(health.meta, Date.now());
+  const currentAgeSeconds = publicationAge === null ? null : Math.floor(publicationAge);
   const fastResultIntegrity = health.storage?.fastResultIntegrity || null;
   const fastResultIntegrityOk = fastResultIntegrity?.valid === true;
   const sourceHealthOk = Boolean(health.sources?.ok && fastResultIntegrityOk);
@@ -8539,29 +8531,31 @@ const buildPublicV1Health = async () => {
   };
   const primarySourceFresh = freshSourceScore("sporttery");
   const fallbackCoverage = health.sources?.fallbackCoverage || null;
-  const currentReadCount = Number(health.currentRead?.count || 0);
-  const currentReadUsable = currentReadCount > 0 && health.currentRead?.stale !== true;
+  const currentReadCount = health.currentRead?.count;
+  const currentReadUsable = Number.isSafeInteger(currentReadCount) && currentReadCount > 0 && health.currentRead?.stale === false;
   const fallbackFreshnessMs = Math.max(
     timestampMs(fallbackCoverage?.updatedAt),
-    timestampMs(fallbackCoverage?.detailsUpdatedAt),
-    timestampMs(health.sources?.externalSignals?.updatedAt),
-    timestampMs(health.sources?.preMatchSignals?.updatedAt)
+    timestampMs(fallbackCoverage?.detailsUpdatedAt)
   );
-  const fallbackReferenceMs = fallbackFreshnessMs > 0 ? fallbackFreshnessMs : metaTime;
-  const fallbackAgeSeconds = Number.isFinite(fallbackReferenceMs) && fallbackReferenceMs > 0
-    ? Math.max(0, Math.floor((Date.now() - fallbackReferenceMs) / 1000))
+  const fallbackAgeSeconds = Number.isFinite(fallbackFreshnessMs) && fallbackFreshnessMs > 0 && fallbackFreshnessMs <= Date.now()
+    ? (Date.now() - fallbackFreshnessMs) / 1000
     : null;
   const fallbackWithinReliableWindow = Number.isFinite(fallbackAgeSeconds) && fallbackAgeSeconds <= fallbackMaxAgeSeconds;
-  const sourceDataFresh = sourceHealthOk && primarySourceFresh && currentReadUsable;
+  const currentPublicationFresh = publicationAge !== null && publicationAge <= maxAgeSeconds;
+  const primaryScheduleFresh = sourceHealthOk && primarySourceFresh && health.meta?.api?.currentStale !== true && currentPublicationFresh;
+  const sourceDataFresh = primaryScheduleFresh && currentReadUsable;
   const fallbackDataFresh = currentReadUsable
+    && publicationAge !== null && publicationAge <= fallbackMaxAgeSeconds
     && freshSourceScore("five-hundred")
-    && fallbackCoverage?.usable !== false
-    && fallbackCoverage?.primaryStale !== false
+    && fallbackCoverage?.usable === true
+    && fallbackCoverage?.primaryStale === true
     && fallbackWithinReliableWindow;
-  const legacyMetaFresh = ageSeconds !== null && ageSeconds <= maxAgeSeconds && sourceHealthOk && primarySourceFresh;
+  // An explicitly empty current generation may still be fresh (no fixtures).
+  const emptyScheduleFresh = primaryScheduleFresh && currentReadCount === 0 && health.meta?.files?.current === 0
+    && health.currentRead?.stale === false && ageSeconds !== null && ageSeconds <= maxAgeSeconds;
   const dataFresh = Boolean(
     fastResultIntegrityOk
-    && (sourceDataFresh || fallbackDataFresh || legacyMetaFresh)
+    && (sourceDataFresh || fallbackDataFresh || emptyScheduleFresh)
   );
   const minRecommendationRows = Number(process.env.MODEL_RELIABILITY_MIN_ROWS || 30);
   const minPromotionBaselineRows = Number(process.env.MODEL_PROMOTION_MIN_BASELINE_ROWS || 500);
@@ -8623,6 +8617,7 @@ const buildPublicV1Health = async () => {
       officialSourceSinglePoint,
       officialSourceRedundancy,
       primarySourceFresh,
+      currentPublicationFresh,
       sourceDataFresh,
       fallbackDataFresh,
       fallbackWithinReliableWindow,
@@ -8736,6 +8731,7 @@ const getPublicV1Health = async () => {
       status: {
         serviceOk: false,
         dataFresh: false,
+        currentPublicationFresh: false,
         sourceHealthOk: false,
         recommendationReliable: false,
         recommendationProjectionParityOk: false,
@@ -11497,26 +11493,18 @@ const buildPublicProduct = async () => {
   if (publicProductInflight) return publicProductInflight;
   publicProductInflight = (async () => {
     if (!postgresPool || !shouldPreferPostgresRead()) throw new Error("PUBLIC_DATA_UNAVAILABLE");
-    const [current, centerPayload] = await Promise.all([
-      buildV1CurrentPayload(new URL("http://localhost/api/v1/matches/current?view=list")),
-      readPostgresRecommendationCenter(postgresPool, {
-        publicationIdentity: resolveBasePublication().identity,
-        recommendationAuthorityPolicy: currentRecommendationPolicy,
-      }),
-    ]);
     const maxSourceAgeMinutes=boundedRuntimeEnv(process.env,"SOURCE_MAX_AGE_MINUTES",{
       fallback:20,min:1,max:30*24*60,
     });
-    const now=Date.now();
-    let fixtureCurrent=current;
-    try {
-      const day=new Date(now+8*3600000).toISOString().slice(0,10);
-      fixtureCurrent=publicOfficialCurrent(require('./officialScheduleRead.cjs').read(day),Date.now());
-    } catch {
-      // A failed signed read must not present a retained native snapshot as live.
-      fixtureCurrent={...current,stale:true};
-    }
-    const value=publicOverview(fixtureCurrent,centerPayload,Date.now(),maxSourceAgeMinutes*60000);
+    const value=await readPublicOverview({
+      readOfficial:day=>require('./officialScheduleRead.cjs').read(day),
+      readNative:()=>buildV1CurrentPayload(new URL("http://localhost/api/v1/matches/current?view=list")),
+      readCenter:()=>readPostgresRecommendationCenter(postgresPool,{
+        publicationIdentity:resolveBasePublication().identity,
+        recommendationAuthorityPolicy:currentRecommendationPolicy,
+      }),
+      maxSourceAgeMs:maxSourceAgeMinutes*60000,
+    });
     publicProductCache={at:Date.now(),value};
     return value;
   })();
@@ -11525,31 +11513,61 @@ const buildPublicProduct = async () => {
 const researchArchiveModule = require('./researchArchiveRead.cjs');
 const researchHttpHandler = require('./researchHttp.cjs').createResearchHttp({
   accounts: accountSystem,
+  readiness: postgresPool ? require('./researchPublishReadiness.cjs').createReadiness({pool:postgresPool}) : null,
   reader: postgresPool ? researchArchiveModule.createResearchArchiveRead({
     pool: postgresPool,
     replay: require('../scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs').readPublication,
   }) : null,
   submit: postgresPool ? require('./researchBrokerClient.cjs').submitResearchRequest : null,
 });
+const readPublicFixtureHistory = require('./publicFixtureHistory.cjs').createArchiveReader(
+  () => require('./postgresProjectionStore.cjs').readPublicFixtureHistoryRows(postgresPool, resolveBasePublication().identity),
+  require('./publicSignedFixtureArchive.cjs').createSignedReader(sportteryRelaySnapshotPath)
+);
 const handleApi = async (req, res, url) => {
   if (await accountSystem.handle(req, res, url)) return;
   if (await researchHttpHandler(req, res, url)) return;
   if (req.method === "OPTIONS") return send(res, 204, "");
 
+  if (url.pathname === "/api/public/fixtures/history") {
+    if (process.env.PUBLIC_PREVIEW_ENABLED !== "1") return sendJson(res, {ok: false, error: "public preview unavailable"}, 404);
+    if (req.method !== "GET" && req.method !== "HEAD") return sendJson(res, {ok: false, error: "method not allowed"}, 405);
+    try {
+      const result = await readPublicFixtureHistory(url.searchParams.get("date"));
+      return sendJsonCached(req, res, result, {maxAgeSeconds: 15});
+    } catch (error) {
+      return error.status === 400 ? sendJson(res, {ok: false, error: "invalid business date"}, 400)
+        : sendJson(res, {ok: false, error: "fixture archive temporarily unavailable"}, 503);
+    }
+  }
+
   if (url.pathname === "/api/public/overview" || /^\/api\/public\/matches\/[^/]+$/.test(url.pathname)) {
     if (process.env.PUBLIC_PREVIEW_ENABLED !== "1") return sendJson(res,{ok:false,error:"public preview unavailable"},404);
     if (req.method !== "GET" && req.method !== "HEAD") return sendJson(res,{ok:false,error:"method not allowed"},405);
     try {
-      const overview=await buildPublicProduct();
-      if (url.pathname === "/api/public/overview") return sendJsonCached(req,res,overview,{maxAgeSeconds:5});
+      if (url.pathname === "/api/public/overview") return sendJsonCached(req,res,await buildPublicProduct(),{maxAgeSeconds:5});
       const id=decodeURIComponent(url.pathname.slice("/api/public/matches/".length));
       if (!/^[a-zA-Z0-9_-]{1,120}$/.test(id)) return sendJson(res,{ok:false,error:"invalid match"},400);
-      const currentMatch=overview.matches.find(row=>row.id===id);
+      const archiveDate = url.searchParams.get('date');
+      const overview = archiveDate === null ? await buildPublicProduct().catch(() => null) : null;
+      const currentMatch=overview?.matches.find(row=>row.id===id);
+      let archiveLookupFailed = false;
+      if (!currentMatch && (/^(?:sporttery|fivehundred)_\d+$/.test(id) || archiveDate !== null)) {
+        if (archiveDate !== null && !require('./publicFixtureHistory.cjs').validDay(archiveDate)) return sendJson(res,{ok:false,error:"invalid business date"},400);
+        let archived;
+        try { archived = await readPublicFixtureHistory.find(id, archiveDate); } catch { archiveLookupFailed = true; }
+        if (archived) {
+          const match = {...archived, archiveResult: true, effectiveStatus: archived.status,
+            odds: {home: null, draw: null, away: null}};
+          return sendJsonCached(req,res,{ok:true,match,sourceUpdatedAt:null,stale:false,referenceOnly:true},{maxAgeSeconds:15});
+        }
+        if (archiveDate !== null || !overview) return sendJson(res,{ok:false,error:archiveLookupFailed?"fixture archive temporarily unavailable":"match not found"},archiveLookupFailed?503:404);
+      }
       const match=currentMatch||publicFixture(/^schedule_/.test(id)
         ?await resolvePublicScheduleIdentity(id,{readNative:readMatchById,readOfficial:require('./officialScheduleRead.cjs').read})
         :await readMatchById(id));
-      if (!match) return sendJson(res,{ok:false,error:"match not found"},404);
-      return sendJsonCached(req,res,{ok:true,match,sourceUpdatedAt:currentMatch?overview.sourceUpdatedAt:null,stale:currentMatch?overview.stale:true,example:overview.review.example?.matchId===id?overview.review.example:null,referenceOnly:true},{maxAgeSeconds:5});
+      if (!match) return sendJson(res,{ok:false,error:archiveLookupFailed?"fixture archive temporarily unavailable":"match not found"},archiveLookupFailed?503:404);
+      return sendJsonCached(req,res,{ok:true,match,sourceUpdatedAt:currentMatch?overview.sourceUpdatedAt:null,stale:currentMatch?overview.stale:true,example:overview?.review.example?.matchId===id?overview.review.example:null,referenceOnly:true},{maxAgeSeconds:5});
     } catch {return sendJson(res,{ok:false,error:"public data temporarily unavailable"},503);}
   }
 
@@ -11910,6 +11928,21 @@ const handleApi = async (req, res, url) => {
     });
   }
 
+  if (url.pathname === "/api/sports-data") {
+    return require('./neutralSportsRead.cjs').handle(req, res, url, {
+      authorize: () => hasRecommendationAccess(req, url), send: (status, body) => sendJson(res, body, status),
+    });
+  }
+
+  if (url.pathname === "/api/research/combo-series") {
+    if (req.method !== "GET" && req.method !== "HEAD") return sendJson(res, { ok: false, error: "method not allowed" }, 405);
+    if (!(await hasRecommendationAccess(req, url))) return sendJson(res, { ok: false, error: "access code required" }, 401);
+    if ([...url.searchParams.keys()].some(key => key !== "businessDate") || url.searchParams.getAll("businessDate").length !== 1) return sendJson(res, { ok: false, error: "invalid business day" }, 400);
+    res.setHeader("Cache-Control", "private, no-store");
+    try { return sendJson(res, await require('./researchComboSeries.cjs').readDay(postgresPool, url.searchParams.get("businessDate"))); }
+    catch { return sendJson(res, { ok: false, error: "combo series unavailable" }, 503); }
+  }
+
   if (url.pathname === "/api/research/official-event-references") {
     if (req.method !== "GET" && req.method !== "HEAD") return sendJson(res, { ok: false, error: "method not allowed" }, 405);
     if (!(await hasRecommendationAccess(req, url))) return sendJson(res, { ok: false, error: "access code required" }, 401);
@@ -12186,6 +12219,7 @@ const handleStatic = async (req, res, url) => {
     ["/data/five-hundred-details.json", "/api/v1/source-health"],
     ["/data/model-evaluation.json", "/api/v1/model/evaluation"],
     ["/data/prediction-snapshots.json", "/api/v1/model/evaluation"],
+    ["/data/reference-integrity.json", "/api/v1/source-health"],
     ["/data/model-calibration.json", "/api/v1/model/evaluation"],
     ["/data/model-strategy.json", "/api/v1/model/evaluation"],
     ["/data/gpt-predictions.json", "/api/v1/model/evaluation"],

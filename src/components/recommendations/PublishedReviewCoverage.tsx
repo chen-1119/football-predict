@@ -14,13 +14,13 @@ function CountBody({ data, zh }: { data: PublishedReviewCounts; zh: boolean }) {
     {data.scoreEligible > 0 && <small>{zh ? '比分已核验样本' : 'Score samples'} {data.scoreEligible} · {zh ? '首选比分' : 'First score'} {data.scoreTop1}/{data.scoreEligible} · {zh ? '双比分覆盖' : 'Either score'} {data.scoreTop2}/{data.scoreEligible}</small>}
   </>;
 }
-export function PublishedReviewCoveragePanel({ data, failed, language = 'zh' }: { data?: PublishedReviewCoverage; failed: boolean; language?: 'zh' | 'en' }) {
+export function PublishedReviewCoveragePanel({ data, failed, loading = false, language = 'zh' }: { data?: PublishedReviewCoverage; failed: boolean; loading?: boolean; language?: 'zh' | 'en' }) {
   const zh = language === 'zh';
   const [track, setTrack] = useState<'all' | PublishedReviewTrack>('all');
   const [businessDate, setBusinessDate] = useState('');
   if (!data) return <section className="rc-paper published-review-coverage" aria-label={zh ? '已发布推荐统计' : 'Published recommendation coverage'}>
     <h2>{zh ? '已发布推荐统计' : 'Published recommendation coverage'}</h2>
-    <p role="status">{failed ? (zh ? '统计读取失败，当前总数未知。' : 'Coverage failed to load; the total is unknown.') : (zh ? '人工与训练模型统计尚未接入。下方旧策略台账单独保留，不能代表全部推荐。' : 'Editorial and trained-model coverage is not connected yet. The legacy ledger below does not represent all recommendations.')}</p>
+    <p role="status">{loading ? (zh ? '正在读取历史命中率…' : 'Loading historical hit rates…') : failed ? (zh ? '统计读取失败，当前总数未知。' : 'Coverage failed to load; the total is unknown.') : (zh ? '人工与训练模型统计尚未接入。下方旧策略台账单独保留，不能代表全部推荐。' : 'Editorial and trained-model coverage is not connected yet. The legacy ledger below does not represent all recommendations.')}</p>
   </section>;
   const days = [...new Set(tracks.flatMap(t => data.tracks[t].days.map(d => d.businessDate)))].sort().reverse();
   const visible = track === 'all' ? tracks : [track];

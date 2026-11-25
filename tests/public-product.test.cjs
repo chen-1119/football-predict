@@ -4,6 +4,46 @@ const {publicOfficialCurrent}=require('../server/publicProduct.cjs');
 const signedFixture=require('./fixtures/reviewed-official-event.cjs');
 const {project}=require('../server/officialScheduleRead.cjs');
 const {resolvePublicScheduleIdentity}=require('../server/publicProduct.cjs');
+const {readPublicOverview}=require('../server/publicProduct.cjs');
+
+test('public review returns validated totals per track and never exposes the ledger or partial coverage',()=>{
+ const now=signedFixture.NOW,asOf=new Date(now).toISOString();
+ const cohort={publishedRecords:4,distinctEvents:4,settled:2,won:1,lost:1,pending:1,unknown:0,void:0,disputed:1,
+  hitRate:.5,days:[{private:'private-event'}],markets:{private:'private-market'},records:['private-record']};
+ const zero={publishedRecords:0,distinctEvents:0,settled:0,won:0,lost:0,pending:0,unknown:0,void:0,disputed:0,hitRate:null};
+ const coverage={version:'published-review-coverage-v1',asOf,complete:true,rejected:[],identityConflicts:[],selectionConflicts:[],
+  overall:{selectedTrackRecords:8},tracks:{manual:cohort,trained:zero,legacy:cohort}};
+ const projectCoverage=c=>publicOverview(null,{publishedCoverage:c},now).review.tracks;
+ const totals=projectCoverage(coverage);
+ assert.equal(totals.manual.hitRate,.5);
+ assert.equal(totals.manual.disputed,1);
+ assert.equal(totals.trained.hitRate,null);
+ assert.equal(JSON.stringify(totals).includes('private'),false);
+ for(const patch of [{complete:false},{asOf:new Date(now+1000).toISOString()},{rejected:['private']},
+  {tracks:{...coverage.tracks,manual:{...cohort,won:4}}},{tracks:{...coverage.tracks,manual:{...cohort,hitRate:'0.5'}}},
+  {overall:{selectedTrackRecords:0}}])assert.equal(projectCoverage({...coverage,...patch}),null);
+});
+
+test('verified schedule avoids the native read; a failed lane preserves the other public result',async()=>{
+ const input=signedFixture.setup(),clock=()=>signedFixture.NOW;
+ const view=project(input.snapshot,input.draft.businessDate,{now:clock(),trustRegistry:input.trustRegistry});
+ let nativeReads=0;
+ const fail=()=>{throw Error('fixture failure');};
+ const center={review:{singles:[],statistics:{single:{published:2,settled:1,won:1,pending:1}}}};
+ const options={readOfficial:()=>view,readNative:()=>{nativeReads++;return {rows:[],stale:false};},readCenter:fail,clock};
+ const official=await readPublicOverview(options);
+ assert.equal(nativeReads,0);
+ assert.equal(official.scheduleAvailable,true);
+ assert.equal(official.stale,false);
+ assert.equal(official.review.summary,null);
+ const fallback=await readPublicOverview({...options,readOfficial:fail,readCenter:()=>center});
+ assert.equal(nativeReads,1);
+ assert.equal(fallback.stale,true);
+ const history=await readPublicOverview({...options,readOfficial:fail,readNative:fail,readCenter:()=>center});
+ assert.equal(history.review.summary.won,1);
+ assert.equal(history.scheduleAvailable,false);
+ await assert.rejects(readPublicOverview({...options,readOfficial:fail,readNative:fail}),/PUBLIC_DATA_UNAVAILABLE/);
+});
 
 test('shared public detail and follow resolver keeps historical identity and prefers rescheduled signed facts',async()=>{
  const input=signedFixture.setup(),view=project(input.snapshot,input.draft.businessDate,{now:signedFixture.NOW,trustRegistry:input.trustRegistry});

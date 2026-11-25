@@ -139,6 +139,19 @@ test('retired settlements reject untrusted, conflicting, wrong-version, missing-
   }
 });
 
+test('future conflict is excluded before retired score agreement and co-kickoff unrelated finals are ignored',()=>{
+  const registry=retire(captured()).registry;
+  const timely=match('old-0',{final:true,scoreHome:2,scoreAway:0});
+  const futureConflict=match('old-0',{final:true,observedAt:at(SETTLED,1000),scoreHome:0,scoreAway:1});
+  const sameKickoffOtherIdentity=match('wrong-id',{final:true,scoreHome:0,scoreAway:1});
+  const result=c.settleCandidateProspectiveRegistry({priorRegistry:registry,
+    matches:[futureConflict,sameKickoffOtherIdentity,timely],evaluatedAt:SETTLED});
+  assert.equal(result.chainValid,true);
+  assert.equal(result.retiredSettlementsAdded,1);
+  assert.equal(events(result.registry.ledgers[0],'settlement')[0].actual,'1');
+  assertPrefix(registry.ledgers[0],result.registry.ledgers[0]);
+});
+
 test('a retired append cannot predate retirement or a previous settlement and a later retry remains possible',()=>{
   const registry=retire(captured({count:2}),{evaluatedAt:'2026-07-27T04:00:00.000Z'}).registry;
   const early=c.settleCandidateProspectiveRegistry({priorRegistry:registry,

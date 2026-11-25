@@ -2,6 +2,80 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const {publicationRefreshBlocked,nativePublicationReadError,publicationTransitionHealth}=require('../server/publicationRefreshPolicy.cjs');
 const status={available:true,baseReady:false,baseBlockedReason:'postgres-generation-mismatch',counts:{currentMatches:64,historyMatches:2296},syncMetaUpdatedAt:'2026-09-19T02:15:49.712Z'};
 const fallback={ok:false,status:{serviceOk:false,dataFresh:false,recommendationReliable:false},sync:{workerState:'health-refresh-failed'},data:{currentCount:0,historyCount:0},storage:{sqlite:null}};
+// Exercise the normal response builder without starting HTTP, PostgreSQL or a worker.
+test('a fresh source cannot renew an older served generation', async () => {
+  const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
+  const source = fs.readFileSync(path.join(__dirname, '../server/index.cjs'), 'utf8');
+  // Feed the fallback channel the same isolated clock expressions as the real
+  // source builder, including an unrelated update in the shared external file.
+  const fallbackClocks = /const fiveHundredFreshness = ([^;]+);\s*const fiveHundredDetailsFreshness = ([^;]+);/.exec(source);
+  assert.ok(fallbackClocks);
+  const fallbackContext = {
+    source500:{rows:150},source500Details:{},external:{updatedAt:'2026-11-23T01:52:30Z'},
+    maxAgeMinutes:20,sourceFreshness: clock => clock ?? null
+  };
+  for (const expression of fallbackClocks.slice(1)) assert.equal(vm.runInNewContext(expression,fallbackContext),null);
+  const start = source.indexOf('const buildPublicV1Health = async');
+  const end = source.indexOf('const getPublicV1Health = async', start);
+  assert(start >= 0 && end > start);
+  const now = Date.parse('2026-11-23T01:52:30Z');
+  const when = secondsAgo => new Date(now - secondsAgo * 1000).toISOString();
+  const health = {
+    meta: { updatedAt: when(1), api:{transport:'direct',currentFreshnessTime:when(0),currentStale:false},
+      fastResultPublication:{publishedAt:when(0)}, files:{current:63} }, sources: { ok: true, sourceScores: {
+      sporttery: { updatedAt: when(1), stale: false }, 'five-hundred': { updatedAt: when(1), stale: false }
+    }, fallbackCoverage: { usable: true, primaryStale: true, updatedAt: when(1) } },
+    currentRead: { count: 63, stale: false, fileUpdatedAt:when(0), checkedAt: when(0), dbUpdatedAt: when(0) },
+    storage: { fastResultIntegrity: { valid: true } }, fastResultWatcher: {}
+  };
+  const build = vm.runInNewContext(source.slice(start, end) + '\n buildPublicV1Health', {
+    getPublicV1HealthBase: async () => ({ health }), buildCurrentRecommendationCoverage: async () => ({ projectionParity: {} }),
+    currentMetaTime: meta => Date.parse(meta.updatedAt), currentPublicationAgeSeconds: require('../server/publicationRefreshPolicy.cjs').currentPublicationAgeSeconds,
+    boundedRuntimeEnv: (_env, _name, config) => config.fallback, Date: class extends Date { static now() { return now; } },
+    timestampMs: value => Date.parse(value || '') || 0, buildModelEvaluationHealth: () => ({}),
+    installedSignedTrainingAsset: null, publicSourceHealth: x => x, process: { env: {} },
+    require: name => { assert.equal(name, '../scripts/predictionExecutionCapture.cjs'); return { predictionCaptureStorageHealth: () => ({}) }; }
+  });
+  for (const timestamp of [when(1_987_588), undefined, 'invalid', when(-1)]) {
+    health.meta.api.sourceUpdatedAt = timestamp;
+    const result = await build();
+    assert.equal(result.status.primarySourceFresh, true);
+    assert.equal(result.status.currentPublicationFresh, false);
+    assert.equal(result.status.fallbackDataFresh, false);
+    assert.equal(result.status.dataFresh, false);
+  }
+  health.meta.api.sourceUpdatedAt = when(3600);
+  let result = await build();
+  assert.equal(result.status.sourceDataFresh, false);
+  assert.equal(result.status.fallbackDataFresh, true);
+  health.sources.fallbackCoverage = null;
+  assert.equal((await build()).status.dataFresh, false);
+  health.sources.fallbackCoverage = {usable:true, primaryStale:true};
+  assert.equal((await build()).status.dataFresh, false);
+  health.sources.fallbackCoverage.updatedAt = when(-1);
+  assert.equal((await build()).status.dataFresh, false);
+  health.meta.api.sourceUpdatedAt = when(600);
+  result = await build();
+  assert.equal(result.status.sourceDataFresh, true);
+  assert.equal(result.data.currentAgeSeconds, 600);
+  health.currentRead.count = 0;
+  assert.equal((await build()).status.dataFresh, false);
+  health.meta.files.current = 0;
+  assert.equal((await build()).status.dataFresh, true);
+  health.currentRead.stale = true;
+  assert.equal((await build()).status.dataFresh, false);
+  health.currentRead = {count:63,stale:false,fileUpdatedAt:when(0)};
+  health.meta.files.current = 63;
+  health.meta.api.sourceUpdatedAt = when(0);
+  health.meta.sourceAttempt = {transport:'relay',relayCurrentLaneCapturedAt:when(90000),relayResultLaneCapturedAt:when(0)};
+  assert.equal((await build()).status.dataFresh, false);
+  delete health.meta.sourceAttempt.relayCurrentLaneCapturedAt;
+  assert.equal((await build()).status.dataFresh, false);
+  health.meta.sourceAttempt.relayCurrentLaneCapturedAt = when(600);
+  assert.equal((await build()).status.sourceDataFresh, true);
+  health.meta.api.currentStale = true;
+  assert.equal((await build()).status.dataFresh, false);
+});
 test('committed native projection can refresh while enrichment keeps the sync lock',()=>{
  assert.equal(publicationRefreshBlocked({postgresOnly:true,pointerLocked:false,syncLocked:true}),false);
  assert.equal(publicationRefreshBlocked({postgresOnly:true,pointerLocked:true,syncLocked:true}),true);

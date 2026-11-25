@@ -93,6 +93,7 @@ const propExpression = name => {
   return prop.initializer.expression.getText(listAst);
 };
 const actualOddsProps = new Function('require', 'exports', 'MatchMarketOdds', 'match', 'language', 'sp', 'capturedDataByMatchId', compile(`
+  const useUnified = false; // This fixture exercises archived model picks. Published picks have a separate presentation suite.
   return { marketOdds: (${propExpression('marketOdds')}), odds: (${propExpression('odds')}),
     marketOddsLabel: (${propExpression('marketOddsLabel')}) };
 `, 'actual-odds-props.tsx'));

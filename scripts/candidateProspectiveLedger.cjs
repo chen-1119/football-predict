@@ -142,6 +142,26 @@ const normalizedLeagueForMatch = (match) => {
   return "unknown";
 };
 
+const compareCanonicalKeys = new Intl.Collator().compare;
+const canonicalKeyOrders = new Map();
+const CANONICAL_KEY_ORDER_CACHE_LIMIT = 512;
+
+const sortedCanonicalKeys = (value) => {
+  const keys = Object.keys(value);
+  if (keys.length < 2) return keys;
+  // The registry reuses the same shapes across thousands of immutable events.
+  // Key layouts are bounded and contain no values from those events.
+  const layout = keys.length <= 64 ? JSON.stringify(keys) : null;
+  if (!layout || layout.length > 1024) return keys.sort(compareCanonicalKeys);
+  const saved = canonicalKeyOrders.get(layout);
+  if (saved) return saved;
+  const ordered = keys.sort(compareCanonicalKeys);
+  if (canonicalKeyOrders.size < CANONICAL_KEY_ORDER_CACHE_LIMIT) {
+    canonicalKeyOrders.set(layout, ordered);
+  }
+  return ordered;
+};
+
 const canonicalize = (value) => {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (!value || typeof value !== "object") {
@@ -151,12 +171,12 @@ const canonicalize = (value) => {
     }
     return value;
   }
-  return Object.fromEntries(
-    Object.keys(value)
-      .sort((left, right) => left.localeCompare(right))
-      .filter((key) => value[key] !== undefined)
-      .map((key) => [key, canonicalize(value[key])]),
-  );
+  const entries = [];
+  for (const key of sortedCanonicalKeys(value)) {
+    const child = value[key];
+    if (child !== undefined) entries.push([key, canonicalize(child)]);
+  }
+  return Object.fromEntries(entries);
 };
 
 const sha256 = (value) => crypto
@@ -1380,7 +1400,7 @@ const officialResultState = (match) => {
   };
 };
 
-const selectOfficialSettlementMatch = (matches, decision) => {
+const selectSettlementMatch = (matches, decision, observedThrough = null) => {
   const matching = (Array.isArray(matches) ? matches : [])
     .filter((row) => (
       identitiesMatch(row, decision)
@@ -1390,7 +1410,12 @@ const selectOfficialSettlementMatch = (matches, decision) => {
       match,
       result: officialResultState(match),
     }))
-    .filter((entry) => entry.result.eligible === true);
+    .filter(({ result }) => {
+      if (result.eligible !== true) return false;
+      if (observedThrough === null) return true;
+      const observedMs = parseTime(result.observedAt);
+      return observedMs !== null && observedMs <= observedThrough;
+    });
   if (!matching.length) return null;
   const scoreKeys = new Set(matching.map(({ result }) => (
     `${result.scoreHome}:${result.scoreAway}`
@@ -1402,10 +1427,11 @@ const selectOfficialSettlementMatch = (matches, decision) => {
     .sort((left, right) => (
       (parseTime(right.result.observedAt) || 0)
       - (parseTime(left.result.observedAt) || 0)
-      || sha256(right.result.settlementEvidence)
-        .localeCompare(sha256(left.result.settlementEvidence))
+      || right.result.provenanceHash.localeCompare(left.result.provenanceHash)
     ))[0].match;
 };
+
+const selectOfficialSettlementMatch = (matches, decision) => selectSettlementMatch(matches, decision);
 
 const settlementEvidenceFromEvent = (event) => canonicalize({
   version: event?.settlementRecordVersion || null,
@@ -2519,13 +2545,26 @@ const captureCohort = ({
   }
 };
 
-const settleCohort = ({ ledger, matches, evaluatedAt }) => {
+const indexSettlementMatches = (matches) => {
+  const byKickoff = new Map();
+  if (Array.isArray(matches)) {
+    matches.forEach((match) => {
+      const kickoffAt = kickoffFor(match);
+      const rows = byKickoff.get(kickoffAt);
+      if (rows) rows.push(match);
+      else byKickoff.set(kickoffAt, [match]);
+    });
+  }
+  return byKickoff;
+};
+
+const settleCohort = ({ ledger, matchesByKickoff, evaluatedAt, observedThrough = null }) => {
   const settledDecisionHashes = new Set(
     ledgerEvents(ledger, "settlement").map((event) => event.decisionEventHash),
   );
   for (const decision of ledgerEvents(ledger, "decision")) {
     if (settledDecisionHashes.has(decision.eventHash)) continue;
-    const match = selectOfficialSettlementMatch(matches, decision);
+    const match = selectSettlementMatch(matchesByKickoff.get(decision.kickoffAt), decision, observedThrough);
     const actual = resultOutcome(match);
     if (!match || !actual) continue;
     const result = officialResultState(match);
@@ -3192,21 +3231,18 @@ const updateCandidateRegistry = (registry, inventory, evaluatedAt) => {
 // Retirement closes prediction capture, not the results of predictions that
 // were already committed. Append only settlements to each retired ledger;
 // its immutable retirement link and earlier review prefixes stay untouched.
-const settleRetiredCohorts = ({ registry, matches, evaluatedAt }) => {
+const settleRetiredCohorts = ({ registry, matchesByKickoff, evaluatedAt }) => {
   const nowMs = parseTime(evaluatedAt);
   if (nowMs === null) return 0;
-  const observedMatches = (Array.isArray(matches) ? matches : []).filter((match) => {
-    const result = officialResultState(match);
-    const observedMs = parseTime(result.observedAt);
-    return result.eligible && observedMs !== null && observedMs <= nowMs;
-  });
   let settlementsAdded = 0;
   for (const ledger of registry?.ledgers || []) {
     if (!ledgerRetired(ledger)) continue;
     const lastRecordedMs = parseTime(ledger.events.at(-1)?.recordedAt);
     if (lastRecordedMs === null || nowMs < lastRecordedMs) continue;
     const before = ledger.events.length;
-    settleCohort({ ledger, matches: observedMatches, evaluatedAt });
+    // Apply the observation cutoff before comparing the eligible scores, just
+    // as when the input was prefiltered, without examining unrelated matches.
+    settleCohort({ ledger, matchesByKickoff, evaluatedAt, observedThrough: nowMs });
     settlementsAdded += ledger.events.length - before;
   }
   return settlementsAdded;
@@ -3230,7 +3266,8 @@ const settleCandidateProspectiveRegistry = ({
     };
   }
   const registry = deepClone(priorRegistry);
-  const retiredSettlementsAdded = settleRetiredCohorts({ registry, matches, evaluatedAt });
+  const matchesByKickoff = indexSettlementMatches(matches);
+  const retiredSettlementsAdded = settleRetiredCohorts({ registry, matchesByKickoff, evaluatedAt });
   const active = registry?.ledgers?.find(
     (ledger) => ledger?.ledgerId === registry.activeLedgerId && !ledgerRetired(ledger),
   ) || null;
@@ -3251,7 +3288,7 @@ const settleCandidateProspectiveRegistry = ({
 
   const beforeEvents = active.events.length;
   const beforeSettlements = ledgerEvents(active, "settlement").length;
-  settleCohort({ ledger: active, matches, evaluatedAt });
+  settleCohort({ ledger: active, matchesByKickoff, evaluatedAt });
   const settlementsAdded = Math.max(
     0,
     ledgerEvents(active, "settlement").length - beforeSettlements,
@@ -3308,7 +3345,12 @@ const updateCandidateProspectiveLedger = ({
   const registry = priorRegistry
     ? deepClone(priorRegistry)
     : createRegistry(evaluatedAt);
-  const beforeHash = sha256(registry);
+  const updatedAt = isoTime(evaluatedAt);
+  // A different timestamp alone proves that the canonical documents differ.
+  // Same-instant updates still compare every field before and after.
+  const timestampChanged = typeof registry.updatedAt === "string"
+    && typeof updatedAt === "string" && registry.updatedAt !== updatedAt;
+  const beforeHash = timestampChanged ? null : sha256(registry);
   const inventory = candidateInventory(candidates, implementationCommitment);
   const inventorySupplied = Array.isArray(candidates) && candidates.length > 0;
   updateCandidateRegistry(registry, inventory, evaluatedAt);
@@ -3420,14 +3462,15 @@ const updateCandidateProspectiveLedger = ({
     registry.ledgers.push(active);
     registry.activeLedgerId = active.ledgerId;
   }
-  const retiredSettlementsAdded = settleRetiredCohorts({ registry, matches, evaluatedAt });
+  const matchesByKickoff = indexSettlementMatches(matches);
+  const retiredSettlementsAdded = settleRetiredCohorts({ registry, matchesByKickoff, evaluatedAt });
   if (!active) {
-    registry.updatedAt = isoTime(evaluatedAt);
+    registry.updatedAt = updatedAt;
     const verification = verifyRegistry(registry);
     return {
       registry,
       chainValid: verification.valid,
-      changed: sha256(registry) !== beforeHash,
+      changed: timestampChanged || sha256(registry) !== beforeHash,
       retiredSettlementsAdded,
       blockers: [...verification.blockers, "selected-candidate-missing"],
       audit: null,
@@ -3463,22 +3506,25 @@ const updateCandidateProspectiveLedger = ({
     trustedCollectorCount,
     trustedCollectorResolver,
   });
-  settleCohort({ ledger: active, matches, evaluatedAt });
+  settleCohort({ ledger: active, matchesByKickoff, evaluatedAt });
   let audit = auditLedger(active, {
     totalCandidatesEverTested: registry.candidateRegistry.length,
     evaluatedAt,
   });
+  const beforeReview = active.events.length;
   appendDueReview(active, audit, evaluatedAt);
-  audit = auditLedger(active, {
-    totalCandidatesEverTested: registry.candidateRegistry.length,
-    evaluatedAt,
-  });
-  registry.updatedAt = isoTime(evaluatedAt);
+  if (active.events.length !== beforeReview) {
+    audit = auditLedger(active, {
+      totalCandidatesEverTested: registry.candidateRegistry.length,
+      evaluatedAt,
+    });
+  }
+  registry.updatedAt = updatedAt;
   const finalVerification = verifyRegistry(registry);
   return {
     registry,
     chainValid: finalVerification.valid,
-    changed: sha256(registry) !== beforeHash,
+    changed: timestampChanged || sha256(registry) !== beforeHash,
     retiredSettlementsAdded,
     blockers: finalVerification.blockers,
     audit,

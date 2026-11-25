@@ -15,7 +15,7 @@ const emit=(next:Snapshot)=>{snapshot=Object.freeze(next);listeners.forEach(fn=>
 function start(){
   let newest=Number.NEGATIVE_INFINITY;
   const controller=createPollingController<RecommendationCenterData>({
-    intervalMs:15000,timeoutMs:10000,maxRetryMs:120000,
+    intervalMs:reviewedBusinessDate===undefined?15000:300000,timeoutMs:10000,maxRetryMs:120000,
     request:async signal=>{
       const query=reviewedBusinessDate===undefined?'':'?reviewedBusinessDate='+encodeURIComponent(reviewedBusinessDate);
       const response=await fetch(buildApiUrl('/api/v1/daily-featured-combos'+query),{headers:getAccessAuthHeaders(),cache:'no-store',credentials:'include',signal});

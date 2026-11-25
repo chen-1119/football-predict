@@ -33,7 +33,8 @@ const source = { updatedAt: new Date(at).toISOString(), decisions, combos: [comb
 
 test('query rejects unbounded and malformed filters', () => {
   for (const query of ['?page=0', '?page=-1', '?pageSize=51', '?date=2026-02-31', '?market=CORRECT_SCORE',
-    '?kind=both', '?state=FAILED', '?version=synthetic', '?q=' + 'a'.repeat(81)]) {
+    '?kind=both', '?state=FAILED', '?version=synthetic', '?q=' + 'a'.repeat(81),
+    '?coverage=skipChecks','?coverage=full&coverage=separate']) {
     assert.throws(() => select(query), { code: 'INVALID_REVIEW_QUERY' });
   }
   assert.deepEqual(select(''), { kind: 'single', market: 'ALL', date: '', version: '', state: 'ALL', q: '', page: 1, pageSize: 12 });
@@ -201,4 +202,13 @@ test('database read uses one read-only snapshot and returns source truth', async
   assert.match(commands[0], /READ ONLY/);
   assert.ok(commands.includes('COMMIT'));
   assert.equal(commands.at(-1), 'RELEASE');
+  commands.length=0;
+  const details=await readRecommendationReviewPage({connect:async()=>client},
+    new URL('https://example.test/api/v1/recommendations/review?pageSize=3&coverage=separate'),at);
+  const {publishedCoverage,...expected}=result;
+  assert.ok(publishedCoverage);
+  assert.deepEqual(details,expected);
+  assert.equal(commands.some(sql=>sql.includes('private_model_artifacts')),false);
+  assert.match(commands[0],/READ ONLY/);
+  assert.ok(commands.includes('COMMIT'));
 });

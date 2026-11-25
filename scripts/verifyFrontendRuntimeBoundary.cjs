@@ -1,9 +1,11 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { createHash } = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const ts = require("typescript");
 const { captureReleaseSourceInventory } = require("./releaseChangeClassification.cjs");
 const { ENTRYPOINTS, parseNpmCommand, inspectFrontendRuntimeBoundary, compareFrontendRuntimeBoundary } = require("./frontendRuntimeBoundary.cjs");
 
@@ -53,7 +55,7 @@ function verifyFrontendRuntimeBoundary() {
       assert.ok(observed.files.some(row => row.path === "scripts/syncTeamEvidence.cjs"));
       assert.ok(observed.files.some(row => row.path === "scripts/teamEvidenceStore.cjs"));
       assert.ok(observed.files.some(row => row.path === "scripts/teamEvidenceSources.cjs"));
-      for (const file of ["scripts/researchSocketServer.py", "scripts/researchSocketPeer.py", "scripts/researchReleaseBroker.cjs", "scripts/researchBrokerWorker.cjs", "server/researchReviewedRevision.cjs"])
+      for (const file of ["scripts/researchSocketServer.py", "scripts/researchSocketPeer.py", "scripts/researchReleaseBroker.cjs", "scripts/researchBrokerWorker.cjs", "server/researchReviewedRevision.cjs", "server/researchComboSeries.cjs"])
         assert.ok(observed.files.some(row => row.path === file), `missing research runtime closure: ${file}`);
       assert.ok(observed.files.some(row => row.path === "scripts/expandedLeagueHistoryParser.cjs"));
       assert.equal(observed.files.some(row => row.path === "scripts/collectExpandedLeagueHistory.cjs"), false);
@@ -93,6 +95,60 @@ function verifyFrontendRuntimeBoundary() {
       assert.equal(inspection.ok, false, "mutated input must itself reject, not merely differ from baseline");
       rejected(candidate);
     };
+    const workerPath = "scripts/runSyncWorker.cjs";
+    check("the reviewed generation ordering and its legacy caller pass inspection as distinct runtime sources", () => {
+      const worker = fs.readFileSync(path.join(baselineRoot, workerPath), "utf8").replace(/\r\n/g, "\n");
+      const runCycleDigest = text => {
+        const parsed = ts.createSourceFile(workerPath, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+        const declarations = parsed.statements.filter(ts.isVariableStatement)
+          .flatMap(statement => [...statement.declarationList.declarations])
+          .filter(node => ts.isIdentifier(node.name) && node.name.text === "runCycle");
+        assert.equal(declarations.length, 1);
+        const fn = declarations[0].initializer;
+        assert.ok(ts.isArrowFunction(fn));
+        return createHash("sha256").update(fn.getText(parsed)).digest("hex");
+      };
+      assert.equal(runCycleDigest(worker), "e00ef7b88bffa2dd4b59987f1c64309468f5dbfede3a617bd19303609eaa317d");
+      const start = worker.indexOf("    // Take the existing writer lock before draining captures.");
+      const end = worker.indexOf('    await onBeforeHeavyStep(storageMode.postgresOnly ? "postgres:sync:official"', start);
+      assert.ok(start >= 0 && end > start);
+      const legacy = worker.slice(0, start) + `    await onBeforeHeavyStep("datastore:generation:official");
+    const officialGenerationStep = await runOfficialArtifactGeneration({ isInterrupted, task: () => runOptional(true, "datastore:generation", {
+      SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
+    }, {
+      timeoutMs: commandTimeouts.sqlite
+    }) });
+` + worker.slice(end);
+      assert.equal(runCycleDigest(legacy), "facd991fc312ccab15e90b6ba1311c67a6ea569535138c307a8933fbc8df38ed");
+      changed(workerPath, () => legacy, candidate => {
+        const inspection = inspectFrontendRuntimeBoundary(candidate);
+        assert.equal(inspection.ok, true, JSON.stringify(inspection.blockers));
+        const comparison = compareFrontendRuntimeBoundary({ baseline, candidate });
+        assert.equal(comparison.ok, false);
+        assert.ok(comparison.blockers.includes("runtime-boundary-drift:files"));
+        assert.equal(comparison.fastPathActivated, false);
+      });
+    });
+    check("one-byte worker command or scheduling edits and an unknown worker caller reject at the command-caller boundary", () => {
+      const rejectedCaller = candidate => {
+        const result = inspectFrontendRuntimeBoundary(candidate);
+        assert.equal(result.ok, false);
+        assert.deepEqual(result.blockers, ["unreviewed-command-wrapper-caller:" + workerPath]);
+      };
+      for (const [from, to] of [
+        ['runCommand("node", ["scripts/syncData.cjs"]', 'runCommand("node", ["scripts/syncDatA.cjs"]'],
+        ['onBeforeHeavyStep("datastore:generation:official")', 'onBeforeHeavyStep("datastore:generation:officiaL")'],
+      ]) changed(workerPath, text => {
+        assert.ok(text.includes(from));
+        assert.equal(text.indexOf(from), text.lastIndexOf(from));
+        const mutated = text.replace(from, to);
+        const before = Buffer.from(text), after = Buffer.from(mutated);
+        assert.equal(after.length, before.length);
+        assert.equal(before.reduce((count, byte, index) => count + Number(byte !== after[index]), 0), 1);
+        return mutated;
+      }, rejectedCaller);
+      changed(workerPath, text => text + '\nfunction unreviewedWorkerFixture() { return runCommand("node", ["scripts/syncData.cjs"]); }\n', rejectedCaller);
+    });
     check("warm parse cache rechecks local import resolution when a higher-priority file appears", () => {
       changed("server/boundary-cache-fixture.js", () => "module.exports = {};\n", () => {
         changed("server/index.cjs", text => `${text}\nrequire('./boundary-cache-fixture');\n`, candidate => {
@@ -218,7 +274,11 @@ function verifyFrontendRuntimeBoundary() {
       changed("scripts/runSyncWorker.cjs", text => text.replace("const child = spawn(command, args, {", "const child = spawn(process.env.OVERRIDE || command, args, {"), rejected);
     });
     check("unchanged generic process adapter cannot authorize a new dynamic wrapper caller", () => {
-      changed("scripts/runSyncWorker.cjs", text => text.replace('"sync:team-evidence",\n      {},', 'process.env.UNREVIEWED_EVIDENCE_COMMAND,\n      {},'), unreviewed);
+      changed("scripts/runSyncWorker.cjs", text => {
+        const mutated = text.replace(/"sync:team-evidence",\r?\n      \{\},/, 'process.env.UNREVIEWED_EVIDENCE_COMMAND,\n      {},');
+        assert.notEqual(mutated, text, "dynamic wrapper fixture must mutate the actual worker source");
+        return mutated;
+      }, unreviewed);
       changed("server/index.cjs", text => `${text}\nrunCommand(process.env.UNKNOWN_EXECUTABLE, process.env.UNKNOWN_ARGUMENTS);\n`, unreviewed);
       changed("server/index.cjs", text => `${text}\nrunCommand('node', ['src/pages/PredictionsList.tsx']);\n`, unreviewed);
     });

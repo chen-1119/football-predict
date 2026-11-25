@@ -154,6 +154,7 @@ export interface DataSyncState {
   currentLoaded: boolean;
   historyLoaded: boolean;
   historyLoading: boolean;
+  historyError?: string;
   currentCount: number;
   historyCount: number;
   totalCount: number;

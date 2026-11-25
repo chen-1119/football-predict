@@ -1,7 +1,13 @@
 'use strict';
 const {test}=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript');
 const React=require('react'),{renderToStaticMarkup}=require('react-dom/server'),{createRequire}=require('node:module');
-function load(file){const filename=path.resolve(file),m={exports:{}},native=createRequire(filename);vm.runInNewContext(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module:m,exports:m.exports,Date,Intl,require:id=>id.startsWith('.')?load(path.resolve(path.dirname(filename),id+'.tsx')):native(id)});return m.exports;}
+function load(file){const filename=path.resolve(file),m={exports:{}},native=createRequire(filename);vm.runInNewContext(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module:m,exports:m.exports,Date,Intl,require:id=>{
+ if(id.startsWith('.')) for(const ext of ['.ts','.tsx']){
+  const dependency=path.resolve(path.dirname(filename),id+ext);
+  if(fs.existsSync(dependency))return load(dependency);
+ }
+ return native(id);
+}});return m.exports;}
 const ui=load('src/components/recommendations/ReviewedAnalysis.tsx'),lane=load('src/components/recommendations/LeagueBaselineDirections.tsx');
 const record={eventId:'42',selection:'a',sp:1.76,originalSp:1.8,scores:[[1,2],[0,1]],confidence:'低',reason:'Synthetic reviewed fixture',limitations:['Unknown lineup'],analysisUrl:'https://example.com/preview',cutoffAt:'2030-01-01T10:00:00Z',quoteObservedAt:'2030-01-01T08:00:00Z'};
 const render=(component,props)=>renderToStaticMarkup(React.createElement(component,props));

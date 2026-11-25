@@ -42,7 +42,17 @@ test('null, blank, boolean, zero and partial probabilities rejected', () => { fo
 test('probability argmax is not overwritten by lowest odds', () => { const m = fixture(); m.probabilityModel.oneXTwo.final = { home: 20, draw: 30, away: 50 }; const r = candidate(m); assert.equal(r.tipCode, '2'); assert.equal(r.odds,4.5); });
 test('SP greater than 2.60 does not impose an unrelated hard ban', () => assert.ok(candidate(fixture(1,{odds:{odds1:3,oddsX:2,odds2:1.9}}))));
 test('unique draw leader can be published', () => { const m=fixture();m.probabilityModel.oneXTwo.final={home:20,draw:45,away:35};assert.equal(candidate(m).tipCode,'X'); });
-test('exact tie is not broken arbitrarily', () => { const m=fixture();m.probabilityModel.oneXTwo.final={home:40,draw:40,away:20};assert.equal(candidate(m),null); });
+test('an exact tie follows the frozen HAD direction policy regardless of property order', () => {
+  const match = fixture();
+  for (const vector of [{home:40,draw:40,away:20}, {away:20,draw:40,home:40}]) {
+    match.probabilityModel.oneXTwo.final = vector;
+    const pick = candidate(match);
+    assert.equal(pick.directionPolicyVersion, 'had-direction-selection-v2');
+    assert.equal(pick.directionSelection.category, 'favorite-leader');
+    assert.equal(pick.tipCode, '1');
+    assert.equal(pick.probabilities['1'], pick.probabilities.X);
+  }
+});
 test('unknown market or outside bookmaker cannot impersonate SP', () => { for(const oddsSource of ['500.com:had','bookmaker:had','sporttery:hhad']) assert.equal(candidate(fixture(1,{oddsSource})),null); });
 test('complete fallback quote travels with its own source clock', () => { const m=fixture(1,{odds:{odds1:null,oddsX:3,odds2:4},externalSignals:{bookmakerOdds:{had:{odds1:1.9,oddsX:3.1,odds2:4.2,source:'sporttery:had',updatedAt:'2026-09-17T09:59:00Z'}}}});assert.equal(candidate(m).odds,1.9); });
 test('suspended market and started game are excluded', () => { for(const x of [{status:'LIVE'},{isOnSale:false},{saleStatus:'SUSPENDED'},{resultDisposition:'VOID'}])assert.equal(candidate(fixture(1,x)),null); });

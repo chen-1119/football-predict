@@ -1,6 +1,6 @@
 import { PublishedReviewCoveragePanel } from './PublishedReviewCoverage';
 import { useEffect, useState } from 'react';
-import { ReviewedAnalysisPanel } from './ReviewedAnalysis';
+import { ReviewedAnalysisPanel, ReviewedHistoryPanel } from './ReviewedAnalysis';
 import { reviewedLabel } from '../../services/reviewedPresentation';
 import type { ReviewedAnalysis, ReviewedAnalysisCombo, RecommendationCenterData } from '../../services/recommendationCenterView';
 import { LeagueBaselineDirections } from './LeagueBaselineDirections';
@@ -269,7 +269,8 @@ function HandicapCalibrationPanel({profile,language}:{profile?:HandicapCalibrati
     {groups.length?<div className="rc-calibration__grid">{groups.map(g=>{const m=g.metrics;const awayBias=g.bias['2'];return <article key={g.key} className={g.active?'is-active':''}><div className="rc-calibration__top"><strong>{groupLabel(g.key,zh)}</strong><span>{g.active?(zh?'已启用':'Active'):(zh?'观察中':'Observe')}</span></div><div className="rc-calibration__numbers"><span>{zh?'样本':'Samples'} <b>{g.rows}</b></span><span>{zh?'让负偏差':'Hcap-away bias'} <b>{awayBias>=0?'+':''}{(awayBias*100).toFixed(1)}pp</b></span><span>{zh?'实际让负':'Actual hcap-away'} <b>{(g.actualShare['2']*100).toFixed(1)}%</b></span></div>{m&&<div className="rc-calibration__metrics"><span>Brier {m.rawBrier?.toFixed(3)??'—'} → {m.calibratedBrier?.toFixed(3)??'—'}</span><span>{zh?'验证命中':'Holdout hit'} {m.rawHitRate==null?'—':(m.rawHitRate*100).toFixed(1)+'%'} → {m.calibratedHitRate==null?'—':(m.calibratedHitRate*100).toFixed(1)+'%'}</span></div>}<small>{g.active?(zh?'该组偏差会按收缩权重修正新概率，不会硬改方向。':'This group adjusts new probabilities with shrinkage, never a forced pick.'):(zh?'样本不足或样本外表现未改善，暂不改动新预测。':'No live adjustment until sample/holdout checks pass.')}</small></article>;})}</div>:<p className="rc-empty">{zh?'正在积累让球冻结样本；未达到门槛前保持原净胜球模型。':'Collecting frozen handicap samples; the raw goal-margin model remains unchanged until thresholds are met.'}</p>}</section>;
 }
 export function RecommendationCenter({language,onSelectMatch,mode='recommendations',initialTab='single',selectedTab,onTabChange}:Props){
-  const {data,loading,failed,authorizationRequired,refresh}=useRecommendationCenter();
+  const [historyDay,setHistoryDay]=useState('');
+  const {data,loading,failed,authorizationRequired,refresh}=useRecommendationCenter(mode==='review' && historyDay ? historyDay : undefined);
   const [localTab,setLocalTab]=useState(initialTab),[,setClockTick]=useState(0);
   const tab=selectedTab??localTab;
   const setTab=(next:RecommendationTab)=>{setLocalTab(next);onTabChange?.(next);setFilters(current=>({...current,market:'ALL',version:'',page:1}));};
@@ -285,7 +286,24 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
   const modelQuality=data?.review.qualityReport;
   const reviewFilters:ReviewFilters={kind:tab,market:filters.market,date:filters.date,version:filters.version,state:filters.state,q:debouncedQuery,page:filters.page,pageSize:12};
   const reviewPage=useRecommendationReviewPage(reviewFilters,review);
-  const publishedCoverage=review?reviewPage.data?.publishedCoverage:data?.publishedCoverage;
+  const coverageRestricted=authorizationRequired || (review && reviewPage.authorizationRequired);
+  const incomingCoverage=review ? reviewPage.data?.publishedCoverage ?? data?.publishedCoverage : data?.publishedCoverage;
+  const [lastReviewCoverage,setLastReviewCoverage]=useState<typeof incomingCoverage>();
+  useEffect(()=>{
+    if(!review||coverageRestricted)setLastReviewCoverage(undefined);
+    else if(incomingCoverage)setLastReviewCoverage(incomingCoverage);
+  },[review,coverageRestricted,incomingCoverage]);
+  // The aggregate and its publication-day index have their own as-of time.
+  // A failed date request must not erase the navigation back to a verified day.
+  const publishedCoverage=coverageRestricted ? undefined : incomingCoverage ?? (review ? lastReviewCoverage : undefined);
+  const coverageLoading=!publishedCoverage && loading && !coverageRestricted;
+  const currentBusinessDate=data?.businessDate;
+  const latestManualDay=publishedCoverage?.tracks.manual.days.reduce((latest,day)=>
+    currentBusinessDate && day.businessDate<currentBusinessDate && day.publishedRecords>0 && day.businessDate>latest ? day.businessDate : latest,'');
+  useEffect(()=>{
+    if(review && !historyDay && !loading && !failed && !coverageRestricted && !data?.reviewedAnalysisHistory && latestManualDay)
+      setHistoryDay(latestManualDay);
+  },[review,historyDay,loading,failed,coverageRestricted,data?.reviewedAnalysisHistory,latestManualDay]);
   const summary=review?reviewPage.data?.summary.all:data?.review.statistics[tab==='single'?'single':tab];
   const handicapSummary=data?.review.statistics.handicap;
   const currentDay=data?.businessDate===new Date(now+8*3600000).toISOString().slice(0,10);
@@ -313,12 +331,28 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
   const reviewedData=data?.reviewedAnalysis?.records.length?data.reviewedAnalysis:data?.reviewedAnalysisHistory;
   const reviewedVisible=!review&&!failed&&!authorizationRequired&&(reviewedData?.records.length??0)>0&&reviewedData!.businessDate<=new Date(now+8*3600000).toISOString().slice(0,10);
   const reviewedHistory=reviewedVisible&&reviewedData!.businessDate<new Date(now+8*3600000).toISOString().slice(0,10);
+  const trainedTodayVisible=!review&&!failed&&!authorizationRequired&&tab==='single'&&currentDay&&data?.leagueBaseline?.businessDate===data.businessDate&&(data.leagueBaseline.records.length>0);
+  const historyHeading=reviewedHistory&&!trainedTodayVisible;
   const maximumTwo=!review&&!failed&&!authorizationRequired&&tab==='two'?highestAvailableReviewedTwo(reviewedData,now):null;
   const reviewedDisplay=maximumTwo&&reviewedData?{...reviewedData,combos:reviewedData.combos.filter(c=>!(c.band===10&&c.legs.length===0))}:reviewedData;
   const activeInputs=tab==='single'?data?.inputAsOf:data?.lanes.combos?.inputAsOf??data?.inputAsOf;
+  if (!review && failed && !data) {
+    return <section className="recommendation-center" aria-labelledby="rc-title">
+      <h1 id="rc-title">{zh ? '今日推荐' : 'Today’s Recommendations'}</h1>
+      <div className="rc-empty" role="alert">
+        <strong>{authorizationRequired
+          ? (zh ? '请登录后查看今日推荐' : 'Sign in to view today’s recommendations')
+          : (zh ? '今日推荐读取失败' : 'Today’s recommendations could not be loaded')}</strong>
+        {authorizationRequired
+          ? <a className="rc-link" href="/auth">{zh ? '登录' : 'Sign in'}</a>
+          : <button type="button" className="rc-link" onClick={refresh}>{zh ? '重新读取' : 'Retry'}</button>}
+      </div>
+      <a className="rc-link" href="/review">{zh ? '查看历史推荐与命中率' : 'View past recommendations and results'}</a>
+    </section>;
+  }
   return <section className="recommendation-center" aria-labelledby="rc-title">
-    <header className="rc-heading"><div><span className="rc-eyebrow">{zh?'比赛日 '+(reviewedHistory?reviewedData!.businessDate:data?.businessDate||'—'):'MATCH DAY '+(reviewedHistory?reviewedData!.businessDate:data?.businessDate||'—')}</span><h1 id="rc-title">{review?(zh?'赛后复盘':'Result Review'):reviewedHistory?(zh?'历史推荐':'Published History'):(zh?'今日推荐':'Today’s Recommendations')}</h1><p>{review?(zh?'查看真实赛果，复盘每一次选择。':'Review every selection against actual results.'):reviewedHistory?(zh?'查看原竞彩日已冻结记录；不作为今日新推荐。':'Frozen records from their original match day; not new recommendations for today.'):(zh?'先看比赛与方向，再看选择依据。':'Start with the match and pick, then explore the evidence.')}</p></div><button type="button" className="rc-refresh" onClick={()=>{refresh();if(review)reviewPage.refresh();}} disabled={loading||reviewPage.loading} aria-label={zh?'刷新推荐与复盘':'Refresh recommendations and review'}><RefreshCw size={16} aria-hidden="true"/>{loading||reviewPage.loading?(zh?'更新中':'Updating'):(zh?'刷新':'Refresh')}</button></header>
-    {(!data?.strategySwitch||review)&&<DailyBulletinPanel data={data?.dailyBulletin} now={now} failed={failed||authorizationRequired||review&&reviewPage.failed} review={review} publishedCoverage={authorizationRequired||reviewPage.authorizationRequired?undefined:publishedCoverage}/>}
+    <header className="rc-heading"><div><span className="rc-eyebrow">{zh?'比赛日 '+(historyHeading?reviewedData!.businessDate:data?.businessDate||'—'):'MATCH DAY '+(historyHeading?reviewedData!.businessDate:data?.businessDate||'—')}</span><h1 id="rc-title">{review?(zh?'赛后复盘':'Result Review'):historyHeading?(zh?'历史推荐':'Published History'):(zh?'今日推荐':'Today’s Recommendations')}</h1><p>{review?(zh?'查看真实赛果，复盘每一次选择。':'Review every selection against actual results.'):historyHeading?(zh?'查看原竞彩日已冻结记录；不作为今日新推荐。':'Frozen records from their original match day; not new recommendations for today.'):(zh?'先看比赛与方向，再看选择依据。':'Start with the match and pick, then explore the evidence.')}</p></div><button type="button" className="rc-refresh" onClick={()=>{refresh();if(review)reviewPage.refresh();}} disabled={loading||reviewPage.loading} aria-label={zh?'刷新推荐与复盘':'Refresh recommendations and review'}><RefreshCw size={16} aria-hidden="true"/>{loading||reviewPage.loading?(zh?'更新中':'Updating'):(zh?'刷新':'Refresh')}</button></header>
+    {(!data?.strategySwitch||review)&&!(review&&coverageLoading)&&<DailyBulletinPanel data={data?.dailyBulletin} now={now} failed={failed||coverageRestricted} review={review} publishedCoverage={publishedCoverage}/>}
     {!review&&<ReviewedAnalysisPanel data={reviewedDisplay} revisions={reviewedHistory?data?.reviewedRevisionsHistory:data?.reviewedRevisions} tab={tab} now={now} failed={failed||authorizationRequired}/>}
     {maximumTwo&&<section className="rc-paper" aria-label="最高可用2串1" data-reviewed-display-only="highest-available-two"><h2>最高可用2串1（目标10倍）</h2><article className="rc-paper__record"><strong>实际 {maximumTwo.product} 倍</strong><p>{maximumTwo.legs.map(l=>`${l.matchNum} ${reviewedLabel(l)} ${l.sp}`).join(' × ')} = {maximumTwo.product}</p><p>按已发布单场组合的当前展示参考，未达到10倍；保留原方向与发布SP。组合赔率不等于命中概率。</p></article></section>}
     {!review&&tab==='single'&&<LeagueBaselineDirections data={data?.leagueBaseline} language={language} now={now} failed={failed||authorizationRequired}/>}
@@ -335,7 +369,10 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
       <p>{zh?'同场两个方向按各自 SP 单独记录；玩法由当场实际开放的官方报价决定，可为两项让球方向。研究结果不计入正式推荐或串关。':'Two outcomes of one match are recorded at their own SP. The pair follows whichever official markets are open, including two handicap outcomes. This study is separate from formal picks and parlays.'}</p>
       {data.todayDualResearch?.length?data.todayDualResearch.map(row=><DualResearchV2 key={row.id} row={row} language={language} onSelectMatch={onSelectMatch}/>):<div className="rc-empty"><strong>{zh?'今日暂无合格双选研究':'No eligible dual-choice study today'}</strong><p>{zh?'等待当天比赛的赛前模型证据与新鲜、完整的官方赔率；缺少胜平负不会单独阻止让球双选。':'Awaiting verified pre-match model evidence and fresh complete official SP. Missing 1X2 alone does not block a handicap pair.'}</p></div>}
     </section></details>}
-    {tab==='single'&&<PublishedReviewCoveragePanel data={authorizationRequired||review&&reviewPage.authorizationRequired?undefined:publishedCoverage} failed={failed||review&&reviewPage.failed||authorizationRequired||review&&reviewPage.authorizationRequired} language={language}/>}
+    {tab==='single'&&<PublishedReviewCoveragePanel data={publishedCoverage} loading={coverageLoading} failed={failed||coverageRestricted} language={language}/>}
+    {review&&!coverageRestricted&&<ReviewedHistoryPanel selectedDay={historyDay} onSelectDay={setHistoryDay} coverage={publishedCoverage}
+      history={data?.reviewedAnalysisHistory} revisions={data?.reviewedRevisionsHistory} loading={loading} failed={failed}
+      now={now} tab={tab} language={language} retry={refresh}/>}
     <details className="rc-review-insights" data-legacy-statistics="archive">
     <summary>{zh?'旧策略统计与模型评估 · 展开历史档案':'Legacy statistics and model evaluation · expand archive'}</summary>
     <p>{zh?'以下仅统计旧策略冻结记录。近期人工审核和训练模型参考列入单场页“已发布推荐统计”，分别结算；不加入旧模型概率指标。':'The following statistics cover frozen legacy records only. Recent editorial and trained-model references appear in the single-match published statistics, with separate settlements and probability metrics.'}</p>

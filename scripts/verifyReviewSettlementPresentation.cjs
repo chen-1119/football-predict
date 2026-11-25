@@ -133,7 +133,7 @@ check('current history and SSE share fail-closed protected-session invalidation'
   'effectRequestController.abort();',
   'setMatches([]);',
   'setDataSync(emptyDataSyncState());',
-  '}, [isAccessVerified, accessSession]);'
+  '}, [isAccessVerified, accessSession, account.user?.id, account.refresh]);'
 ]) && protectedAuthInvalidations.length >= 3
   && newSessionPersist > newSessionStart
   && (nextSessionClear < 0 || newSessionPersist < nextSessionClear));
@@ -142,9 +142,10 @@ check('retained cutover state stays explicit in the data layer without a source 
   "dataChannel: 'retained'", 'retainedDataAt: retainedSnapshot.savedAt',
   'serviceTransitioning: true', 'retainedDataAt: undefined', 'serviceTransitioning: false'
 ]) && hasAll(list, [
-  "matchSummary={!dataSync.currentLoaded && baseFilteredMatches.length === 0",
-  "'加载中' : 'Loading'", "const emptyStateText = isLoading",
-  "'暂时无法加载比赛，请稍后重试。'"
+  "matchSummary={matchSummary}", "const waitingForSchedule = !historical && officialSchedule.loading",
+  "const emptyStateText = waitingForSchedule", "visibleCount === 0 && waitingForData",
+  ": isLoading ? (language === 'zh' ? '比赛加载中…'", ": unavailable ? unavailableText",
+  "!dataSync.currentLoaded && dataSync.error"
 ]) && !list.includes('source-health-panel'));
 
 check('transient current failures retry in three seconds and return to the configured steady cadence', hasAll(appContext, [
@@ -201,7 +202,8 @@ check('LIVE keeps immutable original direction and SP outside official settlemen
 check('pending rows without a frozen or published BEST cannot manufacture a handicap direction', hasAll(listRow, [
   'const analysisReferenceSelection = !isFinished && !displayRecommendation',
   'const pickedPrediction = reviewPrediction || displayRecommendation?.prediction || archivedPreMatchPrediction || analysisReference;',
-  'const hasPick = !isVoid && Boolean(pickedPrediction && directionLabel)',
+  'const hasPick = !isVoid && (useUnified ? Boolean(reviewedRow || unifiedRow) : Boolean(pickedPrediction && directionLabel))',
+  'const savedAnalysis = !hasPick && !isVoid && !isFinished ? capturedAnalyses.get(match.id) : undefined',
   "'暂无推荐' : 'No pick'", "isVoid || !pickedPrediction || isPublishedReferenceSpUnavailable ? '--'"
 ]) && !list.includes('getAnalysisReferenceHandicapSupplement(')
   && !listRow.includes('companion?.prediction'));
@@ -231,7 +233,9 @@ check('settled rows show hit or miss while formal labels still require the main 
   "const settledStatus = isFinished && reviewRow && isSettledReviewStatus(reviewRow.resultStatus) ? reviewRow.resultStatus : undefined",
   "settledStatus === 'WON' ? (language === 'zh' ? '命中' : 'Hit')",
   "settledStatus === 'LOST' ? (language === 'zh' ? '未命中' : 'Miss')",
-  "settledStatus === 'WON' ? 'is-hit' : settledStatus === 'LOST' ? 'is-miss' : 'is-pending'"
+  "const displayedResultState = useUnified ? unifiedResult?.primary.settlement?.state : settledStatus;",
+  "!reviewedRow&&displayedResultState === 'WON' ? 'is-hit' : !reviewedRow&&displayedResultState === 'LOST' ? 'is-miss' : 'is-pending'",
+  "reviewedRow ? <ReviewedMatchStatus record={reviewedRow}"
 ]));
 
 check('reference hit/miss remains visible with its reference label and a separate denominator', hasAll(list, [
@@ -533,7 +537,7 @@ check('one failed history refresh preserves the previously loaded history state'
   'setDataSync((current) => ({',
   '...current,',
   'historyLoading: false,',
-  'error: formatError(error)'
+  'historyError: formatError(error)'
 ])
   && !loadHistoryCatchSource.includes('historyLoaded: false')
   && !loadHistoryCatchSource.includes('historyCount: 0')
