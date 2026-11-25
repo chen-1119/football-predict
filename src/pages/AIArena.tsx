@@ -24,35 +24,58 @@ import '../styles/ai-arena.css';
 
 const pct = (value: number) => `${Math.round(value * 100)}%`;
 
+const PUBLISHED_ARENA_RETRY_DELAYS_MS = [0, 500, 1500] as const;
+
+// The published arena is fetched with a bearer token, so every response is
+// bound to the token that requested it and only shown for that same session.
+type TokenBoundArena = { token: string; arena: BigFiveSurvivalArena | null };
+
+const waitUnlessAborted = (delayMs: number, signal: AbortSignal) => new Promise<void>((resolve) => {
+  if (signal.aborted) {
+    resolve();
+    return;
+  }
+  const finish = () => {
+    window.clearTimeout(timer);
+    signal.removeEventListener('abort', finish);
+    resolve();
+  };
+  const timer = window.setTimeout(finish, delayMs);
+  signal.addEventListener('abort', finish);
+});
+
 export const AIArena: React.FC = () => {
   const { matchId } = useParams();
-  const { language, matches, accessSession } = useApp();
+  const { language, matches, accessSession, isAccessVerified } = useApp();
   const decodedMatchId = matchId ? decodeURIComponent(matchId) : '';
   const localArena = React.useMemo(() => buildBigFiveSurvivalArena(matches), [matches]);
-  const [publishedArena, setPublishedArena] = React.useState<BigFiveSurvivalArena | null>(null);
+  const sessionToken = isAccessVerified && accessSession?.token ? accessSession.token : '';
+  const [tokenBoundArena, setTokenBoundArena] = React.useState<TokenBoundArena | null>(null);
   React.useEffect(() => {
-    if (!accessSession?.token) {
-      setPublishedArena(null);
-      return undefined;
-    }
+    if (!sessionToken) return undefined;
     const controller = new AbortController();
     const load = async () => {
-      for (const delayMs of [0, 500, 1500]) {
-        if (delayMs) await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+      for (const delayMs of PUBLISHED_ARENA_RETRY_DELAYS_MS) {
+        if (delayMs) await waitUnlessAborted(delayMs, controller.signal);
         if (controller.signal.aborted) return;
         try {
-          const payload = await fetchPublishedBigFiveSurvivalArena(accessSession.token, controller.signal);
-          if (!controller.signal.aborted) setPublishedArena(payload);
+          const payload = await fetchPublishedBigFiveSurvivalArena(sessionToken, controller.signal);
+          if (!controller.signal.aborted) setTokenBoundArena({ token: sessionToken, arena: payload });
           return;
         } catch {
           if (controller.signal.aborted) return;
         }
       }
-      if (!controller.signal.aborted) setPublishedArena(null);
+      if (!controller.signal.aborted) setTokenBoundArena({ token: sessionToken, arena: null });
     };
     void load();
+    // Switching account, signing out or refreshing aborts the old request; a
+    // late response is ignored by the aborted guard and by the token binding.
     return () => controller.abort();
-  }, [accessSession?.token, matches]);
+  }, [sessionToken, matches]);
+  // A snapshot fetched for another token (previous account, signed-out or
+  // expired session) is never reused, even while the new request is pending.
+  const publishedArena = sessionToken && tokenBoundArena?.token === sessionToken ? tokenBoundArena.arena : null;
   // A forming server pool intentionally omits unlocked submissions. Once at
   // least two qualified fixtures are available, the server locks the current
   // pool without later backfill and its immutable snapshot is authoritative.

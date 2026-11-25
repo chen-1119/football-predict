@@ -25,7 +25,10 @@ export const AIArenaPreview: React.FC<AIArenaPreviewProps> = ({ matches, arena: 
   const { language } = useApp();
   const localArena = React.useMemo(() => buildBigFiveSurvivalArena(matches), [matches]);
   const arena = publishedArena || localArena;
-  const [activeDate, setActiveDate] = React.useState<string>('all');
+  const [selectedDate, setActiveDate] = React.useState<string>('all');
+  // Derive the fallback instead of resetting state in an effect: a refreshed
+  // arena without the selected day simply shows every day.
+  const activeDate = selectedDate !== 'all' && !arena.dates.includes(selectedDate) ? 'all' : selectedDate;
   const visibleMatches = activeDate === 'all'
     ? arena.matches
     : arena.matches.filter((row) => row.dateKey === activeDate);
@@ -42,10 +45,6 @@ export const AIArenaPreview: React.FC<AIArenaPreviewProps> = ({ matches, arena: 
     { label: language === 'zh' ? '爆冷王' : 'Upset king', award: arena.awards.upsetKing, digits: 2 },
     { label: language === 'zh' ? '莽夫奖' : 'Boldest', award: arena.awards.reckless, digits: 0 },
   ] : [];
-
-  React.useEffect(() => {
-    if (activeDate !== 'all' && !arena.dates.includes(activeDate)) setActiveDate('all');
-  }, [activeDate, arena.dates]);
 
   return (
     <>
