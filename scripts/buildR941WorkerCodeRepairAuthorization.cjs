@@ -41,6 +41,9 @@ const R941_BASELINE_TARGET_HASHES = Object.freeze({
   'scripts/verifyStaticVerificationReceipts.cjs': '53121dc7a6a31816a072450791272d39e75562c17c877bf5399a8a2b4d426a42',
   'scripts/verifyDataValidationScopes.cjs': '84aa5e95eec23078dbc7793591c3e8fd1dcdbf639b76a1258169d04504dc75f7',
   'scripts/verifyDeploymentConfig.cjs': '28ce944ed4128cc7487bf9ac1ec1365b0de3a029298545457b2d585dbd6b4d7a',
+  'server/researchPublicationFreshnessRetry.cjs': 'a1d804ad3a3a6ddb546fddad5aef14c3333817fb13c206a5ee49780442a8be86',
+  'scripts/verifyPostgresWorkerReadIsolation.cjs': '2a48e87b6f449c9171069f8c357686b3e92e88dc6e4dda14155762748db53787',
+  'scripts/verifyWorkerFastPublisherIsolation.cjs': 'b5100c198e40e75fff1974573bb1aa6713f5abcd3b78f06bcabdb5562c8dc562',
 });
 
 const sha256File = (filePath) => crypto

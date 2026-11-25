@@ -3,7 +3,7 @@
 // refusal. Root verifies its retained journal and the installed source repair.
 const {createHash}=require('node:crypto');
 const {hash}=require('../src/services/leagueBaselineModel.cjs');
-const REQUIRED_FRESH_INPUT_SHA256='be7a0ab324d86b967321b432f3c39e6b2062dbe74f7c892af4fc1bf4612682e9';
+const REQUIRED_FRESH_INPUT_SHA256='c3257c3ff6edc2a8585e3f32e3d0662a8d2bacf3fc4ced047d652d8af2c1165e';
 const ACTION='publication-freshness-retry';
 const ERROR='REVIEWED_ANALYSIS_OFFICIAL_EVENT_FRESH_CLOCK';
 const sha=x=>createHash('sha256').update(x).digest('hex');

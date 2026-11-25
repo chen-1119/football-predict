@@ -7,7 +7,7 @@
   ],
   "application": "Overlay the listed source blobs on the verified installed r941 source. Verify every baseline digest first. Move the deployed recovery authorization to the retired path verbatim. Use the original training asset and normal release factory.",
   "sourceFiles": 2187,
-  "sourceTreeSha256": "cc3dffb08af6a3f7e62c3b94e343bfb44872cda70c4438df3d0ebd95ce8a589b",
+  "sourceTreeSha256": "799a61eb2da6c6fbc76553159c3c3a9451460041ae7a369a9080a204d9bbdc64",
   "retireExistingFile": {
     "from": "deploy/light-server/worker-code-repair-authorization.json",
     "to": "docs/release-history/retired-r941-reconciliation-timeout-authorization-20261124.json",
@@ -32,7 +32,7 @@
     {
       "path": "scripts/buildR941WorkerCodeRepairAuthorization.cjs",
       "baselineSha256": null,
-      "integratedSha256": "76af67728cefa83f8c924e193aea6cd8367e01ecb68400bae041a667a6a72c83"
+      "integratedSha256": "5b7f93bc2d3ce53d9ec8d6661eeff331291b4a7559e5e65937441e18bf9cbe5f"
     },
     {
       "path": "scripts/candidateProspectiveLedger.cjs",
@@ -92,7 +92,7 @@
     {
       "path": "scripts/releaseWorkerCodeRepair.cjs",
       "baselineSha256": "7aa23148afdc9636434b540763aa581f806ff080be8caed516951bfdc08c48f8",
-      "integratedSha256": "327ce3666938da7590dbc5679294822c3adab705d0e86db121076d472c030396"
+      "integratedSha256": "05a4caa82d196ef139c1ba71877f007630741115c971498fe905e80804f092ce"
     },
     {
       "path": "scripts/runReleaseWorkerPreflight.cjs",
@@ -165,6 +165,11 @@
       "integratedSha256": "2ac685c34def8a210c9299fd9df92d444f731a6ecf8b55b45c061cefde31667b"
     },
     {
+      "path": "scripts/verifyPostgresWorkerReadIsolation.cjs",
+      "baselineSha256": "2a48e87b6f449c9171069f8c357686b3e92e88dc6e4dda14155762748db53787",
+      "integratedSha256": "b86310b1cf47d99372067f5561028acf3d28c06c57a9853c06ddfff2afaaba0b"
+    },
+    {
       "path": "scripts/verifyRecommendationContentPresentation.cjs",
       "baselineSha256": "f6a240fc2aba0ec1d77e61a0f89f6b4e54636564990174f0e917760a05300375",
       "integratedSha256": "735782da5e28aa16694338d5034cefdb199f398d48f23cd757fc4c368d13e2ab"
@@ -193,6 +198,11 @@
       "path": "scripts/verifyStaticVerificationReceipts.cjs",
       "baselineSha256": "53121dc7a6a31816a072450791272d39e75562c17c877bf5399a8a2b4d426a42",
       "integratedSha256": "b6836a040a0a80aab7b97535ec13c65ba127f8afa016ba33e7b00e0db1c1c59d"
+    },
+    {
+      "path": "scripts/verifyWorkerFastPublisherIsolation.cjs",
+      "baselineSha256": "b5100c198e40e75fff1974573bb1aa6713f5abcd3b78f06bcabdb5562c8dc562",
+      "integratedSha256": "24fce0131a391dff620c5850fc7bc2c49c7c8e1ae520b585f24f6e3ba22de553"
     },
     {
       "path": "server/collectorQuorumEvidence.cjs",
@@ -233,6 +243,11 @@
       "path": "server/recommendationReviewPage.cjs",
       "baselineSha256": "aea3b347cf516d918b9741eb66fd9ddbdfab7d819399a5448bb18d72b651f7b8",
       "integratedSha256": "2da45c09ba6dcffd08eac178ee26d680d584a831d268896d47b2b824352688d3"
+    },
+    {
+      "path": "server/researchPublicationFreshnessRetry.cjs",
+      "baselineSha256": "a1d804ad3a3a6ddb546fddad5aef14c3333817fb13c206a5ee49780442a8be86",
+      "integratedSha256": "efaaa17662514f805236cae4d68f145f5a5af1f9f409c7c49529e9fc5cee90c8"
     },
     {
       "path": "server/selectedJsonObjectFile.cjs",

@@ -26,6 +26,9 @@ const R941_STABILITY_TARGETS=[
   'scripts/verifyStaticVerificationReceipts.cjs',
   'scripts/verifyDataValidationScopes.cjs',
   'scripts/verifyDeploymentConfig.cjs',
+  'server/researchPublicationFreshnessRetry.cjs',
+  'scripts/verifyPostgresWorkerReadIsolation.cjs',
+  'scripts/verifyWorkerFastPublisherIsolation.cjs',
 ];
 const R941_STABILITY_ADDED=[
   'scripts/postgresExternalGenerationRow.cjs',
