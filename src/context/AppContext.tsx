@@ -888,6 +888,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return acceptedRows.length;
         }
       } catch (error: unknown) {
+        if (mode !== 'current') throw error;
         console.error(error);
         setDataSync((current) => ({
           ...current,
@@ -1162,6 +1163,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       const requestGeneration = ++historyRequestGeneration;
+      setDataSync((current) => ({ ...current, historyLoading: true }));
       const request = (async (): Promise<boolean> => {
         try {
           // Start the optional unresolved archive in parallel, but never make
@@ -1247,7 +1249,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               HISTORY_DATA_FETCH_TIMEOUT_MS
             );
             const nextRows = matchRowsFromPayload(nextPage.data);
-            if (!nextRows || nextRows.length === 0) break;
+            if (!nextRows) throw new Error('Invalid history page.');
+            if (nextRows.length === 0) break;
             accumulatedHistory.push(...nextRows);
             pageInfo = historyPageInfoFromPayload(nextPage.data);
           }
@@ -1261,8 +1264,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (cancelled) return false;
           setDataSync((current) => ({
             ...current,
-            historyLoaded: loadedHistoryCount > 0,
+            historyLoaded: true,
             historyLoading: false,
+            historyError: undefined,
             historyCount: loadedHistoryCount,
             totalCount: current.currentCount + loadedHistoryCount,
             dataChannel: current.dataChannel || historyData.channel,
@@ -1281,7 +1285,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setDataSync((current) => ({
             ...current,
             historyLoading: false,
-            error: formatError(error)
+            historyError: formatError(error)
           }));
           return false;
         }
