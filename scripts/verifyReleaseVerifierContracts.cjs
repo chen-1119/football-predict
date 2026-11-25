@@ -7,6 +7,13 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('exact r941 stability recovery retains failed health, dual incident proofs and fresh capture before lease',()=>{
+ const tests=['tests/inline-map-evidence.test.cjs','tests/r941-worker-code-repair-v11.test.cjs'];
+ const result=require('node:child_process').spawnSync(process.execPath,['--test',...tests],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});
+ assert.equal(result.status,0,result.stderr||result.stdout);assert.match(result.stdout,/^# fail 0$/m);assert.match(result.stdout,/^# skipped 0$/m);
+ for(const entry of ['scripts/createReleaseBundle.cjs','scripts/verifyReleaseBundleSafety.cjs'])for(const f of [...tests,'scripts/streamedInlineObjectEntries.cjs','scripts/inlineRowIncidentEvidence.cjs','scripts/buildR941WorkerCodeRepairAuthorization.cjs'])assert(read(entry).includes('"'+f+'"'));
+ for(const file of tests)assert(read('.github/workflows/recommendation-runtime.yml').includes(file));
+});
 check('sync metadata incident recovery retains failed health, exact scope and final release gates',()=>{
  const tests=['tests/sync-meta-incident-evidence.test.cjs','tests/sync-meta-recovery-policy.test.cjs'];
  const result=require('node:child_process').spawnSync(process.execPath,['--test',...tests],{cwd:root,encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:1048576});

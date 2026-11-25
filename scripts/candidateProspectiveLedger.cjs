@@ -760,10 +760,17 @@ const appendEvent = (ledger, event) => {
   return ledger.events.at(-1);
 };
 
-const verifyLedger = (ledger, { verifyReviewCheckpoints = true } = {}) => {
+const TRUSTED_PRIOR_VERIFICATION = Symbol("trustedPriorVerification");
+
+const verifyLedgerInternal = (ledger, { verifyReviewCheckpoints = true } = {}) => {
   const blockers = [];
   if (!ledger || ledger.version !== LEDGER_VERSION || !Array.isArray(ledger.events)) {
-    return { valid: false, blockers: ["ledger-shape-invalid"] };
+    return {
+      valid: false,
+      blockers: ["ledger-shape-invalid"],
+      atomicDecisionValidation: null,
+      settlementValidation: null,
+    };
   }
   let previousHash = GENESIS_HASH;
   for (let index = 0; index < ledger.events.length; index += 1) {
@@ -785,11 +792,15 @@ const verifyLedger = (ledger, { verifyReviewCheckpoints = true } = {}) => {
     blockers.push("root-hash-invalid");
   }
   if (sha256(ledger.header) !== ledger.headerHash) blockers.push("header-hash-invalid");
-  if (ledger?.header?.gateSpec?.decisionRecordVersion === DECISION_RECORD_VERSION) {
-    for (const event of ledger.events.filter((row) => row?.type === "decision")) {
+  const enforceDecisionRecordVersion =
+    ledger?.header?.gateSpec?.decisionRecordVersion === DECISION_RECORD_VERSION;
+  const atomicDecisionValidation = [];
+  for (const event of ledger.events.filter((row) => row?.type === "decision")) {
+    const rowBlockers = atomicDecisionRecordBlockers(event);
+    atomicDecisionValidation.push({ event, blockers: rowBlockers });
+    if (enforceDecisionRecordVersion) {
       const prefix = `event-${event.sequence}`;
-      blockers.push(...atomicDecisionRecordBlockers(event)
-        .map((blocker) => `${prefix}-${blocker}`));
+      blockers.push(...rowBlockers.map((blocker) => `${prefix}-${blocker}`));
     }
   }
   // A production ledger can contain thousands of immutable decisions. Comparing
@@ -802,11 +813,7 @@ const verifyLedger = (ledger, { verifyReviewCheckpoints = true } = {}) => {
   for (const event of ledger.events.filter((row) => (
     row?.type === "decision" || row?.type === "exclusion"
   ))) {
-    const kickoffAt = cohortKickoffFor(event);
-    const market = String(event?.market || "HAD").trim().toUpperCase();
-    const keys = kickoffAt
-      ? [...identityValues(event)].map((identity) => JSON.stringify([kickoffAt, market, identity]))
-      : [];
+    const keys = cohortIdentityKeysFor(event);
     if (keys.some((key) => cohortIdentityKeys.has(key))) {
       blockers.push(`event-${event.sequence}-duplicate-cohort-key`);
     }
@@ -817,7 +824,10 @@ const verifyLedger = (ledger, { verifyReviewCheckpoints = true } = {}) => {
       .filter((event) => event?.type === "decision")
       .map((event) => [event.eventHash, event]),
   );
+  const enforceSettlementRecordVersion =
+    ledger?.header?.gateSpec?.settlementRecordVersion === SETTLEMENT_RECORD_VERSION;
   const settledDecisionHashes = new Set();
+  const settlementValidation = [];
   for (const event of ledger.events.filter((row) => row?.type === "settlement")) {
     const decision = decisionHashes.get(event.decisionEventHash);
     if (!decision) blockers.push(`event-${event.sequence}-orphan-settlement`);
@@ -828,10 +838,10 @@ const verifyLedger = (ledger, { verifyReviewCheckpoints = true } = {}) => {
     if (decision && event.phase !== decision.phase) {
       blockers.push(`event-${event.sequence}-settlement-phase-mismatch`);
     }
-    if (ledger?.header?.gateSpec?.settlementRecordVersion
-        === SETTLEMENT_RECORD_VERSION) {
-      blockers.push(...settlementRecordBlockers(event, decision)
-        .map((blocker) => `event-${event.sequence}-${blocker}`));
+    const rowBlockers = settlementRecordBlockers(event, decision);
+    settlementValidation.push({ event, blockers: rowBlockers });
+    if (enforceSettlementRecordVersion) {
+      blockers.push(...rowBlockers.map((blocker) => `event-${event.sequence}-${blocker}`));
     }
   }
   if (
@@ -904,26 +914,64 @@ const verifyLedger = (ledger, { verifyReviewCheckpoints = true } = {}) => {
       }
     }
   }
-  return { valid: blockers.length === 0, blockers };
+  return {
+    valid: blockers.length === 0,
+    blockers,
+    atomicDecisionValidation,
+    settlementValidation,
+  };
 };
 
-const verifyRegistry = (registry) => {
-  if (!registry) return { valid: true, blockers: [] };
+const verifyLedger = (ledger, { verifyReviewCheckpoints = true } = {}) => {
+  const { valid, blockers } = verifyLedgerInternal(ledger, { verifyReviewCheckpoints });
+  return { valid, blockers };
+};
+
+const verifyRegistryInternal = (registry, reusedLedgerVerifications = null) => {
+  if (!registry) {
+    return { target: registry, valid: true, blockers: [], ledgerVerifications: new Map() };
+  }
   const blockers = [];
   if (registry.version !== REGISTRY_VERSION || !Array.isArray(registry.ledgers)) {
-    return { valid: false, blockers: ["registry-shape-invalid"] };
+    return {
+      target: registry,
+      valid: false,
+      blockers: ["registry-shape-invalid"],
+      ledgerVerifications: new Map(),
+    };
   }
   const ids = new Set();
+  const ledgerVerifications = new Map();
   for (const ledger of registry.ledgers) {
     if (ids.has(ledger?.ledgerId)) blockers.push(`duplicate-ledger-id:${ledger?.ledgerId || "missing"}`);
     ids.add(ledger?.ledgerId);
-    const verification = verifyLedger(ledger);
+    const verification = reusedLedgerVerifications?.get(ledger) || verifyLedgerInternal(ledger);
+    ledgerVerifications.set(ledger, verification);
     blockers.push(...verification.blockers.map((blocker) => `${ledger?.ledgerId || "unknown"}:${blocker}`));
   }
   if (registry.activeLedgerId && !ids.has(registry.activeLedgerId)) {
     blockers.push("active-ledger-missing");
   }
-  return { valid: blockers.length === 0, blockers };
+  return {
+    target: registry,
+    valid: blockers.length === 0,
+    blockers,
+    ledgerVerifications,
+  };
+};
+
+const verifyRegistry = (registry) => {
+  const { valid, blockers } = verifyRegistryInternal(registry);
+  return { valid, blockers };
+};
+
+const verifyRegistryWithCache = (registry) => {
+  const internal = verifyRegistryInternal(registry);
+  return {
+    valid: internal.valid,
+    blockers: internal.blockers,
+    [TRUSTED_PRIOR_VERIFICATION]: internal,
+  };
 };
 
 const fixedGateSpec = () => ({
@@ -1196,6 +1244,13 @@ const cohortKickoffFor = (value) => isoTime(
   || value?.matchDate
   || value?.kickoff,
 );
+
+const cohortIdentityKeysFor = (value) => {
+  const kickoffAt = cohortKickoffFor(value);
+  if (!kickoffAt) return [];
+  const market = String(value?.market || "HAD").trim().toUpperCase();
+  return [...identityValues(value)].map((identity) => `${kickoffAt}\0${market}\0${identity}`);
+};
 
 const sameCohortIdentity = (left, right) => {
   const leftKickoff = cohortKickoffFor(left);
@@ -2439,13 +2494,16 @@ const captureCohort = ({
   const frozenMs = parseTime(ledger.header.frozenAt);
   const activation = ledgerActivation(ledger);
   const activationMs = parseTime(activation?.activationAt);
-  const existing = ledger.events
-    .filter((event) => event.type === "decision" || event.type === "exclusion");
+  const existingKeys = new Set();
+  for (const event of ledger.events) {
+    if (event.type !== "decision" && event.type !== "exclusion") continue;
+    for (const key of cohortIdentityKeysFor(event)) existingKeys.add(key);
+  }
   const rows = (Array.isArray(matches) ? matches : [])
     .filter((match) => parseTime(kickoffFor(match)) > frozenMs)
     .sort((left, right) => parseTime(kickoffFor(left)) - parseTime(kickoffFor(right)));
   for (const match of rows) {
-    if (existing.some((event) => sameCohortIdentity(event, match))) continue;
+    if (cohortIdentityKeysFor(match).some((key) => existingKeys.has(key))) continue;
     const kickoffAt = kickoffFor(match);
     const kickoffMs = parseTime(kickoffAt);
     const deadline = decisionDeadlineFor(match);
@@ -2457,7 +2515,7 @@ const captureCohort = ({
       ? "formal"
       : "pre-gate-shadow";
     if (nowMs > kickoffMs) {
-      appendEvent(ledger, {
+      const appended = appendEvent(ledger, {
         type: "exclusion",
         recordedAt: isoTime(evaluatedAt),
         phase,
@@ -2488,7 +2546,7 @@ const captureCohort = ({
         gateSpecHash: ledger.header.gateSpecHash,
         onlineEffect: false,
       });
-      existing.push(ledger.events.at(-1));
+      for (const key of cohortIdentityKeysFor(appended)) existingKeys.add(key);
       continue;
     }
     const selection = selectSnapshotAtDeadline({
@@ -2498,7 +2556,7 @@ const captureCohort = ({
       deadlineAt,
     });
     if (!selection.snapshot) {
-      appendEvent(ledger, {
+      const appended = appendEvent(ledger, {
         type: "exclusion",
         recordedAt: isoTime(evaluatedAt),
         phase,
@@ -2529,7 +2587,7 @@ const captureCohort = ({
         gateSpecHash: ledger.header.gateSpecHash,
         onlineEffect: false,
       });
-      existing.push(ledger.events.at(-1));
+      for (const key of cohortIdentityKeysFor(appended)) existingKeys.add(key);
       continue;
     }
     const appended = appendEvent(ledger, buildDecisionEvent({
@@ -2541,7 +2599,7 @@ const captureCohort = ({
       trustedCollectorCount,
       trustedCollectorResolver,
     }));
-    existing.push(appended);
+    for (const key of cohortIdentityKeysFor(appended)) existingKeys.add(key);
   }
 };
 
@@ -2558,10 +2616,11 @@ const indexSettlementMatches = (matches) => {
   return byKickoff;
 };
 
-const settleCohort = ({ ledger, matchesByKickoff, evaluatedAt, observedThrough = null }) => {
+const collectCohortSettlements = ({ ledger, matchesByKickoff, evaluatedAt, observedThrough = null }) => {
   const settledDecisionHashes = new Set(
     ledgerEvents(ledger, "settlement").map((event) => event.decisionEventHash),
   );
+  const pendingSettlements = [];
   for (const decision of ledgerEvents(ledger, "decision")) {
     if (settledDecisionHashes.has(decision.eventHash)) continue;
     const match = selectSettlementMatch(matchesByKickoff.get(decision.kickoffAt), decision, observedThrough);
@@ -2573,7 +2632,8 @@ const settleCohort = ({ ledger, matchesByKickoff, evaluatedAt, observedThrough =
     // later exact Sporttery result can still settle it; an invalid terminal
     // settlement would otherwise permanently poison the prospective cohort.
     if (!result.eligible) continue;
-    appendEvent(ledger, {
+    settledDecisionHashes.add(decision.eventHash);
+    pendingSettlements.push({
       type: "settlement",
       recordedAt: isoTime(evaluatedAt),
       phase: decision.phase,
@@ -2604,6 +2664,18 @@ const settleCohort = ({ ledger, matchesByKickoff, evaluatedAt, observedThrough =
       blockers: [],
       onlineEffect: false,
     });
+  }
+  return pendingSettlements;
+};
+
+const settleCohort = ({ ledger, matchesByKickoff, evaluatedAt, observedThrough = null }) => {
+  for (const event of collectCohortSettlements({
+    ledger,
+    matchesByKickoff,
+    evaluatedAt,
+    observedThrough,
+  })) {
+    appendEvent(ledger, event);
   }
 };
 
@@ -2814,8 +2886,8 @@ const auditLedger = (ledger, {
   totalCandidatesEverTested = 1,
   evaluatedAt = new Date().toISOString(),
   verifyReviewCheckpoints = true,
-} = {}) => {
-  const verification = verifyLedger(ledger, { verifyReviewCheckpoints });
+} = {}, preverified = null) => {
+  const verification = preverified || verifyLedgerInternal(ledger, { verifyReviewCheckpoints });
   const decisions = ledgerEvents(ledger, "decision");
   const exclusions = ledgerEvents(ledger, "exclusion");
   const settlements = ledgerEvents(ledger, "settlement");
@@ -2849,10 +2921,11 @@ const auditLedger = (ledger, {
   };
   const shadow = phaseSummary("pre-gate-shadow");
   const formal = phaseSummary("formal");
-  const atomicDecisionValidation = decisions.map((event) => ({
-    event,
-    blockers: atomicDecisionRecordBlockers(event),
-  }));
+  const atomicDecisionValidation = verification.atomicDecisionValidation
+    || decisions.map((event) => ({
+      event,
+      blockers: atomicDecisionRecordBlockers(event),
+    }));
   const atomicDecisionRows = atomicDecisionValidation
     .filter((row) => row.blockers.length === 0).length;
   const atomicDecisionBlockerCounts = Object.fromEntries(
@@ -2863,16 +2936,17 @@ const auditLedger = (ledger, {
         atomicDecisionValidation.filter((row) => row.blockers.includes(blocker)).length,
       ]),
   );
-  const decisionByHash = new Map(
-    decisions.map((event) => [event.eventHash, event]),
-  );
-  const settlementValidation = settlements.map((event) => ({
-    event,
-    blockers: settlementRecordBlockers(
+  const decisionByHash = verification.settlementValidation
+    ? null
+    : new Map(decisions.map((event) => [event.eventHash, event]));
+  const settlementValidation = verification.settlementValidation
+    || settlements.map((event) => ({
       event,
-      decisionByHash.get(event.decisionEventHash),
-    ),
-  }));
+      blockers: settlementRecordBlockers(
+        event,
+        decisionByHash.get(event.decisionEventHash),
+      ),
+    }));
   const completeSettlementRows = settlementValidation
     .filter((row) => row.blockers.length === 0).length;
   const settlementBlockerCounts = Object.fromEntries(
@@ -3162,6 +3236,24 @@ const buildReviewCheckpointEvidence = (ledger, checkpoint, {
   };
 };
 
+const hasUnrecordedDueReview = (ledger, audit) => {
+  const due = reviewCheckpointFor(audit?.cohort?.formal?.settled ?? 0);
+  if (!due) return false;
+  const existing = new Set(
+    ledgerEvents(ledger, "review").map((event) => Number(
+      event.checkpointSettled ?? event.checkpointFinalized,
+    )),
+  );
+  for (
+    let checkpoint = MIN_FORMAL_SETTLED;
+    checkpoint <= due;
+    checkpoint += REVIEW_INTERVAL
+  ) {
+    if (!existing.has(checkpoint)) return true;
+  }
+  return false;
+};
+
 const appendDueReview = (ledger, audit, evaluatedAt) => {
   const due = reviewCheckpointFor(audit.cohort.formal.settled);
   if (!due) return;
@@ -3248,12 +3340,17 @@ const settleRetiredCohorts = ({ registry, matchesByKickoff, evaluatedAt }) => {
   return settlementsAdded;
 };
 
-const settleCandidateProspectiveRegistry = ({
-  priorRegistry = null,
-  matches = [],
-  evaluatedAt = new Date().toISOString(),
-} = {}) => {
-  const priorVerification = verifyRegistry(priorRegistry);
+const settleCandidateProspectiveRegistry = (options = {}) => {
+  const {
+    priorRegistry = null,
+    matches = [],
+    evaluatedAt = new Date().toISOString(),
+  } = options;
+  const trustedPrior = options[TRUSTED_PRIOR_VERIFICATION]
+    && options[TRUSTED_PRIOR_VERIFICATION].target === priorRegistry
+    ? options[TRUSTED_PRIOR_VERIFICATION]
+    : null;
+  const priorVerification = trustedPrior || verifyRegistryInternal(priorRegistry);
   if (!priorVerification.valid) {
     return {
       registry: priorRegistry,
@@ -3265,15 +3362,108 @@ const settleCandidateProspectiveRegistry = ({
       audit: null,
     };
   }
-  const registry = deepClone(priorRegistry);
+  if (!priorRegistry) {
+    return {
+      registry: null,
+      chainValid: true,
+      changed: false,
+      eventsAdded: 0,
+      settlementsAdded: 0,
+      retiredSettlementsAdded: 0,
+      blockers: ["active-ledger-missing"],
+      audit: null,
+    };
+  }
   const matchesByKickoff = indexSettlementMatches(matches);
-  const retiredSettlementsAdded = settleRetiredCohorts({ registry, matchesByKickoff, evaluatedAt });
-  const active = registry?.ledgers?.find(
-    (ledger) => ledger?.ledgerId === registry.activeLedgerId && !ledgerRetired(ledger),
+  const nowMs = parseTime(evaluatedAt);
+  const retiredPending = new Map();
+  if (nowMs !== null) {
+    for (const ledger of priorRegistry.ledgers || []) {
+      if (!ledgerRetired(ledger)) continue;
+      const lastRecordedMs = parseTime(ledger.events.at(-1)?.recordedAt);
+      if (lastRecordedMs === null || nowMs < lastRecordedMs) continue;
+      const pending = collectCohortSettlements({
+        ledger,
+        matchesByKickoff,
+        evaluatedAt,
+        observedThrough: nowMs,
+      });
+      if (pending.length > 0) retiredPending.set(ledger, pending);
+    }
+  }
+  const priorActive = priorRegistry.ledgers?.find(
+    (ledger) => ledger?.ledgerId === priorRegistry.activeLedgerId && !ledgerRetired(ledger),
   ) || null;
+  const activePending = priorActive
+    ? collectCohortSettlements({ ledger: priorActive, matchesByKickoff, evaluatedAt })
+    : [];
+
+  if (retiredPending.size === 0 && activePending.length === 0) {
+    const registry = trustedPrior ? priorRegistry : deepClone(priorRegistry);
+    if (!priorActive) {
+      return {
+        registry,
+        chainValid: priorVerification.valid,
+        changed: false,
+        eventsAdded: 0,
+        settlementsAdded: 0,
+        retiredSettlementsAdded: 0,
+        blockers: [...priorVerification.blockers, "active-ledger-missing"],
+        audit: null,
+      };
+    }
+    const audit = auditLedger(
+      priorActive,
+      {
+        totalCandidatesEverTested: priorRegistry.candidateRegistry.length,
+        evaluatedAt,
+      },
+      priorVerification.ledgerVerifications.get(priorActive) || null,
+    );
+    return {
+      registry,
+      chainValid: priorVerification.valid,
+      changed: false,
+      eventsAdded: 0,
+      settlementsAdded: 0,
+      retiredSettlementsAdded: 0,
+      blockers: priorVerification.blockers,
+      audit,
+    };
+  }
+
+  const reusedLedgerVerifications = new Map();
+  let retiredSettlementsAdded = 0;
+  let active = null;
+  const ledgers = (priorRegistry.ledgers || []).map((ledger) => {
+    if (ledger === priorActive) {
+      active = activePending.length > 0 ? deepClone(ledger) : (trustedPrior ? ledger : deepClone(ledger));
+      if (activePending.length === 0 && priorVerification.ledgerVerifications.has(ledger)) {
+        reusedLedgerVerifications.set(active, priorVerification.ledgerVerifications.get(ledger));
+      }
+      return active;
+    }
+    const pending = retiredPending.get(ledger);
+    if (pending) {
+      const cloned = deepClone(ledger);
+      for (const event of pending) appendEvent(cloned, event);
+      retiredSettlementsAdded += pending.length;
+      return cloned;
+    }
+    const untouched = trustedPrior ? ledger : deepClone(ledger);
+    if (priorVerification.ledgerVerifications.has(ledger)) {
+      reusedLedgerVerifications.set(untouched, priorVerification.ledgerVerifications.get(ledger));
+    }
+    return untouched;
+  });
+  const registry = {
+    ...priorRegistry,
+    candidateRegistry: deepClone(priorRegistry.candidateRegistry || []),
+    ledgers,
+  };
   if (!active) {
     if (retiredSettlementsAdded > 0) registry.updatedAt = isoTime(evaluatedAt);
-    const verification = verifyRegistry(registry);
+    const verification = verifyRegistryInternal(registry, reusedLedgerVerifications);
     return {
       registry,
       chainValid: verification.valid,
@@ -3287,26 +3477,36 @@ const settleCandidateProspectiveRegistry = ({
   }
 
   const beforeEvents = active.events.length;
-  const beforeSettlements = ledgerEvents(active, "settlement").length;
-  settleCohort({ ledger: active, matchesByKickoff, evaluatedAt });
-  const settlementsAdded = Math.max(
-    0,
-    ledgerEvents(active, "settlement").length - beforeSettlements,
-  );
-  let audit = auditLedger(active, {
-    totalCandidatesEverTested: registry.candidateRegistry.length,
-    evaluatedAt,
-  });
-  if (settlementsAdded > 0) {
-    appendDueReview(active, audit, evaluatedAt);
-    audit = auditLedger(active, {
+  for (const event of activePending) appendEvent(active, event);
+  const settlementsAdded = activePending.length;
+  let activeVerification = reusedLedgerVerifications.get(active) || verifyLedgerInternal(active);
+  let audit = auditLedger(
+    active,
+    {
       totalCandidatesEverTested: registry.candidateRegistry.length,
       evaluatedAt,
-    });
+    },
+    activeVerification,
+  );
+  if (settlementsAdded > 0) {
+    const beforeReview = active.events.length;
+    appendDueReview(active, audit, evaluatedAt);
+    if (active.events.length !== beforeReview) {
+      activeVerification = verifyLedgerInternal(active);
+      audit = auditLedger(
+        active,
+        {
+          totalCandidatesEverTested: registry.candidateRegistry.length,
+          evaluatedAt,
+        },
+        activeVerification,
+      );
+    }
   }
+  reusedLedgerVerifications.set(active, activeVerification);
   const eventsAdded = Math.max(0, active.events.length - beforeEvents) + retiredSettlementsAdded;
   if (eventsAdded > 0) registry.updatedAt = isoTime(evaluatedAt);
-  const finalVerification = verifyRegistry(registry);
+  const finalVerification = verifyRegistryInternal(registry, reusedLedgerVerifications);
   return {
     registry,
     chainValid: finalVerification.valid,
@@ -3319,20 +3519,25 @@ const settleCandidateProspectiveRegistry = ({
   };
 };
 
-const updateCandidateProspectiveLedger = ({
-  priorRegistry = null,
-  candidates = [],
-  selectedCandidate = null,
-  robustness = null,
-  matches = [],
-  snapshots = [],
-  evaluatedAt = new Date().toISOString(),
-  implementationCommitment = {},
-  nominationPolicyCommitment = null,
-  trustedCollectorCount = 1,
-  trustedCollectorResolver = null,
-} = {}) => {
-  const priorVerification = verifyRegistry(priorRegistry);
+const updateCandidateProspectiveLedger = (options = {}) => {
+  const {
+    priorRegistry = null,
+    candidates = [],
+    selectedCandidate = null,
+    robustness = null,
+    matches = [],
+    snapshots = [],
+    evaluatedAt = new Date().toISOString(),
+    implementationCommitment = {},
+    nominationPolicyCommitment = null,
+    trustedCollectorCount = 1,
+    trustedCollectorResolver = null,
+  } = options;
+  const trustedPrior = options[TRUSTED_PRIOR_VERIFICATION]
+    && options[TRUSTED_PRIOR_VERIFICATION].target === priorRegistry
+    ? options[TRUSTED_PRIOR_VERIFICATION]
+    : null;
+  const priorVerification = trustedPrior || verifyRegistryInternal(priorRegistry);
   if (!priorVerification.valid) {
     return {
       registry: priorRegistry,
@@ -3345,6 +3550,16 @@ const updateCandidateProspectiveLedger = ({
   const registry = priorRegistry
     ? deepClone(priorRegistry)
     : createRegistry(evaluatedAt);
+  const priorLengthByLedger = new Map();
+  if (priorRegistry && Array.isArray(priorRegistry.ledgers)) {
+    priorRegistry.ledgers.forEach((origLedger, idx) => {
+      const clonedLedger = registry.ledgers[idx];
+      const verified = priorVerification.ledgerVerifications.get(origLedger);
+      if (clonedLedger && verified) {
+        priorLengthByLedger.set(clonedLedger, { length: origLedger.events.length, verified });
+      }
+    });
+  }
   const updatedAt = isoTime(evaluatedAt);
   // A different timestamp alone proves that the canonical documents differ.
   // Same-instant updates still compare every field before and after.
@@ -3464,9 +3679,16 @@ const updateCandidateProspectiveLedger = ({
   }
   const matchesByKickoff = indexSettlementMatches(matches);
   const retiredSettlementsAdded = settleRetiredCohorts({ registry, matchesByKickoff, evaluatedAt });
+  const reusableVerifications = () => {
+    const map = new Map();
+    for (const [cloned, info] of priorLengthByLedger.entries()) {
+      if (cloned.events.length === info.length) map.set(cloned, info.verified);
+    }
+    return map;
+  };
   if (!active) {
     registry.updatedAt = updatedAt;
-    const verification = verifyRegistry(registry);
+    const verification = verifyRegistryInternal(registry, reusableVerifications());
     return {
       registry,
       chainValid: verification.valid,
@@ -3507,20 +3729,32 @@ const updateCandidateProspectiveLedger = ({
     trustedCollectorResolver,
   });
   settleCohort({ ledger: active, matchesByKickoff, evaluatedAt });
-  let audit = auditLedger(active, {
-    totalCandidatesEverTested: registry.candidateRegistry.length,
-    evaluatedAt,
-  });
+  const reused = reusableVerifications();
+  let activeVerification = reused.get(active) || verifyLedgerInternal(active);
+  let audit = auditLedger(
+    active,
+    {
+      totalCandidatesEverTested: registry.candidateRegistry.length,
+      evaluatedAt,
+    },
+    activeVerification,
+  );
   const beforeReview = active.events.length;
   appendDueReview(active, audit, evaluatedAt);
   if (active.events.length !== beforeReview) {
-    audit = auditLedger(active, {
-      totalCandidatesEverTested: registry.candidateRegistry.length,
-      evaluatedAt,
-    });
+    activeVerification = verifyLedgerInternal(active);
+    audit = auditLedger(
+      active,
+      {
+        totalCandidatesEverTested: registry.candidateRegistry.length,
+        evaluatedAt,
+      },
+      activeVerification,
+    );
   }
+  reused.set(active, activeVerification);
   registry.updatedAt = updatedAt;
-  const finalVerification = verifyRegistry(registry);
+  const finalVerification = verifyRegistryInternal(registry, reused);
   return {
     registry,
     chainValid: finalVerification.valid,
@@ -3568,6 +3802,7 @@ module.exports = {
   REGISTRY_LOCK_OWNER_METADATA_GRACE_MS,
   REGISTRY_LOCK_VERSION,
   GATE_SPEC_RESET_AUTHORIZATION_VERSION,
+  TRUSTED_PRIOR_VERIFICATION,
   canonicalize,
   sha256,
   registryLockFileFor,
@@ -3578,6 +3813,7 @@ module.exports = {
   normalizeTriplet,
   normalizedLeagueForMatch,
   classifyCandidateDecisionEvidence,
+  cohortIdentityKeysFor,
   canonicalFunctionSource,
   candidateEvaluatorSemanticHashes,
   marketProbabilitiesFromOdds,
@@ -3592,7 +3828,9 @@ module.exports = {
   appendEvent,
   verifyLedger,
   verifyRegistry,
+  verifyRegistryWithCache,
   fixedGateSpec,
+  hasUnrecordedDueReview,
   assessWindowPerformance,
   buildFormalMetricDiagnostics,
   buildReviewCheckpointEvidence,

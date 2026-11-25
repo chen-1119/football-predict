@@ -301,7 +301,19 @@ function verifyReleaseWorkerCodeRepair() {
     const runCaptureFixture=(variant='repair')=>{
       const localAuth=structuredClone(freshAuth),identity=c=>({mode:'active-generation',...Object.fromEntries(
         ['generationId','manifestHash','sourceCycleId','committedAt'].map(k=>[k,c.pointer[k]]))});
-      const index=variant.startsWith('index-'),ordinary=variant==='ordinary'||variant==='index-ordinary';
+      const index=variant.startsWith('index-'),syncMeta=variant.startsWith('sync-meta-'),ordinary=variant.endsWith('ordinary');
+      const syncMetaEvidence=require('./syncMetaIncidentEvidence.cjs');
+      const syncMetaWorker=structuredClone(writerWorker);
+      syncMetaWorker.status.lastCycle.error='npm run validate:data exited with 1';
+      const syncMetaJournal=[{unit:'football-sync-worker.service',pid:'43',timestampUs:String((now-2050)*1000),
+        timestampMs:now-2050,message:syncMetaEvidence.MESSAGE}];
+      const meta={path:'/opt/football-predict/public/data/sync-meta.json',bytes:1093306,sha256:hex('e'),stableIdentity:true};
+      if(syncMeta)Object.assign(localAuth,{version:'worker-code-repair-v9',reason:'sync-meta-strategy-summary-size',
+        bindingPolicy:'fresh-sync-meta-size-incident-before-lease-v1',
+        incident:syncMetaEvidence.incidentAnchor({worker:syncMetaWorker,journal:syncMetaJournal,meta}),
+        files:p.SYNC_META_TARGETS.map(name=>({path:name,beforeSha256:hex(2),afterSha256:hex(3)})),
+        addedSources:p.SYNC_META_ADDED.map(name=>({path:name,sha256:hex(4)})),
+        unchangedSources:p.SYNC_META_UNCHANGED.map(name=>({path:name,sha256:hex(5)}))});
       if(index) {
         Object.assign(localAuth,{version:'worker-code-repair-v7',reason:'reference-decision-index-limit',bindingPolicy:'fresh-reference-index-limit-and-exact-corpus-before-lease-v1',
           files:p.REFERENCE_INDEX_TARGETS.map(name=>({path:name,beforeSha256:hex(2),afterSha256:hex(3)})),
@@ -331,7 +343,7 @@ function verifyReleaseWorkerCodeRepair() {
         fsyncSync:fd=>events.push(['fsync',fd.file]),closeSync:()=>{}};
       const context=vm.createContext({Buffer,Date,process:{},console});
       const realm=value=>{context.fixtureJson=JSON.stringify(value);return new vm.Script('JSON.parse(fixtureJson)').runInContext(context);};
-      let fixturePolicy,fixtureWorker,fixtureDriver;
+      let fixturePolicy,fixtureWorker,fixtureDriver,fixtureSyncMeta;
       const fixtureGenerations={...generations,
         resolveCurrentGeneration:()=>{assert.equal(held,false,'current payload hashing must precede pointer lock');
           return {...generations.validateGenerationDirectory({generationDir:contexts.rawCurrent.generationDir}),pointer:contexts.rawCurrent.pointer};},
@@ -343,23 +355,26 @@ function verifyReleaseWorkerCodeRepair() {
           ? {...contexts.rawCurrent.pointer,sourceCycleId:'moved'} : contexts[file==='current'?'rawCurrent':'rawPrevious'].pointer;}};
       const fixtureRequire=name=>name==='node:fs'?fixtureFs:name==='node:path'?path.posix:
         name==='./releaseWorkerCodeRepair.cjs'?fixturePolicy:name==='./releaseWorkerPreflight.cjs'?fixtureWorker:
+        name==='./syncMetaIncidentEvidence.cjs'?fixtureSyncMeta:
         name==='./nativeReleaseDataPlane.cjs'?fixtureDriver:name==='../server/dataGenerationStore.cjs'?fixtureGenerations:require(name);
       context.require=fixtureRequire;
       const compile=(source,name)=>{const module={exports:{}};
         new vm.Script('(function(require,module,exports,__dirname){'+source+'\n})',{filename:name}).runInContext(context)(fixtureRequire,module,module.exports,'/candidate/scripts');
         return module.exports;};
-      const liveWorker=structuredClone(writerWorker);
+      const liveWorker=structuredClone(syncMeta?syncMetaWorker:writerWorker);
       if(index)liveWorker.status.lastCycle.error='npm run reconcile:fast-results-generation exited with 1';
       if(ordinary){liveWorker.status.lastCycle.ok=true;publication.committed=identity(contexts.rawCurrent);}
       fixtureWorker={evaluateWorkerPreflight:new vm.Script('('+worker.evaluateWorkerPreflight.toString()+')').runInContext(context),
         collectWorkerPreflight:()=>realm(liveWorker),buildReadOnlyWorkerProbe:()=>''};
+      fixtureSyncMeta=compile(fs.readFileSync(path.join(__dirname,'syncMetaIncidentEvidence.cjs'),'utf8'),'serialized-sync-meta.cjs');
       fixturePolicy=compile(policySource,'serialized-policy.cjs');
       fixturePolicy.candidateAuthorization=(_root,a)=>fixturePolicy.validateWorkerCodeRepairAuthorization(a,Date.now());
       fixturePolicy.collectWorkerCodeRepair=()=>{collects++;assert.equal(ordinary,false,'healthy capture must not collect stale incident');
         const indexJournal=index?JSON.stringify(localAuth.incident.failure,null,2).split('\n').map(message=>({unit:'football-sync-worker.service',pid:'43',
           timestampUs:String((now-2050)*1000),timestampMs:now-2050,message})):null;
         return realm({...freshExtra,publication,files:localAuth.files.map(r=>({path:r.path,sha256:r.beforeSha256})),
-          ...(index?{indexSources:localAuth.indexSources,referenceIndex:localAuth.referenceIndex,journal:indexJournal}:{})});};
+          ...(index?{indexSources:localAuth.indexSources,referenceIndex:localAuth.referenceIndex,journal:indexJournal}:{}),
+          ...(syncMeta?{meta,journal:syncMetaJournal,unchangedSources:localAuth.unchangedSources,addedSourcesAbsent:p.SYNC_META_ADDED}:{})});};
       fixtureDriver=compile("const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');"+rootFunctions+
         '\nmodule.exports={secureDirectory,read,write};','serialized-root-journal.cjs');
       const subject=compile(nativeSource,'serialized-native-code.cjs');
@@ -373,7 +388,7 @@ function verifyReleaseWorkerCodeRepair() {
       return {subject,capture,state:realm(state),session:realm(session),authorization:realm(localAuth),events,files,metadata,directory,
         get collects(){return collects;},get held(){return held;},driver:fixtureDriver,realm,publication};
     };
-    for(const variant of ['repair','ordinary','index-repair','index-ordinary'])check(()=>{
+    for(const variant of ['repair','ordinary','index-repair','index-ordinary','sync-meta-repair','sync-meta-ordinary'])check(()=>{
       const f=runCaptureFixture(variant),r=f.capture(),route=variant.endsWith('ordinary')?'ordinary':'repair';assert.equal(f.held,false);assert.equal(r.capture.body.route,route);
       assert.equal(f.collects,route==='ordinary'?0:1);assert.equal(r.capture.body.generationEvidence.rawCurrent.files,1);
       assert.equal(r.capture.body.generationEvidence.rawCurrent.bytes,fs.statSync(path.join(contexts.rawCurrent.generationDir,'matches-current.json')).size);

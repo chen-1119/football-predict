@@ -6,8 +6,8 @@
     "44d43223770bc01ed902f064c07486b59f8b318d"
   ],
   "application": "Overlay the listed source blobs on the verified installed r941 source. Verify every baseline digest first. Move the deployed recovery authorization to the retired path verbatim. Use the original training asset and normal release factory.",
-  "sourceFiles": 2182,
-  "sourceTreeSha256": "1863d29bb3bbf6dd1ba4e9f924991956bf52e9297986821c9f4d9d522062ffcd",
+  "sourceFiles": 2187,
+  "sourceTreeSha256": "e9beebdc15759e2d3f6403e1663a1a0b5b5ba7a5814e583306db9d468d858f3d",
   "retireExistingFile": {
     "from": "deploy/light-server/worker-code-repair-authorization.json",
     "to": "docs/release-history/retired-r941-reconciliation-timeout-authorization-20261124.json",
@@ -17,7 +17,7 @@
     {
       "path": ".github/workflows/recommendation-runtime.yml",
       "baselineSha256": "329071cc9984b2c2655dca0fcf2b24291f274f187f6990690639ce06f32df3b9",
-      "integratedSha256": "017a0d37fb40eddba35c0339d3d87c4d252860b30a0329569a6cf8c2b18bcb7e"
+      "integratedSha256": "21c6fdd2c191e5d02e7414ed06b4b218f6ac4e4923233db6f55071919a2b0769"
     },
     {
       "path": "deploy/light-server/worker-code-repair-authorization.json",
@@ -30,19 +30,44 @@
       "integratedSha256": "f9148e71c82386d156e2e09012d0765ae01d576fa60b6c8c2fd26f392821dbca"
     },
     {
+      "path": "scripts/buildR941WorkerCodeRepairAuthorization.cjs",
+      "baselineSha256": null,
+      "integratedSha256": "2220d505ef0f9df7c360d677cd9342cbb251266c1121100bcd320663bd9cfc6e"
+    },
+    {
       "path": "scripts/candidateProspectiveLedger.cjs",
       "baselineSha256": "c27abeec204f71b9917a103a484350a12c27d0de6af6f538e5b7f6f772e779f0",
-      "integratedSha256": "d6999fff2e21c3a87670c092bc598d694e482e1eebc70c10333ab13a5c9acae1"
+      "integratedSha256": "71345c19c0a8e310cb8afd526141ad0c5f9092b49fe4f29c2bedeec7eb003ee4"
+    },
+    {
+      "path": "scripts/captureCandidateProspectiveDeadline.cjs",
+      "baselineSha256": "e6900ae35aeb98bd2ef165d214421441cb7eec80578f76b70313fd8fb5b37c51",
+      "integratedSha256": "f9ed69e824fecc6489f15c10596fc673deb4b6f21f8fb3b0db9fada85422262e"
     },
     {
       "path": "scripts/createReleaseBundle.cjs",
       "baselineSha256": "97fd0063a8da828be2fa44b5f469df7d5e1b70402ae8f7eadea9683a2e239868",
-      "integratedSha256": "e464b829ac73be9337a28165700a0894371ee7ce18028c18e6a5e26e4ef2d840"
+      "integratedSha256": "fe9d878770d0ee22186f4225815757d9a0fd1e14c24539ffbdc805138a847472"
+    },
+    {
+      "path": "scripts/deployReleaseBundle.cjs",
+      "baselineSha256": "c627eb5fe3d41e05ff3b72e072747a32c40b3842e933706c210569257be9ea12",
+      "integratedSha256": "d1559188f1d243b113311fe88201185221222c4f59a7bc6d8dc57a0c0ac1361e"
     },
     {
       "path": "scripts/frontendRuntimeBoundary.cjs",
       "baselineSha256": "881b485dedf99f81ccc4db382f3119e45635446a6b673063ab2d82a24299caa6",
       "integratedSha256": "e9265e1915bfa130e658c7ef7c04802b8835dc4f285490e34ec824d0c6779dfa"
+    },
+    {
+      "path": "scripts/inlineRowIncidentEvidence.cjs",
+      "baselineSha256": null,
+      "integratedSha256": "94015d71377ccf3c453296a77c227f027af732264c89b4e53d0e16a302cab2e7"
+    },
+    {
+      "path": "scripts/nativeCodeReleaseDataPlane.cjs",
+      "baselineSha256": "38edd0a0571e8083beb55e62f9b2ce21eff57a38ce231cd779221dd8bc3610f5",
+      "integratedSha256": "612225f2579e776e079642c2162135bdc7a666f4302ac0b407a53effb0df548b"
     },
     {
       "path": "scripts/neutralSwedishOfficial.cjs",
@@ -65,9 +90,24 @@
       "integratedSha256": "1a3164ac5ad17e129bd9ee8099b9a30c3cbd263d161f969e3cb611d8770fbc91"
     },
     {
+      "path": "scripts/releaseWorkerCodeRepair.cjs",
+      "baselineSha256": "7aa23148afdc9636434b540763aa581f806ff080be8caed516951bfdc08c48f8",
+      "integratedSha256": "b941ba7347af1ec22ce50416246cf9e0e3d8226ee6d615e1fa797f6e3775b134"
+    },
+    {
+      "path": "scripts/runReleaseWorkerPreflight.cjs",
+      "baselineSha256": "7e6bb042c531367883ea67e52897a3d402d121ff1098abd8641620dff7e7df2d",
+      "integratedSha256": "173084cb4495b3610cc942b06cbe2b595456dbeec4019c97845349403d033fe7"
+    },
+    {
       "path": "scripts/runSyncWorker.cjs",
       "baselineSha256": "2bd126fbce42dc0b6216bc47e2a21abf938b606cfbc3a4973569a4fea6dc0738",
       "integratedSha256": "b0863a180e3ec97eaa0f7bf23eb05a1cba6267acd0a285e6cf32746f91ec0e85"
+    },
+    {
+      "path": "scripts/streamedInlineObjectEntries.cjs",
+      "baselineSha256": null,
+      "integratedSha256": "a8aab0f54859d556bac0735054191c7a3a36c8c34a26e60685577ce36ad667da"
     },
     {
       "path": "scripts/syncPostgresProjection.cjs",
@@ -105,6 +145,11 @@
       "integratedSha256": "b39b6ca538fecd436536b0bb628c001f19e5f78bc26e45ae374aea4e6a9253d5"
     },
     {
+      "path": "scripts/verifyNativeCodeServing.cjs",
+      "baselineSha256": "28c4216601818a8af12f922747924b5d1b2d534985957ef04a20e07a05940a6f",
+      "integratedSha256": "2ac685c34def8a210c9299fd9df92d444f731a6ecf8b55b45c061cefde31667b"
+    },
+    {
       "path": "scripts/verifyRecommendationContentPresentation.cjs",
       "baselineSha256": "f6a240fc2aba0ec1d77e61a0f89f6b4e54636564990174f0e917760a05300375",
       "integratedSha256": "735782da5e28aa16694338d5034cefdb199f398d48f23cd757fc4c368d13e2ab"
@@ -112,17 +157,27 @@
     {
       "path": "scripts/verifyReleaseBundleSafety.cjs",
       "baselineSha256": "759d998b519ce3a12593318fc5f8ab148006b23ed43874774011cdb397a7327e",
-      "integratedSha256": "0659379c274143eea3492d444a9cd1c11110d2b09cda99860f6c1ac6bcc73d7d"
+      "integratedSha256": "c989c5af66fb3d1d488a55f9b00c7cd321ff9e3ecf8ab449c0161b1fb5c1fa92"
     },
     {
       "path": "scripts/verifyReleaseVerifierContracts.cjs",
       "baselineSha256": "abf3faebc01a15f0a5d289a88832bcfbc0c92494bd8e5d828858b80a4ed851fa",
-      "integratedSha256": "7e9de1b9461f39d75be5fcdf0d2b28693d73b4f5032b51329bd4307f6c0d7282"
+      "integratedSha256": "d73a08a2181163a8e7f26a9fd4cb3ef5585ab256bc3e93b56f6363bae55343d9"
+    },
+    {
+      "path": "scripts/verifyReleaseWorkerCodeRepair.cjs",
+      "baselineSha256": "4e03d5fea6da4b0a256ec4686af6248eda47db4e19a2a4e8301202799b56a424",
+      "integratedSha256": "d0a079764c4770a612c9829ba75b1fb3c2610dd79be7a29374076ee9937c3173"
     },
     {
       "path": "scripts/verifyReviewSettlementPresentation.cjs",
       "baselineSha256": "0d3c5cbd3e4010d4602fa3a498cc72734416637d083c62537af36b0ee3697053",
       "integratedSha256": "46bc1239ca2bd8d33fe4cf3316ab22e2b554a5b112cdb7e0f0a60db7b7099f22"
+    },
+    {
+      "path": "server/collectorQuorumEvidence.cjs",
+      "baselineSha256": "7d13ef85828a48c15522b0c6ef25c7367c3877a58d515a93a3bd496da2ae5ea0",
+      "integratedSha256": "565129c458363c56c8a1784b3b5517878bdb92a3ac804681c7215256c29cd775"
     },
     {
       "path": "server/index.cjs",
@@ -158,6 +213,11 @@
       "path": "server/recommendationReviewPage.cjs",
       "baselineSha256": "aea3b347cf516d918b9741eb66fd9ddbdfab7d819399a5448bb18d72b651f7b8",
       "integratedSha256": "2da45c09ba6dcffd08eac178ee26d680d584a831d268896d47b2b824352688d3"
+    },
+    {
+      "path": "server/selectedJsonObjectFile.cjs",
+      "baselineSha256": "350de1857fec4a1a92bb1347c159d9a48900d9b02d7febd72104d42cd8b4a7fc",
+      "integratedSha256": "678efdb2c68e0436a5695ba42c4bc170140fb01b399f847e55a56c82a619b053"
     },
     {
       "path": "src/App.tsx",
@@ -255,6 +315,11 @@
       "integratedSha256": "f673a775fe54597f75503e5dcc489fb05a2fc1b78c4bffe637aed79fa6c50210"
     },
     {
+      "path": "tests/inline-map-evidence.test.cjs",
+      "baselineSha256": null,
+      "integratedSha256": "ba41498c13e59505952771fefd05bba019c714416197a168fd0015578cc89328"
+    },
+    {
       "path": "tests/official-generation-early-lock.test.cjs",
       "baselineSha256": null,
       "integratedSha256": "d5f4f83038ef5a088a3084fe9cb0db361630e7a39f653631e75a4ecd561769f3"
@@ -303,6 +368,11 @@
       "path": "tests/publishedReviewCoverageUi.test.cjs",
       "baselineSha256": "e4c16c2b75570ee79d07f887ef7c307a540ca341feaa3da9c528227d0e123cff",
       "integratedSha256": "8c488d3e6b17aec2fb404cd3b8e8f2e1ef2e25e8c3ab5a183ad514ad12346f73"
+    },
+    {
+      "path": "tests/r941-worker-code-repair-v11.test.cjs",
+      "baselineSha256": null,
+      "integratedSha256": "bc3b860ffaf9fddfd8f51956b2247829dbeb3784730342b558022c4e307a093f"
     },
     {
       "path": "tests/recommendation-center-interaction.test.cjs",

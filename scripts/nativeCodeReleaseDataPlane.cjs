@@ -5,6 +5,22 @@ const { NativeReleasePostgresPool } = require('./nativeReleasePostgresTransport.
 const LIVE = '/opt/football-predict', STORE = '/var/lib/football-predict';
 const pool = (s, name, oid) => new NativeReleasePostgresPool({ database: name, databaseOid: oid, clusterId: s.clusterId });
 const driver = () => require('./nativeReleaseDataPlane.cjs');
+function requiresFreshRepairCapture(auth) {
+  if (auth.version === 'worker-code-repair-v11') {
+    assert.equal(auth.baseRuntimeSha256, 'd922357040c5f5fbedc19ec9d5a49a7bd5c3c674089df88b7037f6b98cf64db5');
+    assert.equal(auth.bindingPolicy, 'fresh-r941-stability-incident-before-lease-v1');
+    return true;
+  }
+  if (auth.version === 'worker-code-repair-v10') {
+    assert.equal(auth.baseRuntimeSha256, '5de9c543933c37b1b086c41862a17456f83227f555b7613b2058318d848a498c');
+    assert.equal(auth.bindingPolicy, 'fresh-r938-timeout-incident-before-lease-v1');
+    return true;
+  }
+  return ['worker-code-repair-v6','worker-code-repair-v7','worker-code-repair-v8','worker-code-repair-v9'].includes(auth.version);
+}
+function usesCommittedRepairPair(auth) {
+  return requiresFreshRepairCapture(auth) || ['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5'].includes(auth.version);
+}
 const WAKE_TRIGGER_DEFINITION_SHA = 'b0a62d41d43b46a2b76a0745b3d1781f8348645b0e5a2d95a18482ebfe6a1e31';
 async function restrictKnownWakeTrigger(source, role, directory) {
   const unsafe = (await source.query(`SELECT p.oid::text AS oid,n.nspname,p.proname,pg_get_userbyid(p.proowner) AS owner,
@@ -87,11 +103,11 @@ async function tryAllocate(sha, directory) {
     const selection=policy.selectWorkerCodeRepairPreparation(repair,
       require('./releaseWorkerPreflight.cjs').collectWorkerPreflight(),policy.collectWorkerCodeRepair);
     assert.equal(selection.report.ok,true,'worker preparation changed before allocation');
-    if(selection.useRepair && ['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5','worker-code-repair-v6','worker-code-repair-v7'].includes(repair.version)) {
+    if(selection.useRepair && usesCommittedRepairPair(repair)) {
       assert.equal(repair.baseRuntimeSha256,state.oldSha);
       assert.equal(repair.publication.databaseOid,state.oldDatabaseOid);
       state.committedGenerationRepairAuthorizationHash=crypto.createHash('sha256').update(fs.readFileSync(repairFile)).digest('hex');
-      if(['worker-code-repair-v6','worker-code-repair-v7'].includes(repair.version)) state.repairCapturePolicy=repair.bindingPolicy;
+      if(requiresFreshRepairCapture(repair)) state.repairCapturePolicy=repair.bindingPolicy;
     }
   }
   state.schemaCatalogHash = (await verifySchema(state)).catalogHash;
@@ -172,7 +188,7 @@ function sealFreshRepairCapture(state,body) {
 }
 function assertFreshRepairCapture(state,capture,authorization,authorizationHash) {
   const repair=require('./releaseWorkerCodeRepair.cjs');
-  assert(['worker-code-repair-v6','worker-code-repair-v7'].includes(authorization.version));
+  assert(requiresFreshRepairCapture(authorization));
   assert.equal(state.repairCapturePolicy,authorization.bindingPolicy);
   assert.deepEqual(capture,sealFreshRepairCapture(state,capture.body),'repair capture content or state MAC changed');
   const body=capture.body;
@@ -188,7 +204,7 @@ function assertFreshRepairCapture(state,capture,authorization,authorizationHash)
     const report=repair.evaluateWorkerCodeRepair(authorization,body.worker,body.observed);
     assert.equal(report.ok,true);assert.equal(report.workerHealthy,false);
     assert.deepEqual(body.publication,body.observed.publication);
-    assert.deepEqual(body.incident,repair.repeatedRepairIncident(authorization,body.worker,body.observed.journal));
+    assert.deepEqual(body.incident,repair.repeatedRepairIncident(authorization,body.worker,body.observed.journal,body.observed.meta));
   } else {
     assert.equal(body.observed,null);assert.equal(body.incident,null);
     assert.equal(require('./releaseWorkerPreflight.cjs').evaluateWorkerPreflight(body.worker).ok,true);
@@ -220,13 +236,13 @@ function readFreshRepairCapture(state,authorization,authorizationHash) {
 function assertRepairPair(state, session, current, previous, authorization, authorizationHash, freshCapture=null) {
   const repair=require('./releaseWorkerCodeRepair.cjs');
   repair.validateWorkerCodeRepairAuthorization(authorization,Date.now());
-  assert(['worker-code-repair-v2','worker-code-repair-v3','worker-code-repair-v4','worker-code-repair-v5','worker-code-repair-v6','worker-code-repair-v7'].includes(authorization.version));
+  assert(usesCommittedRepairPair(authorization));
   assert.equal(authorizationHash,state.committedGenerationRepairAuthorizationHash);
   assert.equal(authorization.baseRuntimeSha256,state.oldSha);
   assert.equal(authorization.publication.databaseOid,state.oldDatabaseOid);
   assert.equal(state.dataPlane,'code-only');
   const same=require('./codeReleaseAcceptance.cjs').assertSamePublication;
-  const fresh=['worker-code-repair-v6','worker-code-repair-v7'].includes(authorization.version)
+  const fresh=requiresFreshRepairCapture(authorization)
     ? assertFreshRepairCapture(state,freshCapture,authorization,authorizationHash) : null;
   const publication=fresh?fresh.publication:authorization.publication;
   same(publication.committed,session.identity);
@@ -251,7 +267,7 @@ function assertCodePublicationForState(state,session,storeDir=STORE,pointerLockH
   const file=path.join(__dirname,'../deploy/light-server/worker-code-repair-authorization.json');
   const bytes=fs.readFileSync(file),authorization=JSON.parse(bytes),generations=require('../server/dataGenerationStore.cjs');
   require('./releaseWorkerCodeRepair.cjs').candidateAuthorization(path.resolve(__dirname,'..'),authorization);
-  const freshCapture=['worker-code-repair-v6','worker-code-repair-v7'].includes(authorization.version)
+  const freshCapture=requiresFreshRepairCapture(authorization)
     ? readFreshRepairCapture(state,authorization,crypto.createHash('sha256').update(bytes).digest('hex')) : null;
   const held=pointerLockHandle||generations.acquirePointerCommitLock({lockDir:generations.storePaths(storeDir).pointerLockDir,timeoutMs:10000,staleMs:60000});
   try {
@@ -276,7 +292,7 @@ function captureFreshRepairPair(state,session,directory,storeDir=STORE) {
   const file=path.join(__dirname,'../deploy/light-server/worker-code-repair-authorization.json');
   const bytes=fs.readFileSync(file),authorization=repair.candidateAuthorization(path.resolve(__dirname,'..'),JSON.parse(bytes));
   const authorizationHash=crypto.createHash('sha256').update(bytes).digest('hex');
-  assert(['worker-code-repair-v6','worker-code-repair-v7'].includes(authorization.version));
+  assert(requiresFreshRepairCapture(authorization));
   assert.equal(authorizationHash,state.committedGenerationRepairAuthorizationHash);
   assert.equal(state.repairCapturePolicy,authorization.bindingPolicy);
   assert.equal(authorization.baseRuntimeSha256,state.oldSha);
@@ -310,7 +326,7 @@ function captureFreshRepairPair(state,session,directory,storeDir=STORE) {
     same(generations.readPointer(paths.previousPointer),previous.pointer);
     const body={sha:state.sha,oldSha:state.oldSha,stateHash:jsonHash(state),authorizationHash,
       checkedAt:new Date().toISOString(),route:selected.useRepair?'repair':'ordinary',publication,worker,observed,
-      incident:selected.useRepair?repair.repeatedRepairIncident(authorization,worker,observed.journal):null,
+      incident:selected.useRepair?repair.repeatedRepairIncident(authorization,worker,observed.journal,observed.meta):null,
       generationEvidence:{committed:generationVerificationEvidence(session.publication.context),
         rawCurrent:generationVerificationEvidence(current),rawPrevious:generationVerificationEvidence(previous)}};
     const capture=sealFreshRepairCapture(state,body);
@@ -596,7 +612,7 @@ function retireSeed(sha) {
   d.write(path.join(directory, 'code-seed-retired.json'), { ...intent, removed: true, completedAt: new Date().toISOString() });
   return { ok: true, bytes, removed: true };
 }
-module.exports = { tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, assertCodeCurrentPublication, assertCodePublicationForState, assertRepairPair, captureLeaseInput, retryLeaseRead, assertResultArchivesReady, assertCodeCutoverArchivesReady, readCodeCutoverArchiveAuthority, assertCodeArchiveCoverageClock, verifyCodeCutoverCompletionClock, generationVerificationEvidence, sealFreshRepairCapture, assertFreshRepairCapture, readFreshRepairCapture, assertFreshCaptureAbsent, captureFreshRepairPair };
+module.exports = { requiresFreshRepairCapture, tryAllocate, verifySchema, seed, candidateAccess, retire, retireSeed, restrictKnownWakeTrigger, leaseCurrent, assertCodeCurrentPublication, assertCodePublicationForState, assertRepairPair, captureLeaseInput, retryLeaseRead, assertResultArchivesReady, assertCodeCutoverArchivesReady, readCodeCutoverArchiveAuthority, assertCodeArchiveCoverageClock, verifyCodeCutoverCompletionClock, generationVerificationEvidence, sealFreshRepairCapture, assertFreshRepairCapture, readFreshRepairCapture, assertFreshCaptureAbsent, captureFreshRepairPair };
 if (require.main === module) {
   (async () => {
     assert.equal(process.argv.length, 4); const action = process.argv[2], sha = process.argv[3];

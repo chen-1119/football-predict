@@ -123,7 +123,7 @@ async function verify(sha) {
         const bytes = fs.readFileSync(file), authorizationHash = crypto.createHash('sha256').update(bytes).digest('hex');
         const authorization = require('./releaseWorkerCodeRepair.cjs').candidateAuthorization(APP, JSON.parse(bytes));
         assert.equal(authorizationHash, state.committedGenerationRepairAuthorizationHash);
-        const capture = ['worker-code-repair-v6','worker-code-repair-v7'].includes(authorization.version)
+        const capture = code.requiresFreshRepairCapture(authorization)
           ? code.readFreshRepairCapture(state, authorization, authorizationHash) : null;
         // Validate immutable bytes before taking the short global pointer lock.
         const current = generations.resolveCurrentGeneration({ storeDir: STORE });

@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const { Worker } = require('node:worker_threads');
+const { isUtf8 } = require('node:buffer');
 const HASH_FROM_OWNED_THREAD = Symbol('independent full hash');
 let hashOwner = null;
 
@@ -16,13 +17,31 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
     || !Number.isSafeInteger(chunkBytes) || chunkBytes < 1 || chunkBytes > 1024 * 1024
     || !Number.isSafeInteger(maxSelectedChars) || maxSelectedChars < 1
     || !Number.isSafeInteger(maxDepth) || maxDepth < 1) fail('SELECTED_JSON_OPTIONS_INVALID', 'invalid selected JSON options');
-  const selected = new Set(keys), result = Object.create(null), stack = [];
-  const hash = crypto.createHash('sha256'), decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+  const S_OBJ_KEY_OR_END = 1, S_OBJ_KEY_REQ = 2, S_OBJ_COLON = 3, S_OBJ_VALUE = 4, S_OBJ_COMMA_OR_END = 5;
+  const S_ARR_VAL_OR_END = 6, S_ARR_VAL_REQ = 7, S_ARR_COMMA_OR_END = 8;
+  const selected = new Set(keys), result = Object.create(null), stack = new Uint8Array(maxDepth + 1);
+  let depth = 0, topKey = null;
+  const hash = crypto.createHash('sha256');
+  const keyDecoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+  const captureDecoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+  let utf8Carry = Buffer.alloc(0);
   let mode = '', atom = '', rootStarted = false, rootDone = false, escape = false, unicodeLeft = 0;
   let isKey = false, keyText = '', keyStart = -1;
   let capture = null, captureStart = -1, selectedChars = 0, readBytes = 0, maxObservedDepth = 0;
   const invalid = detail => fail('FILE_JSON_INVALID', `invalid JSON: ${detail}`);
-  const appendCapture = text => {
+  const validateUtf8Chunk = bytes => {
+    const checkBuf = utf8Carry.length ? Buffer.concat([utf8Carry, bytes]) : bytes;
+    let end = checkBuf.length, back = 0;
+    while (back < 3 && end - 1 - back >= 0 && (checkBuf[end - 1 - back] & 0xc0) === 0x80) back++;
+    if (end - 1 - back >= 0 && checkBuf[end - 1 - back] >= 0xc0) {
+      const lead = checkBuf[end - 1 - back];
+      const needed = lead < 0xe0 ? 2 : lead < 0xf0 ? 3 : lead < 0xf8 ? 4 : 5;
+      if (needed <= 4 && back + 1 < needed) end = end - 1 - back;
+    }
+    if (end > 0 && !isUtf8(checkBuf.subarray(0, end))) invalid('invalid UTF-8');
+    utf8Carry = end < checkBuf.length ? Buffer.from(checkBuf.subarray(end)) : Buffer.alloc(0);
+  };
+  const appendCaptureText = text => {
     if (!capture || !text) return;
     selectedChars += text.length;
     if (selectedChars > maxSelectedChars) fail('SELECTED_JSON_VALUE_LIMIT', 'selected JSON values exceed the memory admission bound');
@@ -34,18 +53,30 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
       capture.pendingChars = 0;
     }
   };
-  const appendKey = text => {
+  const appendCaptureBytes = (bytes, start, end, stream) => {
+    if (!capture || start >= end) return;
+    let text;
+    try { text = captureDecoder.decode(bytes.subarray(start, end), { stream }); } catch { invalid('invalid UTF-8'); }
+    appendCaptureText(text);
+  };
+  const appendKeyBytes = (bytes, start, end, stream) => {
+    if (start >= end) return;
+    let text;
+    try { text = keyDecoder.decode(bytes.subarray(start, end), { stream }); } catch { invalid('invalid UTF-8'); }
     keyText += text;
     if (keyText.length > 16384) fail('SELECTED_JSON_KEY_LIMIT', 'top-level JSON key is too long');
   };
-  let currentText = '';
+  let currentBytes = null;
   const completeValue = end => {
-    const parent = stack.at(-1);
-    if (!parent) { rootDone = true; return; }
-    if (!['value', 'valueOrEnd', 'valueRequired'].includes(parent.state)) invalid('unexpected completed value');
-    parent.state = 'commaOrEnd';
-    if (stack.length === 1 && capture) {
-      appendCapture(currentText.slice(captureStart, end));
+    if (depth === 0) { rootDone = true; return; }
+    const st = stack[depth - 1];
+    if (st !== S_OBJ_VALUE && st !== S_ARR_VAL_OR_END && st !== S_ARR_VAL_REQ) invalid('unexpected completed value');
+    stack[depth - 1] = st === S_OBJ_VALUE ? S_OBJ_COMMA_OR_END : S_ARR_COMMA_OR_END;
+    if (depth === 1 && capture) {
+      appendCaptureBytes(currentBytes, captureStart, end, false);
+      let tail;
+      try { tail = captureDecoder.decode(); } catch { invalid('invalid UTF-8'); }
+      appendCaptureText(tail);
       if (capture.pending.length) capture.parts.push(capture.pending.join(''));
       const key = capture.key, parts = capture.parts;
       capture = null; captureStart = -1;
@@ -54,14 +85,15 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
       result[key] = JSON.parse(parts.join(''));
     }
   };
-  const closeContainer = end => { stack.pop(); completeValue(end); };
-  const push = type => {
-    stack.push({ type, state: type === 'object' ? 'keyOrEnd' : 'valueOrEnd', key: null });
-    maxObservedDepth = Math.max(maxObservedDepth, stack.length);
-    if (stack.length > maxDepth) fail('SELECTED_JSON_DEPTH_LIMIT', 'JSON nesting exceeds the admission bound');
+  const closeContainer = end => { depth--; completeValue(end); };
+  const push = isObject => {
+    if (depth + 1 > maxDepth) fail('SELECTED_JSON_DEPTH_LIMIT', 'JSON nesting exceeds the admission bound');
+    stack[depth++] = isObject ? S_OBJ_KEY_OR_END : S_ARR_VAL_OR_END;
+    if (depth > maxObservedDepth) maxObservedDepth = depth;
   };
+  const atomValid = /^(?:true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)$/;
   const finishAtom = end => {
-    if (!/^(?:true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)$/.test(atom)) invalid('invalid scalar');
+    if (!atomValid.test(atom)) invalid('invalid scalar');
     mode = ''; atom = ''; completeValue(end);
   };
   // Reuse native scans within this invocation; grammar and byte hashing remain
@@ -69,19 +101,19 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
   const atomDelimiter = /[\x20\t\r\n,\]}]/g, whitespace = /[\x20\t\r\n]+/y, special = /["\\\x00-\x1f]/g;
 
   // Bounded runs of complete skipped scalars use the same exact grammar in a
-  // native scan. Containers, retained values and incomplete chunk tails still
-  // use the state machine. The numeric lookahead keeps the original 4096-char
-  // admission bound; longer atoms fall back to its explicit refusal below.
+  // native scan over 1-byte Latin-1 views after C++ SIMD UTF-8 validation.
+  // Longer atoms fall back to the state machine and its explicit 4096-char bound.
   const jsonString = '"(?:[^"\\\\\\x00-\\x1f]|\\\\(?:["\\\\/bfnrt]|u[0-9a-fA-F]{4}))*"';
-  const jsonScalar = '(?:' + jsonString + '|true|false|null|(?![-0-9eE+.]{4097})-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)';
+  const jsonScalar = '(?:' + jsonString + '|true|false|null|-?(?:0|[1-9][0-9]{0,20})(?:\\.[0-9]{1,24})?(?:[eE][+-]?[0-9]{1,10})?(?![0-9.eE+-]))';
   const gap = '[ \\t\\r\\n]*', separator = gap + ',' + gap;
   const property = jsonString + gap + ':' + gap + jsonScalar;
-  const scalarProperties = new RegExp(property + '(?:' + separator + property + '){0,63}(?=' + gap + '[,}])', 'y');
-  const scalarValues = new RegExp(jsonScalar + '(?:' + separator + jsonScalar + '){0,63}(?=' + gap + '[,\\]])', 'y');
-  const consume = text => {
-    currentText = text;
+  const openProp = jsonString + gap + ':' + gap + '([{\\[])';
+  const objectStep = new RegExp('(?:' + property + '(?:' + separator + property + '){0,31}(?:' + gap + '(\\})|' + separator + openProp + '|(?=' + gap + '[,}]))|' + openProp + ')', 'y');
+  const scalarValues = new RegExp(jsonScalar + '(?:' + separator + jsonScalar + '){0,31}(?=' + gap + '[,\\]])', 'y');
+  const consume = (bytes, text) => {
+    currentBytes = bytes;
     if (capture) captureStart = 0;
-    if (mode === 'string' && isKey) keyStart = 0;
+    if (mode === 'string' && isKey && depth === 1) keyStart = 0;
     let i = 0;
     while (i < text.length) {
       const c = text[i];
@@ -105,9 +137,17 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
         if (text[i] !== '"') invalid('unescaped control character');
         i++; mode = '';
         if (isKey) {
-          const frame = stack.at(-1);
-          if (stack.length === 1) { appendKey(text.slice(keyStart, i)); frame.key = JSON.parse(keyText); }
-          frame.state = 'colon'; keyText = ''; keyStart = -1;
+          if (depth === 1) {
+            appendKeyBytes(bytes, keyStart, i, false);
+            let tail;
+            try { tail = keyDecoder.decode(); } catch { invalid('invalid UTF-8'); }
+            if (tail) {
+              keyText += tail;
+              if (keyText.length > 16384) fail('SELECTED_JSON_KEY_LIMIT', 'top-level JSON key is too long');
+            }
+            topKey = JSON.parse(keyText);
+          }
+          stack[depth - 1] = S_OBJ_COLON; keyText = ''; keyStart = -1;
         } else completeValue(i);
         continue;
       }
@@ -128,7 +168,7 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
         whitespace.exec(text);
         const after = whitespace.lastIndex;
         if (capture) {
-          appendCapture(text.slice(captureStart, i));
+          appendCaptureBytes(bytes, captureStart, i, true);
           captureStart = after;
         }
         i = after; continue;
@@ -136,50 +176,82 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
       if (rootDone) invalid('trailing content');
       if (!rootStarted) {
         if (c !== '{') invalid('top-level value must be an object');
-        rootStarted = true; push('object'); i++; continue;
+        rootStarted = true; push(true); i++; continue;
       }
-      const frame = stack.at(-1);
+      const st = stack[depth - 1];
 
-      if (!capture && stack.length > 1 && frame.type === 'object'
-        && (frame.state === 'keyOrEnd' || frame.state === 'keyRequired') && c === '"') {
-        scalarProperties.lastIndex = i;
-        if (scalarProperties.exec(text)) {
-          frame.state = 'commaOrEnd'; i = scalarProperties.lastIndex; continue;
+      if (!capture && depth > 1) {
+        if ((st === S_OBJ_KEY_OR_END || st === S_OBJ_KEY_REQ) && c === '"') {
+          objectStep.lastIndex = i;
+          const m = objectStep.exec(text);
+          if (m) {
+            i = objectStep.lastIndex;
+            const opened = m[2] || m[3];
+            if (opened !== undefined) {
+              stack[depth - 1] = S_OBJ_VALUE;
+              push(opened === '{');
+            } else if (m[1] !== undefined) {
+              closeContainer(i);
+            } else {
+              stack[depth - 1] = S_OBJ_COMMA_OR_END;
+            }
+            continue;
+          }
+        } else if (st === S_OBJ_COMMA_OR_END && c === ',' && i + 1 < text.length && text[i + 1] === '"') {
+          objectStep.lastIndex = i + 1;
+          const m = objectStep.exec(text);
+          if (m) {
+            i = objectStep.lastIndex;
+            const opened = m[2] || m[3];
+            if (opened !== undefined) {
+              stack[depth - 1] = S_OBJ_VALUE;
+              push(opened === '{');
+            } else if (m[1] !== undefined) {
+              closeContainer(i);
+            } else {
+              stack[depth - 1] = S_OBJ_COMMA_OR_END;
+            }
+            continue;
+          }
+        } else if (st === S_ARR_VAL_OR_END || st === S_ARR_VAL_REQ) {
+          if (c === '{') { push(true); i++; continue; }
+          scalarValues.lastIndex = i;
+          if (scalarValues.exec(text)) {
+            stack[depth - 1] = S_ARR_COMMA_OR_END; i = scalarValues.lastIndex; continue;
+          }
         }
       }
-      if (!capture && frame.type === 'array'
-        && (frame.state === 'valueOrEnd' || frame.state === 'valueRequired')) {
-        scalarValues.lastIndex = i;
-        if (scalarValues.exec(text)) {
-          frame.state = 'commaOrEnd'; i = scalarValues.lastIndex; continue;
-        }
-      }
-      if (frame.state === 'keyOrEnd' || frame.state === 'keyRequired') {
-        if (c === '}' && frame.state === 'keyOrEnd') { closeContainer(++i); continue; }
+      if (st === S_OBJ_KEY_OR_END || st === S_OBJ_KEY_REQ) {
+        if (c === '}' && st === S_OBJ_KEY_OR_END) { closeContainer(++i); continue; }
         if (c !== '"') invalid('expected object key');
-        mode = 'string'; isKey = true; keyText = ''; keyStart = i; i++; continue;
+        mode = 'string'; isKey = true; keyText = ''; keyStart = depth === 1 ? i : -1; i++; continue;
       }
-      if (frame.state === 'colon') {
+      if (st === S_OBJ_COLON) {
         if (c !== ':') invalid('expected colon');
-        frame.state = 'value'; i++; continue;
+        stack[depth - 1] = S_OBJ_VALUE; i++; continue;
       }
-      if (frame.state === 'commaOrEnd') {
-        if (c === (frame.type === 'object' ? '}' : ']')) { closeContainer(++i); continue; }
+      if (st === S_OBJ_COMMA_OR_END) {
+        if (c === '}') { closeContainer(++i); continue; }
         if (c !== ',') invalid('expected comma or container end');
-        frame.state = frame.type === 'object' ? 'keyRequired' : 'valueRequired'; i++; continue;
+        stack[depth - 1] = S_OBJ_KEY_REQ; i++; continue;
       }
-      if (frame.state === 'valueOrEnd' && c === ']') { closeContainer(++i); continue; }
-      if (stack.length === 1 && selected.has(frame.key)) {
-        capture = { key: frame.key, parts: [], pending: [], pendingChars: 0 }; captureStart = i;
+      if (st === S_ARR_COMMA_OR_END) {
+        if (c === ']') { closeContainer(++i); continue; }
+        if (c !== ',') invalid('expected comma or container end');
+        stack[depth - 1] = S_ARR_VAL_REQ; i++; continue;
       }
-      if (c === '{' || c === '[') { push(c === '{' ? 'object' : 'array'); i++; continue; }
+      if (st === S_ARR_VAL_OR_END && c === ']') { closeContainer(++i); continue; }
+      if (depth === 1 && selected.has(topKey)) {
+        capture = { key: topKey, parts: [], pending: [], pendingChars: 0 }; captureStart = i;
+      }
+      if (c === '{' || c === '[') { push(c === '{'); i++; continue; }
       if (c === '"') { mode = 'string'; isKey = false; i++; continue; }
-      if (c === '-' || /[0-9tfn]/.test(c)) { mode = 'atom'; atom = c; i++; continue; }
+      if (c === '-' || (c >= '0' && c <= '9') || c === 't' || c === 'f' || c === 'n') { mode = 'atom'; atom = c; i++; continue; }
       invalid('expected value');
     }
-    if (capture) { appendCapture(text.slice(captureStart)); captureStart = 0; }
-    if (mode === 'string' && isKey && stack.length === 1) { appendKey(text.slice(keyStart)); keyStart = 0; }
-    currentText = '';
+    if (capture) { appendCaptureBytes(bytes, captureStart, bytes.length, true); captureStart = 0; }
+    if (mode === 'string' && isKey && depth === 1) { appendKeyBytes(bytes, keyStart, bytes.length, true); keyStart = 0; }
+    currentBytes = null;
   };
   const before = fs.lstatSync(filePath);
   if (!before.isFile() || before.isSymbolicLink()) fail('GENERATION_FILE_UNSAFE', 'selected JSON file must be a plain file');
@@ -195,15 +267,12 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
       readBytes += n;
       if (readBytes > expectedBytes) fail('FILE_SIZE_MISMATCH', 'selected JSON file grew while reading');
       const bytes = buffer.subarray(0, n); hash.update(bytes);
-      let text;
-      try { text = decoder.decode(bytes, { stream: true }); } catch { invalid('invalid UTF-8'); }
-      consume(text);
+      validateUtf8Chunk(bytes);
+      consume(bytes, bytes.toString('latin1'));
     }
-    let tail;
-    try { tail = decoder.decode(); } catch { invalid('incomplete UTF-8'); }
-    consume(tail);
+    if (utf8Carry.length > 0) invalid('incomplete UTF-8');
     if (mode === 'atom') finishAtom(0);
-    if (mode || !rootDone || stack.length) invalid('incomplete document');
+    if (mode || !rootDone || depth !== 0) invalid('incomplete document');
     if (readBytes !== expectedBytes) fail('FILE_SIZE_MISMATCH', 'selected JSON file shrank while reading');
     const after = fs.fstatSync(fd), current = fs.lstatSync(filePath);
     if (after.dev !== opened.dev || after.ino !== opened.ino || after.size !== opened.size

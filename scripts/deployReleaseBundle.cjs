@@ -225,7 +225,7 @@ const buildRemotePreflightCommand = (expectedRecoveryHelperSha256, rotationContr
   "case \"$entrypoint_check\" in *\"appPresent=1\"*) ;; *) echo \"app-dir-missing\"; exit 22 ;; esac",
   "test ! -e /var/lib/football-release/reference-repairs/current && test ! -L /var/lib/football-release/reference-repairs/current || { echo 'release-reference-repair-recovery-pending'; exit 28; }",
   "systemctl is-active football-predict >/dev/null || { echo \"service-inactive\"; exit 23; }",
-  `sudo -n /opt/node-v22.22.1/bin/node -e ${workerCodeRepairProbe ? shellQuote(workerCodeRepairProbe) : shellQuote(buildReadOnlyWorkerProbe())} || { echo "release-worker-preflight-rejected"; exit 27; }`,
+  `sudo -n /usr/bin/flock -s -w 2 /run/lock/football-release.lock /opt/node-v22.22.1/bin/node -e ${workerCodeRepairProbe ? shellQuote(workerCodeRepairProbe) : shellQuote(buildReadOnlyWorkerProbe())} || { echo "release-worker-preflight-rejected"; exit 27; }`,
   `if test "$recovery_helper_sha" = ${shellQuote(expectedRecoveryHelperSha256)}; then echo "recoveryHelperRotationRequired=0"; elif test ${shellQuote(rotationContractReady ? "1" : "0")} = "1"; then echo "recoveryHelperRotationRequired=1"; else echo "release-recovery-helper-mismatch"; exit 26; fi`,
   `echo "recoveryHelperRotationContractReady=${rotationContractReady ? "1" : "0"}"`,
   "echo preflight-ok"
@@ -545,8 +545,33 @@ if (bundleInspection.entries.some(entry => entry.replace(/^\.\//, '') === worker
     || policy.sha256 !== crypto.createHash('sha256').update(fs.readFileSync(path.join(rootDir,'scripts/releaseWorkerCodeRepair.cjs'))).digest('hex'))
     fail('signed worker code repair policy unavailable');
   try {
+    const parsedAuthorization = JSON.parse(authorization.content.toString('utf8'));
+    if (parsedAuthorization.version === 'worker-code-repair-v10') {
+      const entry = 'scripts/workerTimeoutIncident.cjs';
+      const helper = inspectBundleEntryBytes(bundlePath, entry);
+      const localHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(rootDir, entry))).digest('hex');
+      if (!helper.ok || helper.sha256 !== localHash || !Array.isArray(parsedAuthorization.addedSources)
+        || parsedAuthorization.addedSources.length !== 1 || parsedAuthorization.addedSources[0].path !== entry
+        || parsedAuthorization.addedSources[0].sha256 !== localHash) throw new Error('signed timeout incident verifier differs');
+    }
+    if (parsedAuthorization.version === 'worker-code-repair-v11') {
+      const repairPolicy = require('./releaseWorkerCodeRepair.cjs');
+      if (!Array.isArray(parsedAuthorization.addedSources)
+        || JSON.stringify(parsedAuthorization.addedSources.map(row => row.path)) !== JSON.stringify(repairPolicy.R941_STABILITY_ADDED)
+        || !Array.isArray(parsedAuthorization.unchangedSources)
+        || JSON.stringify(parsedAuthorization.unchangedSources.map(row => row.path)) !== JSON.stringify(repairPolicy.R941_STABILITY_UNCHANGED)) {
+        throw new Error('signed r941 stability source inventory differs');
+      }
+      for (const row of [...parsedAuthorization.addedSources, ...parsedAuthorization.unchangedSources]) {
+        const bundled = inspectBundleEntryBytes(bundlePath, row.path);
+        const localHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(rootDir, row.path))).digest('hex');
+        if (!bundled.ok || bundled.sha256 !== localHash || row.sha256 !== localHash) {
+          throw new Error(`signed r941 stability source differs: ${row.path}`);
+        }
+      }
+    }
     const repair = require('./releaseWorkerCodeRepair.cjs');
-    const auth = repair.candidateAuthorization(rootDir, JSON.parse(authorization.content.toString('utf8')));
+    const auth = repair.candidateAuthorization(rootDir, parsedAuthorization);
     for (const row of auth.files) {
       const file=inspectBundleEntryBytes(bundlePath,row.path);
       if (!file.ok || file.sha256 !== row.afterSha256) throw new Error('signed repair target differs');
