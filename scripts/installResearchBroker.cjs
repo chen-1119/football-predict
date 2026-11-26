@@ -155,7 +155,7 @@ function installRoot(wire){
   console.log(JSON.stringify({installed:true,receipt:receipt+'.completed.json',releaseSha:body.releaseSha,productionDataWrites:0,cloudHandoverVerified:false}));
  }catch(e){try{command('/usr/bin/systemctl',['stop',UNIT]);command('/usr/bin/systemctl',['disable',UNIT]);}catch{/* keep failed material and report original failure */}throw e;}
 }
-function packageInstall({bundlePath,boundaryPath,dependenciesPath,platformPath,refresh=false}){
+function packageGitInstall({bundlePath,boundaryPath,dependenciesPath,platformPath,refresh=false}){
  const state=JSON.parse(fs.readFileSync(boundaryPath)),boundary=state.stdout?JSON.parse(state.stdout):state;
  if(state.status!==undefined&&state.status!==0)throw Error('RESEARCH_INSTALL_BOUNDARY');
  const manifest=fs.readFileSync(bundlePath+'.manifest.json'),signature=fs.readFileSync(bundlePath+'.manifest.sig'),m=JSON.parse(manifest);
@@ -170,6 +170,41 @@ function packageInstall({bundlePath,boundaryPath,dependenciesPath,platformPath,r
  if(typeof refresh!=='boolean'||refresh&&!boundary.brokerPrevious)throw Error('RESEARCH_REFRESH_BOUNDARY_REQUIRED');
  const body={version:refresh?'research-broker-refresh-v1':'research-broker-install-v1',attemptId:crypto.randomBytes(12).toString('hex'),head,installerSha256:sha(installRoot.toString()),releaseSha:m.sha256,manifestSha256:sha(manifest),signatureSha256:sha(signature),dependenciesSha256:sha(payload[5]),platformSha256:sha(payload[6]),unitApiPid:Number(units['football-predict.service'].MainPID),unitWorkerPid:Number(units['football-sync-worker.service'].MainPID),issuedAtMs,expiresAtMs:issuedAtMs+900000,keyId:signing.keyId,files:names.map((p,i)=>({path:p,bytes:payload[i].length,sha256:sha(payload[i])})),...(refresh?{previous:boundary.brokerPrevious}:{})};
  return {body,signature:crypto.sign('RSA-SHA256',Buffer.concat([refresh?Buffer.from('football-'+body.version+'\0'):DOMAIN,Buffer.from(JSON.stringify(body))]),{key:signing.key,padding:crypto.constants.RSA_PKCS1_PADDING}).toString('base64'),payloads:payload.map(b=>b.toString('base64'))};
+}
+async function packageSignedInstall({bundlePath,boundaryPath,dependenciesPath,platformPath,refresh=false,sourceRoot,sourceMode}){
+ const authority=require('./researchBrokerSourceAuthority.cjs'),options={bundlePath,sourceRoot,toolRoot:root};
+ const archiveMode=sourceMode==='signed-release-archive';
+ if(archiveMode&&sourceRoot!==undefined)throw Error('RESEARCH_INSTALL_ARCHIVE_SOURCE_ROOT_FORBIDDEN');
+ const verify=archiveMode?authority.verifySignedReleaseArchive:authority.verifySignedReleaseSource;
+ const first=await verify(options);
+ const inputs=[[boundaryPath,131072],[dependenciesPath,1024*1024],[platformPath,1024*1024]].map(([file,maximum])=>({file,maximum,...authority.readStable(file,maximum)}));
+ const state=JSON.parse(inputs[0].bytes),boundary=state.stdout?JSON.parse(state.stdout):state;
+ if(state.status!==undefined&&state.status!==0)throw Error('RESEARCH_INSTALL_BOUNDARY');
+ if(typeof refresh!=='boolean'||refresh&&!boundary.brokerPrevious)throw Error('RESEARCH_REFRESH_BOUNDARY_REQUIRED');
+ const head=cp.execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
+ if(!/^[a-f0-9]{40}$/.test(head))throw Error('RESEARCH_INSTALL_SOURCE_HEAD');
+ const units=Object.fromEntries(boundary.units.trim().split(/\n\n/).map(text=>{const value=Object.fromEntries(text.split('\n').map(line=>{const separator=line.indexOf('=');return [line.slice(0,separator),line.slice(separator+1)];}));return[value.Id,value];}));
+ const signing=require('./releaseSigning.cjs').loadReleasePrivateKey();
+ if(signing.keyId!==first.proof.trustedKeyId)throw Error('RESEARCH_INSTALL_SIGNER_MISMATCH');
+ const second=await verify(options);
+ if(JSON.stringify(first.proof)!==JSON.stringify(second.proof))throw Error('RESEARCH_INSTALL_SOURCE_CHANGED');
+ for(const input of inputs){const latest=authority.readStable(input.file,input.maximum);if(latest.identity!==input.identity||!latest.bytes.equals(input.bytes))throw Error('RESEARCH_INSTALL_INPUT_CHANGED');}
+ const issuedAtMs=Date.now(),observed=Date.parse(boundary.observedAt);
+ if(boundary.releaseSha!==second.manifest.sha256||!Number.isFinite(observed)||observed>issuedAtMs||issuedAtMs-observed>180000)throw Error('RESEARCH_INSTALL_FRESH_BOUNDARY');
+ const names=['scripts/researchSocketServer.py','scripts/researchSocketPeer.py','deploy/light-server/football-research-broker.service','manifest.json','manifest.sig','dependencies.json','platform.json'];
+ const payload=[...second.payloads,second.manifestBytes,second.signatureBytes,inputs[1].bytes,inputs[2].bytes];
+ const body={version:refresh?'research-broker-refresh-v1':'research-broker-install-v1',attemptId:crypto.randomBytes(12).toString('hex'),head,installerSha256:sha(installRoot.toString()),releaseSha:second.manifest.sha256,manifestSha256:sha(second.manifestBytes),signatureSha256:sha(second.signatureBytes),dependenciesSha256:sha(inputs[1].bytes),platformSha256:sha(inputs[2].bytes),unitApiPid:Number(units['football-predict.service'].MainPID),unitWorkerPid:Number(units['football-sync-worker.service'].MainPID),issuedAtMs,expiresAtMs:issuedAtMs+900000,keyId:signing.keyId,files:names.map((file,index)=>({path:file,bytes:payload[index].length,sha256:sha(payload[index])})),...(refresh?{previous:boundary.brokerPrevious}:{})};
+ if(archiveMode)authority.assertSignedReleaseArchiveStable(options,second,inputs);
+ else authority.assertSignedReleaseSourceStable(options,second,inputs);
+ return {body,signature:crypto.sign('RSA-SHA256',Buffer.concat([Buffer.from('football-'+body.version+'\0'),Buffer.from(JSON.stringify(body))]),{key:signing.key,padding:crypto.constants.RSA_PKCS1_PADDING}).toString('base64'),payloads:payload.map(bytes=>bytes.toString('base64'))};
+}
+function packageInstall(options){
+ if(options.sourceMode===undefined||options.sourceMode==='git-clean'){
+  if(options.sourceRoot!==undefined)throw Error('RESEARCH_INSTALL_SOURCE_MODE_REQUIRED');
+  return packageGitInstall(options);
+ }
+ if(options.sourceMode==='signed-release-source'||options.sourceMode==='signed-release-archive')return packageSignedInstall(options);
+ throw Error('RESEARCH_INSTALL_SOURCE_MODE');
 }
 // Deployment orchestration supplies only freshly observed, exact paths. Root
 // never accepts caller-selected executable, user, environment or destination.

@@ -12,6 +12,9 @@ const FRESH_VERSION='official-publication-freshness-preparation-authorization-v4
 const FRESH_FILES=['scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs','scripts/recommendationPlatform/reviewedOfficialFreshness.cjs','scripts/researchBrokerWorker.cjs','scripts/researchReleaseBroker.cjs','scripts/researchSocketServer.py','server/researchBrokerClient.cjs','server/researchBrokerJournal.cjs','server/researchPublicationFreshnessRetry.cjs','server/researchWriteHttp.cjs','server/researchWriteService.cjs'];
 const PUBLIC_CURRENT_VERSION='official-public-current-preparation-authorization-v5',PUBLIC_CURRENT_BASE='1db2860b3ca9c3d907258fecbc70acd17aa6b12518254a281aa8b647ce21c5e2';
 const PUBLIC_CURRENT_FILES=['server/index.cjs','server/publicProduct.cjs','src/pages/PublicBrowse.tsx'];
+const COMPATIBILITY_VERSION='reference-integrity-compatibility-preparation-v6';
+const COMPATIBILITY_BASE='4fa34d0d874e5b7895c21c906cce44fbf1433497d0a0a99ec83c6c49bd3797f8';
+const COMPATIBILITY_FILES=['scripts/syncData.cjs','scripts/postgresGenerationSource.cjs','scripts/installReferenceIntegrityInputs.cjs','scripts/activateReferenceIntegrity.cjs','scripts/pushCloudSync.cjs','scripts/exportDataStoreSqlite.cjs','scripts/validateData.cjs','scripts/verifyStaticFileResponseIdentity.cjs','server/referenceIntegrityPartition.cjs','server/data/public-reference-unresolved-baseline.json','server/dataGenerationStore.cjs','server/dataGenerationBundle.cjs','server/streamedJsonObjectArrays.cjs','server/boundedPredictionSnapshots.cjs','server/publicReferenceCompanionStore.cjs','server/publicReferenceArchive.cjs','server/streamedPublicReferenceArchive.cjs','server/referencePairedBaseline.cjs','server/index.cjs','vite.config.ts'];
 const CURRENT={bytes:7758090,sha256:'b86ab357fc1d63a93eaf31e15066cd14ebc0c2e76cf70ec46f390e60f6d48b7a'};
 const WAREHOUSE={bytes:1101391274,sha256:'3c9ef2ea5d9052fe6a7027d9d4db63cdd30e71a2fb08abe220b9b8601e10e1a4'};
 const MESSAGE='PUBLIC_REFERENCE_EVIDENCE_BINDING_MISSING';
@@ -20,9 +23,11 @@ const READER_ROOTS=['deploy/light-server/collector-trust-registry.json','package
 function hash(value){return require('node:crypto').createHash('sha256').update(value).digest('hex');}
 function validate(auth,now){
  const a=require('node:assert/strict');
+ const compatibility=auth.version===COMPATIBILITY_VERSION,initialCompatibility=compatibility&&auth.baseRuntimeSha256===COMPATIBILITY_BASE;
  a.deepEqual(Object.keys(auth).sort(),['baseRuntimeSha256','baselineClosure','createdAt','current','dataContract','expiresAt','files','gap','incident','optionalPreludePolicy','publication','reason','version','warehouse']);
  const publicCurrent=auth.version===PUBLIC_CURRENT_VERSION,fresh=auth.version===FRESH_VERSION||publicCurrent,display=auth.version===DISPLAY_VERSION||fresh,schedule=auth.version===SCHEDULE_VERSION||display;
- if(publicCurrent){a.equal(auth.reason,'restore-public-current-schedule-and-staleness-preserving-r911-original-gap');a.equal(auth.baseRuntimeSha256,PUBLIC_CURRENT_BASE);}
+ if(compatibility){a.equal(auth.reason,'install-backward-compatible-original-partition-readers-with-writer-disabled');a.match(auth.baseRuntimeSha256,/^[a-f0-9]{64}$/);}
+ else if(publicCurrent){a.equal(auth.reason,'restore-public-current-schedule-and-staleness-preserving-r911-original-gap');a.equal(auth.baseRuntimeSha256,PUBLIC_CURRENT_BASE);}
  else if(fresh){a.equal(auth.reason,'restore-official-publication-freshness-preserving-r910-original-gap');a.equal(auth.baseRuntimeSha256,FRESH_BASE);}
  else if(display){a.equal(auth.reason,'restore-official-analysis-display-preserving-r909-original-gap');a.equal(auth.baseRuntimeSha256,DISPLAY_BASE);}
  else if(schedule){a.equal(auth.reason,'restore-signed-official-schedule-preserving-r906-original-gap');a.equal(auth.baseRuntimeSha256,SCHEDULE_BASE);}
@@ -32,17 +37,21 @@ function validate(auth,now){
  a.deepEqual(auth.current,CURRENT);a.deepEqual(auth.warehouse,WAREHOUSE);a.equal(auth.gap.length,29);let previous='';
  for(const r of auth.gap){a.deepEqual(Object.keys(r).sort(),['recordHash','recordSha256','sourceMatchId']);a.match(r.sourceMatchId,/^[1-9]\d{0,19}$/);a(r.sourceMatchId>previous);previous=r.sourceMatchId;for(const k of ['recordHash','recordSha256'])a.match(r[k],/^[a-f0-9]{64}$/);}
  const i=auth.incident;a.deepEqual(Object.keys(i).sort(),['cycleFinishedAt','cycleStartedAt','journalMessageSha256','journalPid','journalTimestampUs','workerMainPid','workerStartedAt']);
- a.equal(i.workerMainPid,publicCurrent?'763458':fresh?'623688':display?'485456':schedule?'397815':'2990491');a.equal(i.workerStartedAt,publicCurrent?'2026-10-22T09:33:55.000Z':fresh?'2026-10-22T02:37:06.000Z':display?'2026-10-21T19:49:58.000Z':schedule?'2026-10-21T15:55:29.000Z':'2026-10-18T04:49:51.000Z');a.match(i.journalPid,/^[1-9]\d*$/);a.notEqual(i.journalPid,i.workerMainPid);a.match(i.journalTimestampUs,/^[1-9]\d{15}$/);a.equal(i.journalMessageSha256,hash(MESSAGE));
+ if(compatibility&&!initialCompatibility){a.match(i.workerMainPid,/^[1-9]\d*$/);a.equal(new Date(i.workerStartedAt).toISOString(),i.workerStartedAt);}
+ else{a.equal(i.workerMainPid,compatibility?'1080936':publicCurrent?'763458':fresh?'623688':display?'485456':schedule?'397815':'2990491');a.equal(i.workerStartedAt,compatibility?'2026-10-23T01:30:39.000Z':publicCurrent?'2026-10-22T09:33:55.000Z':fresh?'2026-10-22T02:37:06.000Z':display?'2026-10-21T19:49:58.000Z':schedule?'2026-10-21T15:55:29.000Z':'2026-10-18T04:49:51.000Z');}
+ a.match(i.journalPid,/^[1-9]\d*$/);a.notEqual(i.journalPid,i.workerMainPid);a.match(i.journalTimestampUs,/^[1-9]\d{15}$/);a.equal(i.journalMessageSha256,hash(MESSAGE));
  for(const k of ['cycleStartedAt','cycleFinishedAt'])a.equal(new Date(i[k]).toISOString(),i[k]);
  a(Date.parse(i.cycleStartedAt)>=Date.parse(i.workerStartedAt)&&Date.parse(i.cycleFinishedAt)>=Date.parse(i.cycleStartedAt)&&Date.parse(i.cycleFinishedAt)<=start);
  const stamp=Number(i.journalTimestampUs)/1000;a(stamp>=Date.parse(i.cycleStartedAt)&&stamp<=Date.parse(i.cycleFinishedAt));
  for(const [list,changed]of [[auth.files,true],[auth.baselineClosure,false],[auth.dataContract,false]]){
   a(Array.isArray(list)&&list.length>0&&list.length<=256);let previous='';
-  for(const r of list){a.deepEqual(Object.keys(r).sort(),changed?['afterSha256','beforeSha256','path']:['path','sha256']);a(typeof r.path==='string'&&(/^(?:scripts|server|src|deploy|services|collectors)\/[a-zA-Z0-9_./-]+$/.test(r.path)||(!changed&&r.path==='package.json'))&&!r.path.split('/').includes('..')&&r.path>previous,'source path closure bound: '+r.path);previous=r.path;
+  for(const r of list){a.deepEqual(Object.keys(r).sort(),changed?['afterSha256','beforeSha256','path']:['path','sha256']);a(typeof r.path==='string'&&(/^(?:scripts|server|src|deploy|services|collectors)\/[a-zA-Z0-9_./-]+$/.test(r.path)||(!changed&&r.path==='package.json')||(compatibility&&r.path==='vite.config.ts'))&&!r.path.split('/').includes('..')&&r.path>previous,'source path closure bound: '+r.path);previous=r.path;
    if(changed){a(r.beforeSha256===null||/^[a-f0-9]{64}$/.test(r.beforeSha256));a.match(r.afterSha256,/^[a-f0-9]{64}$/);}else a.match(r.sha256,/^[a-f0-9]{64}$/);
   }
  }
  for(const name of ['scripts/manualOfficialReleaseRecovery.cjs','scripts/manualOfficialPublicCarryForward.cjs','scripts/recommendationPlatform/reviewedOfficialEvent.cjs','server/researchOfficialEventRead.cjs'])a(auth.files.some(r=>r.path===name));
+ if(compatibility)for(const name of COMPATIBILITY_FILES)a(auth.files.some(r=>r.path===name),'complete partition compatibility closure required');
+ if(compatibility&&!initialCompatibility)a(auth.files.every(record=>record.beforeSha256===record.afterSha256),'repeat compatibility preparation requires identical installed source bytes');
  if(schedule)for(const name of ['server/officialScheduleRead.cjs','server/officialScheduleHttp.cjs','src/services/officialSchedule.cjs','src/hooks/useOfficialSchedule.ts','src/components/recommendations/OfficialSchedule.tsx','src/pages/PredictionsList.tsx'])a(auth.files.some(r=>r.path===name),'schedule source closure required');
  if(display)for(const name of ['src/components/recommendations/OfficialSchedule.css','src/components/recommendations/OfficialEditorialReferences.tsx','src/pages/BestTips.tsx'])a(auth.files.some(r=>r.path===name),'analysis display source closure required');
  if(fresh)for(const name of FRESH_FILES)a(auth.files.some(r=>r.path===name),'publication freshness source closure required');
@@ -102,6 +111,7 @@ function evaluate(auth,worker,observed){
   a(report.blockers.includes('worker-official-recovery-unproven'));a(report.statusAgeSeconds<=300);
   stage='runtime-identity';
   a.equal(observed.runtimeSha256,auth.baseRuntimeSha256);a.equal(observed.completeSha256,auth.baseRuntimeSha256);a.equal(observed.recoveryPending,false);a.equal(observed.oldAuthorizationPresent,false);
+  if(auth.version===COMPATIBILITY_VERSION){stage='partition-writer-disabled';a.equal(observed.partitionWriterDisabled,true);}
   stage='source-closure-and-data-contract';
   a.deepEqual(observed.files,auth.files.map(r=>({path:r.path,sha256:r.beforeSha256})));a.deepEqual(observed.baselineClosure,auth.baselineClosure);a.deepEqual(observed.dataContract,auth.dataContract);
   stage='originals-and-ordinary-publication';
@@ -111,6 +121,26 @@ function evaluate(auth,worker,observed){
   result.actualIncident=assertCycle(auth,worker,observed.journal);result.preparationAllowed=true;
  }catch{result.blockers.push('manual-official-preparation-binding-rejected');result.failureStage=stage;}
  return result;
+}
+function collectCompatibilityWriterState(worker){
+ const fs=require('node:fs'),assert=require('node:assert/strict'),cp=require('node:child_process');
+ const workerPid=worker.serviceAfter.MainPID;assert.match(workerPid,/^[1-9]\d*$/);
+ const processEnvironment=fs.readFileSync('/proc/'+workerPid+'/environ');assert(processEnvironment.length<=1048576);
+ assert(!processEnvironment.toString('utf8').split('\0').some(value=>value.startsWith('ORIGINAL_REFERENCE_PARTITION=')),'compatibility writer process flag must remain absent');
+ const effectiveEnvironment=cp.execFileSync('/usr/bin/systemctl',['show','football-sync-worker.service','--property=Environment','--value'],{encoding:'utf8',timeout:5000,maxBuffer:1048576});
+ assert(!effectiveEnvironment.includes('ORIGINAL_REFERENCE_PARTITION'),'compatibility writer service flag must remain absent');
+ const environmentFileText=cp.execFileSync('/usr/bin/systemctl',['show','football-sync-worker.service','--property=EnvironmentFiles','--value'],{encoding:'utf8',timeout:5000,maxBuffer:16384});
+ const filePattern=/(\/etc\/football-predict\/[a-zA-Z0-9_.-]+) \(ignore_errors=no\)/g;
+ const environmentFiles=[...environmentFileText.matchAll(filePattern)].map(match=>match[1]);
+ assert.equal(environmentFileText.replace(filePattern,'').trim(),'','unsupported worker environment source');
+ assert(environmentFiles.includes('/etc/football-predict/env')&&environmentFiles.length<=8&&new Set(environmentFiles).size===environmentFiles.length);
+ const configured=environmentFiles.map(file=>{
+  const before=fs.lstatSync(file);assert(before.isFile()&&!before.isSymbolicLink()&&before.nlink===1&&before.size<=1048576&&before.uid===0&&(before.mode&0o022)===0);
+  const descriptor=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);let bytes;
+  try{bytes=fs.readFileSync(descriptor);for(const stat of [fs.fstatSync(descriptor),fs.lstatSync(file)])for(const key of ['dev','ino','size','mtimeMs','ctimeMs'])assert.equal(stat[key],before[key]);}finally{fs.closeSync(descriptor);}
+  assert(!bytes.toString('utf8').includes('ORIGINAL_REFERENCE_PARTITION'),'compatibility writer configured flag must remain absent');return {path:file,sha256:hash(bytes)};
+ });
+ return {workerPid,partitionWriterDisabled:true,effectiveEnvironmentHash:hash(effectiveEnvironment),configured};
 }
 function collect(auth,worker){
  const fs=require('node:fs'),path=require('node:path'),a=require('node:assert/strict'),cp=require('node:child_process');
@@ -129,6 +159,7 @@ function collect(auth,worker){
  const identity=()=>({runtimeSha256:plain('.release-bundle-sha256',128).toString().trim(),completeSha256:plain('.release-live-complete',128).toString().trim(),
   recoveryPending:present('/var/lib/football-release/recovery/current')||present('/var/lib/football-release/reference-repairs/current'),oldAuthorizationPresent:present(path.join(root,OLD_AUTH))});
  const before=identity(),files=auth.files.map(r=>({path:r.path,sha256:present(path.join(root,r.path))?hash(plain(r.path)):null}));
+ const compatibilityWriter=auth.version===COMPATIBILITY_VERSION?collectCompatibilityWriterState(worker):null;
  const closure=new Map();function visit(relative){if(closure.has(relative))return;const bytes=plain(relative);closure.set(relative,hash(bytes));for(const m of bytes.toString().matchAll(/require\(['"](\.[^'"]+)['"]\)/g)){const file=require.resolve(path.resolve(root,path.dirname(relative),m[1]));a(file.startsWith(root+path.sep));visit(path.relative(root,file).split(path.sep).join('/'));}}
  for(const name of READER_ROOTS)visit(name);const baselineClosure=[...closure].map(([path,sha256])=>({path,sha256})).sort((a,b)=>a.path<b.path?-1:1);
  // Pins precede execution of any installed policy/decision/authority module.
@@ -149,21 +180,24 @@ function collect(auth,worker){
  a.deepEqual(baselineClosure.map(r=>({path:r.path,sha256:hash(plain(r.path))})),baselineClosure,'reader closure changed during observation');
  const finalWarehouse=fs.lstatSync(root+'/public/data/prediction-snapshots.json');a(!finalWarehouse.isSymbolicLink());a.deepEqual(Object.fromEntries(['dev','ino','size','mtimeMs','ctimeMs'].map(k=>[k,finalWarehouse[k]])),streamIdentity,'warehouse identity changed after hash');
  const after=collectWorkerPreflight();a.deepEqual(after.serviceBefore,worker.serviceAfter);a.deepEqual(after.serviceAfter,worker.serviceAfter);a.equal(after.processMatches,true);a.deepEqual(after.status.lastCycle,worker.status.lastCycle);
- return {...before,files,baselineClosure,dataContract,current,gap,warehouse,warehouseIdentity:streamIdentity,journal,...gate,completedAt:after.checkedAt};
+ if(compatibilityWriter)a.deepEqual(collectCompatibilityWriterState(after),compatibilityWriter,'partition writer configuration changed during observation');
+ return {...before,files,baselineClosure,dataContract,current,gap,warehouse,warehouseIdentity:streamIdentity,journal,...gate,...(compatibilityWriter?{partitionWriterDisabled:true}:{}),completedAt:after.checkedAt};
 }
 function candidateAuthorization(root,auth){
  validate(auth,Date.now());a.equal(fs.existsSync(path.join(root,OLD_AUTH)),false,'old and manual authorization conflict');
  for(const r of auth.files)a.equal(hash(fs.readFileSync(path.join(root,r.path))),r.afterSha256,'candidate source differs');
+ if(auth.version===COMPATIBILITY_VERSION)a(!fs.readFileSync(path.join(root,'deploy/light-server/football-sync-worker.service'),'utf8').includes('ORIGINAL_REFERENCE_PARTITION'),'compatibility package cannot activate the partition writer');
  a.deepEqual(require('./releaseDataPlanePolicy.cjs').capture(root).entries,auth.dataContract,'manual preparation requires unchanged data contract');return auth;
 }
 function buildProbe(auth){
  validate(auth,Date.now());const source="'use strict';\nconst AUTH_ENTRY="+JSON.stringify(AUTH_ENTRY)+',OLD_AUTH='+JSON.stringify(OLD_AUTH)+',VERSION='+JSON.stringify(VERSION)+',ENVELOPE='+JSON.stringify(ENVELOPE)+',BASE='+JSON.stringify(BASE)+',SCHEDULE_VERSION='+JSON.stringify(SCHEDULE_VERSION)+',SCHEDULE_BASE='+JSON.stringify(SCHEDULE_BASE)+',DISPLAY_VERSION='+JSON.stringify(DISPLAY_VERSION)+',DISPLAY_BASE='+JSON.stringify(DISPLAY_BASE)+',FRESH_VERSION='+JSON.stringify(FRESH_VERSION)+',FRESH_BASE='+JSON.stringify(FRESH_BASE)+',FRESH_FILES='+JSON.stringify(FRESH_FILES)+',PUBLIC_CURRENT_VERSION='+JSON.stringify(PUBLIC_CURRENT_VERSION)+',PUBLIC_CURRENT_BASE='+JSON.stringify(PUBLIC_CURRENT_BASE)+',PUBLIC_CURRENT_FILES='+JSON.stringify(PUBLIC_CURRENT_FILES)+',CURRENT='+JSON.stringify(CURRENT)+',WAREHOUSE='+JSON.stringify(WAREHOUSE)+',MESSAGE='+JSON.stringify(MESSAGE)+',PRELUDE='+JSON.stringify(PRELUDE)+',READER_ROOTS='+JSON.stringify(READER_ROOTS)+';\n'
-  +[workerPolicy.evaluateWorkerPreflight,workerPolicy.collectWorkerPreflight,hash,validate,preludeFrame,assertCycle,evaluate,collect].map(fn=>fn.toString()).join('\n')
+  +'const COMPATIBILITY_VERSION='+JSON.stringify(COMPATIBILITY_VERSION)+',COMPATIBILITY_BASE='+JSON.stringify(COMPATIBILITY_BASE)+',COMPATIBILITY_FILES='+JSON.stringify(COMPATIBILITY_FILES)+';\n'
+  +[workerPolicy.evaluateWorkerPreflight,workerPolicy.collectWorkerPreflight,hash,validate,preludeFrame,assertCycle,evaluate,collectCompatibilityWriterState,collect].map(fn=>fn.toString()).join('\n')
   +'\ntry{const auth='+JSON.stringify(auth)+';const worker=collectWorkerPreflight(),base=evaluateWorkerPreflight(worker);if(base.ok){console.log(JSON.stringify(base));}else{const report=evaluate(auth,worker,collect(auth,worker));console.log(JSON.stringify(report));if(!report.preparationAllowed)process.exitCode=1;}}catch{console.log(JSON.stringify({version:ENVELOPE,preparationAllowed:false,workerHealthy:false,readyToCutover:false,productionWrites:0,blockers:[\'manual-official-preparation-observation-unavailable\']}));process.exitCode=1;}';
  a(Buffer.byteLength(source)<120000,'fixed SSH probe bound');return source;
 }
 const {evaluateWorkerPreflight,collectWorkerPreflight}=workerPolicy;
-module.exports={AUTH_ENTRY,OLD_AUTH,VERSION,ENVELOPE,BASE,SCHEDULE_VERSION,SCHEDULE_BASE,DISPLAY_VERSION,DISPLAY_BASE,FRESH_VERSION,FRESH_BASE,FRESH_FILES,PUBLIC_CURRENT_VERSION,PUBLIC_CURRENT_BASE,PUBLIC_CURRENT_FILES,CURRENT,WAREHOUSE,MESSAGE,PRELUDE,READER_ROOTS,hash,validate,preludeFrame,assertCycle,evaluate,collect,candidateAuthorization,buildProbe};
+module.exports={AUTH_ENTRY,OLD_AUTH,VERSION,ENVELOPE,BASE,SCHEDULE_VERSION,SCHEDULE_BASE,DISPLAY_VERSION,DISPLAY_BASE,FRESH_VERSION,FRESH_BASE,FRESH_FILES,PUBLIC_CURRENT_VERSION,PUBLIC_CURRENT_BASE,PUBLIC_CURRENT_FILES,COMPATIBILITY_VERSION,COMPATIBILITY_BASE,COMPATIBILITY_FILES,CURRENT,WAREHOUSE,MESSAGE,PRELUDE,READER_ROOTS,hash,validate,preludeFrame,assertCycle,evaluate,collectCompatibilityWriterState,collect,candidateAuthorization,buildProbe};
 if(require.main===module){
  try{a.equal(process.argv.length,3);const root=path.resolve(process.argv[2]),file=path.join(root,AUTH_ENTRY);if(!fs.existsSync(file))throw Error('explicit manual authorization required');const st=fs.lstatSync(file);a(st.isFile()&&!st.isSymbolicLink()&&st.nlink===1&&st.size<=65536);const auth=candidateAuthorization(root,JSON.parse(fs.readFileSync(file)));new(require('node:vm').Script)(buildProbe(auth)).runInNewContext({require,process,console,Date});}
  catch{console.log(JSON.stringify({version:ENVELOPE,preparationAllowed:false,readyToCutover:false,productionWrites:0,blockers:['manual-official-preparation-entry-rejected']}));process.exitCode=1;}

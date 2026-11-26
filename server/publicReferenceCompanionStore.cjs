@@ -131,7 +131,9 @@ function persistOriginalCompanion(storeDir, record, entry) {
   if (original.seal.sha256 !== seal.sha256) fail("REFERENCE_CUSTODY_BYTES_INVALID");
   return { ...seal, inserted: true, durability: process.platform === "win32" ? "process-crash" : "directory-fsync" };
 }
-function persistCurrentReferenceCompanions(storeDir, matches, entries) {
+function persistCurrentReferenceCompanions(storeDir, matches, entries, referencePartition = null) {
+  const partition = require("./referenceIntegrityPartition.cjs");
+  if (referencePartition) partition.originalRecordsForContext(referencePartition);
   const wanted = new Map();
   for (const match of matches) {
     const record = match?.predictionMeta?.publicReferenceDecision;
@@ -146,10 +148,16 @@ function persistCurrentReferenceCompanions(storeDir, matches, entries) {
   for (const entry of entries) {
     const record = wanted.get(entry?.referenceHash);
     if (!record) continue;
+    if (referencePartition && partition.isOriginalUnresolvedRecord(record)) fail("REFERENCE_PARTITION_EXPLICIT_RESOLUTION_REQUIRED");
     persistOriginalCompanion(storeDir, record, entry);
     found.add(record.contentHash);
   }
   for (const [hash, record] of wanted) if (!found.has(hash)) {
+    if (referencePartition && partition.isOriginalUnresolvedRecord(record)) {
+      partition.assertOriginalInContext(referencePartition, record);
+      if (readOriginalCompanion(storeDir, record)) fail("REFERENCE_PARTITION_EXPLICIT_RESOLUTION_REQUIRED");
+      continue;
+    }
     // Snapshot retention may omit an old current/history reference from this
     // cycle's warehouse. Its previously durable exact original still proves
     // custody; do not recreate it or change the retained public output.
@@ -160,12 +168,19 @@ function persistCurrentReferenceCompanions(storeDir, matches, entries) {
   }
   return { references: wanted.size, durability: process.platform === "win32" ? "process-crash" : "directory-fsync" };
 }
-function assertCurrentReferenceCompanions(storeDir, matches) {
+function assertCurrentReferenceCompanions(storeDir, matches, referencePartition = null) {
+  const partition = require("./referenceIntegrityPartition.cjs");
+  if (referencePartition) partition.originalRecordsForContext(referencePartition);
   let references = 0;
   for (const match of matches) {
     const record = match?.predictionMeta?.publicReferenceDecision;
     if (!record?.evidenceBinding) continue;
     if (!attestPublicReferenceDecision(record, match)) fail("REFERENCE_CUSTODY_CURRENT_INVALID");
+    if (referencePartition && partition.isOriginalUnresolvedRecord(record)) {
+      partition.assertOriginalInContext(referencePartition, record);
+      if (readOriginalCompanion(storeDir, record)) fail("REFERENCE_PARTITION_EXPLICIT_RESOLUTION_REQUIRED");
+      continue;
+    }
     if (!readOriginalCompanion(storeDir, record)) fail("PUBLIC_REFERENCE_EVIDENCE_BINDING_MISSING");
     references++;
   }

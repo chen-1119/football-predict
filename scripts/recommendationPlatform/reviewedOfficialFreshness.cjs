@@ -20,7 +20,7 @@ function sourceAge(snapshot,asOf){
  return oldest;
 }
 async function waitForFreshOfficialDraft(draft,{pool,trustRegistry,readSnapshot=readLiveOfficialSnapshot}){
- p.check(draft?.version===4&&typeof pool?.connect==='function'&&typeof readSnapshot==='function','OFFICIAL_FRESH_INPUT');
+ p.check([4,5].includes(draft?.version)&&typeof pool?.connect==='function'&&typeof readSnapshot==='function','OFFICIAL_FRESH_INPUT');
  const startedUtc=Date.now(),startedMono=performance.now();let lastUtc=startedUtc,lastMono=startedMono,lastDb=null;
  function remaining(){
   const utc=Date.now(),mono=performance.now();
@@ -43,10 +43,11 @@ async function waitForFreshOfficialDraft(draft,{pool,trustRegistry,readSnapshot=
  }
  for(;;){
   remaining();const snapshot=readSnapshot();remaining();
-  const client=await bounded(()=>pool.connect(),late=>late.release(budgetError()));let broken,asOf;
+  const client=await bounded(()=>pool.connect(),late=>late.release(budgetError()));let broken,asOf,evidenceByEvent={};
   try{
    const result=await bounded(()=>client.query('SELECT clock_timestamp() AS now'));
    const at=result.rows[0]?.now;asOf=at instanceof Date?at.toISOString():at;
+   if(draft.version===5)evidenceByEvent=await bounded(()=>require('./reviewedResearchEvidence.cjs').loadForDraft(client,draft,asOf));
   }catch(error){broken=error;throw error;}finally{client.release(broken);}
   remaining();const db=ns(asOf);
   p.check(db!==null&&(lastDb===null||db>=lastDb),'OFFICIAL_EVENT_FRESH_CLOCK');lastDb=db;
@@ -54,7 +55,7 @@ async function waitForFreshOfficialDraft(draft,{pool,trustRegistry,readSnapshot=
   // Other policy failures are also terminal. Only stale acquisition clocks or
   // a fully valid source with insufficient transport margin may wait.
   let age;
-  try{p.make(draft,{matches:[],snapshot,trustRegistry,asOf});age=sourceAge(snapshot,asOf);}
+  try{p.make(draft,{matches:[],snapshot,trustRegistry,asOf,evidenceByEvent});age=sourceAge(snapshot,asOf);}
   catch(error){if(error.code!==freshError)throw error;age=sourceAge(snapshot,asOf);if(age<=30000n*1000000n)throw error;}
   remaining();
   if(age<=BigInt(READY_AGE_MS)*1000000n)return;

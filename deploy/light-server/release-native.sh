@@ -342,6 +342,7 @@ run_native_release() {
     --bundle-sha256 "$BUNDLE_SHA256" --release-sequence "$RELEASE_SEQUENCE"
   release_stage_observe begin stopped-window
   native_data final
+  validate_reference_snapshot_pair "$NEXT_DIR"
   if [ "$NATIVE_CODE_RELEASE" = 1 ]; then
     "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/manualOfficialPublicCarryForward.cjs" before-swap "$BUNDLE_SHA256" "$$" "$NEXT_DIR"
     native_code_verify_cutover_lease "$CODE_CUTOVER_POST_SWAP_MARGIN_SECONDS"

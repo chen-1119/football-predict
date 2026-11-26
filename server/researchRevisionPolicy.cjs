@@ -42,4 +42,8 @@ function comboDisposition(combo, observations, asOf) {
   }
   return { canRefresh: true, reason: 'append-new-combo-version', preserveOriginal: true };
 }
-module.exports = { eventKey, reviewDisposition, comboDisposition };
+function requireResearchContinuity(records,draft){
+ if(records.some(record=>record?.research!==undefined||record?.strategy==='evidence-first-editorial-v1')
+  &&(draft?.version!==5||draft?.strategy!=='evidence-first-editorial-v1'))throw Object.assign(Error('REVIEW_REVISION_RESEARCH_DOWNGRADE'),{code:'REVIEW_REVISION_RESEARCH_DOWNGRADE',retryWriteAutomatically:false});
+}
+module.exports = { eventKey, reviewDisposition, comboDisposition, requireResearchContinuity };

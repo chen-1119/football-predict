@@ -7,8 +7,8 @@ const {createResearchWriteService}=require('../server/researchWriteService.cjs')
 async function verify(pool){
  const schema='research_retry_'+process.pid+'_'+Date.now(),sql=s=>s.replaceAll('football.',schema+'.'),q=(s,args)=>pool.query(sql(s),args);
  const signed=require('./collectorAttestationTestFixture.cjs').createCollectorAttestationTestContext({keyId:'disposable-publish-retry'}),snapshotPath=path.join(path.dirname(signed.registryPath),'retry-snapshot.json'),previous=process.env.SPORTTERY_RELAY_FAST_LANE_SNAPSHOT;
- process.env.SPORTTERY_RELAY_FAST_LANE_SNAPSHOT=snapshotPath;let clock=f.NOW+100,holder;
- const mapped={async connect(){const c=await pool.connect();return{release:e=>c.release(e),async query(s,args){const out=await c.query(sql(s),args);if(s==='SELECT clock_timestamp() AS now')return{rows:[{now:new Date(clock++)}]};return out;}};}};
+ process.env.SPORTTERY_RELAY_FAST_LANE_SNAPSHOT=snapshotPath;let clock=f.NOW+100,holder,publicationWrites=0;
+ const mapped={async connect(){const c=await pool.connect();return{release:e=>c.release(e),async query(s,args){if(/^\s*(INSERT|UPDATE|DELETE)\b/i.test(s))publicationWrites++;const out=await c.query(sql(s),args);if(s==='SELECT clock_timestamp() AS now')return{rows:[{now:new Date(clock++)}]};return out;}};}};
  try{
   await pool.query('CREATE SCHEMA '+schema);await q('CREATE TABLE football.private_model_artifacts(artifact_key text PRIMARY KEY,artifact_version text NOT NULL,generated_at timestamptz NOT NULL,updated_at timestamptz NOT NULL,payload json NOT NULL,payload_sha256 text NOT NULL,payload_bytes integer NOT NULL)');await q('CREATE TABLE football.match_snapshots(dataset text,payload json)');
   const matches=[f.source(1)],source=f.snapshot(matches,{pair:signed.keyPair,mutate:e=>e.payload.value.matchInfoList[0].subMatchList.forEach(r=>{r.homeTeamId=10;r.awayTeamId=11;})});fs.writeFileSync(snapshotPath,JSON.stringify(source.snapshot));await q("INSERT INTO football.match_snapshots VALUES('current',$1::json)",[JSON.stringify(matches[0])]);
@@ -25,7 +25,25 @@ async function verify(pool){
   const saved=JSON.parse(before.find(r=>r.artifact_key===key).json);a.deepEqual(saved.draft,draft);a.equal(JSON.stringify(saved.draft),json);a.deepEqual(p.make(saved.draft,{...saved.inputs,trustRegistry:source.registry,asOf:saved.record.createdAt}),saved.record);
   const repeat=await service.execute(Buffer.from(JSON.stringify(request)));a.equal(repeat.submitted,false);a.equal(repeat.payloadSha256,result.payloadSha256);a.deepEqual((await q('SELECT artifact_key,payload::text AS json FROM football.private_model_artifacts ORDER BY artifact_key')).rows,before);
   a.equal(JSON.stringify(receipt),receiptJson);a.equal(request.originalRequestJson,originalRequestJson);
-  return{ok:true,scope:'disposable-native-postgres',realOriginalLockTimeout55P03:true,originalRequestBytesUnchanged:true,freshReadBeforeRetry:true,normalSignedPublisherAndSecondAck:true,completeSignedReplay:true,duplicateDoesNotWrite:true,failedReceiptPreserved:true,productionWrites:0,productionRootBrokerVerified:false};
+  // Exercise the actual ten-second prewrite wait failure against this isolated
+  // database. The fixed fixture clock ages signed quotes, never production data.
+  await q('DELETE FROM football.private_model_artifacts');
+  const f4=require('../tests/fixtures/reviewed-official-event.cjs'),v4Source=f4.setup(signed.keyPair),v4=v4Source.draft,v4Json=JSON.stringify(v4),v4Input={...original,json:v4Json,sha256:p.sha(v4Json),draftHash:p.hash(v4)},v4Raw=JSON.stringify(v4Input),v4Sha=p.sha(v4Raw);
+  fs.writeFileSync(snapshotPath,JSON.stringify(v4Source.snapshot));clock=f4.NOW+60000;const writeCount=publicationWrites;
+  const readiness=require('../server/researchPublishReadiness.cjs').createReadiness({pool:mapped});
+  a.equal((await readiness(Buffer.from(v4Raw))).state,'waiting');a.equal(publicationWrites,writeCount);
+  await a.rejects(service.execute(Buffer.from(v4Raw)),{code:'REVIEWED_ANALYSIS_OFFICIAL_FRESH_WAIT_BUDGET'});
+  a.equal(publicationWrites,writeCount);a.equal(Number((await q('SELECT count(*) AS n FROM football.private_model_artifacts')).rows[0].n),0);
+  const waitReceipt={...receipt,requestSha:v4Sha,releaseSha:retry.PREWRITE_WAIT_RELEASE_R936,finishedAt:new Date().toISOString(),stderr:JSON.stringify({ok:false,error:'REVIEWED_ANALYSIS_OFFICIAL_FRESH_WAIT_BUDGET',retryWriteAutomatically:false})+'\n'},waitReceiptJson=JSON.stringify(waitReceipt),waitIntent=JSON.stringify({version:'research-broker-intent-v1',requestSha:v4Sha,releaseSha:waitReceipt.releaseSha,admittedAt:waitReceipt.finishedAt,automaticWriteRetry:false});
+  const waitRequest={version:original.version,action:'publication-retry',originalRequestJson:v4Raw,originalRequestSha256:v4Sha,failedReceiptSha256:p.sha(waitReceiptJson)};
+  retry.verifyFailure(waitRequest,file=>Buffer.from(file.endsWith('.receipt.json')?waitReceiptJson:waitIntent));clock=f4.NOW+100;
+  a.equal((await readiness(Buffer.from(v4Raw))).state,'ready');a.equal(publicationWrites,writeCount);
+  const recovered=await service.execute(Buffer.from(JSON.stringify(waitRequest)));a.equal(recovered.submitted,true);a.equal(recovered.verified,true);a.equal(recovered.explicitRetry,true);
+  const savedV4=(await q('SELECT artifact_key,payload::text AS json FROM football.private_model_artifacts ORDER BY artifact_key')).rows;a.equal(savedV4.length,2);
+  const originalV4=JSON.parse(savedV4.find(r=>r.artifact_key===recovered.recordKey).json);a.equal(JSON.stringify(originalV4.draft),v4Json);a.deepEqual(p.make(originalV4.draft,{...originalV4.inputs,trustRegistry:v4Source.trustRegistry,asOf:originalV4.record.createdAt}),originalV4.record);
+  const writesAfter=publicationWrites;const repeatedV4=await service.execute(Buffer.from(JSON.stringify(waitRequest)));a.equal(repeatedV4.submitted,false);a.equal(publicationWrites,writesAfter);a.deepEqual((await q('SELECT artifact_key,payload::text AS json FROM football.private_model_artifacts ORDER BY artifact_key')).rows,savedV4);a.equal(JSON.stringify(waitReceipt),waitReceiptJson);
+  a.equal((await readiness(Buffer.from(v4Raw))).state,'complete');a.equal(publicationWrites,writesAfter);
+  return{ok:true,scope:'disposable-native-postgres',realOriginalLockTimeout55P03:true,realV4PrewriteWaitBudgetFailure:true,noPublicationWritesOnWaitFailure:true,v4RecoverySignedPublisherAndSecondAck:true,v4OriginalDraftExact:true,originalRequestBytesUnchanged:true,freshReadBeforeRetry:true,normalSignedPublisherAndSecondAck:true,completeSignedReplay:true,duplicateDoesNotWrite:true,failedReceiptPreserved:true,productionWrites:0,productionRootBrokerVerified:false};
  }finally{if(holder){await holder.query("SELECT pg_advisory_unlock_all()");holder.release();}if(previous===undefined)delete process.env.SPORTTERY_RELAY_FAST_LANE_SNAPSHOT;else process.env.SPORTTERY_RELAY_FAST_LANE_SNAPSHOT=previous;try{await pool.query('DROP SCHEMA IF EXISTS '+schema+' CASCADE');}finally{signed.cleanup();}}
 }
 if(require.main===module){const u=new URL(process.env.RESEARCH_REPORT_TEST_DATABASE_URL||'invalid:');if(!['postgres:','postgresql:'].includes(u.protocol)||!['127.0.0.1','localhost','[::1]'].includes(u.hostname)||u.pathname!=='/recommendation_test')throw Error('Explicit disposable local database required');const pool=new(require('pg').Pool)({connectionString:u.href,ssl:false,max:4});verify(pool).then(v=>console.log(JSON.stringify(v))).catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>pool.end());}

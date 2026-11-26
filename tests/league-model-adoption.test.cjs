@@ -4,13 +4,13 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const m=require('../src/services/leagueBaselineModel.cjs'),maker=require('../src/services/leagueBaselineRecommendation.cjs');
 const reg=require('../scripts/leagueBaselineRegistry.cjs'),runtime=require('../scripts/recommendationPlatform/leagueBaselineRuntime.cjs');
 const signed=require('./fixtures/signed-live-had.cjs');
-function fixture(){
+function fixture(league='br1'){
  const match={...signed.source(),leagueId:require('../scripts/storedResultTeamIdentity.cjs').derivedTeamId('Synthetic League').replace(/^team_/,'league_')};
  const source=signed.snapshot([match],{mutate:e=>{e.payload.value.matchInfoList[0].subMatchList[0].leagueAllName='Synthetic League';}});
  const parameters={poisson:{teams:['Alpha','Bravo'],attack:[.3,-.3],defense:[0,0],homeIntercept:.3,awayIntercept:.1,converged:true,gradientNorm:1e-8},
   elo:{ratings:{Alpha:1500,Bravo:1500},homeAdvantage:50,drawRate:.25},frequencies:{1:.5,X:.25,2:.25},
   poissonWeight:1,trainingRows:380,through:'2025-12-01',inputHash:'f'.repeat(64)};
- const packet=m.seal({version:m.VERSION,league:'br1',researchOnly:true,formalEligible:false,
+ const packet=m.seal({version:m.VERSION,league,researchOnly:true,formalEligible:false,
   createdAt:signed.stamp(signed.NOW-60000),availableAt:signed.stamp(signed.NOW-60000),parameters,parametersHash:m.hash(parameters),
   reportSha256:'a'.repeat(64),historySha256:'b'.repeat(64),
   validation:{kind:'chronological-statistical-holdout',testRows:380,brier:.6,logLoss:1,baselineBrier:.65,baselineLogLoss:1.1,formalEligible:false},
@@ -69,7 +69,7 @@ test('missing ACK cannot become visible and cutoff prevents first write',async()
  assert.equal((await runtime.projection(db.client,f.match.businessDate,db.rows().values().next().value.updated_at,f.trustRegistry)).records.length,0);
 });
 test('browser projection verifies binding, hides old-day references and renders one HAD direction',async()=>{
- const f=fixture(),db=poolAt(signed.NOW-1000);await reg.install(f.packet,{pool:db.pool,expectedSha256:null});
+ const f=fixture('nl.1'),db=poolAt(signed.NOW-1000);await reg.install(f.packet,{pool:db.pool,expectedSha256:null});
  db.setNow(signed.NOW+1000);await runtime.append(db.pool,maker.make(f),f);
  const raw=await runtime.projection(db.client,f.match.businessDate,signed.stamp(signed.NOW+2000),f.trustRegistry);
  const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript'),path=require('node:path');
@@ -78,9 +78,15 @@ test('browser projection verifies binding, hides old-day references and renders 
    {module,exports:module.exports,Date,require:(id)=>{if(id.startsWith('.')){const base=path.resolve(path.dirname(file),id);for(const ext of ['.tsx','.ts'])if(fs.existsSync(base+ext))return compile(base+ext);}return native(id);}});return module.exports;}
  const view=compile('src/services/recommendationCenterView.ts');
  const parsed=view.parseLeagueBaseline(raw,raw.businessDate,raw.updatedAt);assert.equal(parsed.records[0].modelHash,f.packet.contentHash);
+ assert.equal(Object.hasOwn(raw.records[0],'league'),false);assert.equal(parsed.records[0].formalEligible,false);
+ assert.equal(parsed.records[0].frozenHadQuote.sp,1.8);assert.equal(parsed.records[0].recordHash,raw.records[0].recordHash);
  const component=compile('src/components/recommendations/LeagueBaselineDirections.tsx').LeagueBaselineDirections;
  const html=require('react-dom/server').renderToStaticMarkup(require('react').createElement(component,{data:parsed,language:'zh',now:signed.NOW+3000,failed:false}));
  assert.match(html,/data-model-hash/);assert.match(html,/未校准/);assert.match(html,/主胜/);
+ assert.doesNotMatch(html,/巴西甲级联赛/);assert.match(html,/冻结 HAD SP/);assert.match(html,/1.80/);assert.match(html,/data-record-hash/);
+ const changed=structuredClone(raw),{contentHash,...changedBody}=changed.records[0];
+ changedBody.comparisons[0].quote.odds.H=0;changed.records[0]=m.seal(changedBody);
+ assert.throws(()=>view.parseLeagueBaseline(changed,changed.businessDate,changed.updatedAt),/frozen quote/);
  raw.records[0].parametersHash='d'.repeat(64);assert.throws(()=>view.parseLeagueBaseline(raw,raw.businessDate,raw.updatedAt),/seal/);
 });
 test('model registered after decision clock cannot be backdated into adoption',async()=>{
@@ -89,7 +95,7 @@ test('model registered after decision clock cannot be backdated into adoption',a
 });
 test('runtime with empty native registry records absence without acquiring matches or source',async()=>{
  const db=poolAt(signed.NOW);const result=await runtime.run({pool:db.pool,trustRegistry:fixture().trustRegistry});
- assert.equal(result.status,'awaiting-model');assert.equal(result.registry.length,2);assert.equal(result.created,0);
+ assert.equal(result.status,'awaiting-model');assert.equal(result.registry.length,m.LEAGUES.length);assert.equal(result.created,0);
  assert.equal(db.log.some(q=>q.includes('match_snapshots')),false);
 });
 module.exports={fixture,poolAt};

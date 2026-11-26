@@ -14,7 +14,7 @@ async function openPostgresRuntimeReadSession(options = {}) {
   const storeDir = path.resolve(options.storeDir || process.env.SERVER_STORE_DIR || process.env.DATA_STORE_DIR || path.join(__dirname, "../server-data"));
   const publicDataDir = path.resolve(options.publicDataDir || process.env.DATA_GENERATION_PUBLIC_DATA_DIR || path.join(__dirname, "../public/data"));
   const owned = !options.pool, pool = options.pool || createPostgresPool({ max: 1, applicationName: "football-runtime-reader" });
-  let client, lease, closed = false;
+  let client, lease, closed = false, receiptBarrierWaitMs = 0;
   const barrier = receiptBarrierState();
   const close = async () => {
     if (closed) return;
@@ -36,11 +36,11 @@ async function openPostgresRuntimeReadSession(options = {}) {
     if (options.protectReceipt) {
       // Acquire before BEGIN so a wait cannot pin a snapshot older than the
       // publisher whose exclusive lock just completed.
-      // Do not enqueue an unbounded lock wait behind a full projection. A
-      // failed attempt is retried by the owning worker on its next cycle.
       // If the network times out after dispatch, discard the connection so a
       // late server response cannot strand a session lock in the pool.
+      const barrierStartedAt = performance.now();
       await acquireReceiptReadBarrier(client, barrier, receiptWaitMs);
+      receiptBarrierWaitMs = Number((performance.now() - barrierStartedAt).toFixed(3));
     }
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
     const rows = await client.query("SELECT key,value FROM football.projection_meta WHERE key = ANY($1::text[])",
@@ -61,6 +61,7 @@ async function openPostgresRuntimeReadSession(options = {}) {
     const publication = paired.publication;
     if (!publication.context) throw new Error("native read requires matching immutable generation");
     const readAudit = Object.freeze({ version: "native-read-session-audit-v1",
+      receiptBarrierWaitMs, receiptBarrierWaitLimitMs: receiptWaitMs,
       fullPayloadValidationPasses: 1,
       payloadBytesValidated: publication.context.manifest.files.reduce((sum, entry) => sum + entry.bytes, 0),
       validationAndLeaseMs: Number((performance.now() - validationStartedAt).toFixed(3)),

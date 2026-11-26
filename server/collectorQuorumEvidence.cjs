@@ -307,6 +307,35 @@ const proofForPrimaryMarket = (market, poolCode, trustRegistry) => {
   };
 };
 
+const COLLECTOR_EVIDENCE_INDEX = Symbol("collectorEvidenceIndex");
+
+const indexCollectorEvidenceStore = (evidenceStore) => {
+  if (!evidenceStore || typeof evidenceStore !== "object") return null;
+  if (evidenceStore[COLLECTOR_EVIDENCE_INDEX]) return evidenceStore;
+  const byPoolAndHash = new Map();
+  for (const row of normalizedStore(evidenceStore).rows) {
+    const acceptedMs = instantMs(row?.acceptedAt);
+    const receivedMs = instantMs(row?.receivedAt);
+    if (acceptedMs === null || receivedMs === null || !row?.independenceDomain || !row?.keyId) continue;
+    const extractions = Array.isArray(row?.marketExtractions) ? row.marketExtractions : [];
+    const seenForRow = new Set();
+    for (const item of extractions) {
+      if ((item?.poolCode !== "HAD" && item?.poolCode !== "HHAD") || typeof item?.hash !== "string") continue;
+      const key = `${item.poolCode}|${item.hash}`;
+      if (seenForRow.has(key)) continue;
+      seenForRow.add(key);
+      const list = byPoolAndHash.get(key);
+      const entry = { row, acceptedMs, receivedMs };
+      if (list) list.push(entry);
+      else byPoolAndHash.set(key, [entry]);
+    }
+  }
+  return {
+    ...normalizedStore(evidenceStore),
+    [COLLECTOR_EVIDENCE_INDEX]: byPoolAndHash,
+  };
+};
+
 const collectorQuorumForDecision = ({
   snapshot,
   deadlineAt,
@@ -315,6 +344,8 @@ const collectorQuorumForDecision = ({
 } = {}) => {
   const trustRegistry = loadCollectorTrustRegistry(trustRegistryInput);
   const deadlineMs = instantMs(deadlineAt);
+  const preindexed = evidenceStore?.[COLLECTOR_EVIDENCE_INDEX] || null;
+  const fallbackRows = preindexed ? null : normalizedStore(evidenceStore).rows;
   const markets = {};
   for (const poolCode of ["HAD", "HHAD"]) {
     const market = decisionMarket(snapshot, poolCode);
@@ -322,25 +353,45 @@ const collectorQuorumForDecision = ({
     const proofs = [];
     const primary = proofForPrimaryMarket(market, poolCode, trustRegistry);
     if (primary) proofs.push(primary);
-    for (const row of normalizedStore(evidenceStore).rows) {
-      const acceptedMs = instantMs(row?.acceptedAt);
-      const receivedMs = instantMs(row?.receivedAt);
-      if (deadlineMs === null || acceptedMs === null || receivedMs === null) continue;
-      if (acceptedMs > deadlineMs || receivedMs > deadlineMs) continue;
-      const extraction = (Array.isArray(row?.marketExtractions) ? row.marketExtractions : [])
-        .find((item) => item?.poolCode === poolCode && item?.hash === extractionHash);
-      if (!extraction || !row?.independenceDomain || !row?.keyId) continue;
-      proofs.push({
-        poolCode,
-        keyId: row.keyId,
-        independenceDomain: row.independenceDomain,
-        extractionHash,
-        commitmentHash: row.commitmentHash,
-        acceptedAt: row.acceptedAt,
-        receivedAt: row.receivedAt,
-        evidenceId: row.evidenceId,
-        source: "collector-evidence-store",
-      });
+    if (preindexed) {
+      if (deadlineMs !== null) {
+        const candidates = preindexed.get(`${poolCode}|${extractionHash}`) || [];
+        for (const { row, acceptedMs, receivedMs } of candidates) {
+          if (acceptedMs > deadlineMs || receivedMs > deadlineMs) continue;
+          proofs.push({
+            poolCode,
+            keyId: row.keyId,
+            independenceDomain: row.independenceDomain,
+            extractionHash,
+            commitmentHash: row.commitmentHash,
+            acceptedAt: row.acceptedAt,
+            receivedAt: row.receivedAt,
+            evidenceId: row.evidenceId,
+            source: "collector-evidence-store",
+          });
+        }
+      }
+    } else {
+      for (const row of fallbackRows) {
+        const acceptedMs = instantMs(row?.acceptedAt);
+        const receivedMs = instantMs(row?.receivedAt);
+        if (deadlineMs === null || acceptedMs === null || receivedMs === null) continue;
+        if (acceptedMs > deadlineMs || receivedMs > deadlineMs) continue;
+        const extraction = (Array.isArray(row?.marketExtractions) ? row.marketExtractions : [])
+          .find((item) => item?.poolCode === poolCode && item?.hash === extractionHash);
+        if (!extraction || !row?.independenceDomain || !row?.keyId) continue;
+        proofs.push({
+          poolCode,
+          keyId: row.keyId,
+          independenceDomain: row.independenceDomain,
+          extractionHash,
+          commitmentHash: row.commitmentHash,
+          acceptedAt: row.acceptedAt,
+          receivedAt: row.receivedAt,
+          evidenceId: row.evidenceId,
+          source: "collector-evidence-store",
+        });
+      }
     }
     const byDomain = new Map();
     for (const proof of proofs) {
@@ -378,6 +429,7 @@ module.exports = {
   appendCollectorEvidenceUpload,
   collectorQuorumForDecision,
   evidenceRowFromEndpoint,
+  indexCollectorEvidenceStore,
   mergeCollectorEvidenceStore,
   normalizedStore,
   summarizeRecentCollectorEvidenceStore,

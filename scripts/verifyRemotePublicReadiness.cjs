@@ -875,7 +875,15 @@ const run = async () => {
         candidateCaptureHeartbeat?.projectedWorstCaseCompletionAgeMs,
       )
       && candidateCaptureHeartbeat.projectedWorstCaseCompletionAgeMs
+        === candidateCaptureHeartbeat.preemptiveRefreshAgeMs
+          + candidateCaptureHeartbeat.attemptTimeoutLimitMs
+          + candidateCaptureHeartbeat.retryDelayMs
+          + candidateCaptureHeartbeat.recoveryCaptureBudgetMs
+      && candidateCaptureHeartbeat.projectedWorstCaseCompletionAgeMs
         < candidateCaptureHeartbeat.freshnessLimitMs
+      && candidateCaptureHeartbeat.projectedWorstCaseCompletionAgeMs
+        <= candidateCaptureHeartbeat.freshnessLimitMs
+          - candidateCaptureHeartbeat.preemptiveSafetyMarginMs
       && candidateCaptureHeartbeat?.preemptiveBudgetFits === true
       && Number.isFinite(
         Date.parse(candidateCaptureHeartbeat?.nextPreemptiveRefreshAt || ""),
@@ -906,10 +914,16 @@ const run = async () => {
             : candidateCaptureHeartbeat.retryDelayMs
               + candidateCaptureHeartbeat.recoveryCaptureBudgetMs)
       && candidateCaptureHeartbeat?.nextAttemptBudgetFits === true
+      && candidateCaptureHeartbeat.nextAttemptProjectedCompletionAgeMs
+        <= candidateCaptureHeartbeat.freshnessLimitMs
+          - candidateCaptureHeartbeat.preemptiveSafetyMarginMs
       && candidateCaptureHeartbeat?.ok === true
       && candidateCaptureHeartbeat?.skipped === false
+      && Number.isFinite(candidateCaptureHeartbeat?.intervalSeconds)
       && Number(candidateCaptureHeartbeat?.intervalSeconds || 0) >= 1
-      && Number(candidateCaptureHeartbeat?.intervalSeconds || 0) <= 60
+      && candidateCaptureHeartbeat.intervalSeconds
+        <= (candidateCaptureHeartbeat.freshnessLimitMs
+          - candidateCaptureHeartbeat.preemptiveReserveMs) / 1_000
       && Number(candidateCaptureHeartbeat.intervalSeconds)
         === candidateCaptureHeartbeat.preemptiveRefreshAgeMs / 1_000
       && Number.isFinite(Date.parse(candidateCaptureHeartbeat?.evaluatedAt || ""))
@@ -1037,6 +1051,7 @@ const run = async () => {
       ), {
       status: modelEvaluation.status,
       state: publicCandidateProspective?.state || null,
+      shadowObservationValid: shadowObservationAuditValid(publicCandidateProspective),
       chainValid: publicCandidateProspective?.chainValid ?? null,
       heartbeat: {
         version: candidateCaptureHeartbeat?.version || null,
@@ -1116,6 +1131,7 @@ const run = async () => {
         captureFinalizationGraceSeconds:
           candidateCaptureFinalizationGraceSeconds,
         nearestStatus: candidateReadiness.nearestStatus || null,
+        nearestDeadlineBatch: candidateNearestDeadlineBatch,
         blockerCounts: candidateReadiness.blockerCounts || {},
         awaitingReasonCounts: candidateReadiness.awaitingReasonCounts || {},
         excludedReasonCounts: candidateReadiness.excludedReasonCounts || {},
@@ -1126,6 +1142,7 @@ const run = async () => {
           registryAvailable: candidateAdmission.registryAvailable === true,
           reconciled: candidateAdmission.reconciled === true,
           captureGap: candidateAdmission.captureGap === true,
+          expectedRows: candidateAdmissionExpectedRows,
           admitted: Number(candidateAdmission.admitted || 0),
           excluded: Number(candidateAdmission.excluded || 0),
           pendingDeadline: Number(candidateAdmission.pendingDeadline || 0),

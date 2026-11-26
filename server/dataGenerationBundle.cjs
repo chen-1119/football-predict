@@ -24,6 +24,7 @@ const DEFAULT_RETENTION_COUNT = 4;
 const DEFAULT_CLEANUP_GRACE_MS = 10 * 60 * 1000;
 const DEFAULT_READER_LEASE_MS = 15 * 60 * 1000;
 const LARGE_SEMANTIC_COMPARISON_DELTA_BYTES = 64 * 1024 * 1024;
+const SMALL_SEMANTIC_COMPARISON_BYTES = 1024 * 1024;
 
 const FILE_DEFINITIONS = Object.freeze([
   { path: "matches-current.json", required: true, kind: "array" },
@@ -39,6 +40,7 @@ const FILE_DEFINITIONS = Object.freeze([
   { path: "ai-arena.json", required: false, kind: "object" },
   { path: "pre-match-signals.json", required: false, kind: "object" },
   { path: "gpt-predictions.json", required: false, kind: "object-or-array" },
+  { path: "reference-integrity.json", required: false, kind: "object" },
 ]);
 
 const CORE_FILES = Object.freeze(
@@ -163,13 +165,16 @@ const validateBundleReader = ({
   let oddsRows = 0;
   let predictionRows = 0;
   let calibrationValid = false;
+  let snapshotMetadata = null;
+  let referenceIntegrity = null;
+  const coreFiles = [...CORE_FILES, ...(hasPayload("reference-integrity.json") ? ["reference-integrity.json"] : [])];
 
   const validationDefinitions = includeSemanticHash
     ? [
-        ...[...CORE_FILES]
+        ...[...coreFiles]
           .sort()
           .map((relativePath) => FILE_DEFINITIONS.find((entry) => entry.path === relativePath)),
-        ...FILE_DEFINITIONS.filter((definition) => !CORE_FILES.includes(definition.path)),
+        ...FILE_DEFINITIONS.filter((definition) => !coreFiles.includes(definition.path)),
       ]
     : FILE_DEFINITIONS;
   const semanticHasher = includeSemanticHash ? createSemanticHasher() : null;
@@ -178,14 +183,20 @@ const validateBundleReader = ({
 
   for (const definition of validationDefinitions) {
     if (!hasPayload(definition.path)) continue;
-    // Serving startup needs the complete JSON grammar/hash and exact rows
-    // count, without retaining a gigabyte of historical prediction objects.
-    // Semantic-hash callers keep their original complete-value path.
-    if (!semanticHasher && definition.kind === "rows-object" && typeof inspectRowsObject === "function") {
-      const inspection = inspectRowsObject(definition.path);
+    if (definition.kind === "rows-object" && typeof inspectRowsObject === "function") {
+      if (semanticHasher) {
+        if (semanticEntries > 0) semanticHasher.update(",");
+        semanticHasher.update(JSON.stringify(definition.path));
+        semanticHasher.update(":");
+      }
+      const inspection = inspectRowsObject(definition.path, { semanticHasher });
       if (definition.path === "odds-history.json") oddsRows = inspection.rows;
-      else if (definition.path === "prediction-snapshots.json") predictionRows = inspection.rows;
+      else if (definition.path === "prediction-snapshots.json") {
+        predictionRows = inspection.rows;
+        snapshotMetadata = inspection.metadata;
+      }
       files += 1;
+      if (semanticHasher) semanticEntries += 1;
       continue;
     }
     if (
@@ -209,7 +220,7 @@ const validateBundleReader = ({
     try {
       files += 1;
       assertPayloadKind(definition, payload);
-      if (semanticHasher && CORE_FILES.includes(definition.path)) {
+      if (semanticHasher && coreFiles.includes(definition.path)) {
         if (semanticEntries > 0) semanticHasher.update(",");
         semanticHasher.update(JSON.stringify(definition.path));
         semanticHasher.update(":");
@@ -241,6 +252,10 @@ const validateBundleReader = ({
           break;
         case "prediction-snapshots.json":
           predictionRows = payload.rows.length;
+          snapshotMetadata = { version: payload.version, publicReferenceIntegrity: payload.publicReferenceIntegrity };
+          break;
+        case "reference-integrity.json":
+          referenceIntegrity = payload;
           break;
         case "model-calibration.json":
           calibrationValid = Boolean(
@@ -260,6 +275,7 @@ const validateBundleReader = ({
     }
   }
 
+  require("./referenceIntegrityPartition.cjs").validateSnapshotIntegrity(snapshotMetadata, referenceIntegrity);
   if (!metaCycle) fail("GENERATION_SOURCE_CYCLE_MISSING", "sync-meta.json.sourceCycleId is required");
   if (sourceCycleId && metaCycle !== String(sourceCycleId).trim()) {
     fail("GENERATION_SOURCE_CYCLE_MISMATCH", "sync-meta sourceCycleId differs from generation", {
@@ -584,7 +600,7 @@ const inspectMatchArrayFile = (filePath, relativePath, { semanticHasher = null }
 const bundleSemanticHashFromReader = ({ hasPayload, readPayload }) => {
   const hash = createSemanticHasher();
   hash.update("{");
-  const sortedCoreFiles = [...CORE_FILES].sort();
+  const sortedCoreFiles = [...CORE_FILES, ...(hasPayload("reference-integrity.json") ? ["reference-integrity.json"] : [])].sort();
   for (let index = 0; index < sortedCoreFiles.length; index += 1) {
     const relativePath = sortedCoreFiles[index];
     if (!hasPayload(relativePath)) {
@@ -613,6 +629,69 @@ const bundleSemanticHash = (payloads) => {
   });
 };
 
+const inspectRowsObjectFile = (filePath, relativePath, {
+  semanticHasher = null, expectedBytes, expectedSha256,
+} = {}) => {
+  const { streamJsonObjectArrays } = require("./streamedJsonObjectArrays.cjs");
+  const { readSelectedJsonObjectFile } = require("./selectedJsonObjectFile.cjs");
+  const before = fs.lstatSync(filePath);
+  const inspection = streamJsonObjectArrays(filePath, {
+    keys: semanticHasher ? [] : ["rows"], allowNonArrays: true,
+    inventoryFields: Boolean(semanticHasher), expectedBytes, expectedSha256, onItem: () => {},
+  });
+  const binding = { expectedBytes: inspection.bytes, expectedSha256: inspection.sha256 };
+  let rows = inspection.counts.rows;
+  let metadata = null;
+  if (semanticHasher) {
+    const fields = inspection.rootFields.sort((left, right) => left.key < right.key ? -1 : left.key > right.key ? 1 : 0);
+    if (!fields.some((field) => field.key === "rows" && field.array)) {
+      fail("GENERATION_SEMANTIC_INVALID", `${relativePath} must be an object with rows[]`);
+    }
+    const keys = fields.filter((field) => !field.array && field.key !== "updatedAt").map((field) => field.key);
+    if (relativePath === "prediction-snapshots.json") keys.push("version", "publicReferenceIntegrity");
+    const selected = readSelectedJsonObjectFile({ filePath, ...binding, keys, maxSelectedChars: 16 * 1024 * 1024 }).value;
+    metadata = relativePath === "prediction-snapshots.json"
+      ? { version: selected.version, publicReferenceIntegrity: selected.publicReferenceIntegrity } : null;
+    semanticHasher.update("{");
+    let written = 0;
+    for (const field of fields) {
+      if (field.key === "updatedAt") continue;
+      if (written++) semanticHasher.update(",");
+      semanticHasher.update(JSON.stringify(field.key));
+      semanticHasher.update(":");
+      const location = `projection.${relativePath}.${field.key}`;
+      if (!field.array) {
+        writeCanonicalSemanticValue(semanticHasher, selected[field.key], { relativePath, location, depth: 1 });
+        continue;
+      }
+      semanticHasher.update("[");
+      const arrayInspection = streamJsonObjectArrays(filePath, {
+        ...binding, keys: [field.key], onItem: (key, value, index) => {
+          if (index) semanticHasher.update(",");
+          writeCanonicalSemanticValue(semanticHasher, value, {
+            relativePath, location: `${location}[${index}]`, depth: 2,
+          });
+        },
+      });
+      semanticHasher.update("]");
+      if (field.key === "rows") rows = arrayInspection.counts.rows;
+    }
+    semanticHasher.update("}");
+  } else {
+    if (!inspection.fields.includes("rows")) fail("GENERATION_SEMANTIC_INVALID", `${relativePath} must be an object with rows[]`);
+    if (relativePath === "prediction-snapshots.json") {
+      metadata = readSelectedJsonObjectFile({ filePath, ...binding,
+        keys: ["version", "publicReferenceIntegrity"], maxSelectedChars: 512 * 1024 }).value;
+    }
+  }
+  const after = fs.lstatSync(filePath);
+  if (!after.isFile() || after.isSymbolicLink() || before.dev !== after.dev || before.ino !== after.ino
+    || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) {
+    fail("GENERATION_FILE_CHANGED", `${relativePath} changed across complete semantic reads`);
+  }
+  return { rows, metadata, bytes: inspection.bytes, sha256: inspection.sha256 };
+};
+
 const generationPayloadReader = (context) => {
   const manifestPaths = new Set(context.manifest.files.map((entry) => entry.path));
   return {
@@ -623,16 +702,13 @@ const generationPayloadReader = (context) => {
       relativePath,
       options,
     ),
-    inspectRowsObject: (relativePath) => {
+    inspectRowsObject: (relativePath, options) => {
       const entry = context.manifest.files.find((row) => row.path === relativePath);
       if (!entry) fail("FILE_NOT_IN_MANIFEST", `file is not part of generation: ${relativePath}`);
       const filePath = path.join(context.generationDir, ...relativePath.split("/"));
-      const inspection = require("./streamedJsonObjectArrays.cjs").streamJsonObjectArrays(filePath, {
-        keys: ["rows"], allowNonArrays: true, expectedBytes: entry.bytes, expectedSha256: entry.sha256,
-        onItem: () => {},
+      return inspectRowsObjectFile(filePath, relativePath, {
+        ...options, expectedBytes: entry.bytes, expectedSha256: entry.sha256,
       });
-      if (!inspection.fields.includes("rows")) fail("GENERATION_SEMANTIC_INVALID", `${relativePath} must be an object with rows[]`);
-      return { rows: inspection.counts.rows };
     },
     reportedFiles: FILE_DEFINITIONS.filter((definition) => manifestPaths.has(definition.path)).length,
   };
@@ -642,6 +718,7 @@ const readMutableBundle = ({ publicDataDir }) => {
   const resolvedDir = path.resolve(publicDataDir);
   const files = new Map();
   const observations = new Map();
+  const inspections = new Map();
   for (const definition of FILE_DEFINITIONS) {
     const filePath = path.join(resolvedDir, definition.path);
     if (!fs.existsSync(filePath)) {
@@ -677,10 +754,21 @@ const readMutableBundle = ({ publicDataDir }) => {
     const entry = files.get(relativePath);
     if (!entry) fail("GENERATION_CORE_FILE_MISSING", `missing ${relativePath}`);
     const inspection = inspectMatchArrayFile(entry.filePath, relativePath, options);
+    inspections.set(relativePath, inspection);
     observations.set(relativePath, Object.freeze({
       sha256: inspection.sha256,
       bytes: inspection.bytes,
       rows: inspection.rows,
+    }));
+    return inspection;
+  };
+  const inspectRowsObject = (relativePath, options) => {
+    const entry = files.get(relativePath);
+    if (!entry) fail("GENERATION_CORE_FILE_MISSING", `missing ${relativePath}`);
+    const inspection = inspectRowsObjectFile(entry.filePath, relativePath, options);
+    inspections.set(relativePath, inspection);
+    observations.set(relativePath, Object.freeze({
+      sha256: inspection.sha256, bytes: inspection.bytes, rows: inspection.rows,
     }));
     return inspection;
   };
@@ -718,8 +806,14 @@ const readMutableBundle = ({ publicDataDir }) => {
     hasPayload: (relativePath) => files.has(relativePath),
     readPayload,
     inspectMatchArray,
+    inspectRowsObject,
     reportedFiles: files.size,
     descriptors,
+    matchingInspection: (relativePath, entry) => {
+      const inspection = inspections.get(relativePath);
+      return inspection && inspection.bytes === entry?.bytes && inspection.sha256 === entry?.sha256
+        ? inspection : null;
+    },
   });
 };
 
@@ -729,6 +823,52 @@ const validateGenerationBundle = (context, { includeSemanticHash = false } = {})
     ...reader,
     sourceCycleId: context.sourceCycleId,
     includeSemanticHash,
+  });
+};
+
+const compareActiveCoreSemantics = (sourceFiles, activeContext) => {
+  const activeFiles = new Map(activeContext.manifest.files.map((entry) => [entry.path, entry]));
+  const sourceCore = [...CORE_FILES, ...(sourceFiles["reference-integrity.json"] ? ["reference-integrity.json"] : [])].sort();
+  const activeCore = [...CORE_FILES, ...(activeFiles.has("reference-integrity.json") ? ["reference-integrity.json"] : [])].sort();
+  if (JSON.stringify(sourceCore) !== JSON.stringify(activeCore)) return "different";
+  let uncertain = false;
+  for (const relativePath of sourceCore) {
+    const source = sourceFiles[relativePath], active = activeFiles.get(relativePath);
+    if (!active) fail("GENERATION_CORE_FILE_MISSING", `missing active ${relativePath}`);
+    if (source.expectedBytes === active.bytes && source.expectedSha256 === active.sha256) continue;
+    if (Math.max(source.expectedBytes, active.bytes) > SMALL_SEMANTIC_COMPARISON_BYTES) {
+      uncertain = true;
+      continue;
+    }
+    const canonicalHash = (filePath, expectedBytes, expectedSha256) => {
+      const hasher = createSemanticHasher();
+      if (FILE_DEFINITIONS.find((entry) => entry.path === relativePath)?.kind === "rows-object") {
+        inspectRowsObjectFile(filePath, relativePath, { expectedBytes, expectedSha256, semanticHasher: hasher });
+      } else {
+        const payload = readChunkedJsonFile(filePath, {
+          expectedBytes, expectedSha256, maxBytes: SMALL_SEMANTIC_COMPARISON_BYTES,
+        }).value;
+        writeSemanticPayload(hasher, relativePath, payload);
+      }
+      return hasher.digest("hex");
+    };
+    const sourceHash = canonicalHash(source.sourcePath, source.expectedBytes, source.expectedSha256);
+    const activeHash = canonicalHash(path.join(activeContext.generationDir, relativePath), active.bytes, active.sha256);
+    if (sourceHash !== activeHash) return "different";
+  }
+  return uncertain ? "unknown" : "equal";
+};
+
+const validateProvenEqualActiveBundle = (activeContext, loaded) => {
+  const reader = generationPayloadReader(activeContext);
+  const entries = new Map(activeContext.manifest.files.map((entry) => [entry.path, entry]));
+  validateBundleReader({
+    ...reader,
+    sourceCycleId: activeContext.sourceCycleId,
+    inspectRowsObject: (relativePath) => loaded.matchingInspection(relativePath, entries.get(relativePath))
+      || reader.inspectRowsObject(relativePath),
+    inspectMatchArray: (relativePath) => loaded.matchingInspection(relativePath, entries.get(relativePath))
+      || reader.inspectMatchArray(relativePath),
   });
 };
 
@@ -763,6 +903,9 @@ const commitCurrentDataGeneration = ({
   try {
     if (fs.existsSync(paths.currentPointer)) {
       const activeContext = resolveCurrentGeneration({ storeDir });
+      if (activeContext.manifest.schemaVersion === 2 && !sourceFiles["reference-integrity.json"]) {
+        fail("REFERENCE_PARTITION_DOWNGRADE_FORBIDDEN", "cannot drop unresolved original partition");
+      }
       const activeManifestByPath = new Map(
         activeContext.manifest.files.map((entry) => [entry.path, entry])
       );
@@ -776,8 +919,16 @@ const commitCurrentDataGeneration = ({
             >= LARGE_SEMANTIC_COMPARISON_DELTA_BYTES;
         });
       if (!coreByteShapeChanged) {
-        const activeInspection = validateGenerationBundle(activeContext, { includeSemanticHash: true });
-        const activeSemanticHash = activeInspection.semanticHash;
+        const comparison = compareActiveCoreSemantics(sourceFiles, activeContext);
+        let activeSemanticHash = null;
+        if (comparison === "equal") {
+          validateProvenEqualActiveBundle(activeContext, loaded);
+          resolveGeneration({ storeDir, generationId: activeContext.generationId,
+            manifestHash: activeContext.manifestHash, sourceCycleId: activeContext.sourceCycleId });
+          activeSemanticHash = semanticHash;
+        } else if (comparison === "unknown") {
+          activeSemanticHash = validateGenerationBundle(activeContext, { includeSemanticHash: true }).semanticHash;
+        }
         if (activeSemanticHash === semanticHash) {
           // Re-hash the mutable source after the potentially long active
           // generation validation. This preserves the old in-memory snapshot

@@ -1,5 +1,7 @@
 const fs = require("fs");
 const path = require("path");
+const { acquireSyncMetaCommitLock } = require("./syncMetaCommitLock.cjs");
+const { summarizeStrategyForSyncMeta } = require("./syncMetaStrategySummary.cjs");
 const {
   isOfficialRecommendationEligible,
 } = require("../src/services/officialRecommendationEligibility.cjs");
@@ -446,21 +448,28 @@ function removeEmbeddedStrategy(calibration) {
 
 function reconcileShadowStrategyArtifacts(strategy) {
   const syncMetaFile = path.join(publicDataDir, "sync-meta.json");
-  const syncMeta = readJson(syncMetaFile, null);
-  const strategyMeta = strategy && typeof strategy === "object" ? {
+  const strategyMeta = strategy && typeof strategy === "object" ? summarizeStrategyForSyncMeta({
     version: strategy.version || null,
     generatedAt: strategy.generatedAt || null,
     activation: strategy.activation || null,
     sample: strategy.sample || {},
     activeGates: strategy.activeGates || {},
-  } : null;
+  }) : null;
   let syncMetaUpdated = false;
-  if (syncMeta && typeof syncMeta === "object" && !Array.isArray(syncMeta)) {
-    const currentStrategyMeta = syncMeta.modelStrategy || null;
-    if (JSON.stringify(currentStrategyMeta) !== JSON.stringify(strategyMeta)) {
-      writeJson(syncMetaFile, { ...syncMeta, modelStrategy: strategyMeta });
-      syncMetaUpdated = true;
+  const syncMetaLock = acquireSyncMetaCommitLock({ filePath: syncMetaFile });
+  try {
+    // Re-read after acquiring the shared commit protocol so concurrent fast
+    // observations committed while waiting are preserved in their entirety.
+    const syncMeta = readJson(syncMetaFile, null);
+    if (syncMeta && typeof syncMeta === "object" && !Array.isArray(syncMeta)) {
+      const currentStrategyMeta = syncMeta.modelStrategy || null;
+      if (JSON.stringify(currentStrategyMeta) !== JSON.stringify(strategyMeta)) {
+        writeJson(syncMetaFile, { ...syncMeta, modelStrategy: strategyMeta });
+        syncMetaUpdated = true;
+      }
     }
+  } finally {
+    syncMetaLock.release();
   }
 
   if (strategy?.activation?.onlineEffect !== "shadow") {

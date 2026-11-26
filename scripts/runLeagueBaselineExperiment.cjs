@@ -3,14 +3,15 @@
 // define train/test membership, never fabricated historical availability times.
 const fs=require('node:fs'),path=require('node:path');
 const {hash,parseHistory,url,SOURCES,VERSION:HISTORY_VERSION}=require('./collectLeagueTextHistory.cjs');
-const VERSION='league-elo-poisson-experiment-v1', OUTCOMES=['1','X','2'];
+const VERSION='league-elo-poisson-experiment-v2', OUTCOMES=['1','X','2'];
+const {LEAGUES}=require('../src/services/leagueBaselineScope.cjs');
 const assert=(value,message)=>{if(!value)throw Error(message);};
 const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
 function validateRows(rows) {
   assert(Array.isArray(rows)&&rows.length>0&&rows.length<=10000,'row count');
   const ids=new Set();
   for(const r of rows){
-    assert(typeof r.id==='string'&&r.id.length>0&&['br1','fi1'].includes(r.league)&&/^20\d{2}-\d{2}-\d{2}$/.test(r.date)
+    assert(typeof r.id==='string'&&r.id.length>0&&LEAGUES.includes(r.league)&&/^20\d{2}-\d{2}-\d{2}$/.test(r.date)
       && new Date(r.date).toISOString().slice(0,10)===r.date,'date/league');
     assert(typeof r.home==='string'&&typeof r.away==='string'&&r.home!==r.away
       &&r.home.length>0&&r.away.length>0,'teams');
@@ -24,7 +25,7 @@ function fitPoisson(rows,regularization) {
   let homeIntercept=Math.log((rows.reduce((s,r)=>s+r.homeGoals,0)+1)/(rows.length+1));
   let awayIntercept=Math.log((rows.reduce((s,r)=>s+r.awayGoals,0)+1)/(rows.length+1));
   let steps=0,gradientNorm=null;
-  for(;steps<5000;steps++){
+  for(;steps<50000;steps++){
     const ga=teams.map(()=>0),gd=teams.map(()=>0);let gh=0,gv=0;
     for(const r of rows){const h=idx.get(r.home),v=idx.get(r.away);
       const eh=Math.exp(homeIntercept+a[h]+d[v])-r.homeGoals,ev=Math.exp(awayIntercept+a[v]+d[h])-r.awayGoals;

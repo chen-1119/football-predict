@@ -7,6 +7,9 @@ const { buildShadowObservationState } = require("../src/services/candidateCaptur
 const {
   CAPTURE_FINALIZATION_GRACE_SECONDS,
   CAPTURE_FINALIZATION_POLICY_VERSION,
+  REGISTRY_VERSION,
+  LEDGER_VERSION,
+  TRUSTED_PRIOR_VERIFICATION,
   candidateEvaluatorSemanticHashes,
   CANDIDATE_IMPLEMENTATION_COMMITMENT_VERSION,
   atomicDecisionRecordValid,
@@ -14,13 +17,17 @@ const {
   canonicalize,
   captureFinalizationFor,
   classifyCandidateDecisionEvidence,
+  cohortIdentityKeysFor,
   decisionDeadlineFor,
+  fixedGateSpec,
+  hasUnrecordedDueReview,
   sameCohortIdentity,
   selectSnapshotAtDeadline,
   settleCandidateProspectiveRegistry,
   sha256,
   updateCandidateProspectiveLedger,
   verifyRegistry,
+  verifyRegistryWithCache,
   withCandidateProspectiveRegistryLock,
 } = require("./candidateProspectiveLedger.cjs");
 const {
@@ -64,6 +71,7 @@ const {
 } = require("../src/services/collectorAttestation.cjs");
 const {
   collectorQuorumForDecision,
+  indexCollectorEvidenceStore,
 } = require("../server/collectorQuorumEvidence.cjs");
 
 let DatabaseSync = null;
@@ -613,6 +621,60 @@ const sqliteProjectedMatchUniverse = (
 };
 
 let matchUniverseCache = null;
+let cachedRegistrySnapshot = null;
+
+const sameBigIntStat = (left, right) => Boolean(
+  left
+  && right
+  && left.isFile()
+  && right.isFile()
+  && left.dev === right.dev
+  && left.ino === right.ino
+  && left.size === right.size
+  && left.mtimeNs === right.mtimeNs
+  && left.ctimeNs === right.ctimeNs
+);
+
+const readArtifactWithRegistryCache = (filePath) => {
+  if (path.resolve(String(filePath || "")) !== registryFile) {
+    return readJson(filePath, null);
+  }
+  try {
+    const before = fs.statSync(filePath, { bigint: true });
+    const raw = fs.readFileSync(filePath, "utf8");
+    const after = fs.statSync(filePath, { bigint: true });
+    const parsed = JSON.parse(raw);
+    if (sameBigIntStat(before, after)) {
+      cachedRegistrySnapshot = {
+        filePath: registryFile,
+        stat: after,
+        parsed,
+      };
+    } else {
+      cachedRegistrySnapshot = null;
+    }
+    return parsed;
+  } catch {
+    cachedRegistrySnapshot = null;
+    return null;
+  }
+};
+
+const consumeCachedRegistryRead = (filePath) => {
+  const cached = cachedRegistrySnapshot;
+  cachedRegistrySnapshot = null;
+  if (!cached || cached.filePath !== path.resolve(String(filePath || ""))) {
+    return readJson(filePath, null);
+  }
+  try {
+    const current = fs.statSync(filePath, { bigint: true });
+    if (sameBigIntStat(cached.stat, current)) return cached.parsed;
+  } catch {
+    return null;
+  }
+  return readJson(filePath, null);
+};
+
 const publicHistoryRowsForMatchUniverse = ({
   sqliteReady = false,
   readHistory = () => readJson(historyMatchesFile, []),
@@ -631,7 +693,7 @@ const settlementHistoryIdentityValues = ({
     legacyCommonCohortG2V1SuiteFile,
     commonCohortG2SuiteFile,
   ],
-  readArtifact = (filePath) => readJson(filePath, null),
+  readArtifact = readArtifactWithRegistryCache,
 } = {}) => {
   const identities = new Set();
   const visited = new Set();
@@ -645,23 +707,56 @@ const settlementHistoryIdentityValues = ({
       identities.add(`sporttery_${withoutPrefix}`);
     }
   };
-  const visit = (value) => {
-    if (!value || typeof value !== "object" || visited.has(value)) return;
-    visited.add(value);
-    if (!Array.isArray(value)) {
-      const hasMatchIdentity = value.matchId != null || value.sourceMatchId != null;
-      const looksLikeMatchEvidence = Boolean(
-        value.kickoffAt
-        || value.kickoffTime
-        || value.decisionDeadlineAt
-        || ["decision", "exclusion", "settlement", "settlement_hold"]
-          .includes(value.type),
-      );
-      if (hasMatchIdentity && looksLikeMatchEvidence) {
-        addIdentity(value.matchId);
-        addIdentity(value.sourceMatchId);
+  const inspectCandidateEvidenceObject = (value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return;
+    const hasMatchIdentity = value.matchId != null || value.sourceMatchId != null;
+    const looksLikeMatchEvidence = Boolean(
+      value.kickoffAt
+      || value.kickoffTime
+      || value.decisionDeadlineAt
+      || ["decision", "exclusion", "settlement", "settlement_hold"]
+        .includes(value.type),
+    );
+    if (hasMatchIdentity && looksLikeMatchEvidence) {
+      addIdentity(value.matchId);
+      addIdentity(value.sourceMatchId);
+    }
+  };
+  const visitCanonicalRegistryFast = (value) => {
+    if (
+      !value
+      || typeof value !== "object"
+      || value.version !== REGISTRY_VERSION
+      || !Array.isArray(value.ledgers)
+      || !value.ledgers.every(
+        (ledger) => ledger
+          && typeof ledger === "object"
+          && ledger.version === LEDGER_VERSION
+          && Array.isArray(ledger.events),
+      )
+    ) {
+      return false;
+    }
+    for (const ledger of value.ledgers) {
+      for (const event of ledger.events) {
+        inspectCandidateEvidenceObject(event);
+        inspectCandidateEvidenceObject(event?.featureSnapshot);
+        const diagnosticRows = event?.checkpointAudit?.metrics?.diagnostics?.rows;
+        if (Array.isArray(diagnosticRows)) {
+          for (const row of diagnosticRows) inspectCandidateEvidenceObject(row);
+        }
       }
     }
+    return true;
+  };
+  const visit = (value) => {
+    if (!value || typeof value !== "object" || visited.has(value)) return;
+    if (visitCanonicalRegistryFast(value)) {
+      visited.add(value);
+      return;
+    }
+    visited.add(value);
+    inspectCandidateEvidenceObject(value);
     for (const child of Array.isArray(value) ? value : Object.values(value)) {
       visit(child);
     }
@@ -743,14 +838,18 @@ const kickoffMsFor = (match) => Date.parse(match?.kickoffTime || match?.matchDat
 
 const pendingCaptureMatches = (ledger, matches, atMs) => {
   const frozenMs = Date.parse(ledger?.header?.frozenAt || "");
-  const existing = (ledger?.events || [])
-    .filter((event) => event?.type === "decision" || event?.type === "exclusion");
+  if (!Number.isFinite(frozenMs)) return [];
+  const existingKeys = new Set();
+  for (const event of ledger?.events || []) {
+    if (event?.type !== "decision" && event?.type !== "exclusion") continue;
+    for (const key of cohortIdentityKeysFor(event)) existingKeys.add(key);
+  }
   return matches.filter((match) => {
     const kickoffMs = kickoffMsFor(match);
-    if (!Number.isFinite(kickoffMs) || !Number.isFinite(frozenMs)) return false;
+    if (!Number.isFinite(kickoffMs)) return false;
     if (
       kickoffMs <= frozenMs
-      || existing.some((event) => sameCohortIdentity(event, match))
+      || cohortIdentityKeysFor(match).some((key) => existingKeys.has(key))
     ) return false;
     const finalization = captureFinalizationFor(match);
     return Number.isFinite(finalization?.millis) && atMs >= finalization.millis;
@@ -1331,6 +1430,24 @@ const candidateReadinessPreview = ({
   const frozenMs = Date.parse(ledger?.header?.frozenAt || "");
   const terminalEvents = (Array.isArray(ledger?.events) ? ledger.events : [])
     .filter((event) => event?.type === "decision" || event?.type === "exclusion");
+  const terminalEventIndexesByKey = new Map();
+  terminalEvents.forEach((event, index) => {
+    for (const key of cohortIdentityKeysFor(event)) {
+      const list = terminalEventIndexesByKey.get(key);
+      if (list) list.push(index);
+      else terminalEventIndexesByKey.set(key, [index]);
+    }
+  });
+  const matchingTerminalEventsFor = (match) => {
+    const matchedIndexes = new Set();
+    for (const key of cohortIdentityKeysFor(match)) {
+      const indexes = terminalEventIndexesByKey.get(key);
+      if (!indexes) continue;
+      for (const index of indexes) matchedIndexes.add(index);
+    }
+    if (!matchedIndexes.size) return [];
+    return [...matchedIndexes].sort((a, b) => a - b).map((index) => terminalEvents[index]);
+  };
   const upcoming = (Array.isArray(matches) ? matches : [])
     .filter((match) => {
       const kickoffMs = kickoffMsFor(match);
@@ -1344,9 +1461,7 @@ const candidateReadinessPreview = ({
   const evaluatedRows = upcoming.map((match) => {
     const deadline = decisionDeadlineFor(match);
     const finalization = captureFinalizationFor(match);
-    const matchingTerminalEvents = terminalEvents.filter(
-      (event) => sameCohortIdentity(event, match),
-    );
+    const matchingTerminalEvents = matchingTerminalEventsFor(match);
     const terminalEvent = matchingTerminalEvents.at(-1) || null;
     const terminalEventCount = matchingTerminalEvents.length;
     if (!deadline || !Number.isFinite(deadline.millis)) {
@@ -2495,8 +2610,8 @@ const capture = async ({ deadlineOnly = false } = {}) => {
   return withCandidateProspectiveRegistryLock(
     registryFile,
     async () => {
-    let registry = readJson(registryFile, null);
-    const verification = verifyRegistry(registry);
+    let registry = consumeCachedRegistryRead(registryFile);
+    const verification = verifyRegistryWithCache(registry);
     if (!verification.valid) {
       return writeStatus({
         ok: false,
@@ -2513,6 +2628,7 @@ const capture = async ({ deadlineOnly = false } = {}) => {
       priorRegistry: registry,
       matches,
       evaluatedAt,
+      [TRUSTED_PRIOR_VERIFICATION]: verification[TRUSTED_PRIOR_VERIFICATION],
     });
     if (!settlementUpdate.chainValid) {
       return writeStatus({
@@ -2699,13 +2815,22 @@ const capture = async ({ deadlineOnly = false } = {}) => {
       0,
       Number(process.env.TRUSTED_SPORTTERY_COLLECTOR_COUNT || 1),
     );
-    const collectorEvidenceStore = readJson(collectorEvidenceStoreFile, null);
+    let indexedCollectorEvidenceStore;
+    const getIndexedCollectorEvidenceStore = () => {
+      if (indexedCollectorEvidenceStore === undefined) {
+        const rawStore = readJson(collectorEvidenceStoreFile, null);
+        indexedCollectorEvidenceStore = rawStore
+          ? indexCollectorEvidenceStore(rawStore)
+          : null;
+      }
+      return indexedCollectorEvidenceStore;
+    };
     const collectorTrustRegistry = loadCollectorTrustRegistry(collectorTrustRegistryFile);
     const trustedCollectorResolver = collectorTrustRegistry
       ? ({ snapshot, deadlineAt }) => collectorQuorumForDecision({
           snapshot,
           deadlineAt,
-          evidenceStore: collectorEvidenceStore,
+          evidenceStore: getIndexedCollectorEvidenceStore(),
           trustRegistry: collectorTrustRegistry,
         })
       : null;
@@ -2822,18 +2947,33 @@ const capture = async ({ deadlineOnly = false } = {}) => {
       });
     }
     const beforeEvents = ledger.events?.length || 0;
-    const update = updateCandidateProspectiveLedger({
-      priorRegistry: registry,
-      candidates: [],
-      selectedCandidate: null,
-      robustness: null,
-      matches,
-      snapshots,
-      evaluatedAt,
-      implementationCommitment: {},
-      trustedCollectorCount,
-      trustedCollectorResolver,
-    });
+    const canReuseSettledHeartbeat = dueMatches.length === 0
+      && ledger.header?.gateSpecHash === sha256(fixedGateSpec())
+      && !hasUnrecordedDueReview(ledger, settlementUpdate.audit);
+    const update = canReuseSettledHeartbeat
+      ? {
+          registry,
+          chainValid: true,
+          changed: false,
+          retiredSettlementsAdded: 0,
+          blockers: [],
+          audit: settlementUpdate.audit,
+        }
+      : updateCandidateProspectiveLedger({
+          priorRegistry: registry,
+          candidates: [],
+          selectedCandidate: null,
+          robustness: null,
+          matches,
+          snapshots,
+          evaluatedAt,
+          implementationCommitment: {},
+          trustedCollectorCount,
+          trustedCollectorResolver,
+          ...(!settlementUpdate.changed ? {
+            [TRUSTED_PRIOR_VERIFICATION]: verification[TRUSTED_PRIOR_VERIFICATION],
+          } : {}),
+        });
     if (!update.chainValid) {
       return writeStatus({
         ok: false,
@@ -2847,15 +2987,19 @@ const capture = async ({ deadlineOnly = false } = {}) => {
         blockers: update.blockers,
       });
     }
-    const updatedLedger = activeLedgerFor(update.registry);
-    readiness = candidateReadinessPreview({
-      ledger: updatedLedger || ledger,
-      matches,
-      snapshots: readinessSnapshots,
-      evaluatedAt,
-      trustedCollectorCount,
-      trustedCollectorResolver,
-    });
+    const updatedLedger = canReuseSettledHeartbeat
+      ? ledger
+      : activeLedgerFor(update.registry);
+    if (!canReuseSettledHeartbeat) {
+      readiness = candidateReadinessPreview({
+        ledger: updatedLedger || ledger,
+        matches,
+        snapshots: readinessSnapshots,
+        evaluatedAt,
+        trustedCollectorCount,
+        trustedCollectorResolver,
+      });
+    }
     const finalResearchReuse = deadlineOnly ? null : researchHeartbeatReuseDecision({
       priorStatus: priorCaptureStatus,
       settlementInputFingerprint: currentResearchSettlementInputFingerprint,

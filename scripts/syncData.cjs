@@ -92,6 +92,7 @@ const {
 const { readRuntimeFastResultInput } = require("./runtimeFastResultInput.cjs");
 const { readStorageMode } = require("../server/storageMode.cjs");
 const { acquireSyncMetaCommitLock } = require("./syncMetaCommitLock.cjs");
+const { summarizeStrategyForSyncMeta } = require("./syncMetaStrategySummary.cjs");
 const { FREE_FOOTBALL_TEAM_ALIASES } = require("./freeFootballTeamAliases.cjs");
 const { buildFormalReviewPerformance } = require("../server/reviewPerformanceSummary.cjs");
 const { auditRecommendationBias } = require("./auditRecommendationBatchBias.cjs");
@@ -14695,10 +14696,20 @@ function buildLiveRecommendationAuditSummary(matches, capturedAt) {
 
 // Called only with the receipt/history from the verified PostgreSQL same-RR
 // reader. Display odds do not replace an already committed official event ID.
+const RESULT_ONLY_BLOCKED_GATE_REASON_CODES = Object.freeze([
+  "cutoff",
+  "model-after-cutoff",
+  "cutoff-crossed-during-sync",
+  "kickoff",
+  "cutoff-crossed-during-sync-no-trusted-pre-cutoff-decision",
+  "sync-started-after-cutoff-no-trusted-pre-cutoff-decision",
+  "locked-no-trusted-pre-cutoff-decision",
+]);
+
 function preserveCanonicalResultOnlyIdentities(matches, receipt, runtimeFinals) {
   if (receipt?.version !== "sqlite-fast-result-receipt-v2" || !Array.isArray(receipt.observations)) return matches;
   const iso = (value) => Number.isFinite(Date.parse(value || "")) ? new Date(value).toISOString() : null;
-  const resultOnly = (match, canonicalReviewId = match?.id) => {
+  const resultOnly = (match, canonicalReviewId = match?.id, preservedReference = null) => {
     const meta = match?.predictionMeta;
     const gate = meta?.publicationGate;
     const review = match?.postMatchReview;
@@ -14708,7 +14719,7 @@ function preserveCanonicalResultOnlyIdentities(matches, receipt, runtimeFinals) 
       || match.archivedPreMatchPrediction != null
       || gate?.version !== "prediction-publication-cutoff-gate-v1"
       || gate.status !== "blocked" || gate.trustedExistingPreCutoffDecision !== false
-      || !["cutoff", "model-after-cutoff"].includes(gate.reasonCode)
+      || !RESULT_ONLY_BLOCKED_GATE_REASON_CODES.includes(gate.reasonCode)
       || !summary || !Array.isArray(summary.rows) || summary.rows.length
       || ![match.id, canonicalReviewId].includes(review.matchId)
       || review.sourceMatchId !== match.sourceMatchId
@@ -14721,7 +14732,8 @@ function preserveCanonicalResultOnlyIdentities(matches, receipt, runtimeFinals) 
     for (const object of [match, meta]) {
       for (const key of ["publicationId", "publicationBinding", "livePublicationEvidence", "publicReferenceDecision",
         "immutableAnalysisReferenceDecision", "dualMarketDecision", "archiveParityRecovery"]) {
-        if (object?.[key] != null) return false;
+        if (object?.[key] != null && !(object === meta && key === "publicReferenceDecision"
+          && preservedReference !== null && object[key] === preservedReference)) return false;
       }
     }
     for (const key of ["settled", "won", "mainSettled", "mainWon", "allSettled", "allWon",
@@ -14755,7 +14767,15 @@ function preserveCanonicalResultOnlyIdentities(matches, receipt, runtimeFinals) 
     const witnesses = byEvent.get(JSON.stringify([sourceId, event])) || [];
     if (witnesses.length !== 1) return match;
     const witness = witnesses[0];
-    if (witness.id !== `sporttery_${sourceId}` || !resultOnly(witness) || !resultOnly(match, witness.id)
+    const reference = match.predictionMeta?.publicReferenceDecision;
+    const witnessReference = witness.predictionMeta?.publicReferenceDecision;
+    const attest = require("../src/services/publicReferenceDecision.cjs").attestPublicReferenceDecision;
+    const identicalReference = reference?.version === "public-reference-decision-v2" && reference.evidenceBinding
+      && JSON.stringify(reference) === JSON.stringify(witnessReference)
+      && attest(reference, match) && attest(witnessReference, witness);
+    if (witness.id !== `sporttery_${sourceId}`
+      || !resultOnly(witness, witness.id, identicalReference ? witnessReference : null)
+      || !resultOnly(match, witness.id, identicalReference ? reference : null)
       || !sameEvent(match, witness) || match.resultSource !== witness.resultSource
       || match.scoreHome !== witness.scoreHome || match.scoreAway !== witness.scoreAway) return match;
     for (const key of ["homeTeamId", "awayTeamId", "homeTeamName", "awayTeamName"]) {
@@ -16240,6 +16260,7 @@ function loadPredictionSnapshots(publicDir) {
     if (!fs.existsSync(file)) continue;
     try {
       const parsed = readChunkedJsonFile(file).value;
+      require("../server/referenceIntegrityPartition.cjs").readSnapshotIntegrity(file, parsed);
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Array.isArray(parsed.rows)) {
         const error = new Error("prediction snapshot must be an object with rows[]");
         error.code = "PREDICTION_SNAPSHOT_INVALID";
@@ -16261,6 +16282,7 @@ function loadPredictionSnapshots(publicDir) {
         rows: Array.isArray(parsed?.rows) ? parsed.rows : [],
         publicReferenceDecisions: Array.isArray(parsed?.publicReferenceDecisions) ? parsed.publicReferenceDecisions : [],
         publicReferenceEvidence: Array.isArray(parsed?.publicReferenceEvidence) ? parsed.publicReferenceEvidence : [],
+        ...(parsed.publicReferenceIntegrity ? { publicReferenceIntegrity: parsed.publicReferenceIntegrity } : {}),
       };
     } catch (cause) {
       const error = new Error(`existing prediction snapshots cannot be read; refusing to replace history: ${cause.message}`);
@@ -16773,7 +16795,10 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
   observationMatches = matches,
   companionStoreDir = null,
   boundedHistory = false,
+  referencePartition = null,
 } = {}) {
+  const integrityPartition = require("../server/referenceIntegrityPartition.cjs");
+  const unresolvedReferences = referencePartition ? integrityPartition.originalRecordsForContext(referencePartition) : null;
   const cutoff = Date.parse(capturedAt) - PREDICTION_SNAPSHOT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
   const acceptHistoryRow = (target, row) => {
     const rowTime = Date.parse(row?.lastSeenAt || row?.capturedAt);
@@ -16786,7 +16811,7 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
     target.set(`${sourceMatchId}|${phase}|${signature}|${featureHash}`, normalized);
   };
   const workspace = boundedHistory ? require("../server/boundedPredictionSnapshots.cjs").openWorkspace(publicDir, {
-    cutoff, acceptHistoryRow,
+    cutoff, acceptHistoryRow, referencePartition,
     rowMetadata(row) {
       const firstTime = Date.parse(row?.firstSeenAt || row?.capturedAt || "");
       return {
@@ -16799,6 +16824,7 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
   }) : null;
   try {
   const history = workspace ? workspace.history : loadPredictionSnapshots(publicDir);
+  if (history.publicReferenceIntegrity && !referencePartition) throw new Error("REFERENCE_PARTITION_DOWNGRADE_FORBIDDEN");
   const byKey = workspace ? workspace.rowMap : new Map();
   const observations = (observationMatches || [])
     .filter((match) => shouldCaptureLockedShadowRevision(match, capturedAt))
@@ -16896,13 +16922,14 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
   for (const row of rows) byPhase[row.phase] = (byPhase[row.phase] || 0) + 1;
   const references = workspace ? workspace.finishReferences(matches, companionStoreDir) : null;
   const payload = {
-    version: 3,
+    version: unresolvedReferences ? 4 : 3,
     source: "sporttery:prediction-snapshots",
     // Separate immutable public lineage; never enter the candidate deadline selector.
     publicReferenceDecisions: references ? references.publicReferenceDecisions : [...new Map([
       ...(history.publicReferenceDecisions || []),
       ...(matches || []).map((match) => match?.predictionMeta?.publicReferenceDecision).filter(Boolean),
-    ].filter((record) => Date.parse(record.recordedAt) >= cutoff)
+    ].filter((record) => Date.parse(record.recordedAt) >= cutoff
+      && !(unresolvedReferences && integrityPartition.isOriginalUnresolvedRecord(record)))
       .map((record) => [record.contentHash, record])).values()],
     updatedAt: appended || updated ? capturedAt : (history.updatedAt || capturedAt),
     retentionDays: PREDICTION_SNAPSHOT_RETENTION_DAYS,
@@ -16920,6 +16947,7 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
   };
   if (workspace) {
     payload.publicReferenceEvidence = references.publicReferenceEvidence;
+    if (references.publicReferenceIntegrity) payload.publicReferenceIntegrity = references.publicReferenceIntegrity;
     return workspace.attach(payload);
   }
   const originalEntries = [
@@ -16927,6 +16955,13 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
     ...(matches || []).map((match) => require("../src/services/publicReferenceDecision.cjs")
       .pendingPublicReferenceEvidence(match)).filter(Boolean),
   ];
+  if (unresolvedReferences) {
+    const originalHashes = new Set(unresolvedReferences.map(record => record.contentHash));
+    if (originalEntries.some(entry => originalHashes.has(entry?.referenceHash))) {
+      throw new Error("REFERENCE_PARTITION_EXPLICIT_RESOLUTION_REQUIRED");
+    }
+    payload.publicReferenceIntegrity = integrityPartition.buildReferenceIntegrity(unresolvedReferences);
+  }
   if (companionStoreDir) {
     const present = new Set(originalEntries.map(entry => entry.referenceHash));
     for (const match of matches || []) {
@@ -16936,7 +16971,12 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
       // record. A missing/corrupt store never falls back to the current model.
       const original = require("../server/publicReferenceCompanionStore.cjs")
         .readOriginalCompanion(companionStoreDir, record);
-      if (original) { originalEntries.push(original.entry); present.add(record.contentHash); }
+      if (original) {
+        if (unresolvedReferences && integrityPartition.isOriginalUnresolvedRecord(record)) {
+          throw new Error("REFERENCE_PARTITION_EXPLICIT_RESOLUTION_REQUIRED");
+        }
+        originalEntries.push(original.entry); present.add(record.contentHash);
+      }
     }
   }
   payload.publicReferenceEvidence = require("../src/services/publicReferenceEvidence.cjs")
@@ -17922,6 +17962,12 @@ async function sync() {
   const sourceCycleId = `sporttery-full-sync:${capturedAt}`;
   const publicDir = path.join(__dirname, "..", "public");
   const dataDir = path.join(publicDir, "data");
+  const partition = require("../server/referenceIntegrityPartition.cjs");
+  const activeReferencePartition = process.env.ORIGINAL_REFERENCE_PARTITION === "1"
+    ? partition.loadInstalledReferencePartition() : null;
+  if (!activeReferencePartition && fs.existsSync(path.join(dataDir, partition.FILE_NAME))) {
+    throw new Error("REFERENCE_PARTITION_DOWNGRADE_FORBIDDEN");
+  }
   fs.mkdirSync(publicDir, { recursive: true });
   const existingUnresolvedArchive = loadUnresolvedMatchArchive();
   const existingStore = loadExistingMatchStore();
@@ -18265,7 +18311,8 @@ async function sync() {
     publicDir,
     output,
     capturedAt,
-    { observationMatches: prospectiveAuditMatches, companionStoreDir: DEFAULT_STORE_DIR, boundedHistory: true },
+    { observationMatches: prospectiveAuditMatches, companionStoreDir: DEFAULT_STORE_DIR, boundedHistory: true,
+      referencePartition: activeReferencePartition },
   );
   try {
   // Preserve the original finalized binding before any mutable public file can
@@ -18273,7 +18320,7 @@ async function sync() {
   // a WeakMap alone cannot survive that boundary. Missing original evidence
   // still fails in appendPredictionSnapshots above; never rebuild it here.
   require("../server/publicReferenceCompanionStore.cjs").persistCurrentReferenceCompanions(
-    DEFAULT_STORE_DIR, output, predictionSnapshotsPayload.publicReferenceEvidence,
+    DEFAULT_STORE_DIR, output, predictionSnapshotsPayload.publicReferenceEvidence, activeReferencePartition,
   );
   // Private pre-persistence computation evidence is not a public decision ledger.
   // Capture failures expose a diagnostic gap without changing publication or old records.
@@ -18562,6 +18609,11 @@ async function sync() {
     version: 1,
     source: "sporttery",
     sourceCycleId,
+    ...(activeReferencePartition ? { historicalReferenceIntegrity: {
+      version: partition.VERSION, state: "original-evidence-unresolved", unresolved: 29,
+      recoveredCompanions: 0, modelAdmissionGranted: false,
+      contentHash: predictionSnapshotsPayload.publicReferenceIntegrity.contentHash,
+    } } : {}),
     updatedAt: sourcePublishedAt,
     capturedAt: sourcePublishedAt,
     lastAttemptAt: capturedAt,
@@ -18770,13 +18822,7 @@ async function sync() {
     // strategy is intentionally absent from modelCalibration.strategy, but it
     // must remain visible in health metadata as shadow instead of becoming
     // null (or allowing stale guarded-active metadata to survive).
-    modelStrategy: existingModelStrategy ? {
-      version: existingModelStrategy.version,
-      generatedAt: existingModelStrategy.generatedAt,
-      activation: existingModelStrategy.activation,
-      sample: existingModelStrategy.sample,
-      activeGates: existingModelStrategy.activeGates,
-    } : null,
+    modelStrategy: existingModelStrategy ? summarizeStrategyForSyncMeta(existingModelStrategy) : null,
     historicalTraining: historicalTrainingModeling,
     postgresTeamHistory: postgresTeamHistorySummary,
     teamEvidenceResearch: teamResearchReadSummary,
@@ -18808,7 +18854,7 @@ async function sync() {
   // Re-read exact durable originals immediately before the public rename.
   // This is custody only, not a new decision or permission to change history.
   require("../server/publicReferenceCompanionStore.cjs").assertCurrentReferenceCompanions(
-    DEFAULT_STORE_DIR, [...split.current, ...split.history],
+    DEFAULT_STORE_DIR, [...split.current, ...split.history], activeReferencePartition,
   );
   if (process.env.WRITE_LEGACY_STATIC_PAYLOADS !== "0") {
     writeJson(path.join(publicDir, "matches.json"), split.current);
@@ -18819,6 +18865,9 @@ async function sync() {
   writeJson(path.join(dataDir, "team-index.json"), teamIndex);
   writeJson(path.join(dataDir, "odds-history.json"), oddsHistoryPayload);
   writeJson(path.join(dataDir, "prediction-snapshots.json"), predictionSnapshotsPayload);
+  if (predictionSnapshotsPayload.publicReferenceIntegrity) {
+    writeJson(path.join(dataDir, "reference-integrity.json"), predictionSnapshotsPayload.publicReferenceIntegrity);
+  }
   writeJson(path.join(dataDir, "post-match-reviews.json"), postMatchReviewsPayload);
   writeJson(path.join(dataDir, "model-calibration.json"), modelCalibration);
   writeJson(path.join(dataDir, "recommendation-bias-audit.json"), recommendationBiasAudit);

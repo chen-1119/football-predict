@@ -7,6 +7,7 @@ import { OfficialScheduleCard, scheduleMatchesReference } from '../components/re
 import { OfficialReferenceCard } from '../components/recommendations/OfficialEditorialReferences';
 import { useOfficialEditorialReferences } from '../hooks/useOfficialEditorialReferences';
 import { reviewedLatestRecord } from '../services/publishedMatchRecommendation';
+import { EveningComboSeries } from '../components/recommendations/EveningComboSeries';
 interface BestTipsProps {onSelectMatch:(matchId:string)=>void}
 export function BestTips({onSelectMatch}:BestTipsProps){
  const {language}=useApp(),[params,setParams]=useSearchParams();
@@ -17,6 +18,7 @@ export function BestTips({onSelectMatch}:BestTipsProps){
  const view=schedule.data&&now-Date.parse(schedule.data.sourceReceivedAt)<=900000&&now-Date.parse(schedule.data.quoteReceivedAt)<=900000?schedule.data:null;
  const requested=params.get('tab'),tab=requested==='two'||requested==='three'?requested:'single';
  return <><RecommendationCenter language={language} onSelectMatch={onSelectMatch} selectedTab={tab} onTabChange={next=>{const query=new URLSearchParams(params);if(next==='single')query.delete('tab');else query.set('tab',next);setParams(query);}}/>
+  {tab!=='single'&&<EveningComboSeries businessDate={day} size={tab==='two'?2:3} now={now} onSelect={onSelectMatch}/>}
   {tab==='single'&&view&&view.events.length>0&&<section className="league-stack" aria-label="今日官方赛程" data-today-official-schedule>
    <header><h2>今日官方赛程 · {view.events.length} 场</h2><p>选择比赛查看官方 SP、售卖状态和已发布分析。</p></header>
    {view.events.map(event=>{const first=references.data?.records.find(record=>scheduleMatchesReference(event,record));return first

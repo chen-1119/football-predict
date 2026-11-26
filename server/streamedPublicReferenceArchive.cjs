@@ -23,7 +23,12 @@ function buildStreamedPublicReferenceArchive(context, options = {}) {
     || !Number.isSafeInteger(inlineBytes) || inlineBytes < 0 || inlineBytes > INLINE_BYTES) fail("invalid streamed reference admission bound");
   const name = "prediction-snapshots.json";
   // Admit the path and immutable manifest before creating scratch files.
-  const { value: metadata } = readGenerationSelectedObject(context, name, { keys: ["updatedAt", "retentionDays"], maxSelectedChars: 64 * 1024 });
+  const { value: metadata } = readGenerationSelectedObject(context, name, {
+    keys: ["updatedAt", "retentionDays", "version", "publicReferenceIntegrity"], maxSelectedChars: 512 * 1024 });
+  const partition = require("./referenceIntegrityPartition.cjs");
+  const integrity = context.manifest.files.some(item => item.path === partition.FILE_NAME)
+    ? require("./dataGenerationStore.cjs").readGenerationFile(context, partition.FILE_NAME, { parseJson: true }) : null;
+  partition.validateSnapshotIntegrity(metadata, integrity);
   const input = path.join(context.generationDir, name), entry = context.manifest.files.find(item => item.path === name);
   const base = fs.realpathSync(options.tempDir || os.tmpdir());
   const directory = fs.mkdtempSync(path.join(base, "football-pg-reference-"));
@@ -42,16 +47,21 @@ function buildStreamedPublicReferenceArchive(context, options = {}) {
     fs.chmodSync(directory, 0o700);
     spoolFd = fs.openSync(path.join(directory, "items.jsonl"), "wx+", 0o600);
     let spoolBytes = 0, itemCount = 0, lastRecordedTime = -Infinity;
-    const records = [], byHash = new Map(), evidence = new Map();
+    const integrityHashes = integrity?.records?.length
+      ? new Set(integrity.records.map(record => record.contentHash))
+      : null;
+    const records = [], byHash = new Map(), evidence = new Map(), deferredEvidence = [];
+    let seenDecisionsItem = false;
     const rowHash = newHash().update("[");
     const writeAll = (fd, bytes) => { let offset = 0; while (offset < bytes.length) { const written = fs.writeSync(fd, bytes, offset, bytes.length - offset); if (!written) throw new Error("reference scratch write stalled"); offset += written; } };
-    const appendItem = value => {
+    const appendItemWithBytes = value => {
       const bytes = Buffer.from(JSON.stringify(value));
       if (spoolBytes + bytes.length > maxArchiveBytes) fail("reference scratch exceeds bounded archive bytes");
       const item = { offset: spoolBytes, bytes: bytes.length, sha256: newHash().update(bytes).digest("hex") };
       writeAll(spoolFd, bytes); spoolBytes += bytes.length;
-      return item;
+      return { item, bytes };
     };
+    const appendItem = value => appendItemWithBytes(value).item;
     const itemBytes = item => {
       if (closed) throw new Error("reference archive is closed");
       const bytes = Buffer.allocUnsafe(item.bytes); let read = 0;
@@ -60,24 +70,7 @@ function buildStreamedPublicReferenceArchive(context, options = {}) {
       return bytes;
     };
     const itemValue = item => JSON.parse(itemBytes(item).toString("utf8"));
-    const scan = (key, onItem) => streamJsonObjectArrays(input, { keys: [key], allowNonArrays: true,
-      expectedBytes: entry.bytes, expectedSha256: entry.sha256, maxItemChars: MAX_ITEM_CHARS,
-      onItem(_key, value) { if (++itemCount > maxItems) fail("reference item count exceeds bounded admission"); onItem(value); } });
-    const result = scan("publicReferenceDecisions", record => {
-      if (!validReferenceHash(record?.contentHash) || byHash.has(record.contentHash) || !attestPublicReferenceDecision(record, record)) throw new Error("REFERENCE_INDEX_RECORD_INVALID");
-      const item = appendItem(record);
-      rowHash.update(records.length ? "," : "").update(itemBytes(item));
-      const descriptor = { ...item, hash: record.contentHash, bound: Boolean(record.evidenceBinding) };
-      records.push(descriptor); byHash.set(record.contentHash, descriptor);
-      const at = Date.parse(record.recordedAt || ""); if (Number.isFinite(at)) lastRecordedTime = Math.max(lastRecordedTime, at);
-    });
-    if (!result.fields.includes("publicReferenceDecisions")) {
-      // The legacy two-field reader also validates duplicate/malformed evidence
-      // fields when no archive exists. Absence must not bypass that check.
-      scan("publicReferenceEvidence", () => {}); close(); return null;
-    }
-    const contentHash = rowHash.update("]").digest("hex");
-    scan("publicReferenceEvidence", value => {
+    const acceptEvidence = (value, existingItem = null) => {
       const descriptor = byHash.get(value?.referenceHash);
       if (!descriptor) return; // Exact existing collectPublicReferenceEvidence retention semantics.
       const record = itemValue(descriptor);
@@ -87,8 +80,49 @@ function buildStreamedPublicReferenceArchive(context, options = {}) {
         if (previous.sha256 !== encodedHash) throw new Error("PUBLIC_REFERENCE_EVIDENCE_BINDING_CONFLICT");
         return;
       }
-      evidence.set(value.referenceHash, appendItem(value));
+      evidence.set(value.referenceHash, existingItem || appendItem(value));
+    };
+    // Single streaming pass validates both ledgers and avoids scanning a
+    // gigabyte-scale prediction-snapshots.json twice. If evidence appears
+    // before decisions in the JSON object, spool bounded items and bind them
+    // in arrival order once decisions finish.
+    const result = streamJsonObjectArrays(input, {
+      keys: ["publicReferenceDecisions", "publicReferenceEvidence"],
+      allowNonArrays: true,
+      expectedBytes: entry.bytes,
+      expectedSha256: entry.sha256,
+      maxItemChars: MAX_ITEM_CHARS,
+      onItem(key, value) {
+        if (++itemCount > maxItems) fail("reference item count exceeds bounded admission");
+        if (key === "publicReferenceDecisions") {
+          seenDecisionsItem = true;
+          if (integrity && partition.isOriginalUnresolvedRecord(value)) throw new Error("REFERENCE_PARTITION_ACTIVE_OVERLAP");
+          if (!validReferenceHash(value?.contentHash) || byHash.has(value.contentHash) || !attestPublicReferenceDecision(value, value)) throw new Error("REFERENCE_INDEX_RECORD_INVALID");
+          const { item, bytes } = appendItemWithBytes(value);
+          rowHash.update(records.length ? "," : "").update(bytes);
+          const descriptor = { ...item, hash: value.contentHash, bound: Boolean(value.evidenceBinding) };
+          records.push(descriptor); byHash.set(value.contentHash, descriptor);
+          const at = Date.parse(value.recordedAt || ""); if (Number.isFinite(at)) lastRecordedTime = Math.max(lastRecordedTime, at);
+          return;
+        }
+        if (integrityHashes?.has(value?.referenceHash)) {
+          throw new Error("REFERENCE_PARTITION_EXPLICIT_RESOLUTION_REQUIRED");
+        }
+        if (seenDecisionsItem) {
+          acceptEvidence(value);
+        } else if (validReferenceHash(value?.referenceHash)) {
+          deferredEvidence.push({ referenceHash: value.referenceHash, item: appendItem(value) });
+        }
+      },
     });
+    if (!result.fields.includes("publicReferenceDecisions")) {
+      close(); return null;
+    }
+    const contentHash = rowHash.update("]").digest("hex");
+    for (const deferred of deferredEvidence) {
+      if (!byHash.has(deferred.referenceHash)) continue;
+      acceptEvidence(itemValue(deferred.item), deferred.item);
+    }
     for (const record of records) if (record.bound && !evidence.has(record.hash)) throw new Error("PUBLIC_REFERENCE_EVIDENCE_BINDING_MISSING");
     const evidenceHash = newHash().update("["); let evidencePosition = 0;
     for (const item of evidence.values()) evidenceHash.update(evidencePosition++ ? "," : "").update(itemBytes(item));

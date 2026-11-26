@@ -11,7 +11,7 @@ const {conflictForDecision}=require('../../src/services/recommendationCrossTrack
 const {buildPublishedScoreDistribution}=require('../../src/services/publishedScoreDistribution.cjs');
 const {evaluateEvidencePriceRecommendation}=require('../../src/services/evidencePriceRecommendationPolicy.cjs');
 const {buildQualityReport}=require('./qualityReport.cjs');
-const {buildDataCoverage}=require('../dataCoverage.cjs');
+const {buildDataCoverage,uniqueTargets}=require('../dataCoverage.cjs');
 const {createDualResearchRecord}=require('./dualChoiceResearch.cjs');
 const {createDualResearchV2Record,validDualResearchV2Record,settleDualResearchV2}=require('./dualChoiceResearchV2.cjs');
 const {officialResultValidators,resultAllowsCalibration}=require('./officialResults.cjs');
@@ -382,14 +382,15 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
         legacyPublicationEnabled:false,legacyFallbackEnabled:false,formalEligible:false,
         modelAdoptionCount:leagueBaselineView?.records?.length||0};
       const trained=leagueBaselineView?.records||[];
-      const missing=targetMatches.filter(m=>!trained.some(r=>r.event.sourceMatchId===String(m.sourceMatchId||'').replace(/^sporttery_/,'')
-        &&time(r.event.eventVersion)===time(m.eventVersion||m.kickoffTime)&&r.event.homeTeamId===m.homeTeamId&&r.event.awayTeamId===m.awayTeamId));
+      const targets=uniqueTargets(targetRows,day(now));
+      const missing=targets.filter(target=>target.conflict||!trained.some(r=>r.event.sourceMatchId===String(target.row.sourceMatchId||'').replace(/^sporttery_/,'')
+        &&time(r.event.eventVersion)===time(target.row.eventVersion||target.row.kickoffTime)&&r.event.homeTeamId===target.row.homeTeamId&&r.event.awayTeamId===target.row.awayTeamId));
       center.coverage={version:'recommendation-day-coverage-v1',businessDate:day(now),updatedAt:center.updatedAt,
-        targetCount:targetMatches.length,publishableCount:targetMatches.length-missing.length,qualifiedCount:0,unqualifiedCount:targetMatches.length,
-        coverageRatio:targetMatches.length?0:null,missingTotal:targetMatches.length,hasMore:targetMatches.length>32,
-        missing:targetMatches.slice(0,32).map(m=>({matchId:m.id||null,sourceMatchId:m.sourceMatchId||null,
-          homeTeamName:m.homeTeamName||'',awayTeamName:m.awayTeamName||'',reasonCode:'trained-model-adoption-required',
-          reasonText:missing.includes(m)?'等待本联赛训练参数、球队映射与新模型采用记录；不回退旧模型':'已有球队模型参考；正式分市场校准与前瞻验证尚未完成'}))};
+        targetCount:targets.length,publishableCount:targets.length-missing.length,qualifiedCount:0,unqualifiedCount:targets.length,
+        coverageRatio:targets.length?0:null,missingTotal:targets.length,hasMore:targets.length>32,
+        missing:targets.slice(0,32).map(target=>({matchId:target.row.id||null,sourceMatchId:target.row.sourceMatchId||null,
+          homeTeamName:target.row.homeTeamName||'',awayTeamName:target.row.awayTeamName||'',reasonCode:'trained-model-adoption-required',
+          reasonText:missing.includes(target)?'等待本联赛训练参数、球队映射与新模型采用记录；不回退旧模型':'已有球队模型参考；正式分市场校准与前瞻验证尚未完成'}))};
     }
     await repo.saveView(center);
     return {centerUpdatedAt:center.updatedAt,quarantined:quarantined.length};

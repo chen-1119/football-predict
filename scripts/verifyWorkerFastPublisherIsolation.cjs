@@ -45,7 +45,7 @@ async function verify(url) {
       "external-signals.json": { matches: {} }, "odds-history.json": { rows: [] }, "prediction-snapshots.json": { rows: [] }, "model-calibration.json": { version: "test", generatedAt: at } };
     for (const [name, value] of Object.entries(payloads)) fs.writeFileSync(path.join(publicDataDir, name), JSON.stringify(value));
     const large = path.join(publicDataDir, "prediction-snapshots.json"), fd = fs.openSync(large, "w"), segment = JSON.stringify({ scalar: "x".repeat(1024), value: 123.5, literal: false });
-    try { fs.writeSync(fd, '{"metadata":{"history":['); for (let i = 0; i < 65536; i++) fs.writeSync(fd, (i ? "," : "") + segment); fs.writeSync(fd, ']},"rows":[]}'); } finally { fs.closeSync(fd); }
+    try { fs.writeSync(fd, '{"history":['); for (let i = 0; i < 65536; i++) fs.writeSync(fd, (i ? "," : "") + segment); fs.writeSync(fd, '],"rows":[]}'); } finally { fs.closeSync(fd); }
     const committed = commitCurrentDataGeneration({ storeDir, publicDataDir, sourceCycleId: payloads["sync-meta.json"].sourceCycleId, committedAt: at });
     await syncPostgresProjectionFromSource(createPostgresGenerationSource({ storeDir, publicDataDir }), { pool, mode: "backfill", aiArenaPath: path.join(temp, "absent-arena.json") });
     fs.writeFileSync(env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH, JSON.stringify(publisherCollector.registry));

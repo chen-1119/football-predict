@@ -3,11 +3,11 @@ const test=require('node:test'),a=require('node:assert/strict');
 const retry=require('../server/researchPublicationRetry.cjs'),p=require('../scripts/recommendationPlatform/reviewedAnalysis.cjs');
 const {decodeRequest,createResearchWriteService}=require('../server/researchWriteService.cjs');
 const {requestJournalIdentity}=require('../scripts/researchReleaseBroker.cjs');
-function fixture(){
- const draft={version:3,businessDate:'2026-10-17',singles:[]},json=JSON.stringify(draft),input={version:'research-broker-request-v1',action:'publish',draftHash:p.hash(draft),json,sha256:p.sha(json)};
- const originalRequestJson=JSON.stringify(input),originalRequestSha256=p.sha(originalRequestJson),releaseSha='a'.repeat(64);
+function fixture({version=3,error='55P03',releaseSha='a'.repeat(64)}={}){
+ const draft={version,businessDate:'2026-10-17',singles:[],...(version===4?{eventAuthority:'signed-official-events-v1'}:{})},json=JSON.stringify(draft),input={version:'research-broker-request-v1',action:'publish',draftHash:p.hash(draft),json,sha256:p.sha(json)};
+ const originalRequestJson=JSON.stringify(input),originalRequestSha256=p.sha(originalRequestJson);
  const intent={version:'research-broker-intent-v1',requestSha:originalRequestSha256,releaseSha,admittedAt:'2026-10-17T04:24:09.942Z',automaticWriteRetry:false};
- const receipt={version:'research-broker-result-v1',requestSha:originalRequestSha256,releaseSha,finishedAt:'2026-10-17T04:24:12.153Z',code:1,overflow:false,stdout:'',stderr:JSON.stringify({ok:false,error:'55P03',retryWriteAutomatically:false})+'\n',automaticWriteRetry:false};
+ const receipt={version:'research-broker-result-v1',requestSha:originalRequestSha256,releaseSha,finishedAt:'2026-10-17T04:24:12.153Z',code:1,overflow:false,stdout:'',stderr:JSON.stringify({ok:false,error,retryWriteAutomatically:false})+'\n',automaticWriteRetry:false};
  const make=()=>({version:input.version,action:'publication-retry',originalRequestJson,originalRequestSha256,failedReceiptSha256:p.sha(JSON.stringify(receipt))});
  const read=(file)=>Buffer.from(JSON.stringify(file.endsWith('.receipt.json')?receipt:intent));
  return{input,draft,intent,receipt,make,read};
@@ -17,6 +17,27 @@ test('explicit retry preserves exact original publish bytes and binds completed 
  a.equal(retry.verifyFailure(r,f.read).originalRequestSha256,r.originalRequestSha256);
  a.equal(r.originalRequestJson,JSON.stringify(f.input));
 });
+test('known V4 prewrite wait exhaustion permits one original-bound retry without a second journal namespace',()=>{
+ const f=fixture({version:4,error:'REVIEWED_ANALYSIS_OFFICIAL_FRESH_WAIT_BUDGET',releaseSha:retry.PREWRITE_WAIT_RELEASE}),r=f.make();
+ a.deepEqual(decodeRequest(Buffer.from(JSON.stringify(r))),r);a.equal(retry.verifyFailure(r,f.read).originalRequestSha256,r.originalRequestSha256);
+ a.equal(requestJournalIdentity(Buffer.from(JSON.stringify(r))).journalId,p.sha('research-publication-retry-v1:'+r.originalRequestSha256));
+ a.equal(requestJournalIdentity(Buffer.from(JSON.stringify(r,null,2))).journalId,retry.journalId(r));
+});
+test('r936 prewrite wait retains the exact request and same one-retry journal',()=>{
+ const f=fixture({version:4,error:'REVIEWED_ANALYSIS_OFFICIAL_FRESH_WAIT_BUDGET',releaseSha:retry.PREWRITE_WAIT_RELEASE_R936}),r=f.make();
+ a.equal(retry.verifyFailure(r,f.read).originalReleaseSha,retry.PREWRITE_WAIT_RELEASE_R936);
+ a.equal(requestJournalIdentity(Buffer.from(JSON.stringify(r))).journalId,p.sha('research-publication-retry-v1:'+r.originalRequestSha256));
+ f.receipt.stderr=JSON.stringify({ok:false,error:'LEAGUE_MODEL_COMMIT_UNKNOWN',retryWriteAutomatically:false});
+ a.throws(()=>retry.verifyFailure(f.make(),f.read));
+});
+for(const [name,options,change]of [
+ ['unknown release',{releaseSha:'b'.repeat(64)},()=>{}],['V3 publisher',{version:3},()=>{}],['V5 publisher',{version:5},()=>{}],
+ ['fresh clock rather than prewrite budget',{error:'REVIEWED_ANALYSIS_OFFICIAL_EVENT_FRESH_CLOCK'},()=>{}],
+ ['unknown commit',{error:'LEAGUE_MODEL_COMMIT_UNKNOWN'},()=>{}],['transport timeout',{error:'ETIMEDOUT'},()=>{}],
+ ['partial output',{},f=>{f.receipt.stdout='{}';}],['overflow',{},f=>{f.receipt.overflow=true;}],
+ ['unknown exit',{},f=>{f.receipt.code=null;}],['successful exit',{},f=>{f.receipt.code=0;}],
+ ['intent release drift',{},f=>{f.intent.releaseSha='b'.repeat(64);}],['receipt authorizes auto retry',{},f=>{f.receipt.automaticWriteRetry=true;}]
+])test('prewrite recovery refuses '+name,()=>{const f=fixture({version:4,error:'REVIEWED_ANALYSIS_OFFICIAL_FRESH_WAIT_BUDGET',releaseSha:retry.PREWRITE_WAIT_RELEASE,...options});change(f);a.throws(()=>retry.verifyFailure(f.make(),f.read),{code:'RESEARCH_PUBLICATION_RETRY_REFUSED'});});
 for(const [name,change]of [
  ['successful child',f=>{f.receipt.code=0;}],['unknown child',f=>{f.receipt.code=null;}],['overflow',f=>{f.receipt.overflow=true;}],
  ['unknown commit',f=>{f.receipt.stderr=JSON.stringify({ok:false,error:'LEAGUE_MODEL_COMMIT_UNKNOWN',retryWriteAutomatically:false});}],

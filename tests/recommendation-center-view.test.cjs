@@ -75,6 +75,64 @@ test('trained match matching requires ordered identities and never substitutes a
  for(const bad of [{...m,homeTeamId:m.awayTeamId},{...m,kickoffTime:'2030-01-01T00:00:00Z'},{...m,homeTeamName:'other'}])assert.equal(modelModule.exports.trainedMatchRecommendation(data,bad),null);
  data.leagueBaseline.records.push(r);assert.equal(modelModule.exports.trainedMatchRecommendation(data,m),null);
 });
+async function trainedCoverage(targetRows,records=[]){
+ const ports=memoryPorts();ports.trainedOnly=true;ports.prdPaperPool={};
+ const transaction=ports.transaction;
+ ports.transaction=(lane,action)=>transaction(lane,repo=>{
+  repo.todayTargets=async()=>structuredClone(targetRows);
+  repo.leagueBaselineProjection=async(businessDate,updatedAt)=>({version:'league-baseline-directions-v1',businessDate,updatedAt,records,blocked:0,formalEligible:false});
+  return action(repo);
+ });
+ const before=JSON.stringify({targetRows,records});
+ assert.equal((await createRuntime(ports,{validators}).view()).ok,true);
+ assert.equal(JSON.stringify({targetRows,records}),before);
+ assert.deepEqual(ports.state.decisions,[]);assert.deepEqual(ports.state.combos,[]);
+ return ports.state.view.coverage;
+}
+
+test('trained coverage counts the complete unique day including a finished current and history duplicate',async()=>{
+ const current=Array.from({length:12},(_,index)=>match(index+1));current[0].status='FINISHED';
+ const rows=[...current.map(payload=>({dataset:'current',payload})),{dataset:'history',payload:structuredClone(current[0])}];
+ const coverage=await trainedCoverage(rows);
+ assert.equal(rows.length,13);assert.equal(coverage.targetCount,12);assert.equal(coverage.publishableCount,0);
+ assert.equal(coverage.qualifiedCount,0);assert.equal(coverage.unqualifiedCount,12);assert.equal(coverage.coverageRatio,0);
+ assert.equal(coverage.missingTotal,12);assert.equal(coverage.missing.length,12);assert.equal(coverage.hasMore,false);
+ assert.equal(coverage.missing.filter(row=>row.sourceMatchId==='1').length,1);
+ assert.ok(coverage.missing.every(row=>row.reasonText.startsWith('等待本联赛训练参数')));
+});
+
+test('trained coverage prefers the current identity over earlier history without qualifying model references',async()=>{
+ const current=match(1),history={...current,sourceMatchId:'sporttery_1',homeTeamId:'old-home',eventVersion:'2026-09-17T14:00:00Z'};
+ const records=[{event:{sourceMatchId:'1',eventVersion:current.eventVersion,homeTeamId:current.homeTeamId,awayTeamId:current.awayTeamId}}];
+ const coverage=await trainedCoverage([{dataset:'history',payload:history},{dataset:'current',payload:current},{dataset:'current',payload:structuredClone(current)}],records);
+ assert.equal(coverage.targetCount,1);assert.equal(coverage.publishableCount,1);assert.equal(coverage.qualifiedCount,0);
+ assert.equal(coverage.unqualifiedCount,1);assert.equal(coverage.missingTotal,1);assert.equal(coverage.coverageRatio,0);
+ assert.equal(coverage.missing.length,1);assert.equal(coverage.missing[0].sourceMatchId,'1');
+ assert.match(coverage.missing[0].reasonText,/已有球队模型参考/);
+});
+
+test('trained coverage cannot count an adoption when duplicate current identities conflict',async()=>{
+ const current=match(1),conflict={...current,awayTeamId:'conflicting-away'};
+ const records=[{event:{sourceMatchId:'1',eventVersion:current.eventVersion,homeTeamId:current.homeTeamId,awayTeamId:current.awayTeamId}}];
+ const coverage=await trainedCoverage([{dataset:'current',payload:current},{dataset:'current',payload:conflict}],records);
+ assert.equal(coverage.targetCount,1);assert.equal(coverage.publishableCount,0);assert.equal(coverage.qualifiedCount,0);
+ assert.equal(coverage.missingTotal,1);assert.equal(coverage.missing.length,1);
+ assert.match(coverage.missing[0].reasonText,/等待本联赛训练参数/);
+});
+
+test('trained coverage truncates after deduplication and retains history-only finished targets',async()=>{
+ const rows=Array.from({length:33},(_,index)=>match(index+1)).flatMap(payload=>[
+  {dataset:'current',payload},{dataset:'history',payload:structuredClone(payload)}]);
+ const finished={...match(34),status:'FINISHED'};
+ rows.push({dataset:'history',payload:finished},{dataset:'current',payload:{...match(35),businessDate:'2026-09-18'}});
+ const coverage=await trainedCoverage(rows);
+ assert.equal(coverage.targetCount,34);assert.equal(coverage.publishableCount,0);assert.equal(coverage.missingTotal,34);
+ assert.equal(coverage.missing.length,32);assert.equal(new Set(coverage.missing.map(row=>row.sourceMatchId)).size,32);assert.equal(coverage.hasMore,true);
+ const historyOnly=await trainedCoverage([{dataset:'history',payload:finished}]);
+ assert.equal(historyOnly.targetCount,1);assert.equal(historyOnly.publishableCount,0);assert.equal(historyOnly.missing[0].sourceMatchId,'34');
+ const empty=await trainedCoverage([]);assert.equal(empty.targetCount,0);assert.equal(empty.coverageRatio,null);assert.deepEqual(empty.missing,[]);
+});
+
 test('the actual runtime projection parses for current UI',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.current.length,3);assert.equal(x.previews.length,2);assert.equal(x.review.statistics.single.published,3);});
 
 async function targetPayload(){

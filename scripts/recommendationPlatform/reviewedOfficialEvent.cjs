@@ -134,7 +134,7 @@ function sameOfficialEventIdentity(first,next){
 }
 // A fresh sale observation for display/archive flags, never a publication or
 // a replacement of a frozen decision. Invalid/missing inputs mean closed.
-function createOfficialEventObserver(asOf){
+function createOfficialEventObserver(asOf,{includeValidity=false}={}){
  let context=null;
  return records=>{
  const observed=new Map(),eligible=records.filter(r=>r.eventAuthority?.version===VERSION
@@ -158,13 +158,14 @@ function createOfficialEventObserver(asOf){
     &&first.home===record.homeTeamName&&first.away===record.awayTeamName
     &&p.hash(first.orderedTeamIds)===p.hash(record.eventAuthority.officialOrderedTeamIds),'FROZEN_IDENTITY');
    check(p.hash(market(a[0].row,record,current.entry.receivedAt))===p.hash(market(b[0].row,record,calculator.entry.receivedAt)),'LANE_MARKET');
+   let saleValidUntil=Math.min(Date.parse(record.cutoffAt),Date.parse(record.eventVersion),...[current.entry,calculator.entry].flatMap(e=>[Date.parse(e.requestedAt)+FRESH_MS,Date.parse(e.receivedAt)+FRESH_MS]));
    // Explicit newly observed cutoffs can close a group earlier, never later.
    for(const row of [a[0].row,b[0].row])for(const key of ['buyEndTime','matchEndTime','sellEndTime','stopSaleTime','endTime']){
     if(row[key]==null||row[key]==='')continue;
     const clock=typeof row[key]==='string'&&/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(row[key])?row[key].replace(' ','T')+'+08:00':row[key];
-    check(ns(clock)!==null&&ns(asOf)<ns(clock),'DEADLINE');
+    check(ns(clock)!==null&&ns(asOf)<ns(clock),'DEADLINE');saleValidUntil=Math.min(saleValidUntil,Date.parse(clock));
    }
-   observed.set(record.eventId,{...record,status:'SCHEDULED',isOnSale:true,observedAt:current.entry.receivedAt});
+   observed.set(record.eventId,{...record,status:'SCHEDULED',isOnSale:true,observedAt:current.entry.receivedAt,...(includeValidity?{saleValidUntil:new Date(saleValidUntil).toISOString()}: {})});
   }catch{/* A closed, changed or unverified event can only freeze its group. */}
  }catch{/* Whole-source failure cannot confer eligibility. */}
  return observed;

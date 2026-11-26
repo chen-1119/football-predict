@@ -4,7 +4,7 @@ const p=require('../scripts/recommendationPlatform/reviewedAnalysis.cjs');
 const original=require('../scripts/recommendationPlatform/reviewedAnalysisRuntime.cjs');
 const archive=require('../services/recommendation/comboArchive.cjs');
 const single=require('./researchReviewedRevision.cjs');
-const {comboDisposition}=require('./researchRevisionPolicy.cjs');
+const {comboDisposition,requireResearchContinuity}=require('./researchRevisionPolicy.cjs');
 const {epochNanoseconds:ns}=require('../src/services/prematchV3Clock.cjs');
 const fail=code=>{throw Object.assign(Error(code),{code,retryWriteAutomatically:false});};
 const VERSION='reviewed-combo-revision-v1',ACK_VERSION='reviewed-combo-revision-ack-v1';
@@ -13,7 +13,7 @@ function validate(r){
  if(!r||Object.keys(r).sort().join(',')!=='band,baseArchiveKey,baseArchiveSha256,bases,draft,draftHash,previousRevisionHash,revision,size,version'
   ||r.version!=='reviewed-combo-request-v1'||![2,3].includes(r.size)||![2.5,5,10].includes(r.band)
   ||!/^reviewed-combo-view-\d{4}-\d{2}-\d{2}-[a-f0-9]{64}$/.test(r.baseArchiveKey||'')||!hex(r.baseArchiveSha256)
-  ||!Array.isArray(r.bases)||r.bases.length!==r.size||![3,4].includes(r.draft?.version)||r.draft.singles?.length!==r.size
+  ||!Array.isArray(r.bases)||r.bases.length!==r.size||![3,4,5].includes(r.draft?.version)||r.draft.singles?.length!==r.size
   ||!hex(r.draftHash)||p.hash(r.draft)!==r.draftHash||!Number.isSafeInteger(r.revision)||r.revision<1||r.revision>single.MAX_REVISIONS
   ||(r.revision===1?r.previousRevisionHash!==null:!hex(r.previousRevisionHash)))fail('REVIEW_REVISION_COMBO_REQUEST');
  const day=r.draft.businessDate;
@@ -28,6 +28,12 @@ function previousKey(r){return validate({...r,revision:r.revision-1,previousRevi
 function identity(r){return p.hash({baseArchiveKey:r.baseArchiveKey,baseArchiveSha256:r.baseArchiveSha256,bases:r.bases,size:r.size,band:r.band});}
 function deadline(record,at){original.deadline(record,at);if(record.records.some(r=>ns(at)>=ns(r.eventVersion)))fail('REVIEW_REVISION_COMBO_ALREADY_STARTED');}
 function group(record,band){
+ if(record.records.some(decision=>decision.research!==undefined)){
+  const eligible=require('../scripts/recommendationPlatform/reviewedResearchCombos.cjs').combinations(record.records,record.records.length,record.createdAt);
+  const candidate=eligible.find(candidate=>candidate.legs.length===record.records.length&&candidate.product>=band);
+  if(!candidate)fail('REVIEW_REVISION_COMBO_RESEARCH_INELIGIBLE');
+  return {...candidate,band};
+ }
  const legs=record.records.map(r=>({eventId:r.eventId,matchNum:r.matchNum,market:r.market,...(r.market==='HHAD'?{handicap:r.handicap}:{}),selection:r.selection,sp:r.sp}));
  const product=require('../scripts/recommendationPlatform/reviewedComboHistory.cjs').exactProduct(legs);
  if(product<band)fail('REVIEW_REVISION_COMBO_BAND_UNFILLED');
@@ -49,7 +55,7 @@ async function base(c,r,at){
   const {publicationCreatedAt,publicationCommitObservedAt,...core}=archived;void publicationCreatedAt;void publicationCommitObservedAt;
   if(p.hash(rows[0])!==p.hash(core))fail('REVIEW_REVISION_COMBO_BASE_CHANGED');decisions.push(rows[0]);
  }
- return {combo:found[0],decisions};
+ requireResearchContinuity(decisions,r.draft);return {combo:found[0],decisions};
 }
 async function verifyCommitted(c,key,at,depth=0){
  if(depth>=single.MAX_REVISIONS)fail('REVIEW_REVISION_CHAIN_BOUND');
@@ -60,7 +66,7 @@ async function verifyCommitted(c,key,at,depth=0){
  const first=await base(c,v.request,at);
  if(p.hash(first)!==v.originalHash)fail('REVIEW_REVISION_COMBO_BASE_CHANGED');
  if(v.request.revision>1){const prior=await verifyCommitted(c,previousKey(v.request),at,depth+1);
-  if(!prior.verified||prior.payloadSha256!==v.request.previousRevisionHash||prior.baseIdentity!==identity(v.request)||ns(prior.commitObservedAt)>=ns(v.createdAt))fail('REVIEW_REVISION_CHAIN');}
+  if(!prior.verified||prior.payloadSha256!==v.request.previousRevisionHash||prior.baseIdentity!==identity(v.request)||ns(prior.commitObservedAt)>=ns(v.createdAt))fail('REVIEW_REVISION_CHAIN');requireResearchContinuity(prior.latestDecisions,v.request.draft);}
  const replay=p.make(v.request.draft,{...v.inputs,trustRegistry:single.trust(),asOf:v.createdAt});
  if(p.hash(replay)!==p.hash(v.record)||p.hash(group(replay,v.request.band))!==p.hash(v.combo))fail('REVIEW_REVISION_COMBO_REPLAY');
  if(v.record.records.some((r,i)=>['eventId','eventVersion','businessDate','homeTeamId','awayTeamId','homeTeamName','awayTeamName'].some(k=>r[k]!==first.decisions[i][k])||!require('../scripts/recommendationPlatform/reviewedOfficialEvent.cjs').sameOfficialEventIdentity(first.decisions[i],r)))fail('REVIEW_REVISION_EVENT_CHANGED');
@@ -84,21 +90,22 @@ function createComboRevisionStore({pool,runExclusive}={}){
  async function publish(r){const key=validate(r);return runExclusive(async()=>{
   const before=await read(r);if(before.state!=='not-observed')return {...before,submitted:false};
   const stored=await single.transaction(pool,false,async c=>{
-   await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',['football-postgres-projection-sync-v1']);
+   await require('./researchAppendLock.cjs').acquireResearchAppendLock(c,{independentOfficial:[4,5].includes(r.draft.version)});
    if(await single.row(c,key)||await single.row(c,key+'-ack'))fail('REVIEW_REVISION_EXISTS_READ_FIRST');
    const at=await single.now(c),first=await base(c,r,at);
    if(r.revision>1){const prior=await verifyCommitted(c,previousKey(r),at);
-    if(!prior.verified||prior.payloadSha256!==r.previousRevisionHash||prior.baseIdentity!==identity(r)||ns(prior.commitObservedAt)>=ns(at))fail('REVIEW_REVISION_PREDECESSOR');}
-   const all=r.draft.version===4?[]:(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(x=>x.payload);
+    if(!prior.verified||prior.payloadSha256!==r.previousRevisionHash||prior.baseIdentity!==identity(r)||ns(prior.commitObservedAt)>=ns(at))fail('REVIEW_REVISION_PREDECESSOR');requireResearchContinuity(prior.latestDecisions,r.draft);}
+   const all=[4,5].includes(r.draft.version)?[]:(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' LIMIT 513")).rows.map(x=>x.payload);
    if(all.length>512)fail('REVIEW_REVISION_MATCH_BOUND');
    const matches=all.filter(m=>r.bases.some(b=>b.eventId===String(m.sourceMatchId||'').replace(/^sporttery_/,'')));
    const snapshot=require('../scripts/recommendationPlatform/liveOfficialHandicap.cjs').readLiveOfficialSnapshot();
-   const record=p.make(r.draft,{matches,snapshot,trustRegistry:single.trust(),asOf:at});
-   const observed=record.records.map(d=>({...d,status:r.draft.version===4?'SCHEDULED':matches.find(m=>String(m.sourceMatchId||'').replace(/^sporttery_/,'')===d.eventId)?.status,isOnSale:true,observedAt:d.quoteObservedAt}));
+   const evidenceByEvent=r.draft.version===5?await require('../scripts/recommendationPlatform/reviewedResearchEvidence.cjs').loadForDraft(c,r.draft,at):{};
+   const record=p.make(r.draft,{matches,snapshot,trustRegistry:single.trust(),asOf:at,evidenceByEvent});
+   const observed=record.records.map(d=>({...d,status:[4,5].includes(r.draft.version)?'SCHEDULED':matches.find(m=>String(m.sourceMatchId||'').replace(/^sporttery_/,'')===d.eventId)?.status,isOnSale:true,observedAt:d.quoteObservedAt}));
    if(!comboDisposition({legs:first.decisions},observed,at).canRefresh)fail('REVIEW_REVISION_COMBO_FROZEN');
    if(record.records.some((d,i)=>['eventVersion','homeTeamId','awayTeamId','homeTeamName','awayTeamName'].some(k=>d[k]!==first.decisions[i][k])||!require('../scripts/recommendationPlatform/reviewedOfficialEvent.cjs').sameOfficialEventIdentity(first.decisions[i],d)))fail('REVIEW_REVISION_EVENT_CHANGED');
    const storedAt=await single.now(c);deadline(record,storedAt);
-   const value=p.seal({version:VERSION,createdAt:at,storedAt,request:r,record,combo:group(record,r.band),inputs:{matches,snapshot},originalHash:p.hash(first)});
+   const value=p.seal({version:VERSION,createdAt:at,storedAt,request:r,record,combo:group(record,r.band),inputs:{matches,snapshot,...(r.draft.version===5?{evidenceByEvent}:{})},originalHash:p.hash(first)});
    const saved=await single.insert(c,key,value,storedAt);deadline(record,await single.now(c));return saved;
   });
   await single.transaction(pool,false,async c=>{

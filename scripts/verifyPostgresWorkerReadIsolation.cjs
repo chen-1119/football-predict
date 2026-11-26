@@ -45,9 +45,9 @@ async function verify(url) {
     for (const [name, value] of Object.entries(payloads)) fs.writeFileSync(path.join(publicDataDir, name), JSON.stringify(value));
     const large = path.join(publicDataDir, "prediction-snapshots.json"), fd = fs.openSync(large, "w");
     try {
-      fs.writeSync(fd, '{"metadata":{"history":[');
+      fs.writeSync(fd, '{"history":[');
       for (let i = 0; i < 65536; i++) fs.writeSync(fd, (i ? "," : "") + segment);
-      fs.writeSync(fd, ']},"rows":[]}');
+      fs.writeSync(fd, '],"rows":[]}');
     } finally { fs.closeSync(fd); }
     const committed = commitCurrentDataGeneration({ storeDir, publicDataDir, sourceCycleId: payloads["sync-meta.json"].sourceCycleId, committedAt: at });
     await syncPostgresProjectionFromSource(createPostgresGenerationSource({ storeDir, publicDataDir }), { pool, mode: "backfill", aiArenaPath: path.join(temp, "absent.json") });

@@ -92,7 +92,7 @@ function createResearchReportStore({ pool, runExclusive } = {}) {
         await client.query("SET LOCAL statement_timeout='10000ms'");
         await client.query("SET LOCAL lock_timeout='2000ms'");
         await client.query("SET LOCAL idle_in_transaction_session_timeout='15000ms'");
-        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['football-postgres-projection-sync-v1']);
+        await require('./researchAppendLock.cjs').acquireResearchAppendLock(client,{independentOfficial:true});
         const now = iso((await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now);
         if (Date.parse(input.generatedAt) > Date.parse(now)) fail('REPORT_FUTURE_CLOCK');
         const prior = await readStored(client, input.key);

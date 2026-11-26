@@ -4,6 +4,8 @@ const React=require('react'),render=require('react-dom/server').renderToStaticMa
 function load(ts,filename,overrides={}){
  const native=createRequire(filename),m={exports:{}},local=id=>{
   if(Object.hasOwn(overrides,id))return overrides[id];
+  if(id.endsWith('/runtimeUrls'))return {buildApiUrl:value=>value};
+  if(id.endsWith('/accessControl'))return {getAccessAuthHeaders:()=>({})};
   if(id.endsWith('.css'))return {};
   if(id.startsWith('.')){const base=path.resolve(path.dirname(filename),id),target=[base,base+'.tsx',base+'.ts'].find(file=>fs.existsSync(file)&&fs.statSync(file).isFile());if(target&&/\.tsx?$/.test(target))return load(ts,target,overrides);}
   return native(id);

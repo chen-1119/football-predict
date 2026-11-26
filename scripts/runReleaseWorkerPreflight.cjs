@@ -20,15 +20,32 @@ function runLiveWorkerPreflight() {
   const args = ['-p', String(port), ...buildPinnedSshBaseOptions({ keyPath, pin }), `${user}@${host}`,
     'sudo', '-n', '/usr/bin/env', '-i', 'PATH=/usr/bin:/bin', '/opt/node-v22.22.1/bin/node', '-'];
   const manual=require('./manualOfficialReleaseRecovery.cjs'),file=path.join(rootDir,manual.AUTH_ENTRY);
+  const repairFile=path.join(rootDir,'deploy/light-server/worker-code-repair-authorization.json');
+  assert(!(fs.existsSync(file)&&fs.existsSync(repairFile)),'ambiguous recovery authorization');
   let source=buildReadOnlyWorkerProbe();
   if(fs.existsSync(file)){
     const st=fs.lstatSync(file);assert(st.isFile()&&!st.isSymbolicLink()&&st.nlink===1&&st.size<=65536);
     source=manual.buildProbe(manual.candidateAuthorization(rootDir,JSON.parse(fs.readFileSync(file))));
   }
+  if(fs.existsSync(repairFile)){
+    const repair=require('./releaseWorkerCodeRepair.cjs');
+    const stat=fs.lstatSync(repairFile);assert(stat.isFile()&&!stat.isSymbolicLink()&&stat.nlink===1&&stat.size<=16384);
+    const auth=repair.candidateAuthorization(rootDir,JSON.parse(fs.readFileSync(repairFile)));
+    source=repair.buildWorkerCodeRepairProbe(auth);
+    if(auth.version==='worker-code-repair-v9' || auth.version==='worker-code-repair-v10' || auth.version==='worker-code-repair-v11' || auth.version==='worker-code-repair-v12') {
+      // Shared observation only. The actual root entrypoint keeps its original exclusive FD 9.
+      args.splice(args.indexOf('/opt/node-v22.22.1/bin/node'),0,
+        '/usr/bin/flock','-s','-w','2','/run/lock/football-release.lock');
+    }
+  }
   const child = spawnSync('ssh', args, { input: source, encoding: 'utf8',
     windowsHide: true, timeout: 20000, maxBuffer: 1024 * 1024 });
   assert.ok(!child.error && !child.signal && [0, 1].includes(child.status), 'read-only worker transport unavailable');
   const report = JSON.parse(child.stdout);
+  if(report.version==='worker-code-repair-preparation-v1'){
+    validateRepairPreparationReport(report,child.status,Date.now());
+    return {...report,ok:false,preparationAllowed:true};
+  }
   if(report.version===manual.ENVELOPE){
     const base=report.workerReport,age=Date.now()-Date.parse(report.checkedAt);
     assert(report.preparationAllowed===true&&child.status===0&&report.workerHealthy===false&&report.readyToCutover===false&&report.productionWrites===0
@@ -45,7 +62,16 @@ function runLiveWorkerPreflight() {
     && Number.isFinite(age) && age >= -5000 && age <= 60000, 'invalid or stale worker preparation observation');
   return report;
 }
-module.exports = { runLiveWorkerPreflight };
+function validateRepairPreparationReport(report,exitCode,now){
+  const base=report.workerReport,age=now-Date.parse(report.checkedAt);
+  assert(report.version==='worker-code-repair-preparation-v1'&&report.ok===true&&report.repairPreparationAllowed===true&&exitCode===0
+    &&report.workerHealthy===false&&report.readyToCutover===false&&report.productionWrites===0
+    &&Array.isArray(report.blockers)&&report.blockers.length===0&&base?.version==='release-worker-preflight-v1'&&base.ok===false
+    &&base.readyToCutover===false&&base.productionWrites===0&&Array.isArray(base.blockers)&&base.blockers.length>0
+    &&base.checkedAt===report.checkedAt&&Number.isFinite(age)&&age>=-5000&&age<=60000,'repair preparation envelope rejected');
+  return report;
+}
+module.exports = { runLiveWorkerPreflight, validateRepairPreparationReport };
 if (require.main === module) {
   try { const report = runLiveWorkerPreflight(); console.log(JSON.stringify(report)); if (!report.ok&&!report.preparationAllowed) process.exitCode = 1; }
   catch { console.log(JSON.stringify({ ok: false, blockers: ['worker-preparation-observation-unavailable'],

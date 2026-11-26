@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { NeutralSportsData, NeutralIdentityFallback } from '../NeutralSportsData';
 import './OfficialSchedule.css';
 import type { OfficialScheduleEvent, OfficialScheduleView } from '../../services/officialSchedule.cjs';
 import { useOfficialSchedule } from '../../hooks/useOfficialSchedule';
@@ -54,9 +55,10 @@ export function OfficialScheduleDetail({referenceId,onBack}:{referenceId:string;
   <button type="button" className="btn btn-secondary" onClick={onBack}>返回列表</button>
   {event&&view?<><header className="card" style={{padding:'1.25rem'}}><h1>{event.homeTeamName} — {event.awayTeamName}</h1><p>{event.businessDate} 竞彩日</p>
    <OfficialScheduleFacts event={event} view={view} now={now}/></header>
+   <NeutralSportsData eventId={event.eventId} businessDate={event.businessDate} kickoff={event.kickoff} names={[event.homeTeamName,event.awayTeamName]}/>
    <section className="card" style={{padding:'1.25rem'}}><h2>赛前分析</h2>
     {record?<ReviewedMatchPick record={record} now={now}/>:<p>{references.failed?'已发布分析暂时无法核验。':references.loading?'正在读取已发布分析…':'本场尚未发布赛前推荐及参考比分。'}</p>}
-    {!record&&<p>伤停、首发、近况及交锋尚未完成本场核实。</p>}
-   </section></>:<p role="status">{state.loading?'正在读取官方赛程…':'官方赛程暂时无法核验，请稍后重试。'}</p>}
+    {!record&&<p>赛前分析的完整证据核验尚未完成；已采集的球队资料见上方。</p>}
+   </section></>:<><p role="status">{state.loading?'正在读取官方赛程…':'官方赛程暂时无法核验，请稍后重试。'}</p>{!state.loading&&identity&&<NeutralIdentityFallback eventId={identity.eventId} businessDate={identity.businessDate}/>}</>}
  </section>;
 }

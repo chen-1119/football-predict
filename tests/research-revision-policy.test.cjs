@@ -4,6 +4,11 @@ const {reviewDisposition,comboDisposition}=require('../server/researchRevisionPo
 const now='2026-10-14T13:00:00.000Z',cutoffAt='2026-10-14T14:00:00.000Z',kickoff='2026-10-14T16:45:00.000Z';
 const first={eventId:'2041965',eventVersion:kickoff,cutoffAt,sp:1.75,selection:'a',scores:[[1,2],[0,1]]};
 const second={...first,eventId:'2041966'};
+test('research revisions cannot downgrade the original or an upgraded predecessor',()=>{
+ const {requireResearchContinuity}=require('../server/researchRevisionPolicy.cjs'),research={...first,research:{version:'evidence-first-editorial-v1'},strategy:'evidence-first-editorial-v1'};
+ for(const records of [[research],[first,research],[research,first]])for(const version of [3,4])a.throws(()=>requireResearchContinuity(records,{version}),{code:'REVIEW_REVISION_RESEARCH_DOWNGRADE'});
+ a.doesNotThrow(()=>requireResearchContinuity([first],{version:4}));a.doesNotThrow(()=>requireResearchContinuity([first,research],{version:5,strategy:'evidence-first-editorial-v1'}));
+});
 const observe=(r,changes={})=>({...r,status:'SCHEDULED',isOnSale:true,observedAt:'2026-10-14T12:59:00.000Z',...changes});
 test('open single allows a new review version and preserves the original settlement decision',()=>{
  const copy=structuredClone(first),r=reviewDisposition(first,observe(first),now);

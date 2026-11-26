@@ -177,6 +177,12 @@ const inputPublication = resolveActivePublication({
   validatePayloadSemantics: !requireActiveGenerationFastPath,
 });
 const generationInputActive = inputPublication.mode === "active-generation";
+if (inputPublication.context?.manifest.schemaVersion === 2
+    || fs.existsSync(path.join(publicDataDir, "reference-integrity.json"))) {
+  const error = new Error("partitioned original evidence requires the native PostgreSQL projection");
+  error.code = "REFERENCE_PARTITION_SQLITE_UNSUPPORTED";
+  throw error;
+}
 const inputSyncMeta = readPublicationJson(inputPublication, "sync-meta.json", null);
 if (sourcePointerReadOnly && !generationInputActive) {
   throw new Error("read-only source-pointer export requires an immutable active generation");

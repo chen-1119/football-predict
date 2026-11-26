@@ -67,11 +67,11 @@ function syncNew(file, bytes) {
 }
 function requestJournalIdentity(request) {
   let purpose; try { purpose = JSON.parse(request.toString('utf8')); } catch { fail('RESEARCH_REQUEST_JSON'); }
-  if (purpose?.version !== 'research-broker-request-v1' || !['archive','archive-read','publish','publication-read','revision-publish','revision-read','combo-revision-publish','combo-revision-read','publication-retry','archive-retry','publication-input-recovery','publication-freshness-retry'].includes(purpose.action)) fail('RESEARCH_REQUEST_ACTION');
-  const requestSha = sha(request), readOnly = ['archive-read','publication-read','revision-read','combo-revision-read'].includes(purpose.action);
+  if (purpose?.version !== 'research-broker-request-v1' || !['archive','archive-read','publish','publication-read','revision-publish','revision-read','combo-revision-publish','combo-revision-read','combo-series-publish','combo-series-read','publication-retry','archive-retry','publication-input-recovery','publication-freshness-retry','evidence-archive','evidence-read'].includes(purpose.action)) fail('RESEARCH_REQUEST_ACTION');
+  const requestSha = sha(request), readOnly = ['archive-read','publication-read','revision-read','combo-revision-read','combo-series-read','evidence-read'].includes(purpose.action);
   // Read requests need a fresh database observation. A cached not-observed read
   // must never hide a later COMMIT. Mutation identities remain durable/exact.
-  return { requestSha, readOnly, journalId: purpose.action==='publication-freshness-retry'?require('../server/researchPublicationFreshnessRetry.cjs').journalId(purpose):purpose.action==='publication-input-recovery'?require('../server/researchPublicationInputRecovery.cjs').journalId(purpose):purpose.action==='archive-retry'?require('../server/researchArchiveRetry.cjs').journalId(purpose):purpose.action==='publication-retry'?require('../server/researchPublicationRetry.cjs').journalId(purpose):requestSha + (readOnly ? '-read-' + crypto.randomBytes(12).toString('hex') : '') };
+  return { requestSha, readOnly, journalId: purpose.action==='combo-series-publish'?require('../server/researchComboSeries.cjs').journalId(JSON.parse(purpose.json)):purpose.action==='publication-freshness-retry'?require('../server/researchPublicationFreshnessRetry.cjs').journalId(purpose):purpose.action==='publication-input-recovery'?require('../server/researchPublicationInputRecovery.cjs').journalId(purpose):purpose.action==='archive-retry'?require('../server/researchArchiveRetry.cjs').journalId(purpose):purpose.action==='publication-retry'?require('../server/researchPublicationRetry.cjs').journalId(purpose):requestSha + (readOnly ? '-read-' + crypto.randomBytes(12).toString('hex') : '') };
 }
 function replayEnvelope(saved, requestSha, releaseSha, now = new Date().toISOString()) {
   if (!Buffer.isBuffer(saved) || saved.length > 3*1024*1024-4096) fail('RESEARCH_RECEIPT_BOUND');

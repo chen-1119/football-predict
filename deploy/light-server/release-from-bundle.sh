@@ -164,6 +164,7 @@ PUBLIC_DATA_CACHE_FILES=(
   matches-history.json
   odds-history.json
   prediction-snapshots.json
+  reference-integrity.json
   post-match-reviews.json
   external-signals.json
   five-hundred-details.json
@@ -2825,6 +2826,64 @@ normalize_validated_artifact_modes() {
   find "$artifact_root/node_modules" -type f \! -perm /111 -exec chmod 0644 {} + || return 1
 }
 
+validate_reference_snapshot_pair() {
+  "$NODE_HOME/bin/node" - "$1" "$NATIVE_STATE_DIR/seed-accepted.json" "$BUNDLE_SHA256" "$TRUSTED_SOURCE_DIR" <<'NODE'
+const fs = require("node:fs"), path = require("node:path"), assert = require("node:assert/strict"), crypto = require("node:crypto");
+const [artifactRoot, proofFile, releaseSha, sourceRoot] = process.argv.slice(2);
+const store = require(path.join(sourceRoot, "server/dataGenerationStore.cjs"));
+const partition = require(path.join(sourceRoot, "server/referenceIntegrityPartition.cjs"));
+const selected = require(path.join(sourceRoot, "server/selectedJsonObjectFile.cjs"));
+const identity = info => [info.dev, info.ino, info.size, info.mtimeNs, info.ctimeNs, info.mode, info.nlink].map(String).join(":");
+function stableFile(file, limit) {
+  const before = fs.lstatSync(file, { bigint: true });
+  assert(before.isFile() && !before.isSymbolicLink() && before.nlink === 1n && before.size <= BigInt(limit), "unsafe reference pair file");
+  const descriptor = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+  try {
+    assert.equal(identity(fs.fstatSync(descriptor, { bigint: true })), identity(before));
+    const bytes = fs.readFileSync(descriptor);
+    assert.equal(BigInt(bytes.length), before.size);
+    assert.equal(identity(fs.fstatSync(descriptor, { bigint: true })), identity(before));
+    assert.equal(identity(fs.lstatSync(file, { bigint: true })), identity(before));
+    return bytes;
+  } finally { fs.closeSync(descriptor); }
+}
+for (const directory of [artifactRoot, path.join(artifactRoot, "public"), path.join(artifactRoot, "public/data"), path.dirname(proofFile)]) {
+  const info = fs.lstatSync(directory);
+  assert(info.isDirectory() && !info.isSymbolicLink(), "unsafe reference pair directory");
+}
+const proofBytes = stableFile(proofFile, 1024 * 1024), proof = JSON.parse(proofBytes);
+assert.equal(proof.ok, true); assert.equal(proof.seed, true); assert.equal(proof.sha, releaseSha);
+assert.equal(path.dirname(path.resolve(proof.store)), path.dirname(path.resolve(proofFile)));
+assert.match(path.basename(proof.store), /^(?:code-seed|seed-[0-9]+)-store$/);
+const generationDir = path.join(proof.store, "data-generations/generations", proof.identity.generationId);
+const checked = store.validateGenerationDirectory({ generationDir, expectedGenerationId: proof.identity.generationId,
+  expectedManifestHash: proof.identity.manifestHash, expectedSourceCycleId: proof.identity.sourceCycleId });
+const snapshotEntry = checked.manifest.files.find(entry => entry.path === "prediction-snapshots.json");
+assert(snapshotEntry && snapshotEntry.bytes > 0 && snapshotEntry.bytes <= 2 * 1024 ** 3, "snapshot source missing or oversized");
+const snapshotPath = path.join(artifactRoot, "public/data/prediction-snapshots.json"), snapshotInfo = fs.lstatSync(snapshotPath, { bigint: true });
+assert(snapshotInfo.isFile() && !snapshotInfo.isSymbolicLink() && snapshotInfo.nlink === 1n, "unsafe reference snapshot");
+const metadata = selected.readSelectedJsonObjectFile({ filePath: snapshotPath, expectedBytes: snapshotEntry.bytes,
+  expectedSha256: snapshotEntry.sha256, keys: ["version", "publicReferenceIntegrity"], maxSelectedChars: 512 * 1024 }).value;
+const sidecarEntry = checked.manifest.files.find(entry => entry.path === partition.FILE_NAME);
+const sidecarPath = path.join(artifactRoot, "public/data", partition.FILE_NAME);
+let integrity = null;
+if (sidecarEntry) {
+  assert(sidecarEntry.bytes > 0 && sidecarEntry.bytes <= 512 * 1024, "reference sidecar exceeds bound");
+  const bytes = stableFile(sidecarPath, 512 * 1024);
+  assert.equal(bytes.length, sidecarEntry.bytes);
+  assert.equal(crypto.createHash("sha256").update(bytes).digest("hex"), sidecarEntry.sha256, "reference sidecar differs from source");
+  integrity = JSON.parse(bytes);
+} else {
+  assert.throws(() => fs.lstatSync(sidecarPath), error => error.code === "ENOENT", "unexpected reference sidecar");
+}
+partition.validateSnapshotIntegrity(metadata, integrity);
+assert.equal(identity(fs.lstatSync(snapshotPath, { bigint: true })), identity(snapshotInfo));
+assert(stableFile(proofFile, 1024 * 1024).equals(proofBytes), "reference source proof changed");
+console.log(JSON.stringify({ ok: true, generationId: checked.generationId, manifestHash: checked.manifestHash,
+  snapshotSha256: snapshotEntry.sha256, sidecarSha256: sidecarEntry?.sha256 || null, snapshotVersion: metadata.version }));
+NODE
+}
+
 assemble_final_tree() {
   [ ! -e "$NEXT_DIR" ] && [ ! -L "$NEXT_DIR" ] || {
     printf 'final assembly target must not exist: %s\n' "$NEXT_DIR" >&2
@@ -2858,6 +2917,7 @@ assemble_final_tree() {
   done
 
   chown -hR root:root -- "$NEXT_DIR" || return 1
+  if [ -n "${NATIVE_STATE_DIR:-}" ]; then validate_reference_snapshot_pair "$NEXT_DIR" || return 1; fi
 }
 
 fix_store_permissions() {

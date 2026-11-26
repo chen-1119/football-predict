@@ -5,7 +5,7 @@ const { spawnSync } = require("node:child_process");
 const { buildStreamedPublicReferenceArchive: build } = require("../server/streamedPublicReferenceArchive.cjs");
 const { buildPublicReferenceArchive, buildPublicReferenceIndex, SOURCE_ID, INDEX_ID, resolveIndexedPublicReferenceEvidence } = require("../server/publicReferenceArchive.cjs");
 const { isFileJsonPayload, fileJsonPayloadChunks } = require("../scripts/postgresFileJsonPayload.cjs");
-const { spoolGenerationRows } = require("../scripts/postgresGenerationSource.cjs");
+const { spoolGenerationRows, createPostgresGenerationSource } = require("../scripts/postgresGenerationSource.cjs");
 const { fixture, trust, auditAt } = require("../scripts/verifyPublicReferencePairs.cjs");
 const { buildReferencePerformanceFromSnapshotFile, buildReferencePerformanceWithPairs } = require("../server/referencePairedBaseline.cjs");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "football-stream-reference-test-")); let sequence = 0;
@@ -95,6 +95,87 @@ test("absent legacy reference arrays stay absent; row spooling retains the origi
   assert.equal(fs.existsSync(scratch), false);
   assert.throws(() => spoolGenerationRows(c, "prediction-snapshots.json", 2, root, true), /complete native archive row inventory/);
 });
+test("complete row spools retain exact bounded tails and revalidate every original byte before reuse", () => {
+  const input = { rows: [{ id: "old" }, { id: "middle", unicode: "球队⚽" }, { id: "last" }], publicReferenceEvidence: [{ original: true }] };
+  const stored = context(input), file = path.join(stored.generationDir, "prediction-snapshots.json");
+  const spool = spoolGenerationRows(stored, "prediction-snapshots.json", 1000000, root, true);
+  try {
+    const originalRead = fs.readSync;
+    let verifiedBytes = 0;
+    fs.readSync = function (...args) { const bytes = originalRead.apply(this, args); verifiedBytes += bytes; return bytes; };
+    try { spool.assertSourceUnchanged(); } finally { fs.readSync = originalRead; }
+    assert.equal(verifiedBytes, stored.manifest.files[0].bytes);
+    assert.deepEqual([...spool.rows(2)], input.rows.slice(-2));
+    assert.deepEqual([...spool.rows(1)], input.rows.slice(-1));
+    assert.deepEqual([...spool.rows()], input.rows);
+    for (const invalid of [0, -1, 1.5, 1000001, NaN]) assert.throws(() => [...spool.rows(invalid)], /tail limit/);
+    fs.writeFileSync(file, JSON.stringify(input).replace('"original":true', '"original":null'));
+    assert.throws(() => spool.assertSourceUnchanged(), /source changed/);
+  } finally { spool.close(); spool.close(); }
+  assert.equal(fs.existsSync(spool.directory), false);
+  assert.throws(() => spool.assertSourceUnchanged(), /closed/);
+});
+
+test("reused original row spool rejects replaced input identity and corrupted retained items", () => {
+  const stored = context({ rows: [{ id: "original" }], publicReferenceEvidence: [] });
+  const file = path.join(stored.generationDir, "prediction-snapshots.json"), saved = fs.readFileSync(file);
+  const spool = spoolGenerationRows(stored, "prediction-snapshots.json", 1000000, root, true);
+  try {
+    fs.renameSync(file, file + ".original"); fs.writeFileSync(file, saved);
+    assert.throws(() => spool.assertSourceUnchanged(), /source changed/);
+    const descriptor = fs.openSync(path.join(spool.directory, "states.json"), "r+");
+    try { fs.writeSync(descriptor, Buffer.from("!"), 0, 1, 0); } finally { fs.closeSync(descriptor); }
+    assert.throws(() => [...spool.rows(1)], /scratch integrity invalid/);
+  } finally { spool.close(); }
+  assert.equal(fs.existsSync(spool.directory), false);
+});
+
+test("native source reuses one disk spool through matches and prediction tails and cleans success, rejection and early close", async () => {
+  const { commitCurrentDataGeneration } = require("../server/dataGenerationBundle.cjs");
+  const collect = async iterator => { const rows = []; for await (const row of iterator) rows.push(row); return rows; };
+  for (const mode of ["success", "changed", "early-close"]) {
+    const directory = path.join(root, "reuse-" + mode), publicDataDir = path.join(directory, "public"), storeDir = path.join(directory, "store");
+    fs.mkdirSync(publicDataDir, { recursive: true });
+    const example = fixture({ id: "888009" });
+    delete example.match.archivedPreMatchPrediction;
+    const input = payload([example]);
+    input.rows = Array.from({ length: 501 }, (_, index) => ({ id: "snapshot-" + index, sourceMatchId: "888009", capturedAt: auditAt, preserved: index }));
+    const payloads = { "matches-current.json": [example.match], "matches-history.json": [], "prediction-snapshots.json": input,
+      "odds-history.json": { rows: [] }, "sync-meta.json": { sourceCycleId: "spool-reuse-" + mode, updatedAt: auditAt },
+      "external-signals.json": { updatedAt: auditAt, matches: {} }, "model-calibration.json": { version: "qa", generatedAt: auditAt } };
+    for (const [name, value] of Object.entries(payloads)) fs.writeFileSync(path.join(publicDataDir, name), JSON.stringify(value));
+    const committed = commitCurrentDataGeneration({ storeDir, publicDataDir, sourceCycleId: "spool-reuse-" + mode, committedAt: auditAt });
+    const source = createPostgresGenerationSource({ storeDir, publicDataDir, predictionLimit: 500, referenceTempDir: directory });
+    const originalOpen = fs.openSync, spoolPaths = [];
+    fs.openSync = function (file, flags, ...args) {
+      if (path.basename(String(file)) === "states.json" && flags === "wx+") spoolPaths.push(path.dirname(file));
+      return originalOpen.call(this, file, flags, ...args);
+    };
+    try {
+      await source.prepare({ async query() { return { rows: [] }; } }, { mode: "incremental" });
+      assert.equal((await collect(source.tableRows("match_snapshots"))).length, 1);
+      assert.equal(spoolPaths.length, 1);
+      assert.equal(fs.existsSync(spoolPaths[0]), true);
+      if (mode === "early-close") continue;
+      if (mode === "changed") {
+        const file = path.join(committed.context.generationDir, "prediction-snapshots.json");
+        fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace('"retentionDays":31', '"retentionDays":32'));
+        await assert.rejects(() => collect(source.tableRows("prediction_snapshots")), /source changed/);
+      } else {
+        const predictions = await collect(source.tableRows("prediction_snapshots"));
+        assert.equal(predictions.length, 500);
+        assert.deepEqual(predictions.map(row => JSON.parse(row.payload).preserved).sort((left, right) => left - right), Array.from({ length: 500 }, (_, index) => index + 1));
+      }
+      assert.equal(spoolPaths.length, 1);
+      assert.equal(fs.existsSync(spoolPaths[0]), false);
+    } finally {
+      fs.openSync = originalOpen;
+      source.close(); source.close();
+      assert(spoolPaths.every(directory => !fs.existsSync(directory)));
+    }
+  }
+});
+
 test("scratch initialization failures leave neither reference nor state directories", () => {
   const c = context(payload([fixture({ id: "888006" })]));
   for (const operation of ["chmodSync", "openSync"]) {

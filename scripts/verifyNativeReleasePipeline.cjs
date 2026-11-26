@@ -120,6 +120,83 @@ const liveSnapshot = { isFile: () => true, isSymbolicLink: () => false, nlink: 1
 assert.equal(cachePolicy.safeOptionalDataFile("public/data/prediction-snapshots.json", liveSnapshot), true);
 assert.equal(cachePolicy.safeOptionalDataFile("public/data/odds-history.json", liveSnapshot), false);
 checks.push("native candidate validates the observed live snapshot without widening other data cache files");
+{
+  const generationStore = require("../server/dataGenerationStore.cjs");
+  const partition = require("../server/referenceIntegrityPartition.cjs");
+  const integrity = partition.buildReferenceIntegrity(require("../tests/fixtures/public-reference-unresolved-originals.json"));
+  const extract = (name, next) => {
+    const begin = source.indexOf(name + "() {\n"), end = source.indexOf("\n" + next, begin);
+    assert(begin >= 0 && end > begin); return source.slice(begin, end);
+  };
+  const copier = extract("copy_regular_file_nofollow", "rotate_fixed_recovery_helper()");
+  const pairing = extract("validate_reference_snapshot_pair", "assemble_final_tree()");
+  const assembly = extract("assemble_final_tree", "fix_store_permissions()");
+  const dataList = source.match(/^PUBLIC_DATA_CACHE_FILES=\([\s\S]*?^\)/m)?.[0];
+  assert(dataList && dataList.includes("reference-integrity.json"));
+  const shell = process.platform === "win32" ? "D:/app/Git/bin/bash.exe" : "/bin/bash";
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "football-paired-assembly-"));
+  const quote = value => "'" + String(value).replaceAll("\\", "/").replaceAll("'", "'\\''") + "'";
+  try {
+    for (const name of ["partition", "legacy", "source-missing", "source-corrupt", "target-missing", "target-corrupt",
+      "embedded-mismatch", "legacy-extra", "after-copy-missing", "after-copy-corrupt", "after-copy-snapshot-corrupt"]) {
+      const fixture = path.join(fixtureRoot, name), trusted = path.join(fixture, "trusted"), build = path.join(fixture, "build");
+      const native = path.join(fixture, "native"), seedStore = path.join(native, "seed-1-store"), next = path.join(fixture, "next");
+      fs.mkdirSync(path.join(build, "public/data"), { recursive: true });
+      for (const directory of ["dist", "node_modules"]) fs.mkdirSync(path.join(build, directory));
+      for (const file of ["server/dataGenerationStore.cjs", "server/referenceIntegrityPartition.cjs", "server/selectedJsonObjectFile.cjs",
+        "server/data/public-reference-unresolved-baseline.json", "src/services/publicReferenceDecision.cjs", "src/services/publicReferenceEvidence.cjs"]) {
+        const destination = path.join(trusted, file); fs.mkdirSync(path.dirname(destination), { recursive: true });
+        fs.copyFileSync(path.join(root, file), destination);
+      }
+      const legacy = name === "legacy" || name === "legacy-extra";
+      const embedded = structuredClone(integrity);
+      if (name === "embedded-mismatch") embedded.recoveredCompanions = 1;
+      const snapshot = { version: legacy ? 3 : 4, rows: [], ...(legacy ? {} : { publicReferenceIntegrity: embedded }) };
+      const files = { "prediction-snapshots.json": { bytes: JSON.stringify(snapshot), rows: 0 } };
+      if (!legacy) files[partition.FILE_NAME] = { bytes: JSON.stringify(integrity), rows: 0 };
+      const committed = generationStore.commitDataGeneration({ storeDir: seedStore, sourceCycleId: "paired-assembly-test", files,
+        coreFiles: ["prediction-snapshots.json"], committedAt: "2026-10-23T14:00:00.000Z" });
+      const proof = { ok: true, seed: true, sha: "a".repeat(64), store: seedStore, identity: committed.pointer };
+      fs.writeFileSync(path.join(native, "seed-accepted.json"), JSON.stringify(proof));
+      for (const [file, entry] of Object.entries(files)) fs.writeFileSync(path.join(build, "public/data", file), entry.bytes);
+      const buildSidecar = path.join(build, "public/data", partition.FILE_NAME);
+      const sourceSidecar = path.join(committed.context.generationDir, partition.FILE_NAME);
+      if (name === "source-missing") fs.unlinkSync(sourceSidecar);
+      if (name === "source-corrupt") fs.writeFileSync(sourceSidecar, JSON.stringify(integrity).replace("original-evidence", "changed--evidence"));
+      if (name === "target-missing") fs.unlinkSync(buildSidecar);
+      if (name === "target-corrupt") fs.writeFileSync(buildSidecar, JSON.stringify(integrity).replace("original-evidence", "changed--evidence"));
+      if (name === "legacy-extra") fs.writeFileSync(buildSidecar, JSON.stringify(integrity));
+      let after = "";
+      if (name === "after-copy-missing") after = `rm -- ${quote(path.join(next, "public/data", partition.FILE_NAME))}\n`;
+      if (name === "after-copy-corrupt") after = `printf '{}' > ${quote(path.join(next, "public/data", partition.FILE_NAME))}\n`;
+      if (name === "after-copy-snapshot-corrupt") after = `printf '{}' > ${quote(path.join(next, "public/data/prediction-snapshots.json"))}\n`;
+      const input = `set -euo pipefail\nNODE=${quote(process.execPath)}\nTRUSTED_SOURCE_DIR=${quote(trusted)}\nBUILD_DIR=${quote(build)}\nNEXT_DIR=${quote(next)}\nNATIVE_STATE_DIR=${quote(native)}\nBUNDLE_SHA256=${quote(proof.sha)}\n`
+        + 'install() { command install -d -m 0755 -- "${@: -1}"; }\nchown() { :; }\n'
+        + dataList + '\nPUBLIC_ROOT_CACHE_FILES=()\n' + copier + '\n'
+        + pairing.replace('"$NODE_HOME/bin/node"', '"$NODE"') + '\n' + assembly
+        + '\nassemble_final_tree\n' + after + '\nvalidate_reference_snapshot_pair "$NEXT_DIR"\nprintf "paired-success\\n"\n';
+      const result = spawnSync(shell, ["--noprofile", "--norc", "-s"], { input, encoding: "utf8", windowsHide: true, timeout: 30000 });
+      if (name === "partition" || name === "legacy") {
+        assert.equal(result.status, 0, name + ": " + result.stderr);
+        assert(result.stdout.includes("paired-success"));
+        assert.equal(fs.existsSync(path.join(next, "public/data", partition.FILE_NAME)), !legacy);
+      } else {
+        assert.notEqual(result.status, 0, name + " unexpectedly admitted");
+        assert(!result.stdout.includes("paired-success"));
+      }
+      checks.push("actual assembly and strict generation pair: " + name);
+    }
+  } finally {
+    assert.equal(path.dirname(fs.realpathSync(fixtureRoot)).toLowerCase(), fs.realpathSync(os.tmpdir()).toLowerCase());
+    assert(path.basename(fixtureRoot).startsWith("football-paired-assembly-"));
+    fs.rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+  const finalAt = lane.indexOf("  native_data final\n"), pairAt = lane.indexOf('  validate_reference_snapshot_pair "$NEXT_DIR"', finalAt);
+  assert(finalAt > 0 && pairAt > finalAt && pairAt < lane.indexOf("  RUNTIME_ENV_DIRTY=1", finalAt));
+  assert(pairAt < lane.indexOf('  mv "$APP_DIR" "$BACKUP_DIR"', finalAt));
+  assert(pairAt < lane.indexOf('    native_code_verify_cutover_lease "$CODE_CUTOVER_POST_SWAP_MARGIN_SECONDS"', finalAt));
+  checks.push("final paired validation precedes environment installation and app swap");
+}
 const nativeBudget = lane.match(/^  CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=\$\(\([\s\S]*?^  \)\)/m)?.[0];
 assert.ok(nativeBudget);
 const budgetRun = spawnSync(process.platform === "win32" ? "D:/app/Git/bin/bash.exe" : "/bin/bash", ["--noprofile", "--norc", "-s"], {

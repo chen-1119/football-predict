@@ -5,10 +5,10 @@ import type { LeagueBaselineDirection } from '../../services/recommendationCente
 export function TrainedMatchPick({record,language,reviewed,now}:{record:LeagueBaselineDirection|null;language:'zh'|'en';reviewed?:ReviewedAnalysisRecord|null;now?:number}){
  if(reviewed)return <ReviewedMatchPick record={reviewed} now={now}/>;
  const zh=language==='zh';
- return <div className="compact-pick" data-active-strategy="league-trained-baseline-v1" data-model-hash={record?.modelHash}>
+ return <div className="compact-pick" data-active-strategy="league-trained-baseline-v1" data-model-hash={record?.modelHash} data-record-hash={record?.recordHash} data-forecast-id={record?.id}>
   <small>{record?(zh?'球队模型 · 未校准参考':'Team model · Uncalibrated reference'):(zh?'本场推荐尚未发布':'No published pick for this match')}</small>
   <strong>{record?.direction?{1:zh?'主胜':'Home',X:zh?'平局':'Draw',2:zh?'客胜':'Away'}[record.direction]:record?(zh?'观望':'Watch'):(zh?'暂无推荐':'No pick')}</strong>
-  {record?<details><summary>{zh?'模型版本与比分':'Model version and scores'}</summary><span>{record.modelVersion} · {record.modelHash.slice(0,12)}</span><p>{record.scoreTop3.map(s=>`${s.home}-${s.away}`).join(' / ')}</p></details>:<small>{zh?'尚无本场已发布的模型或审核分析记录。赛程与赔率更新单独显示。':'No published model or reviewed analysis record for this match. Fixture and price updates are shown separately.'}</small>}
+  {record?<details><summary>{zh?'模型版本与比分':'Model version and scores'}</summary><span>{record.modelVersion} · {record.modelHash.slice(0,12)}</span><p>{record.scoreTop3.map(s=>`${s.home}-${s.away}`).join(' / ')}</p><p>{record.frozenHadQuote?`${zh?'冻结 HAD SP':'Frozen HAD SP'} ${record.frozenHadQuote.sp.toFixed(2)}`:(zh?'无已验证 HAD 报价':'No verified HAD quote')}</p><small>{zh?'原记录':'Original record'} {record.recordHash.slice(0,12)}</small></details>:<small>{zh?'尚无本场已发布的模型或审核分析记录。赛程与赔率更新单独显示。':'No published model or reviewed analysis record for this match. Fixture and price updates are shown separately.'}</small>}
  </div>;
 }
 export function LeagueBaselineDirections({data,language,now,failed}:{data?:Data;language:'zh'|'en';now:number;failed:boolean}){
@@ -16,12 +16,12 @@ export function LeagueBaselineDirections({data,language,now,failed}:{data?:Data;
  const records=!failed&&data?.businessDate===today?data.records:[];
  return <section className="rc-paper" aria-label={zh?'球队基线方向':'Team baseline directions'}>
   <header><h2>{zh?'球队基线方向':'Team baseline directions'}</h2><small>{records.length?(zh?'已训练 · 参考 · 未校准':'Trained · Reference · Uncalibrated'):(zh?'等待有效模型记录':'Awaiting valid model records')}</small></header>
-  {records.length?<div className="rc-paper__records">{records.map(r=><article key={r.id} className="rc-paper__record" data-model-hash={r.modelHash}>
-   <strong>{r.homeTeamName} vs {r.awayTeamName}</strong><div className="rc-paper__direction"><strong>{r.direction?{1:zh?'主胜':'Home',X:zh?'平局':'Draw',2:zh?'客胜':'Away'}[r.direction]:zh?'观望':'Watch'}</strong>{now>=Date.parse(r.cutoffAt)&&<small>{zh?'已截止 · 冻结记录':'Closed · Frozen record'}</small>}</div>
+  {records.length?<div className="rc-paper__records">{records.map(r=><article key={r.id} className="rc-paper__record" data-model-hash={r.modelHash} data-record-hash={r.recordHash} data-forecast-id={r.id}>
+   <strong>{r.homeTeamName} vs {r.awayTeamName}</strong><div className="rc-paper__direction"><strong>{r.direction?{1:zh?'主胜':'Home',X:zh?'平局':'Draw',2:zh?'客胜':'Away'}[r.direction]:zh?'观望':'Watch'}</strong>{r.frozenHadQuote&&<span>{zh?'冻结 HAD SP':'Frozen HAD SP'} {r.frozenHadQuote.sp.toFixed(2)}</span>}{now>=Date.parse(r.cutoffAt)&&<small>{zh?'已截止 · 冻结记录':'Closed · Frozen record'}</small>}</div>
    <details><summary>{zh?'依据':'Evidence'}</summary><p>{zh?'球队历史训练参数计算；赔率未进入基础概率。伤停、预计首发、体能、xG、天气尚未作为训练特征。':'Calculated from trained team-history parameters. Market prices do not enter baseline probabilities; optional team factors are not fitted.'}</p>
     <p>{(['1','X','2'] as const).map(k=>`${{1:zh?'胜':'H',X:zh?'平':'D',2:zh?'负':'A'}[k]} ${(r.had[k]*100).toFixed(1)}%`).join(' · ')}</p>
     <p>{zh?'比分参考':'Score reference'} {r.scoreTop3.map(s=>`${s.home}-${s.away} ${(s.probability*100).toFixed(1)}%`).join(' · ')}</p>
-    <small>{r.modelVersion} · {r.modelHash.slice(0,12)}<br/>{zh?'参数':'Parameters'} {r.parametersHash.slice(0,12)}</small>
+    <small>{r.modelVersion} · {r.modelHash.slice(0,12)}<br/>{zh?'参数':'Parameters'} {r.parametersHash.slice(0,12)}<br/>{zh?'原记录':'Original record'} {r.recordHash.slice(0,12)}{r.frozenHadQuote&&<><br/>{zh?'官方报价原件':'Official quote receipt'} {r.frozenHadQuote.receiptHash.slice(0,12)} · {r.frozenHadQuote.receivedAt}</>}</small>
    </details>
   </article>)}</div>:<p role="status">{failed?(zh?'球队基线读取失败。':'Team baseline unavailable.'):(zh?'等待已注册参数、球队身份与当天有效报价。':'Awaiting registered parameters, team identity and valid prices for today.')}</p>}
  </section>;

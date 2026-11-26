@@ -192,6 +192,8 @@ export interface LeagueBaselineDirection {
  sourceMatchId:string;eventVersion:string;homeTeamId:string;awayTeamId:string;
  id:string;homeTeamName:string;awayTeamName:string;createdAt:string;cutoffAt:string;
  modelVersion:string;modelHash:string;parametersHash:string;direction:Outcome|null;
+ recordHash:string;forecastHash:string;formalEligible:false;
+ frozenHadQuote:{sp:number;receivedAt:string;receiptHash:string}|null;
  had:Record<Outcome,number>;scoreTop3:Array<{home:number;away:number;probability:number}>;
 }
 export interface ReviewedAnalysisRecord {
@@ -199,6 +201,8 @@ export interface ReviewedAnalysisRecord {
  homeTeamName:string;awayTeamName:string;market:'HAD'|'HHAD';handicap?:number;selection:'h'|'d'|'a';sp:number;originalSp:number;
  scores:number[][];confidence:'高'|'中'|'低';reason:string;analysisUrl:string;limitations:string[];cutoffAt:string;quoteObservedAt:string;
  evidence?:{hashes:string[];observedAt:string;missing:string[];verification:'official-single-source'};
+ research?:{version:'evidence-first-editorial-v1';evidenceHash:string;directionHash:string;chosenAt:string;assessmentHash:string;coreComplete:boolean;availabilityComplete:boolean;lineupsConfirmed:boolean;comboPolicy:'dual-core-current-availability-v1';sourceCount:number;verification:'human-reviewed-literal-evidence'};
+ comboEligible?:boolean;marketBaseline?:{kind:'normalized-inverse-sp';market:'HAD'|'HHAD';handicap:number|null;probabilities:{h:number;d:number;a:number}};
  review?:{revision:number;publishedAt:string;original:ReviewedAnalysisRecord;settlement:Settlement};
 }
 export interface ReviewedSingleRevision {key:string;revision:number;payloadSha256:string;previousRevisionHash:string|null;eventId:string;publishedAt:string;commitObservedAt:string;decision:ReviewedAnalysisRecord;settlement:Settlement}
@@ -215,6 +219,10 @@ function reviewedPriceProduct(prices:number[]):number{
   coefficient*=BigInt(whole+fraction);scale+=fraction.length-Number(exponent);
  }
  return Number(`${coefficient}e${-scale}`);
+}
+function reviewedResearchSingleHash(value:Record<string,unknown>):string{
+ const {publicationCreatedAt,publicationCommitObservedAt,...core}=value;void publicationCreatedAt;void publicationCommitObservedAt;
+ return prdPaperPublicHash(core);
 }
 export function parseReviewedRevisions(value:unknown,rawAnalysis:unknown,original:ReviewedAnalysis,updatedAt:string):ReviewedRevisions{
  const v=object(value),day=original.businessDate,raw=list(object(rawAnalysis).records);
@@ -235,7 +243,7 @@ export function parseReviewedRevisions(value:unknown,rawAnalysis:unknown,origina
  };
  const decision=(rawDecision:unknown,m:ReturnType<typeof meta>)=>{
   const r=object(rawDecision),first=original.records.find(d=>d.eventId===r.eventId);
-  if(!first||['eventVersion','businessDate','homeTeamId','awayTeamId','homeTeamName','awayTeamName','matchNum'].some(k=>r[k]!==first[k as keyof ReviewedAnalysisRecord]))throw Error('Review event changed');
+  if(!first||['eventVersion','businessDate','homeTeamId','awayTeamId','homeTeamName','awayTeamName','matchNum'].some(k=>r[k]!==first[k as keyof ReviewedAnalysisRecord])||(first.research&&r.strategy!=='evidence-first-editorial-v1'))throw Error('Review event changed');
   const envelope={version:'reviewed-analysis-view-v1',businessDate:day,createdAt:m.publishedAt,commitObservedAt:m.commitObservedAt,updatedAt,
    publicationHash:m.payloadSha256,records:[r],combos:[],threeCombos:[],formalEligible:false};
   return parseReviewedAnalysis({...envelope,contentHash:reviewedAnalysisPublicHash(envelope)},day,updatedAt).records[0];
@@ -257,6 +265,13 @@ export function parseReviewedRevisions(value:unknown,rawAnalysis:unknown,origina
     return {eventId:d.eventId,matchNum:d.matchNum,market:d.market,...(d.market==='HHAD'?{handicap:d.handicap}:{}),selection:d.selection,sp:d.sp};});
   };
   const legs=bind(c,ds),originals=ds.map(d=>original.records.find(r=>r.eventId===d.eventId)!);bind(old,originals);
+  if(ds.some(record=>record.research)){
+   if(c.strategy!=='evidence-first-editorial-v1'||c.source!=='frozen-reviewed-singles'||c.modelProbability!==null||c.expectedValue!==null||c.formalEligible!==false
+    ||ds.some(record=>record.comboEligible!==true||!record.research?.coreComplete||!record.research.availabilityComplete||record.confidence==='低'))throw Error('Review research combo binding');
+   for(const [index,leg]of list(c.legs).map(object).entries()){
+    const rawDecision=object(list(s.decisions)[index]);if(paperHex(leg.singleHash)!==reviewedResearchSingleHash(rawDecision)||paperHex(leg.quoteHash)!==paperHex(rawDecision.quoteHash))throw Error('Review research combo binding');
+   }
+  }
   if(number(c.product)!==reviewedPriceProduct(ds.map(d=>d.sp))||number(c.product)<band||number(old.product)!==reviewedPriceProduct(originals.map(d=>d.sp)))throw Error('Review combo product');
   if(typeof s.frozen!=='boolean'||originals.some(d=>paperClock(updatedAt).ns>=paperClock(d.eventVersion).ns)&&s.frozen!==true
    ||m.key!==`reviewed-combo-${day}-${prdPaperPublicHash({size:ds.length,band,eventIds:ds.map(d=>d.eventId).sort()})}-v${String(m.revision).padStart(2,'0')}`)throw Error('Review combo identity');
@@ -269,6 +284,8 @@ export function parseReviewedRevisions(value:unknown,rawAnalysis:unknown,origina
   for(const group of groups.values()){group.sort((a,b)=>a.revision-b.revision);for(let i=0;i<group.length;i++)if(group[i].revision!==i+1
    ||i>0&&(group[i].previousRevisionHash!==group[i-1].payloadSha256||paperClock(group[i].publishedAt).ns<=paperClock(group[i-1].commitObservedAt).ns))throw Error('Review version chain');}
  }
+ for(const single of singles){const previous=singles.find(row=>row.eventId===single.eventId&&row.revision===single.revision-1);if(previous?.decision.research&&!single.decision.research)throw Error('Review research downgrade');}
+ for(const combo of combos){const previous=combos.find(row=>row.key.replace(/-v\d\d$/,'')===combo.key.replace(/-v\d\d$/,'')&&row.revision===combo.revision-1);if(previous?.decisions.some(record=>record.research)&&combo.decisions.some(record=>!record.research))throw Error('Review research downgrade');}
  return {state:'verified',singles,combos,pending:pending.length};
 }
 export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedAt:string,allowComboArchive=false):ReviewedAnalysis{
@@ -298,6 +315,25 @@ export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedA
   if(sp<=1||originalSp<=1||scores.length!==2||scores.some(s=>s.length!==2||s.some(n=>!Number.isInteger(n)||n<0||n>15)||(s[0]+handicap===s[1]?'d':s[0]+handicap>s[1]?'h':'a')!==selection)||!['高','中','低'].includes(String(r.confidence)))throw Error('Reviewed analysis scores');
   const analysisUrl=paperText(r.analysisUrl,2000),url=new URL(analysisUrl);if(url.protocol!=='https:'||url.username||url.password)throw Error('Reviewed analysis URL');
   let evidence:ReviewedAnalysisRecord['evidence'];
+  let research:ReviewedAnalysisRecord['research'],marketBaseline:ReviewedAnalysisRecord['marketBaseline'],comboEligible:boolean|undefined;
+  if(['research','strategy','marketBaseline','comboEligible'].some(key=>Object.hasOwn(r,key))){
+   const detail=object(r.research),baseline=object(r.marketBaseline),probabilities=object(baseline.probabilities);
+   paperKeys(detail,['version','evidenceHash','directionHash','chosenAt','assessmentHash','coreComplete','availabilityComplete','lineupsConfirmed','comboPolicy','sourceCount','verification']);
+   paperKeys(baseline,['kind','market','handicap','probabilities']);paperKeys(probabilities,['h','d','a']);
+   const chosenAt=paperClock(detail.chosenAt).text,sourceCount=number(detail.sourceCount),chance={h:number(probabilities.h),d:number(probabilities.d),a:number(probabilities.a)};
+   if(r.strategy!=='evidence-first-editorial-v1'||detail.version!==r.strategy||detail.verification!=='human-reviewed-literal-evidence'
+    ||detail.comboPolicy!=='dual-core-current-availability-v1'||!Number.isSafeInteger(sourceCount)||sourceCount<2||sourceCount>16
+    ||['coreComplete','availabilityComplete','lineupsConfirmed'].some(key=>typeof detail[key]!=='boolean')||typeof r.comboEligible!=='boolean'
+    ||r.expectedValue!==null||paperClock(chosenAt).ns>paperClock(r.quoteObservedAt).ns
+    ||((detail.coreComplete!==true||detail.availabilityComplete!==true)&&r.confidence!=='低')
+    ||(r.comboEligible&&(detail.coreComplete!==true||detail.availabilityComplete!==true||r.confidence==='低'))
+    ||baseline.kind!=='normalized-inverse-sp'||baseline.market!==r.market||baseline.handicap!==(r.market==='HHAD'?handicap:null)
+    ||Object.values(chance).some(value=>value<=0||value>=1)||Math.abs(chance.h+chance.d+chance.a-1)>1e-10)throw Error('Reviewed research binding');
+   research={version:'evidence-first-editorial-v1',evidenceHash:paperHex(detail.evidenceHash),directionHash:paperHex(detail.directionHash),chosenAt,
+    assessmentHash:paperHex(detail.assessmentHash),coreComplete:detail.coreComplete as boolean,availabilityComplete:detail.availabilityComplete as boolean,
+    lineupsConfirmed:detail.lineupsConfirmed as boolean,comboPolicy:'dual-core-current-availability-v1',sourceCount,verification:'human-reviewed-literal-evidence'};
+   marketBaseline={kind:'normalized-inverse-sp',market:r.market as 'HAD'|'HHAD',handicap:r.market==='HHAD'?handicap:null,probabilities:chance};comboEligible=r.comboEligible;
+  }
   if(Object.hasOwn(r,'evidenceAdoption')){const e=object(r.evidenceAdoption),{contentHash:eh,...eb}=e,ev=object(e.event),hashes=list(e.evidenceHashes).map(paperHex);
    if(paperHex(eh)!==prdPaperPublicHash(eb)||e.version!=='team-evidence-adoption-view-v1'||!paperHex(e.adoptionHash)||e.verification!=='official-single-source'
     ||e.secondIndependentSourceVerified!==false||e.formalEligible!==false||list(e.probabilityFactorsUsed).length||r.confidence!=='低'
@@ -305,13 +341,19 @@ export function parseReviewedAnalysis(value:unknown,businessDate:string,updatedA
     ||hashes.length<1||hashes.length>4||JSON.stringify(hashes)!==JSON.stringify(r.evidenceHashes)||paperClock(e.asOf).ns!==created.ns)throw Error('Reviewed evidence binding');
    evidence={hashes,observedAt:paperClock(e.asOf).text,missing:list(e.missing).map(x=>paperText(x,100)),verification:'official-single-source'};
   }
-  return {eventId,eventVersion,businessDate,matchNum:paperText(r.matchNum,30),homeTeamId:paperText(r.homeTeamId,100),awayTeamId:paperText(r.awayTeamId,100),homeTeamName:paperText(r.homeTeamName,100),awayTeamName:paperText(r.awayTeamName,100),market:r.market as 'HAD'|'HHAD',...(r.market==='HHAD'?{handicap}:{}),selection:selection as 'h'|'d'|'a',sp,originalSp,scores,confidence:r.confidence as '高'|'中'|'低',reason:paperText(r.reason,500),analysisUrl,limitations:list(r.limitations).map(v=>paperText(v,200)),cutoffAt,quoteObservedAt:paperClock(r.quoteObservedAt).text,...(evidence?{evidence}:{})};
+  return {eventId,eventVersion,businessDate,matchNum:paperText(r.matchNum,30),homeTeamId:paperText(r.homeTeamId,100),awayTeamId:paperText(r.awayTeamId,100),homeTeamName:paperText(r.homeTeamName,100),awayTeamName:paperText(r.awayTeamName,100),market:r.market as 'HAD'|'HHAD',...(r.market==='HHAD'?{handicap}:{}),selection:selection as 'h'|'d'|'a',sp,originalSp,scores,confidence:r.confidence as '高'|'中'|'低',reason:paperText(r.reason,500),analysisUrl,limitations:list(r.limitations).map(v=>paperText(v,200)),cutoffAt,quoteObservedAt:paperClock(r.quoteObservedAt).text,...(evidence?{evidence}:{}),...(research?{research,marketBaseline,comboEligible}:{})};
  });
  const parseCombos=(values:unknown[],size:2|3):ReviewedAnalysisCombo[]=>{
   const bands=new Set<number>(),groups=new Set<string>(),asOf=paperClock(updatedAt).ns;
   return values.map(x=>{
    const c=object(x),band=number(c.band);if(![2.5,5,10].includes(band)||bands.has(band))throw Error('Reviewed combo band');bands.add(band);
+   if(c.strategy!==undefined&&(c.strategy!=='evidence-first-editorial-v1'||c.source!=='frozen-reviewed-singles'||c.modelProbability!==null||c.expectedValue!==null||c.formalEligible!==false))throw Error('Reviewed research combo');
    const bound=list(c.legs).map(x=>{const l=object(x),r=records.find(r=>r.eventId===l.eventId);if(!r||l.market!==r.market||(r.market==='HHAD'?l.handicap!==r.handicap:l.handicap!=null)||l.selection!==r.selection||l.sp!==r.sp||l.matchNum!==r.matchNum)throw Error('Reviewed combo binding');return r;});
+   if(c.strategy!==undefined||bound.some(record=>record.research))for(const leg of list(c.legs).map(object)){
+    const record=records.find(record=>record.eventId===leg.eventId)!,raw=object(rows.find(value=>object(value).eventId===record.eventId));
+    if(c.strategy!=='evidence-first-editorial-v1'||record.comboEligible!==true||!record.research?.coreComplete||!record.research.availabilityComplete
+     ||record.confidence==='低'||paperHex(leg.singleHash)!==reviewedResearchSingleHash(raw)||paperHex(leg.quoteHash)!==paperHex(raw.quoteHash))throw Error('Reviewed research combo binding');
+   }
    const legs=bound.map(r=>({eventId:r.eventId,matchNum:r.matchNum,market:r.market,...(r.market==='HHAD'?{handicap:r.handicap}:{}),selection:r.selection,sp:r.sp}));
    if(!legs.length){if(c.product!==null||c.confidence!==null)throw Error('Reviewed combo empty');return {band,legs,product:null,confidence:null};}
    const group=legs.map(l=>l.eventId).sort().join('/'),product=number(c.product);
@@ -409,9 +451,19 @@ export function parseLeagueBaseline(value:unknown,businessDate:string,updatedAt:
   if((ranks[0][1]-ranks[1][1]>1e-12?ranks[0][0]:null)!==direction)throw new Error('League model direction');
   const scoreTop3=list(grid.scoreTop3).map(value=>{const x=object(value),home=count(x.home),away=count(x.away),probability=number(x.probability);if(home>20||away>20||probability<0||probability>1)throw new Error('League score');return {home,away,probability};});
   if(scoreTop3.length!==3||r.modelVersion!=='league-trained-baseline-v1')throw new Error('League model version');
-  paperHex(r.recordHash);paperHex(r.forecastHash);
+  const recordHash=paperHex(r.recordHash),forecastHash=paperHex(r.forecastHash);
+  const comparisons=r.comparisons==null?[]:list(r.comparisons).map(object),hadComparisons=comparisons.filter(comparison=>comparison.market==='HAD');
+  if(hadComparisons.length>1)throw new Error('Duplicate league HAD quote');
+  let frozenHadQuote:LeagueBaselineDirection['frozenHadQuote']=null;
+  if(direction&&hadComparisons[0]?.quote){
+   const quote=object(hadComparisons[0].quote),odds=object(quote.odds),received=paperClock(quote.receivedAt);
+   const sp=number(odds[{'1':'H',X:'D','2':'A'}[direction]]);
+   if(sp<=1||quote.source!=='sporttery:HAD:signed-live'||received.ns>created.ns||paperClock(quote.cutoffTime).ns!==cutoff.ns)throw new Error('League frozen quote');
+   frozenHadQuote={sp,receivedAt:received.text,receiptHash:paperHex(quote.receiptHash)};
+  }
   return {id,sourceMatchId:paperText(event.sourceMatchId),eventVersion:paperClock(event.eventVersion).text,homeTeamId:paperText(event.homeTeamId),awayTeamId:paperText(event.awayTeamId),homeTeamName:paperText(r.homeTeamName),awayTeamName:paperText(r.awayTeamName),createdAt:created.text,cutoffAt:cutoff.text,
-   modelVersion:r.modelVersion,modelHash:paperHex(r.modelHash),parametersHash:paperHex(r.parametersHash),direction,had,scoreTop3};
+   modelVersion:r.modelVersion,modelHash:paperHex(r.modelHash),parametersHash:paperHex(r.parametersHash),direction,had,scoreTop3,
+   recordHash,forecastHash,formalEligible:false as const,frozenHadQuote};
  });
  return {businessDate,updatedAt,records,blocked:count(p.blocked)};
 }
