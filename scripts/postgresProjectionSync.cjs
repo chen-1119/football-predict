@@ -853,7 +853,7 @@ const inspectResultOnlyReviewConflicts = async (client, reviews) => {
     incomingById.set(review.review_id, review);
   }
   const ids = [...incomingById.keys()];
-  if (ids.length === 0) return { rebasedReviews: 0, staleObservationIds: [] };
+  if (ids.length === 0) return { rebasedReviews: 0, staleObservationIds: [], unchangedReviewIds: new Set() };
   const existingRows = [];
   for (let offset = 0; offset < ids.length; offset += 500) {
     const batch = ids.slice(offset, offset + 500);
@@ -864,6 +864,8 @@ const inspectResultOnlyReviewConflicts = async (client, reviews) => {
              existing_review.observation_id,
              existing_review.settlement,
              existing_review.formal_hit,
+             existing_review.review_reason,
+             existing_review.adjustment,
              existing_review.settled_at,
              existing_review.payload::text AS review_payload,
              existing_observation.result_identity,
@@ -881,6 +883,7 @@ const inspectResultOnlyReviewConflicts = async (client, reviews) => {
 
   let rebasedReviews = 0;
   const staleObservationIds = new Set();
+  const unchangedReviewIds = new Set();
   for (const existing of existingRows) {
     const incoming = incomingById.get(existing.review_id);
     const existingIdentity = resultOnlyIdentityFromStoredRows(existing);
@@ -925,8 +928,23 @@ const inspectResultOnlyReviewConflicts = async (client, reviews) => {
     if (existing.observation_id && existing.observation_id !== incoming.observation_id) {
       staleObservationIds.add(existing.observation_id);
     }
+    if (
+      sameMatch
+      && sameObservation
+      && existing.decision_id === null
+      && existing.formal_hit === null
+      && existing.settlement === incoming.settlement
+      && typeof existing.review_reason === "string"
+      && existing.review_reason === incoming.review_reason
+      && typeof existing.adjustment === "string"
+      && existing.adjustment === incoming.adjustment
+      && iso(existing.settled_at) === incoming.settled_at
+      && existing.review_payload === incoming.payload
+    ) {
+      unchangedReviewIds.add(existing.review_id);
+    }
   }
-  return { rebasedReviews, staleObservationIds: [...staleObservationIds] };
+  return { rebasedReviews, staleObservationIds: [...staleObservationIds], unchangedReviewIds };
 };
 
 const upsertResultOnlyReviews = async (client, reviews, columns) => {
@@ -941,31 +959,36 @@ const upsertResultOnlyReviews = async (client, reviews, columns) => {
     throw error;
   }
   const conflictState = await inspectResultOnlyReviewConflicts(client, reviews);
-  await insertBatches({
-    client,
-    table: "post_match_reviews",
-    columns,
-    jsonColumns: ["payload"],
-    rows: reviews,
-    requireAffectedRows: true,
-    conflict: `ON CONFLICT (review_id) DO UPDATE SET
-      match_id = EXCLUDED.match_id,
-      observation_id = EXCLUDED.observation_id,
-      settlement = EXCLUDED.settlement,
-      formal_hit = EXCLUDED.formal_hit,
-      review_reason = EXCLUDED.review_reason,
-      adjustment = EXCLUDED.adjustment,
-      settled_at = EXCLUDED.settled_at,
-      payload = EXCLUDED.payload
-    WHERE football.post_match_reviews.decision_id IS NULL
-      AND football.post_match_reviews.formal_hit IS NULL
-      AND football.post_match_reviews.settlement = 'result-only'
-      AND EXCLUDED.decision_id IS NULL
-      AND EXCLUDED.formal_hit IS NULL
-      AND EXCLUDED.settlement = 'result-only'
-      AND EXCLUDED.settled_at >= football.post_match_reviews.settled_at
-    RETURNING review_id`,
-  });
+  const mutatingReviews = conflictState.unchangedReviewIds?.size
+    ? reviews.filter((review) => !conflictState.unchangedReviewIds.has(review.review_id))
+    : reviews;
+  if (mutatingReviews.length > 0) {
+    await insertBatches({
+      client,
+      table: "post_match_reviews",
+      columns,
+      jsonColumns: ["payload"],
+      rows: mutatingReviews,
+      requireAffectedRows: true,
+      conflict: `ON CONFLICT (review_id) DO UPDATE SET
+        match_id = EXCLUDED.match_id,
+        observation_id = EXCLUDED.observation_id,
+        settlement = EXCLUDED.settlement,
+        formal_hit = EXCLUDED.formal_hit,
+        review_reason = EXCLUDED.review_reason,
+        adjustment = EXCLUDED.adjustment,
+        settled_at = EXCLUDED.settled_at,
+        payload = EXCLUDED.payload
+      WHERE football.post_match_reviews.decision_id IS NULL
+        AND football.post_match_reviews.formal_hit IS NULL
+        AND football.post_match_reviews.settlement = 'result-only'
+        AND EXCLUDED.decision_id IS NULL
+        AND EXCLUDED.formal_hit IS NULL
+        AND EXCLUDED.settlement = 'result-only'
+        AND EXCLUDED.settled_at >= football.post_match_reviews.settled_at
+      RETURNING review_id`,
+    });
+  }
   return conflictState;
 };
 
@@ -1266,11 +1289,15 @@ const persistSemanticRows = async (client, matches, publicationId) => {
       WHERE decision_hash = ANY($1::text[])
     `, [recommendations.map((row) => row.decision_hash)]);
     const existingIds = new Map(existing.rows.map((row) => [row.decision_hash, row.decision_id]));
+    const recommendationByMatchId = new Map();
     for (const recommendation of recommendations) {
       recommendation.decision_id = existingIds.get(recommendation.decision_hash) || recommendation.decision_id;
+      if (!recommendationByMatchId.has(recommendation.match_id)) {
+        recommendationByMatchId.set(recommendation.match_id, recommendation);
+      }
     }
     for (const review of reviews) {
-      const recommendation = recommendations.find((row) => row.match_id === review.match_id);
+      const recommendation = recommendationByMatchId.get(review.match_id);
       if (recommendation) review.decision_id = recommendation.decision_id;
     }
   }
@@ -1296,7 +1323,8 @@ const persistSemanticRows = async (client, matches, publicationId) => {
       // The decision hash binds the archived decision, not mutable current
       // predictionMeta. Retain its original payload on subsequent projections.
       conflict: `ON CONFLICT (decision_hash) DO UPDATE SET
-        publication_id = EXCLUDED.publication_id`,
+        publication_id = EXCLUDED.publication_id
+      WHERE football.frozen_recommendations.publication_id IS DISTINCT FROM EXCLUDED.publication_id`,
     });
   }
   if (observations.length > 0) {
@@ -1309,7 +1337,10 @@ const persistSemanticRows = async (client, matches, publicationId) => {
       conflict: `ON CONFLICT (observation_id) DO UPDATE SET
         observed_at = GREATEST(football.result_observations.observed_at, EXCLUDED.observed_at),
         is_official_final = football.result_observations.is_official_final OR EXCLUDED.is_official_final,
-        payload = EXCLUDED.payload`,
+        payload = EXCLUDED.payload
+      WHERE football.result_observations.observed_at IS DISTINCT FROM GREATEST(football.result_observations.observed_at, EXCLUDED.observed_at)
+        OR football.result_observations.is_official_final IS DISTINCT FROM (football.result_observations.is_official_final OR EXCLUDED.is_official_final)
+        OR football.result_observations.payload::text IS DISTINCT FROM EXCLUDED.payload::text`,
     });
   }
   if (reviews.length > 0) {
@@ -1324,8 +1355,9 @@ const persistSemanticRows = async (client, matches, publicationId) => {
       && review.settlement === "result-only"
       && Boolean(review._result_only_identity)
     ));
+    const resultOnlyReviewSet = new Set(resultOnlyReviews);
     const otherReviewsWithoutDecision = reviewsWithoutDecision.filter((review) => (
-      !resultOnlyReviews.includes(review)
+      !resultOnlyReviewSet.has(review)
     ));
     if (reviewsWithDecision.length > 0) {
       await insertBatches({
@@ -1341,7 +1373,24 @@ const persistSemanticRows = async (client, matches, publicationId) => {
         review_reason = EXCLUDED.review_reason,
         adjustment = EXCLUDED.adjustment,
         settled_at = EXCLUDED.settled_at,
-        payload = EXCLUDED.payload`,
+        payload = EXCLUDED.payload
+      WHERE ROW(
+        football.post_match_reviews.observation_id,
+        football.post_match_reviews.settlement,
+        football.post_match_reviews.formal_hit,
+        football.post_match_reviews.review_reason,
+        football.post_match_reviews.adjustment,
+        football.post_match_reviews.settled_at,
+        football.post_match_reviews.payload::text
+      ) IS DISTINCT FROM ROW(
+        EXCLUDED.observation_id,
+        EXCLUDED.settlement,
+        EXCLUDED.formal_hit,
+        EXCLUDED.review_reason,
+        EXCLUDED.adjustment,
+        EXCLUDED.settled_at,
+        EXCLUDED.payload::text
+      )`,
       });
     }
     if (resultOnlyReviews.length > 0) {
@@ -1361,7 +1410,24 @@ const persistSemanticRows = async (client, matches, publicationId) => {
         review_reason = EXCLUDED.review_reason,
         adjustment = EXCLUDED.adjustment,
         settled_at = EXCLUDED.settled_at,
-        payload = EXCLUDED.payload`,
+        payload = EXCLUDED.payload
+      WHERE ROW(
+        football.post_match_reviews.observation_id,
+        football.post_match_reviews.settlement,
+        football.post_match_reviews.formal_hit,
+        football.post_match_reviews.review_reason,
+        football.post_match_reviews.adjustment,
+        football.post_match_reviews.settled_at,
+        football.post_match_reviews.payload::text
+      ) IS DISTINCT FROM ROW(
+        EXCLUDED.observation_id,
+        EXCLUDED.settlement,
+        EXCLUDED.formal_hit,
+        EXCLUDED.review_reason,
+        EXCLUDED.adjustment,
+        EXCLUDED.settled_at,
+        EXCLUDED.payload::text
+      )`,
       });
     }
   }
@@ -1441,7 +1507,16 @@ const persistAiArena = async (client, arena) => {
       conflict: `ON CONFLICT (competitor_id) DO UPDATE SET
         display_name = EXCLUDED.display_name,
         strategy_version = EXCLUDED.strategy_version,
-        active = EXCLUDED.active`,
+        active = EXCLUDED.active
+      WHERE ROW(
+        football.ai_competitors.display_name,
+        football.ai_competitors.strategy_version,
+        football.ai_competitors.active
+      ) IS DISTINCT FROM ROW(
+        EXCLUDED.display_name,
+        EXCLUDED.strategy_version,
+        EXCLUDED.active
+      )`,
     });
   }
   const decisions = [];
@@ -1484,8 +1559,13 @@ const persistAiArena = async (client, arena) => {
       conflict: "ON CONFLICT (decision_id) DO NOTHING",
     });
   }
+  const agentById = new Map();
+  for (const agent of agents) {
+    const id = text(agent.id);
+    if (id && !agentById.has(id)) agentById.set(id, agent);
+  }
   const ledger = competitors.map((competitor) => {
-    const agent = agents.find((row) => text(row.id) === competitor.competitor_id) || {};
+    const agent = agentById.get(competitor.competitor_id) || {};
     const openingBalance = Math.max(0, Math.trunc(finite(agent.startingBalance) || 0));
     return {
       entry_id: `opening:${competitionId}:${competitor.competitor_id}`,

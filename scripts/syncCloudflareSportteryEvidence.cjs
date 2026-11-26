@@ -43,12 +43,26 @@ const validateLocalUrl = (value) => {
   return url;
 };
 
+const formatFetchFailure = (label, error) => {
+  const message = error?.message || String(error);
+  const causeCode = String(error?.cause?.code || "").trim();
+  const causeMessage = String(error?.cause?.message || "").trim();
+  const detail = [causeCode, causeMessage && causeMessage !== message ? causeMessage : ""]
+    .filter(Boolean)
+    .join(": ");
+  return detail ? `${label} failed: ${message} (${detail})` : `${label} failed: ${message}`;
+};
+
 const fetchJsonBounded = async (url, init, { timeoutMs, maxBytes, label }) => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let response;
   try {
     response = await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    const wrapped = new Error(formatFetchFailure(label, error));
+    wrapped.cause = error;
+    throw wrapped;
   } finally {
     clearTimeout(timer);
   }
